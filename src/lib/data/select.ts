@@ -1,0 +1,116 @@
+/**
+ * Workspace スナップショットに対する純粋な参照ヘルパー。
+ * 行は RLS でスコープ済みなので、ここでは結合(view化)と整形のみ行う。
+ */
+
+import type { Workspace } from "./workspace";
+import type {
+  Account,
+  Activity,
+  Contact,
+  Lead,
+  LeadSource,
+  Opportunity,
+  Product,
+  Role,
+  StageHistory,
+  Task,
+  User,
+} from "@/lib/types";
+
+export interface OppView extends Opportunity {
+  account?: Account;
+  owner?: User;
+  product?: Product;
+  leadSource?: LeadSource;
+  weighted: number;
+}
+
+export function getUser(ws: Workspace, id?: string): User | undefined {
+  return id ? ws.usersById.get(id) : undefined;
+}
+export function getAccount(ws: Workspace, id?: string): Account | undefined {
+  return id ? ws.accountsById.get(id) : undefined;
+}
+export function getProduct(ws: Workspace, id?: string): Product | undefined {
+  return id ? ws.productsById.get(id) : undefined;
+}
+export function getLeadSource(ws: Workspace, id?: string): LeadSource | undefined {
+  return id ? ws.leadSourcesById.get(id) : undefined;
+}
+
+export function toOppView(ws: Workspace, o: Opportunity): OppView {
+  return {
+    ...o,
+    account: getAccount(ws, o.account_id),
+    owner: getUser(ws, o.owner_user_id),
+    product: getProduct(ws, o.primary_product_id),
+    leadSource: getLeadSource(ws, o.lead_source_id),
+    weighted: Math.round((o.amount * o.probability) / 100),
+  };
+}
+
+export function listOpportunities(ws: Workspace): OppView[] {
+  return ws.opportunities.map((o) => toOppView(ws, o));
+}
+
+export function getOpportunity(ws: Workspace, id: string): OppView | undefined {
+  const o = ws.opportunities.find((x) => x.id === id);
+  return o ? toOppView(ws, o) : undefined;
+}
+
+export function listAccounts(ws: Workspace): Account[] {
+  return ws.accounts;
+}
+
+export function getContactsByAccount(ws: Workspace, accountId: string): Contact[] {
+  return ws.contacts.filter((c) => c.account_id === accountId);
+}
+
+export function listContacts(ws: Workspace): Contact[] {
+  return ws.contacts;
+}
+
+export function listLeads(ws: Workspace): Lead[] {
+  return ws.leads;
+}
+
+export function listTasks(ws: Workspace): Task[] {
+  return ws.tasks;
+}
+
+export function listActivities(ws: Workspace): Activity[] {
+  return ws.activities;
+}
+
+export function getActivitiesByOpportunity(ws: Workspace, id: string): Activity[] {
+  return ws.activities
+    .filter((a) => a.opportunity_id === id)
+    .sort((a, b) => +new Date(b.activity_at) - +new Date(a.activity_at));
+}
+
+export function getTasksByOpportunity(ws: Workspace, id: string): Task[] {
+  return ws.tasks.filter((t) => t.opportunity_id === id);
+}
+
+export function getStageHistory(ws: Workspace, id: string): StageHistory[] {
+  return ws.stageHistories
+    .filter((s) => s.opportunity_id === id)
+    .sort((a, b) => +new Date(b.changed_at) - +new Date(a.changed_at));
+}
+
+export function listMembers(ws: Workspace): { user: User; role: Role }[] {
+  return ws.memberships
+    .map((m) => ({ user: ws.usersById.get(m.user_id), role: m.role }))
+    .filter((x): x is { user: User; role: Role } => Boolean(x.user));
+}
+
+export function getProducts(ws: Workspace): Product[] {
+  return ws.products;
+}
+export function getLeadSources(ws: Workspace): LeadSource[] {
+  return ws.leadSources;
+}
+export function getSalesTargets(ws: Workspace) {
+  return ws.salesTargets;
+}

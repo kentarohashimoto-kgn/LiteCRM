@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { OppView } from "@/lib/data/store";
+import type { OppView } from "@/lib/data/select";
 import { formatYen, formatDate } from "@/lib/utils";
 import { Avatar, EmptyState } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge } from "@/components/ui/badges";

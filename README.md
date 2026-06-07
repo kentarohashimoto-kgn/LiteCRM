@@ -7,23 +7,25 @@
 **今月の着地と今週打つべき施策**まで導きます。将来の BtoB SaaS 外販を見据え、
 最初からマルチテナント構成で設計しています。
 
-> 要件定義書: `CATORCE Sales OS 要件定義書` に準拠。
+本番バックエンドは **Supabase(PostgreSQL + Auth + Row Level Security)**。
+実際のログイン・データ永続化・ロール別アクセス制御で、社員が日常業務に使えます。
 
 ---
 
 ## 特長
 
 - 📊 **ダッシュボード** — 今月の目標 / Commit / Best Case / Weighted / Gap を一目で
-- 🗓 **週次レビュー画面（最重要）** — 「確認」で終わらせず、今週の打ち手を決める会議画面
+- 🗓 **週次レビュー画面(最重要)** — 「確認」で終わらせず、今週の打ち手を決める会議画面
 - 🎯 **商談管理(SFA)** — 金額・ステージ・ヨミ・確度・次アクション・リスクを管理
-- 🔮 **売上予測** — 今月 / 来月 / 四半期 / 12ヶ月ローリング（`weighted = 金額 × 確度`）
+- 🔮 **売上予測** — 今月 / 来月 / 四半期 / 12ヶ月ローリング(`weighted = 金額 × 確度`)
 - 🚨 **危険案件の自動検知** — 放置案件・次アクション未設定・提案後フォロー漏れ
 - 📈 **分析** — 営業マン別 / 商品別 / 流入経路別の成果分析
-- 🔐 **ロール別アクセス制御** — 外部営業は自分の担当案件のみ（RLS相当）
+- 🔐 **ロール別アクセス制御(RLS)** — 外部営業は自分の担当案件のみ(DBレベルで担保)
 - 🏢 **マルチテナント** — CATORCEも1テナント。固有情報はseed/設定として保持
 
-デザインは **カトルセ提案書デザインガイド**（Primary Teal `#008C8C` / Accent Orange `#F59A2A`、
-配色比率 白・グレー70% / ティール20% / オレンジ10%、数字は大きく単位は小さく）に準拠しています。
+デザインは **カトルセ提案書デザインガイド**(Primary Teal `#008C8C` / Accent Orange
+`#F59A2A`、配色比率 白・グレー70% / ティール20% / オレンジ10%、数字は大きく単位は
+小さく)に準拠しています。
 
 ---
 
@@ -32,101 +34,105 @@
 | 領域 | 技術 |
 |---|---|
 | フレームワーク | Next.js 14 (App Router) / React 18 / TypeScript |
-| UI | Tailwind CSS（CATORCEデザイントークン） |
+| UI | Tailwind CSS(CATORCEデザイントークン) |
 | グラフ | Recharts |
-| アイコン | lucide-react |
-| バックエンド(本番) | Supabase (PostgreSQL + Auth + RLS) |
+| 認証 | Supabase Auth(メール+パスワード) |
+| DB / 権限 | Supabase PostgreSQL + Row Level Security |
 
 ---
 
-## クイックスタート（デモモード）
+## セットアップ済みの本番環境
 
-Supabase の設定なしで、すぐに動かせます。CATORCE初期テンプレート + サンプル商談データが
-メモリ上に投入された状態で起動します。
+初期構築として、以下が **すでに用意されています**(管理者が引き継ぎ可能)。
+
+- Supabase プロジェクト: `catorce-sales-os`(東京リージョン / Freeプラン)
+- スキーマ・RLS・CATORCE初期マスタ(商材16・流入経路14・売上目標6ヶ月)
+- メンバー4名(下記)とサンプル商談データ(商談20・タスク・活動・リード)
+
+### 初期アカウント(初期パスワードは全員 `Catorce2026!`、各自で変更推奨)
+
+| 氏名 | メール | ロール | 見える範囲 |
+|---|---|---|---|
+| 橋本 健太郎 | kentaro.hashimoto@catorce.jp | owner(代表) | 全件 |
+| 佐藤 美咲 | ops@catorce.jp | sales_manager | 全件 |
+| 田中 亮 | tanaka@example.com | external_sales | 自分の担当のみ |
+| 鈴木 彩 | suzuki@example.com | external_sales | 自分の担当のみ |
+
+新しい社員アカウントは、ログイン後 **設定 → メンバーを発行**(owner/admin のみ)から
+メール・初期パスワード・ロールを指定して発行できます。
+
+---
+
+## ローカルで動かす
 
 ```bash
+git clone <repo> && cd <repo>
+git checkout claude/keen-mayer-yJCVC
+
+cp .env.example .env.local
+#  NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY を設定
+#  (URL と anon キーは Supabase ダッシュボード → Project Settings → API)
+
 npm install
 npm run dev
-# http://localhost:3000 を開く
+# http://localhost:3000 → /login でメール+パスワードログイン
 ```
 
-`/login` で **ログインユーザーを選択**できます。ロールごとに見える範囲が変わります。
-
-| ユーザー | ロール | 見える範囲 |
-|---|---|---|
-| 橋本 健太郎 | owner（代表） | テナント全件 |
-| 佐藤 美咲 | sales_manager（Sales Ops） | テナント全件 |
-| 田中 亮 / 鈴木 彩 / 山本 直樹 | external_sales（外部営業） | 自分の担当案件のみ |
-| 井上 拓也 | partner（パートナー） | 自分の担当案件のみ |
-
-画面右上の「表示ユーザー」セレクタでいつでも切り替えられます（権限の見え方を検証するため）。
+> `SUPABASE_SERVICE_ROLE_KEY` は「設定→メンバー発行」でのみ使用します(サーバー専用・秘匿)。
+> 未設定でもログインや閲覧・編集は動作します。
 
 ---
 
-## 本番モード（Supabase）
+## Vercel へのデプロイ(社員が使えるURLを発行)
 
-`.env.local` に Supabase の認証情報を設定すると本番構成に切り替えられます。
+1. このリポジトリを GitHub に push(済み)
+2. [vercel.com](https://vercel.com) で **New Project** → 本リポジトリを Import
+3. Framework は自動で Next.js。**Environment Variables** に以下を登録:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`(Sensitive)
+4. **Deploy** → 発行された `https://xxx.vercel.app` を社員に共有
+5. Supabase ダッシュボード → Authentication → URL Configuration に、本番URLを
+   `Site URL` / `Redirect URLs` として追加
 
-```bash
-cp .env.example .env.local
-# NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY などを設定
-```
-
-### DBセットアップ
-
-```bash
-# Supabase CLI を利用する場合
-supabase db reset           # マイグレーション + seed を適用
-# もしくは個別に
-psql "$DATABASE_URL" -f supabase/migrations/0001_init.sql
-psql "$DATABASE_URL" -f supabase/migrations/0002_rls.sql
-psql "$DATABASE_URL" -f supabase/seed.sql
-```
-
-- `0001_init.sql` … 全テーブル定義（tenant_id付き）、インデックス、updated_at / ステージ履歴トリガ
-- `0002_rls.sql` … Row Level Security（要件14章。テナント分離 + ロール別参照/編集）
-- `seed.sql` … CATORCE初期テンプレート（流入経路・商材・売上目標）
-
-> メンバー（memberships）は Supabase Auth でユーザー作成後に投入します（`seed.sql` 末尾コメント参照）。
-
-データアクセスは `src/lib/data/store.ts` のリポジトリ層に集約しています。
-Supabase クライアントへ差し替える際は、各リポジトリ関数の中身を入れ替えるだけで
-画面側の変更は不要な構成です。
+> 値は Supabase ダッシュボード → Project Settings → API で確認できます
+> (anon = "Project API keys" の anon、service_role = 同 service_role)。
 
 ---
 
-## ディレクトリ構成
+## アーキテクチャ / ディレクトリ
 
 ```
 src/
+  middleware.ts                  セッション更新 + /app 配下の認証ガード
   app/
-    login/                         ログイン(ユーザー選択)
+    login/                       メール+パスワードログイン
     app/
-      dashboard/                   ダッシュボード
-      reviews/weekly/              週次レビュー(最重要画面)
-      opportunities/               商談 一覧 / 詳細 / 新規
-      forecast/                    売上予測
-      accounts/  contacts/  leads/ 顧客 / 担当者 / リード
-      tasks/  activities/          タスク / 活動履歴
-      analytics/                   営業マン別 / 商品別 / 流入経路別
-      settings/                    設定(メンバー・商材・流入・ステージ)
-  components/
-    ui/  layout/  charts/  opportunities/
+      dashboard/  reviews/weekly/  opportunities/  forecast/
+      accounts/  contacts/  leads/  tasks/  activities/
+      analytics/(sales-reps|products|channels)/  settings/
+  components/  ui/ layout/ charts/ opportunities/
   lib/
-    types.ts        ドメイン型(要件13章対応)
-    constants.ts    ステージ/ヨミ/ロール/CATORCEマスタ(設定データ)
-    forecast.ts     売上予測ロジック
-    risk.ts         危険案件/放置案件の検知
-    analytics.ts    営業マン別/商品別/流入経路別分析
-    session.ts      認証コンテキスト
-    data/seed.ts    CATORCE初期テンプレート + サンプルデータ
-    data/store.ts   リポジトリ層(RLS相当のスコープを実装)
-  server/
-    actions.ts      Server Actions(作成/更新/活動/タスク)
+    supabase/server.ts           RLS適用のサーバークライアント
+    supabase/admin.ts            service role クライアント(メンバー発行)
+    session.ts                   認証コンテキスト(getCtx)
+    data/workspace.ts            1リクエストの業務データを Supabase から取得(RLSスコープ済)
+    data/select.ts               Workspace に対する純粋な参照ヘルパー
+    forecast.ts / risk.ts / analytics.ts  予測・危険案件・分析ロジック
+    constants.ts                 ステージ/ヨミ/ロール/CATORCEマスタ
+  server/actions.ts              Server Actions(認証・作成・更新・メンバー発行)
 supabase/
-  migrations/       本番スキーマ + RLS
-  seed.sql          CATORCE初期テンプレート(SQL)
+  migrations/
+    0001_init.sql                テーブル定義・インデックス・トリガ
+    0002_rls.sql                 Row Level Security(基本)
+    0003_profiles_and_auth.sql   profiles + サインアップ連動
+    0004_fix_write_policies.sql  書き込みポリシー分割(SELECT漏れ修正)
+  seed.sql                       CATORCE初期マスタ
 ```
+
+データアクセスは **Supabase の RLS が一次防御**です。`workspace.ts` が取得する行は
+すべてログインユーザーの権限でスコープ済みのため、画面側はロールによる再フィルタを
+行いません(外部営業=自分の担当案件のみ、owner/admin/Sales Ops=全件)。
 
 ---
 
@@ -135,18 +141,17 @@ supabase/
 | 要件 | 実装 |
 |---|---|
 | MVP P0/P1機能 (7.2) | ✅ 顧客/担当者/リード/商談/活動/タスク/予測/放置検知/週次レビュー/各種分析 |
-| 商談ステージ・ヨミ (8.3/8.4) | `lib/constants.ts`（基準確度つき・将来カスタマイズ可能） |
-| CATORCEマスタ (8.1/8.2) | seed として投入（ハードコードしない方針 6.2） |
-| マルチテナント (6章) | 全エンティティに `tenant_id`、`store.ts` でテナント分離 |
-| 権限 (11章) / RLS (14章) | ロール別スコープ（デモ: `store.ts` / 本番: `0002_rls.sql`） |
+| 商談ステージ・ヨミ (8.3/8.4) | `lib/constants.ts`(基準確度つき) |
+| CATORCEマスタ (8.1/8.2) | seed として投入(ハードコードしない方針 6.2) |
+| マルチテナント (6章) | 全テーブルに `tenant_id` |
+| 権限 (11章) / RLS (14章) | Supabase RLS(`0002`/`0004`)。外部営業は自分の担当案件のみ・全顧客リスト非表示 |
 | 売上予測 (9.9) | `lib/forecast.ts` `weighted = amount × probability / 100` |
 | 週次レビュー (9.10/15.5) | `app/reviews/weekly` 危険案件・クロージング対象・施策 |
 
-## 未実装（後続フェーズ・要件7.3 / 16章）
+## 未実装(後続フェーズ・要件7.3 / 16章)
 
-Gmail/Calendar連携、Stripe課金、CSVインポート/エクスポート、メンバー招待、
-高度なAI売上予測、AIによる商談メモ構造化・受注確度診断・週次レポート生成
-（商談詳細にはAI診断のプレースホルダーを配置済み）。
+Gmail/Calendar連携、Stripe課金、CSV入出力、高度なAI売上予測、AIによる商談メモ構造化・
+受注確度診断・週次レポート生成(商談詳細にAI診断のプレースホルダーを配置済み)。
 
 ---
 

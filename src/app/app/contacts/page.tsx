@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { getCtx } from "@/lib/session";
-import { listContacts, getAccount } from "@/lib/data/store";
+import { getWorkspace } from "@/lib/data/workspace";
+import { listContacts, getAccount } from "@/lib/data/select";
 import { PageHeader } from "@/components/ui/primitives";
 
 const roleLabel: Record<string, string> = {
@@ -11,9 +11,9 @@ const roleLabel: Record<string, string> = {
 };
 const tempLabel: Record<string, string> = { high: "高", middle: "中", low: "低" };
 
-export default function ContactsPage() {
-  const ctx = getCtx();
-  const contacts = listContacts(ctx);
+export default async function ContactsPage() {
+  const ws = await getWorkspace();
+  const contacts = listContacts(ws);
 
   return (
     <div>
@@ -32,7 +32,7 @@ export default function ContactsPage() {
           </thead>
           <tbody className="divide-y divide-black/[0.04]">
             {contacts.map((c) => {
-              const acc = getAccount(c.account_id);
+              const acc = getAccount(ws, c.account_id);
               return (
                 <tr key={c.id} className="row-hover">
                   <td className="td font-medium">{c.name}</td>

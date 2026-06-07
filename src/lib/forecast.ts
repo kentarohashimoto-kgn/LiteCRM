@@ -3,7 +3,7 @@
  *   weighted_amount = amount * probability / 100
  */
 
-import type { OppView } from "@/lib/data/store";
+import type { OppView } from "@/lib/data/select";
 import type { SalesTarget } from "@/lib/types";
 import { addMonths, monthKey, startOfMonth, sum } from "@/lib/utils";
 

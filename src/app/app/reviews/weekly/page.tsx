@@ -1,10 +1,9 @@
 import { CalendarCheck, TrendingUp, AlertTriangle, Target, Pause } from "lucide-react";
-import { getCtx } from "@/lib/session";
-import { getSalesTargets, getStageHistory, listOpportunities } from "@/lib/data/store";
+import { getWorkspace } from "@/lib/data/workspace";
+import { getSalesTargets, getStageHistory, listOpportunities, listLeads } from "@/lib/data/select";
 import { buildForecast } from "@/lib/forecast";
 import { isAtRisk, isStale } from "@/lib/risk";
 import { repMetrics, productMetrics, channelMetrics } from "@/lib/analytics";
-import { listLeads } from "@/lib/data/store";
 import { PageHeader, Section, Card, ProgressBar } from "@/components/ui/primitives";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
 import { STAGES } from "@/lib/constants";
@@ -12,19 +11,19 @@ import { formatYen, formatPercent, sameMonth, daysSince } from "@/lib/utils";
 
 const stageOrder = Object.fromEntries(STAGES.map((s, i) => [s.key, i]));
 
-export default function WeeklyReviewPage() {
-  const ctx = getCtx();
+export default async function WeeklyReviewPage() {
+  const ws = await getWorkspace();
   const now = new Date();
-  const opps = listOpportunities(ctx);
+  const opps = listOpportunities(ws);
   const open = opps.filter((o) => o.status === "open");
-  const targets = getSalesTargets(ctx);
+  const targets = getSalesTargets(ws);
   const buckets = buildForecast(opps, targets, 3, now);
   const thisMonth = buckets[0];
   const nextMonth = buckets[1];
 
   // 今週進んだ / 止まった案件
   const progressed = open.filter((o) => {
-    const hist = getStageHistory(o.id);
+    const hist = getStageHistory(ws, o.id);
     return hist.some(
       (h) =>
         daysSince(h.changed_at, now)! <= 7 &&
@@ -40,7 +39,7 @@ export default function WeeklyReviewPage() {
 
   const reps = repMetrics(open);
   const products = productMetrics(open).slice(0, 6);
-  const channels = channelMetrics(open, listLeads(ctx)).slice(0, 6);
+  const channels = channelMetrics(open, listLeads(ws)).slice(0, 6);
   const achieve = thisMonth.target > 0 ? thisMonth.bestCase / thisMonth.target : 0;
 
   return (

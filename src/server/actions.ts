@@ -1,149 +1,250 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { SESSION_COOKIE, getCtx } from "@/lib/session";
-import {
-  addActivity,
-  createAccount,
-  createLead,
-  createOpportunity,
-  createTask,
-  setTaskStatus,
-  updateOpportunity,
-} from "@/lib/data/store";
-import type { Task } from "@/lib/types";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { requireCtx } from "@/lib/session";
+import { STAGE_MAP } from "@/lib/constants";
 
-function num(v: FormDataEntryValue | null): number | undefined {
-  if (v == null || v === "") return undefined;
+function num(v: FormDataEntryValue | null): number | null {
+  if (v == null || v === "") return null;
   const n = Number(String(v).replace(/[^\d.-]/g, ""));
-  return Number.isNaN(n) ? undefined : n;
+  return Number.isNaN(n) ? null : n;
 }
-function str(v: FormDataEntryValue | null): string | undefined {
+function str(v: FormDataEntryValue | null): string | null {
   const s = v == null ? "" : String(v).trim();
-  return s === "" ? undefined : s;
+  return s === "" ? null : s;
 }
 
-// ---- Session ----
-export async function switchUser(formData: FormData) {
-  const userId = String(formData.get("userId"));
-  cookies().set(SESSION_COOKIE, userId, { path: "/", maxAge: 60 * 60 * 24 * 30 });
+// ===================== 認証 =====================
+export async function signIn(formData: FormData) {
+  const email = String(formData.get("email") ?? "");
+  const password = String(formData.get("password") ?? "");
+  const supabase = getSupabaseServer();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    redirect("/login?error=" + encodeURIComponent("メールアドレスまたはパスワードが正しくありません"));
+  }
   redirect("/app/dashboard");
 }
 
-export async function logout() {
-  cookies().delete(SESSION_COOKIE);
+export async function signOut() {
+  const supabase = getSupabaseServer();
+  await supabase.auth.signOut();
   redirect("/login");
 }
 
-// ---- Opportunities ----
+// ===================== 商談 =====================
 export async function createOpportunityAction(formData: FormData) {
-  const ctx = getCtx();
-  const o = createOpportunity(ctx, {
-    name: str(formData.get("name")),
-    account_id: str(formData.get("account_id")),
-    owner_user_id: str(formData.get("owner_user_id")),
-    primary_product_id: str(formData.get("primary_product_id")),
-    lead_source_id: str(formData.get("lead_source_id")),
-    stage: str(formData.get("stage")) as never,
-    forecast_category: str(formData.get("forecast_category")) as never,
-    amount: num(formData.get("amount")),
-    expected_close_date: str(formData.get("expected_close_date")),
-    expected_revenue_month: str(formData.get("expected_close_date")),
-    next_action_date: str(formData.get("next_action_date")),
-    next_action_text: str(formData.get("next_action_text")),
-    notes: str(formData.get("notes")),
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const stage = (str(formData.get("stage")) ?? "lead_acquired") as keyof typeof STAGE_MAP;
+  const close = str(formData.get("expected_close_date"));
+  const { data, error } = await sb
+    .from("opportunities")
+    .insert({
+      tenant_id: ctx.tenantId,
+      name: str(formData.get("name")),
+      account_id: str(formData.get("account_id")),
+      owner_user_id: str(formData.get("owner_user_id")) ?? ctx.userId,
+      primary_product_id: str(formData.get("primary_product_id")),
+      lead_source_id: str(formData.get("lead_source_id")),
+      stage,
+      forecast_category: str(formData.get("forecast_category")) ?? "pipeline",
+      amount: num(formData.get("amount")) ?? 0,
+      probability: STAGE_MAP[stage]?.probability ?? 10,
+      expected_close_date: close,
+      expected_revenue_month: close ? close.slice(0, 7) + "-01" : null,
+      next_action_date: str(formData.get("next_action_date")),
+      next_action_text: str(formData.get("next_action_text")),
+      last_activity_at: new Date().toISOString(),
+      notes: str(formData.get("notes")),
+      status: "open",
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    redirect("/app/opportunities?error=" + encodeURIComponent("作成に失敗しました: " + (error?.message ?? "")));
+  }
+  await sb.from("stage_histories").insert({
+    tenant_id: ctx.tenantId,
+    opportunity_id: data.id,
+    to_stage: stage,
+    changed_by: ctx.userId,
+    reason: "新規作成",
   });
   revalidatePath("/app/opportunities");
-  redirect(`/app/opportunities/${o.id}`);
+  redirect(`/app/opportunities/${data.id}`);
 }
 
 export async function updateOpportunityAction(formData: FormData) {
-  const ctx = getCtx();
+  await requireCtx();
+  const sb = getSupabaseServer();
   const id = String(formData.get("id"));
-  updateOpportunity(ctx, id, {
-    stage: str(formData.get("stage")) as never,
-    forecast_category: str(formData.get("forecast_category")) as never,
-    amount: num(formData.get("amount")),
-    expected_close_date: str(formData.get("expected_close_date")),
-    expected_revenue_month: str(formData.get("expected_close_date")),
-    next_action_date: str(formData.get("next_action_date")),
-    next_action_text: str(formData.get("next_action_text")),
-    risk_level: str(formData.get("risk_level")) as never,
-    lost_reason: str(formData.get("lost_reason")),
-    notes: str(formData.get("notes")),
-  });
+  const stage = str(formData.get("stage")) as keyof typeof STAGE_MAP | null;
+  const close = str(formData.get("expected_close_date"));
+  const status =
+    stage === "won" ? "won" : stage === "lost" ? "lost" : stage === "on_hold" ? "on_hold" : "open";
+  await sb
+    .from("opportunities")
+    .update({
+      stage,
+      forecast_category: str(formData.get("forecast_category")),
+      amount: num(formData.get("amount")) ?? 0,
+      probability: stage ? STAGE_MAP[stage]?.probability ?? 10 : undefined,
+      expected_close_date: close,
+      expected_revenue_month: close ? close.slice(0, 7) + "-01" : null,
+      next_action_date: str(formData.get("next_action_date")),
+      next_action_text: str(formData.get("next_action_text")),
+      risk_level: str(formData.get("risk_level")),
+      lost_reason: str(formData.get("lost_reason")),
+      notes: str(formData.get("notes")),
+      status,
+    })
+    .eq("id", id);
   revalidatePath(`/app/opportunities/${id}`);
   revalidatePath("/app/opportunities");
   redirect(`/app/opportunities/${id}`);
 }
 
-// ---- Activities ----
+// ===================== 活動 =====================
 export async function addActivityAction(formData: FormData) {
-  const ctx = getCtx();
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
   const oppId = str(formData.get("opportunity_id"));
-  addActivity(ctx, {
+  const nextDate = str(formData.get("next_action_date"));
+  const nextText = str(formData.get("next_action_text"));
+  const activityAt = new Date().toISOString();
+
+  await sb.from("activities").insert({
+    tenant_id: ctx.tenantId,
     opportunity_id: oppId,
     account_id: str(formData.get("account_id")),
-    activity_type: str(formData.get("activity_type")) as never,
+    owner_user_id: ctx.userId,
+    activity_type: str(formData.get("activity_type")) ?? "note",
     title: str(formData.get("title")),
     body: str(formData.get("body")),
-    next_action_date: str(formData.get("next_action_date")),
-    next_action_text: str(formData.get("next_action_text")),
+    activity_at: activityAt,
+    next_action_date: nextDate,
+    next_action_text: nextText,
   });
-  if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
+
+  if (oppId) {
+    const patch: Record<string, unknown> = { last_activity_at: activityAt };
+    if (nextDate) {
+      patch.next_action_date = nextDate;
+      patch.next_action_text = nextText;
+    }
+    await sb.from("opportunities").update(patch).eq("id", oppId);
+    revalidatePath(`/app/opportunities/${oppId}`);
+  }
   revalidatePath("/app/activities");
 }
 
-// ---- Tasks ----
+// ===================== タスク =====================
 export async function createTaskAction(formData: FormData) {
-  const ctx = getCtx();
-  createTask(ctx, {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("tasks").insert({
+    tenant_id: ctx.tenantId,
     title: str(formData.get("title")),
     opportunity_id: str(formData.get("opportunity_id")),
     account_id: str(formData.get("account_id")),
-    assigned_to: str(formData.get("assigned_to")),
+    assigned_to: str(formData.get("assigned_to")) ?? ctx.userId,
+    created_by: ctx.userId,
     due_date: str(formData.get("due_date")),
-    priority: str(formData.get("priority")) as never,
+    priority: str(formData.get("priority")) ?? "middle",
+    status: "todo",
   });
   revalidatePath("/app/tasks");
 }
 
 export async function setTaskStatusAction(formData: FormData) {
-  const ctx = getCtx();
-  setTaskStatus(ctx, String(formData.get("id")), String(formData.get("status")) as Task["status"]);
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const status = String(formData.get("status"));
+  await sb
+    .from("tasks")
+    .update({ status, completed_at: status === "done" ? new Date().toISOString() : null })
+    .eq("id", String(formData.get("id")));
   revalidatePath("/app/tasks");
 }
 
-// ---- Accounts ----
+// ===================== 顧客 =====================
 export async function createAccountAction(formData: FormData) {
-  const ctx = getCtx();
-  const a = createAccount(ctx, {
-    name: str(formData.get("name")),
-    industry: str(formData.get("industry")),
-    area: str(formData.get("area")),
-    employee_size: str(formData.get("employee_size")),
-    status: str(formData.get("status")) as never,
-    priority: str(formData.get("priority")) as never,
-    website_url: str(formData.get("website_url")),
-    notes: str(formData.get("notes")),
-  });
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const { data, error } = await sb
+    .from("accounts")
+    .insert({
+      tenant_id: ctx.tenantId,
+      owner_user_id: ctx.userId,
+      name: str(formData.get("name")),
+      industry: str(formData.get("industry")),
+      area: str(formData.get("area")),
+      employee_size: str(formData.get("employee_size")),
+      status: str(formData.get("status")) ?? "prospect",
+      priority: str(formData.get("priority")),
+      website_url: str(formData.get("website_url")),
+      notes: str(formData.get("notes")),
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    redirect("/app/accounts?error=" + encodeURIComponent("作成に失敗しました"));
+  }
   revalidatePath("/app/accounts");
-  redirect(`/app/accounts/${a.id}`);
+  redirect(`/app/accounts/${data.id}`);
 }
 
-// ---- Leads ----
+// ===================== リード =====================
 export async function createLeadAction(formData: FormData) {
-  const ctx = getCtx();
-  createLead(ctx, {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("leads").insert({
+    tenant_id: ctx.tenantId,
     title: str(formData.get("title")),
     account_id: str(formData.get("account_id")),
     lead_source_id: str(formData.get("lead_source_id")),
-    owner_user_id: str(formData.get("owner_user_id")),
+    owner_user_id: str(formData.get("owner_user_id")) ?? ctx.userId,
     primary_product_id: str(formData.get("primary_product_id")),
-    rank: str(formData.get("rank")) as never,
-    status: str(formData.get("status")) as never,
+    rank: str(formData.get("rank")),
+    status: str(formData.get("status")) ?? "new",
   });
   revalidatePath("/app/leads");
+}
+
+// ===================== メンバー発行(管理者) =====================
+export async function createMemberAction(formData: FormData) {
+  const ctx = await requireCtx();
+  if (!["owner", "admin"].includes(ctx.role)) {
+    redirect("/app/settings?error=" + encodeURIComponent("メンバー発行は管理者のみ可能です"));
+  }
+  const email = String(formData.get("email") ?? "").trim();
+  const name = String(formData.get("display_name") ?? "").trim();
+  const role = String(formData.get("role") ?? "sales_rep");
+  const password = String(formData.get("password") ?? "").trim();
+  if (!email || !password) {
+    redirect("/app/settings?error=" + encodeURIComponent("メールと初期パスワードは必須です"));
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { display_name: name || email.split("@")[0] },
+  });
+  if (error || !data.user) {
+    redirect("/app/settings?error=" + encodeURIComponent("発行に失敗: " + (error?.message ?? "")));
+  }
+  await admin.from("memberships").insert({
+    tenant_id: ctx.tenantId,
+    user_id: data.user.id,
+    role,
+  });
+  revalidatePath("/app/settings");
+  redirect("/app/settings?ok=" + encodeURIComponent(`${email} を発行しました`));
 }

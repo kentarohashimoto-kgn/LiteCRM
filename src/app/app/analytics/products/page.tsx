@@ -1,14 +1,14 @@
-import { getCtx } from "@/lib/session";
-import { listOpportunities } from "@/lib/data/store";
+import { getWorkspace } from "@/lib/data/workspace";
+import { listOpportunities } from "@/lib/data/select";
 import { productMetrics } from "@/lib/analytics";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { SimpleBar } from "@/components/charts/forecast-chart";
 import { Tag } from "@/components/ui/badges";
 import { formatYen, formatPercent } from "@/lib/utils";
 
-export default function ProductAnalyticsPage() {
-  const ctx = getCtx();
-  const opps = listOpportunities(ctx);
+export default async function ProductAnalyticsPage() {
+  const ws = await getWorkspace();
+  const opps = listOpportunities(ws);
   const products = productMetrics(opps);
 
   return (

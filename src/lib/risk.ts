@@ -2,7 +2,7 @@
  * 危険案件 / 放置案件の検知(要件 9.8 アラート条件, 15.5 危険案件の条件)。
  */
 
-import type { OppView } from "@/lib/data/store";
+import type { OppView } from "@/lib/data/select";
 import { PROPOSAL_OR_LATER, PROPOSAL_FOLLOWUP_DAYS, STALE_DAYS } from "@/lib/constants";
 import { daysSince, sameMonth } from "@/lib/utils";
 

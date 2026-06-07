@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { getCtx } from "@/lib/session";
-import { listAccounts, listOpportunities, getContactsByAccount } from "@/lib/data/store";
+import { getWorkspace } from "@/lib/data/workspace";
+import { listAccounts, listOpportunities, getContactsByAccount } from "@/lib/data/select";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/badges";
 import { formatYen, groupBy, sum } from "@/lib/utils";
 
 const statusLabel: Record<string, string> = { prospect: "見込み", customer: "顧客", inactive: "休眠" };
 
-export default function AccountsPage() {
-  const ctx = getCtx();
-  const accounts = listAccounts(ctx);
-  const opps = listOpportunities(ctx);
+export default async function AccountsPage() {
+  const ws = await getWorkspace();
+  const accounts = listAccounts(ws);
+  const opps = listOpportunities(ws);
   const oppByAcc = groupBy(opps, (o) => o.account_id);
 
   return (
@@ -39,7 +39,7 @@ export default function AccountsPage() {
             {accounts.map((a) => {
               const list = oppByAcc[a.id] ?? [];
               const open = list.filter((o) => o.status === "open");
-              const contacts = getContactsByAccount(a.id);
+              const contacts = getContactsByAccount(ws, a.id);
               return (
                 <tr key={a.id} className="row-hover">
                   <td className="td"><Link href={`/app/accounts/${a.id}`} className="font-medium text-ink hover:text-teal-deep">{a.name}</Link></td>

@@ -1,11 +1,7 @@
 import Link from "next/link";
 import { CalendarCheck, AlertTriangle, Clock, Target as TargetIcon } from "lucide-react";
-import { getCtx } from "@/lib/session";
-import {
-  getSalesTargets,
-  listOpportunities,
-  listTasks,
-} from "@/lib/data/store";
+import { getWorkspace } from "@/lib/data/workspace";
+import { getSalesTargets, listOpportunities, listTasks } from "@/lib/data/select";
 import { buildForecast } from "@/lib/forecast";
 import { isStale, noNextAction } from "@/lib/risk";
 import { repMetrics, productMetrics } from "@/lib/analytics";
@@ -14,12 +10,12 @@ import { ForecastChart, SimpleBar } from "@/components/charts/forecast-chart";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
 import { formatYen, formatManYen, sameMonth, formatDate } from "@/lib/utils";
 
-export default function DashboardPage() {
-  const ctx = getCtx();
+export default async function DashboardPage() {
+  const ws = await getWorkspace();
   const now = new Date();
-  const opps = listOpportunities(ctx);
-  const tasks = listTasks(ctx);
-  const targets = getSalesTargets(ctx);
+  const opps = listOpportunities(ws);
+  const tasks = listTasks(ws);
+  const targets = getSalesTargets(ws);
   const buckets = buildForecast(opps, targets, 6, now);
   const thisMonth = buckets[0];
 

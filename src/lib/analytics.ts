@@ -2,7 +2,7 @@
  * 分析ロジック(要件 10章)。営業マン別 / 商品別 / 流入経路別。
  */
 
-import type { OppView } from "@/lib/data/store";
+import type { OppView } from "@/lib/data/select";
 import type { Lead } from "@/lib/types";
 import { groupBy, sum } from "@/lib/utils";
 import { isStale, noNextAction } from "@/lib/risk";

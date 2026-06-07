@@ -1,14 +1,14 @@
-import { getCtx } from "@/lib/session";
-import { listOpportunities, listLeads } from "@/lib/data/store";
+import { getWorkspace } from "@/lib/data/workspace";
+import { listOpportunities, listLeads } from "@/lib/data/select";
 import { channelMetrics } from "@/lib/analytics";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { SimpleBar } from "@/components/charts/forecast-chart";
 import { formatYen, formatPercent } from "@/lib/utils";
 
-export default function ChannelAnalyticsPage() {
-  const ctx = getCtx();
-  const opps = listOpportunities(ctx);
-  const leads = listLeads(ctx);
+export default async function ChannelAnalyticsPage() {
+  const ws = await getWorkspace();
+  const opps = listOpportunities(ws);
+  const leads = listLeads(ws);
   const channels = channelMetrics(opps, leads);
 
   return (

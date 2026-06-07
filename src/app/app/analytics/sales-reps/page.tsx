@@ -1,13 +1,13 @@
-import { getCtx } from "@/lib/session";
-import { listOpportunities } from "@/lib/data/store";
+import { getWorkspace } from "@/lib/data/workspace";
+import { listOpportunities } from "@/lib/data/select";
 import { repMetrics } from "@/lib/analytics";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { SimpleBar } from "@/components/charts/forecast-chart";
 import { formatYen, formatPercent } from "@/lib/utils";
 
-export default function SalesRepAnalyticsPage() {
-  const ctx = getCtx();
-  const opps = listOpportunities(ctx);
+export default async function SalesRepAnalyticsPage() {
+  const ws = await getWorkspace();
+  const opps = listOpportunities(ws);
   const reps = repMetrics(opps);
 
   return (

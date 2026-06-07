@@ -1,5 +1,5 @@
-import { getCtx } from "@/lib/session";
-import { getAccount, getLeadSource, getLeadSources, getMemberships, getProducts, getUser, listAccounts, listLeads } from "@/lib/data/store";
+import { getWorkspace } from "@/lib/data/workspace";
+import { getAccount, getLeadSource, getLeadSources, getProducts, getUser, listAccounts, listLeads, listMembers } from "@/lib/data/select";
 import { PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/badges";
 import { createLeadAction } from "@/server/actions";
@@ -20,13 +20,13 @@ const statusTone: Record<string, "teal" | "orange" | "gray"> = {
   converted: "teal",
 };
 
-export default function LeadsPage() {
-  const ctx = getCtx();
-  const leads = listLeads(ctx);
-  const accounts = listAccounts(ctx);
-  const sources = getLeadSources(ctx);
-  const products = getProducts(ctx);
-  const owners = getMemberships(ctx).map((m) => getUser(m.user_id)).filter(Boolean);
+export default async function LeadsPage() {
+  const ws = await getWorkspace();
+  const leads = listLeads(ws);
+  const accounts = listAccounts(ws);
+  const sources = getLeadSources(ws);
+  const products = getProducts(ws);
+  const owners = listMembers(ws).map(({ user }) => user);
 
   return (
     <div>
@@ -50,10 +50,10 @@ export default function LeadsPage() {
                 <tr key={l.id} className="row-hover">
                   <td className="td">
                     <div className="font-medium text-sm">{l.title}</div>
-                    {l.account_id && <div className="text-xs text-ink/45">{getAccount(l.account_id)?.name}</div>}
+                    {l.account_id && <div className="text-xs text-ink/45">{getAccount(ws, l.account_id)?.name}</div>}
                   </td>
-                  <td className="td text-xs">{getLeadSource(l.lead_source_id)?.name ?? "—"}</td>
-                  <td className="td"><div className="flex items-center gap-1.5"><Avatar user={getUser(l.owner_user_id)} size={20} /><span className="text-xs">{getUser(l.owner_user_id)?.name}</span></div></td>
+                  <td className="td text-xs">{getLeadSource(ws, l.lead_source_id)?.name ?? "—"}</td>
+                  <td className="td"><div className="flex items-center gap-1.5"><Avatar user={getUser(ws, l.owner_user_id)} size={20} /><span className="text-xs">{getUser(ws, l.owner_user_id)?.name}</span></div></td>
                   <td className="td"><Tag tone={statusTone[l.status]}>{statusLabel[l.status]}</Tag></td>
                   <td className="td text-sm">{l.rank ?? "—"}</td>
                   <td className="td text-xs text-ink/60">{formatDate(l.acquired_at)}</td>
@@ -78,7 +78,7 @@ export default function LeadsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="label">担当</label>
-                <select name="owner_user_id" defaultValue={ctx.userId} className="input">{owners.map((u) => <option key={u!.id} value={u!.id}>{u!.name}</option>)}</select>
+                <select name="owner_user_id" defaultValue={ws.ctx.userId} className="input">{owners.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
               </div>
               <div><label className="label">ランク</label>
                 <select name="rank" className="input"><option value="">—</option><option>A</option><option>B</option><option>C</option></select>

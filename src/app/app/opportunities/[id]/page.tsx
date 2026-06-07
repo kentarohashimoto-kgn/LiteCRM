@@ -1,16 +1,16 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Sparkles } from "lucide-react";
-import { getCtx } from "@/lib/session";
+import { getWorkspace } from "@/lib/data/workspace";
 import {
   getActivitiesByOpportunity,
   getContactsByAccount,
-  getMemberships,
   getOpportunity,
   getStageHistory,
   getTasksByOpportunity,
   getUser,
-} from "@/lib/data/store";
+  listMembers,
+} from "@/lib/data/select";
 import { STAGES, FORECAST_CATEGORIES, STAGE_MAP, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP } from "@/lib/constants";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge, StatusBadge } from "@/components/ui/badges";
@@ -18,16 +18,15 @@ import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
 import { addActivityAction, updateOpportunityAction } from "@/server/actions";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince } from "@/lib/utils";
 
-export default function OpportunityDetailPage({ params }: { params: { id: string } }) {
-  const ctx = getCtx();
-  const o = getOpportunity(ctx, params.id);
+export default async function OpportunityDetailPage({ params }: { params: { id: string } }) {
+  const ws = await getWorkspace();
+  const o = getOpportunity(ws, params.id);
   if (!o) notFound();
 
-  const activities = getActivitiesByOpportunity(o.id);
-  const tasks = getTasksByOpportunity(o.id);
-  const history = getStageHistory(o.id);
-  const contacts = o.account ? getContactsByAccount(o.account.id) : [];
-  const owners = getMemberships(ctx).map((m) => getUser(m.user_id)).filter(Boolean);
+  const activities = getActivitiesByOpportunity(ws, o.id);
+  const tasks = getTasksByOpportunity(ws, o.id);
+  const history = getStageHistory(ws, o.id);
+  const contacts = o.account ? getContactsByAccount(ws, o.account.id) : [];
   const risk = evaluateRisk(o);
   const since = daysSince(o.last_activity_at);
 
@@ -177,7 +176,7 @@ export default function OpportunityDetailPage({ params }: { params: { id: string
                         <span className="text-sm font-medium text-ink">{a.title}</span>
                       </div>
                       {a.body && <p className="text-sm text-ink/60 mt-1">{a.body}</p>}
-                      <div className="text-xs text-ink/40 mt-1">{formatDateFull(a.activity_at)} ・ {getUser(a.owner_user_id)?.name}</div>
+                      <div className="text-xs text-ink/40 mt-1">{formatDateFull(a.activity_at)} ・ {getUser(ws, a.owner_user_id)?.name}</div>
                     </div>
                   </li>
                 ))}
@@ -244,7 +243,7 @@ export default function OpportunityDetailPage({ params }: { params: { id: string
                       <span className="text-ink/30">→</span>
                       <span className="font-medium text-teal-deep">{STAGE_MAP[h.to_stage]?.label}</span>
                     </div>
-                    <div className="text-xs text-ink/40 mt-0.5">{formatDateFull(h.changed_at)} ・ {getUser(h.changed_by)?.name ?? "—"}</div>
+                    <div className="text-xs text-ink/40 mt-0.5">{formatDateFull(h.changed_at)} ・ {getUser(ws, h.changed_by)?.name ?? "—"}</div>
                   </li>
                 ))}
               </ul>

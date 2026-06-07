@@ -1,16 +1,16 @@
 import Link from "next/link";
-import { getCtx } from "@/lib/session";
-import { getLeadSources, getMemberships, getProducts, getUser, listAccounts } from "@/lib/data/store";
+import { getWorkspace } from "@/lib/data/workspace";
+import { getLeadSources, getProducts, listAccounts, listMembers } from "@/lib/data/select";
 import { STAGES, FORECAST_CATEGORIES } from "@/lib/constants";
 import { PageHeader } from "@/components/ui/primitives";
 import { createOpportunityAction } from "@/server/actions";
 
-export default function NewOpportunityPage() {
-  const ctx = getCtx();
-  const accounts = listAccounts(ctx);
-  const owners = getMemberships(ctx).map((m) => getUser(m.user_id)).filter(Boolean);
-  const products = getProducts(ctx);
-  const sources = getLeadSources(ctx);
+export default async function NewOpportunityPage() {
+  const ws = await getWorkspace();
+  const accounts = listAccounts(ws);
+  const owners = listMembers(ws).map(({ user }) => user);
+  const products = getProducts(ws);
+  const sources = getLeadSources(ws);
 
   return (
     <div className="max-w-2xl">
@@ -30,8 +30,8 @@ export default function NewOpportunityPage() {
           </div>
           <div>
             <label className="label">担当営業 *</label>
-            <select name="owner_user_id" required defaultValue={ctx.userId} className="input">
-              {owners.map((u) => <option key={u!.id} value={u!.id}>{u!.name}</option>)}
+            <select name="owner_user_id" required defaultValue={ws.ctx.userId} className="input">
+              {owners.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
         </div>

@@ -1,16 +1,16 @@
-import { getCtx } from "@/lib/session";
-import { getSalesTargets, listOpportunities } from "@/lib/data/store";
+import { getWorkspace } from "@/lib/data/workspace";
+import { getSalesTargets, listOpportunities } from "@/lib/data/select";
 import { buildForecast, summarizePeriod } from "@/lib/forecast";
 import { repMetrics, productMetrics } from "@/lib/analytics";
 import { PageHeader, Section, StatCard, Card } from "@/components/ui/primitives";
 import { ForecastChart, SimpleBar } from "@/components/charts/forecast-chart";
 import { formatYen } from "@/lib/utils";
 
-export default function ForecastPage() {
-  const ctx = getCtx();
+export default async function ForecastPage() {
+  const ws = await getWorkspace();
   const now = new Date();
-  const opps = listOpportunities(ctx);
-  const targets = getSalesTargets(ctx);
+  const opps = listOpportunities(ws);
+  const targets = getSalesTargets(ws);
   const buckets = buildForecast(opps, targets, 12, now);
 
   const thisMonth = summarizePeriod(buckets, 0, 1, "今月");

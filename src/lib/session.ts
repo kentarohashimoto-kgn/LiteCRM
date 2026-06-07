@@ -1,40 +1,48 @@
+import { cache } from "react";
+import { redirect } from "next/navigation";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import type { Role } from "@/lib/types";
+
+export interface Ctx {
+  userId: string;
+  role: Role;
+  tenantId: string;
+  email: string;
+}
+
 /**
- * セッション / 認証コンテキスト。
- *
- * デモモードでは Cookie に保存した user_id からログインユーザーを決定し、
- * memberships からロールを引く(ログイン画面でユーザーを選択)。
- * Supabase化時は supabase.auth.getUser() に置き換える。
+ * 現在のログインユーザーのコンテキストを取得。
+ * Supabase Auth のユーザー + memberships(所属テナント/ロール) から構築。
+ * 未ログイン or 所属なしは null。
  */
+export const getCtxOrNull = cache(async (): Promise<Ctx | null> => {
+  const supabase = getSupabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
 
-import { cookies } from "next/headers";
-import { TENANT_ID } from "@/lib/data/seed";
-import { getMemberships, getUser } from "@/lib/data/store";
-import type { Ctx } from "@/lib/data/store";
-import type { Role, User } from "@/lib/types";
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("tenant_id, role")
+    .eq("user_id", user.id)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
 
-export const SESSION_COOKIE = "sos_user";
-const DEFAULT_USER_ID = "u-daihyo";
+  if (!membership) return null;
 
-export function getSessionUserId(): string {
-  return cookies().get(SESSION_COOKIE)?.value ?? DEFAULT_USER_ID;
-}
+  return {
+    userId: user.id,
+    role: membership.role as Role,
+    tenantId: membership.tenant_id as string,
+    email: user.email ?? "",
+  };
+});
 
-export function getCtx(): Ctx {
-  const userId = getSessionUserId();
-  const memberships = getMembershipsForTenant();
-  const m = memberships.find((x) => x.user_id === userId);
-  const role: Role = m?.role ?? "viewer";
-  return { userId, role, tenantId: TENANT_ID };
-}
-
-function getMembershipsForTenant() {
-  return getMemberships({ userId: "", role: "owner", tenantId: TENANT_ID });
-}
-
-export function getCurrentUser(): User | undefined {
-  return getUser(getSessionUserId());
-}
-
-export function isAuthenticated(): boolean {
-  return Boolean(cookies().get(SESSION_COOKIE)?.value);
+/** 認証必須のページで使用。未ログインなら /login へ。 */
+export async function requireCtx(): Promise<Ctx> {
+  const ctx = await getCtxOrNull();
+  if (!ctx) redirect("/login");
+  return ctx;
 }

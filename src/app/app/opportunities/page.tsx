@@ -1,18 +1,15 @@
 import { Plus } from "lucide-react";
-import { getCtx } from "@/lib/session";
-import { getLeadSources, getMemberships, getProducts, getUser, listOpportunities } from "@/lib/data/store";
+import { getWorkspace } from "@/lib/data/workspace";
+import { getLeadSources, getProducts, listMembers, listOpportunities } from "@/lib/data/select";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { OppTable } from "@/components/opportunities/opp-table";
 
-export default function OpportunitiesPage() {
-  const ctx = getCtx();
-  const opps = listOpportunities(ctx);
-  const owners = getMemberships(ctx)
-    .map((m) => getUser(m.user_id))
-    .filter(Boolean)
-    .map((u) => ({ id: u!.id, name: u!.name }));
-  const products = getProducts(ctx).map((p) => ({ id: p.id, name: p.name }));
-  const sources = getLeadSources(ctx).map((s) => ({ id: s.id, name: s.name }));
+export default async function OpportunitiesPage() {
+  const ws = await getWorkspace();
+  const opps = listOpportunities(ws);
+  const owners = listMembers(ws).map(({ user }) => ({ id: user.id, name: user.name }));
+  const products = getProducts(ws).map((p) => ({ id: p.id, name: p.name }));
+  const sources = getLeadSources(ws).map((s) => ({ id: s.id, name: s.name }));
 
   return (
     <div>

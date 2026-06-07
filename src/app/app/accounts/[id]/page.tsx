@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { getCtx } from "@/lib/session";
-import { getAccount, getContactsByAccount, listOpportunities } from "@/lib/data/store";
+import { getWorkspace } from "@/lib/data/workspace";
+import { getAccount, getContactsByAccount, listOpportunities } from "@/lib/data/select";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/badges";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
@@ -10,13 +10,13 @@ import { formatYen, sum } from "@/lib/utils";
 
 const statusLabel: Record<string, string> = { prospect: "見込み", customer: "顧客", inactive: "休眠" };
 
-export default function AccountDetailPage({ params }: { params: { id: string } }) {
-  const ctx = getCtx();
-  const account = getAccount(params.id);
-  if (!account || account.tenant_id !== ctx.tenantId) notFound();
+export default async function AccountDetailPage({ params }: { params: { id: string } }) {
+  const ws = await getWorkspace();
+  const account = getAccount(ws, params.id);
+  if (!account) notFound();
 
-  const contacts = getContactsByAccount(account.id);
-  const opps = listOpportunities(ctx).filter((o) => o.account_id === account.id);
+  const contacts = getContactsByAccount(ws, account.id);
+  const opps = listOpportunities(ws).filter((o) => o.account_id === account.id);
   const won = opps.filter((o) => o.status === "won");
   const open = opps.filter((o) => o.status === "open");
 

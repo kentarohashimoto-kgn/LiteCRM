@@ -1,48 +1,34 @@
-import { switchUser } from "@/server/actions";
-import { getUsers, getMemberships } from "@/lib/data/store";
-import { ROLE_MAP, APP_NAME, APP_TAGLINE } from "@/lib/constants";
-import { TENANT_ID } from "@/lib/data/seed";
-import { Avatar } from "@/components/ui/primitives";
+import { signIn } from "@/server/actions";
+import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 
-export default function LoginPage() {
-  const users = getUsers();
-  const memberships = getMemberships({ userId: "", role: "owner", tenantId: TENANT_ID });
-  const roleByUser = Object.fromEntries(memberships.map((m) => [m.user_id, m.role]));
-
+export default function LoginPage({ searchParams }: { searchParams: { error?: string } }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-mist-soft p-6">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-sm">
         <div className="text-center mb-6">
           <div className="text-teal-deep font-bold text-2xl tracking-tight">CATORCE</div>
           <div className="text-sm font-semibold text-ink mt-1">{APP_NAME}</div>
           <div className="text-xs text-ink/50 mt-1">{APP_TAGLINE}</div>
         </div>
 
-        <div className="card card-pad">
-          <p className="text-sm text-ink/70 mb-1 font-semibold">ログイン</p>
-          <p className="text-xs text-ink/45 mb-4">
-            デモモードです。メンバーを選択してログインしてください。ロールごとに見える範囲（RLS相当）が変わります。
-          </p>
-          <div className="space-y-2">
-            {users.map((u) => (
-              <form action={switchUser} key={u.id}>
-                <input type="hidden" name="userId" value={u.id} />
-                <button className="w-full flex items-center gap-3 rounded-xl border border-black/10 px-3 py-2.5 text-left hover:border-teal-primary hover:bg-teal-light/40 transition-colors">
-                  <Avatar user={u} size={34} />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-ink">{u.name}</span>
-                    <span className="block text-xs text-ink/50">
-                      {ROLE_MAP[roleByUser[u.id]]?.label ?? roleByUser[u.id]} ・ {u.email}
-                    </span>
-                  </span>
-                </button>
-              </form>
-            ))}
+        <form action={signIn} className="card card-pad space-y-4">
+          <p className="text-sm font-semibold text-ink">ログイン</p>
+          {searchParams.error && (
+            <p className="text-xs text-rose-600 bg-rose-50 rounded-lg px-3 py-2">{searchParams.error}</p>
+          )}
+          <div>
+            <label className="label">メールアドレス</label>
+            <input name="email" type="email" required autoComplete="email" className="input" placeholder="you@catorce.jp" />
           </div>
-        </div>
+          <div>
+            <label className="label">パスワード</label>
+            <input name="password" type="password" required autoComplete="current-password" className="input" placeholder="••••••••" />
+          </div>
+          <button type="submit" className="btn-primary w-full">ログイン</button>
+        </form>
 
         <p className="text-center text-[11px] text-ink/35 mt-4">
-          本番では Supabase Auth（メール+パスワード / Google）に置き換わります。
+          アカウントは管理者が発行します。お困りの場合は管理者にお問い合わせください。
         </p>
       </div>
     </div>

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
-import type { OppView } from "@/lib/data/store";
+import type { OppView } from "@/lib/data/select";
 import { STAGES, FORECAST_CATEGORIES } from "@/lib/constants";
 import { ForecastBadge, RiskBadge, StageBadge } from "@/components/ui/badges";
 import { Avatar } from "@/components/ui/primitives";
