@@ -1,0 +1,256 @@
+/**
+ * CATORCE Sales OS - ドメイン型定義
+ * 要件定義書 9章 / 13章のテーブル定義に対応。
+ * 全業務エンティティは tenant_id を持つ(マルチテナント前提)。
+ */
+
+export type UUID = string;
+
+export type Role =
+  | "owner"
+  | "admin"
+  | "sales_manager"
+  | "sales_rep"
+  | "external_sales"
+  | "partner"
+  | "delivery"
+  | "finance"
+  | "viewer";
+
+export type OpportunityStage =
+  | "lead_acquired"
+  | "contacted"
+  | "meeting_scheduled"
+  | "meeting_done"
+  | "needs_confirmed"
+  | "proposal_preparing"
+  | "proposal_sent"
+  | "internal_review"
+  | "verbal_commit"
+  | "won"
+  | "lost"
+  | "on_hold";
+
+export type ForecastCategory =
+  | "commit"
+  | "best_case"
+  | "pipeline"
+  | "upside"
+  | "omitted";
+
+export type OpportunityStatus = "open" | "won" | "lost" | "on_hold";
+
+export type ActivityType =
+  | "meeting"
+  | "call"
+  | "email"
+  | "dm"
+  | "proposal"
+  | "estimate"
+  | "follow_up"
+  | "note"
+  | "internal_memo";
+
+export type TaskStatus = "todo" | "done" | "cancelled" | "overdue";
+export type Priority = "high" | "middle" | "low";
+export type RiskLevel = "low" | "middle" | "high";
+
+export interface Tenant {
+  id: UUID;
+  name: string;
+  slug: string;
+  status: string;
+}
+
+export interface User {
+  id: UUID;
+  name: string;
+  email: string;
+  avatarColor?: string;
+}
+
+export interface Membership {
+  id: UUID;
+  tenant_id: UUID;
+  user_id: UUID;
+  role: Role;
+  status: string;
+}
+
+export interface Account {
+  id: UUID;
+  tenant_id: UUID;
+  owner_user_id?: UUID;
+  name: string;
+  industry?: string;
+  employee_size?: string;
+  revenue_size?: string;
+  area?: string;
+  status: "prospect" | "customer" | "inactive";
+  priority?: "A" | "B" | "C";
+  potential?: "high" | "middle" | "low";
+  website_url?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Contact {
+  id: UUID;
+  tenant_id: UUID;
+  account_id: UUID;
+  name: string;
+  department?: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  decision_role?: "decision_maker" | "influencer" | "user" | "referrer";
+  interest_topics?: string[];
+  temperature?: "high" | "middle" | "low";
+  last_contacted_at?: string;
+  next_contact_date?: string;
+  notes?: string;
+}
+
+export interface LeadSource {
+  id: UUID;
+  tenant_id: UUID;
+  name: string;
+  description?: string;
+  status: string;
+}
+
+export interface ProductCategory {
+  id: UUID;
+  tenant_id: UUID;
+  name: string;
+}
+
+export interface Product {
+  id: UUID;
+  tenant_id: UUID;
+  category_id?: UUID;
+  category?: string;
+  name: string;
+  description?: string;
+  default_price?: number;
+  default_gross_profit_rate?: number;
+  is_recurring: boolean;
+  status: "active" | "inactive" | "testing";
+  release_date?: string;
+  notes?: string;
+}
+
+export interface Lead {
+  id: UUID;
+  tenant_id: UUID;
+  account_id?: UUID;
+  contact_id?: UUID;
+  lead_source_id?: UUID;
+  campaign_id?: UUID;
+  owner_user_id?: UUID;
+  primary_product_id?: UUID;
+  title: string;
+  status: "new" | "contacted" | "qualified" | "disqualified" | "converted";
+  rank?: "A" | "B" | "C";
+  acquired_at: string;
+  first_contacted_at?: string;
+  converted_at?: string;
+  disqualified_reason?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface Opportunity {
+  id: UUID;
+  tenant_id: UUID;
+  account_id: UUID;
+  contact_id?: UUID;
+  lead_id?: UUID;
+  owner_user_id: UUID;
+  name: string;
+  stage: OpportunityStage;
+  forecast_category: ForecastCategory;
+  amount: number;
+  gross_profit?: number;
+  gross_profit_rate?: number;
+  probability: number;
+  expected_close_date?: string;
+  expected_revenue_month?: string;
+  primary_product_id?: UUID;
+  lead_source_id?: UUID;
+  next_action_date?: string;
+  next_action_text?: string;
+  last_activity_at?: string;
+  status: OpportunityStatus;
+  lost_reason?: string;
+  win_reason?: string;
+  risk_level?: RiskLevel;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Activity {
+  id: UUID;
+  tenant_id: UUID;
+  account_id?: UUID;
+  contact_id?: UUID;
+  opportunity_id?: UUID;
+  owner_user_id: UUID;
+  activity_type: ActivityType;
+  title: string;
+  body?: string;
+  activity_at: string;
+  next_action_date?: string;
+  next_action_text?: string;
+  created_at: string;
+}
+
+export interface Task {
+  id: UUID;
+  tenant_id: UUID;
+  opportunity_id?: UUID;
+  account_id?: UUID;
+  assigned_to: UUID;
+  created_by: UUID;
+  title: string;
+  description?: string;
+  due_date: string;
+  status: TaskStatus;
+  priority?: Priority;
+  completed_at?: string;
+}
+
+export interface StageHistory {
+  id: UUID;
+  tenant_id: UUID;
+  opportunity_id: UUID;
+  from_stage?: OpportunityStage;
+  to_stage: OpportunityStage;
+  changed_by?: UUID;
+  reason?: string;
+  changed_at: string;
+}
+
+export interface SalesTarget {
+  id: UUID;
+  tenant_id: UUID;
+  target_month: string; // YYYY-MM-01
+  target_amount: number;
+  target_gross_profit?: number;
+}
+
+export interface ForecastSnapshot {
+  id: UUID;
+  tenant_id: UUID;
+  snapshot_date: string;
+  period_month: string;
+  commit_amount: number;
+  best_case_amount: number;
+  pipeline_amount: number;
+  upside_amount: number;
+  weighted_amount: number;
+  target_amount: number;
+  gap_amount: number;
+}
