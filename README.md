@@ -85,6 +85,9 @@ npm run dev
 
 ## Vercel へのデプロイ(社員が使えるURLを発行)
 
+> 詳細な手順書は **[docs/DEPLOY.md](docs/DEPLOY.md)** を参照(環境変数の取得場所・
+> Supabase URL設定・トラブルシューティングまで網羅)。以下は要約です。
+
 1. このリポジトリを GitHub に push(済み)
 2. [vercel.com](https://vercel.com) で **New Project** → 本リポジトリを Import
 3. Framework は自動で Next.js。**Environment Variables** に以下を登録:
