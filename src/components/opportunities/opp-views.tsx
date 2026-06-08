@@ -6,6 +6,7 @@ import type { OppView } from "@/lib/data/select";
 import { OppTable } from "./opp-table";
 import { AppointmentCalendar } from "./appointment-calendar";
 import { AppointmentTrendChart } from "@/components/charts/appointment-trend-chart";
+import { StackedTrendChart, type StackSeries } from "@/components/charts/stacked-trend-chart";
 import { Section } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { MONTHLY_APPOINTMENT_TARGET, YOMI_APPOINTMENT } from "@/lib/constants";
@@ -36,6 +37,7 @@ export function OppViews({
   campaigns?: Option[];
 }) {
   const [view, setView] = useState<"list" | "calendar">("list");
+  const [trendTab, setTrendTab] = useState<"total" | "owner" | "exhibition">("total");
 
   const now = new Date();
   // 「アポ」= ヨミが 4.アポ の商談。初回商談日(first_meeting_date)を予定日とする。
@@ -62,28 +64,56 @@ export function OppViews({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apoOpps]);
 
-  // 推移: 過去〜当月=商談獲得数(created_at) / 先2ヶ月=アポ予定(初回商談日)
-  const trend = useMemo(() => {
-    const buckets: { label: string; count: number; isFuture?: boolean }[] = [];
+  // 推移の月バケット。過去〜当月=商談獲得(created_at)、先2ヶ月=アポ予定(初回商談日)。
+  // 各月にひも付く商談リストを保持し、全体/担当者別/展示会別で再集計する。
+  const buckets = useMemo(() => {
+    const list: { label: string; isFuture: boolean; opps: OppView[] }[] = [];
     for (let offset = -8; offset <= 2; offset++) {
       const ref = new Date(now.getFullYear(), now.getMonth() + offset, 1);
       const y = ref.getFullYear();
       const m = ref.getMonth();
       const isFuture = offset > 0;
-      const count = isFuture
-        ? apoOpps.filter((o) => {
-            const d = parseYMD(o.first_meeting_date);
-            return d && d.getFullYear() === y && d.getMonth() === m;
-          }).length
-        : opps.filter((o) => {
-            const d = parseYMD(o.created_at);
-            return d && d.getFullYear() === y && d.getMonth() === m;
-          }).length;
-      buckets.push({ label: `${String(y).slice(2)}/${m + 1}`, count, isFuture });
+      const inMonth = (o: OppView, field: "created_at" | "first_meeting_date") => {
+        const d = parseYMD(o[field]);
+        return !!d && d.getFullYear() === y && d.getMonth() === m;
+      };
+      const monthOpps = isFuture
+        ? apoOpps.filter((o) => inMonth(o, "first_meeting_date"))
+        : opps.filter((o) => inMonth(o, "created_at"));
+      list.push({ label: `${String(y).slice(2)}/${m + 1}`, isFuture, opps: monthOpps });
     }
-    return buckets;
+    return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opps, apoOpps]);
+
+  const totalTrend = useMemo(
+    () => buckets.map((b) => ({ label: b.label, count: b.opps.length, isFuture: b.isFuture })),
+    [buckets],
+  );
+
+  const ownerTrend = useMemo(
+    () =>
+      buildStacked(
+        buckets,
+        (o) => o.owner_user_id,
+        (o) => o.owner?.name ?? "未割当",
+        (o) => o.owner?.avatarColor ?? "#94A3B8",
+        12,
+      ),
+    [buckets],
+  );
+
+  const exhibitionTrend = useMemo(
+    () =>
+      buildStacked(
+        buckets,
+        (o) => o.campaign_id ?? "__none",
+        (o) => o.campaign?.name ?? "展示会以外",
+        (o) => (o.campaign_id ? "" : "#CBD5E1"),
+        10,
+      ),
+    [buckets],
+  );
 
   // カレンダー対象: 当月・来月
   const cal1 = { year: now.getFullYear(), month: now.getMonth() + 1 };
@@ -162,11 +192,33 @@ export function OppViews({
             </table>
           </div>
 
-          {/* 商談数の推移 */}
-          <Section title="商談数の推移(実績／予定)">
-            <AppointmentTrendChart data={trend} />
+          {/* 商談数の推移(全体／担当者別／展示会別) */}
+          <Section
+            title="商談数の推移"
+            action={
+              <div className="inline-flex rounded-lg border border-black/10 bg-white p-0.5 text-xs">
+                <TrendTab active={trendTab === "total"} onClick={() => setTrendTab("total")} label="全体" />
+                <TrendTab active={trendTab === "owner"} onClick={() => setTrendTab("owner")} label="担当者別" />
+                <TrendTab active={trendTab === "exhibition"} onClick={() => setTrendTab("exhibition")} label="展示会別" />
+              </div>
+            }
+          >
+            {trendTab === "total" ? (
+              <AppointmentTrendChart data={totalTrend} />
+            ) : trendTab === "owner" ? (
+              <>
+                <StackedTrendChart data={ownerTrend.data} series={ownerTrend.series} />
+                <SeriesLegend series={ownerTrend.series} />
+              </>
+            ) : (
+              <>
+                <StackedTrendChart data={exhibitionTrend.data} series={exhibitionTrend.series} />
+                <SeriesLegend series={exhibitionTrend.series} />
+              </>
+            )}
             <p className="text-[11px] text-ink/40 mt-2">
-              実績(濃色)=作成日ベースの商談獲得数。予定(淡色)=初回商談日ベースのアポ(ヨミ=4.アポ)件数。
+              実績=作成日ベースの商談獲得数(過去〜当月)。予定=初回商談日ベースのアポ(ヨミ=4.アポ)件数(先2ヶ月)。
+              {trendTab === "exhibition" && "「展示会以外」は展示会流入でない商談。"}
             </p>
           </Section>
 
@@ -199,6 +251,80 @@ export function OppViews({
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+const STACK_PALETTE = [
+  "#008C8C", "#F59A2A", "#3B82F6", "#8B5CF6", "#EC4899",
+  "#10B981", "#EF4444", "#0EA5E9", "#A855F7", "#84CC16",
+];
+
+/** 月バケットを系列(担当者/展示会)で積み上げ集計。上位 cap 件 + その他にまとめる。 */
+function buildStacked(
+  buckets: { label: string; opps: OppView[] }[],
+  keyOf: (o: OppView) => string,
+  nameOf: (o: OppView) => string,
+  colorOf: (o: OppView) => string,
+  cap: number,
+): { data: Record<string, string | number>[]; series: StackSeries[] } {
+  const totals = new Map<string, number>();
+  const sample = new Map<string, OppView>();
+  for (const b of buckets) {
+    for (const o of b.opps) {
+      const k = keyOf(o);
+      totals.set(k, (totals.get(k) ?? 0) + 1);
+      if (!sample.has(k)) sample.set(k, o);
+    }
+  }
+  let keys = [...totals.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
+  const capped = new Set<string>();
+  if (keys.length > cap) {
+    keys.slice(cap).forEach((k) => capped.add(k));
+    keys = keys.slice(0, cap);
+    keys.push("__other");
+  }
+  const data = buckets.map((b) => {
+    const row: Record<string, string | number> = { label: b.label };
+    keys.forEach((k) => (row[k] = 0));
+    for (const o of b.opps) {
+      let k = keyOf(o);
+      if (capped.has(k)) k = "__other";
+      row[k] = (row[k] as number) + 1;
+    }
+    return row;
+  });
+  const series: StackSeries[] = keys.map((k, i) => {
+    if (k === "__other") return { key: k, name: "その他", color: "#CBD5E1" };
+    const s = sample.get(k)!;
+    return { key: k, name: nameOf(s), color: colorOf(s) || STACK_PALETTE[i % STACK_PALETTE.length] };
+  });
+  return { data, series };
+}
+
+function TrendTab({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "rounded-md px-2.5 py-1 font-medium transition-colors",
+        active ? "bg-teal-primary text-white" : "text-ink/55 hover:text-ink",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function SeriesLegend({ series }: { series: StackSeries[] }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3">
+      {series.map((s) => (
+        <span key={s.key} className="inline-flex items-center gap-1 text-[11px] text-ink/70">
+          <span className="w-2.5 h-2.5 rounded-sm" style={{ background: s.color }} />
+          {s.name}
+        </span>
+      ))}
     </div>
   );
 }
