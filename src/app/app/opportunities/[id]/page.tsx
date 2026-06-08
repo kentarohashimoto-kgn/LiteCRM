@@ -14,7 +14,7 @@ import {
 } from "@/lib/data/select";
 import { STAGES, FORECAST_CATEGORIES, STAGE_MAP, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP } from "@/lib/constants";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
-import { ForecastBadge, StageBadge, StatusBadge } from "@/components/ui/badges";
+import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/ui/badges";
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
 import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction } from "@/server/actions";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince } from "@/lib/utils";
@@ -88,7 +88,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
                   </select>
                 </div>
                 <div>
-                  <label className="label">ヨミ</label>
+                  <label className="label">予測区分（forecast）</label>
                   <select name="forecast_category" defaultValue={o.forecast_category} className="input">
                     {FORECAST_CATEGORIES.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
                   </select>
@@ -191,6 +191,8 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
         <div className="space-y-5">
           <Section title="基本情報">
             <dl className="space-y-2.5 text-sm">
+              <Row label="ヨミ"><YomiBadge yomi={o.yomi} /></Row>
+              <Row label="初回商談日">{formatDateFull(o.first_meeting_date)}</Row>
               <Row label="担当営業"><span className="flex items-center gap-1.5"><Avatar user={o.owner} size={22} />{o.owner?.name}</span></Row>
               <Row label="主商材">{o.product?.name ?? "—"}</Row>
               <Row label="流入経路">{o.leadSource?.name ?? "—"}</Row>

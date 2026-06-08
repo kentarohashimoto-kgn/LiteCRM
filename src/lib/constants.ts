@@ -109,6 +109,26 @@ export const PROPOSAL_FOLLOWUP_DAYS = 7;
  */
 export const MONTHLY_APPOINTMENT_TARGET = 30;
 
+/**
+ * ヨミ(原本値)マスタ。Notion原本の「ヨミ」フィールド値をそのまま保持・表示する。
+ * forecast_category(内部予測区分)とは別物。
+ */
+export const YOMI_OPTIONS: { key: string; label: string }[] = [
+  { key: "0.受注", label: "0.受注" },
+  { key: "1.A(80%)", label: "1.A(80%)" },
+  { key: "2.B(50%)", label: "2.B(50%)" },
+  { key: "3.C(30%)", label: "3.C(30%)" },
+  { key: "4.アポ", label: "4.アポ" },
+  { key: "5.リスケ", label: "5.リスケ" },
+  { key: "6.定期追い", label: "6.定期追い" },
+  { key: "7.オチ", label: "7.オチ" },
+  { key: "8.キャンセル", label: "8.キャンセル" },
+  { key: "9.調整中", label: "9.調整中" },
+];
+
+/** 「アポ(初回商談待ち)」を表すヨミ値 */
+export const YOMI_APPOINTMENT = "4.アポ";
+
 /** CATORCE 流入経路マスタ初期値(8.2) */
 export const CATORCE_LEAD_SOURCES: { name: string; description: string }[] = [
   { name: "X", description: "X投稿、プロフィール、DM経由" },

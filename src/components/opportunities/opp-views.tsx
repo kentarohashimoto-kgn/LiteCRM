@@ -8,7 +8,7 @@ import { AppointmentCalendar } from "./appointment-calendar";
 import { AppointmentTrendChart } from "@/components/charts/appointment-trend-chart";
 import { Section } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
-import { MONTHLY_APPOINTMENT_TARGET } from "@/lib/constants";
+import { MONTHLY_APPOINTMENT_TARGET, YOMI_APPOINTMENT } from "@/lib/constants";
 
 interface Option {
   id: string;
@@ -38,16 +38,17 @@ export function OppViews({
   const [view, setView] = useState<"list" | "calendar">("list");
 
   const now = new Date();
-  const openOpps = useMemo(() => opps.filter((o) => o.status === "open"), [opps]);
+  // 「アポ」= ヨミが 4.アポ の商談。初回商談日(first_meeting_date)を予定日とする。
+  const apoOpps = useMemo(() => opps.filter((o) => o.yomi === YOMI_APPOINTMENT), [opps]);
 
-  // 当月/来月/再来月のアポ件数(next_action_date基準, open)
+  // 当月/来月/再来月のアポ件数(ヨミ=アポ × 初回商談日基準)
   const monthSummary = useMemo(() => {
     return [0, 1, 2].map((offset) => {
       const ref = new Date(now.getFullYear(), now.getMonth() + offset, 1);
       const y = ref.getFullYear();
       const m = ref.getMonth();
-      const count = openOpps.filter((o) => {
-        const d = parseYMD(o.next_action_date);
+      const count = apoOpps.filter((o) => {
+        const d = parseYMD(o.first_meeting_date);
         return d && d.getFullYear() === y && d.getMonth() === m;
       }).length;
       return {
@@ -59,9 +60,9 @@ export function OppViews({
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openOpps]);
+  }, [apoOpps]);
 
-  // 過去からの商談数推移(created_at基準, 直近9ヶ月+先2ヶ月予定)
+  // 推移: 過去〜当月=商談獲得数(created_at) / 先2ヶ月=アポ予定(初回商談日)
   const trend = useMemo(() => {
     const buckets: { label: string; count: number; isFuture?: boolean }[] = [];
     for (let offset = -8; offset <= 2; offset++) {
@@ -70,8 +71,8 @@ export function OppViews({
       const m = ref.getMonth();
       const isFuture = offset > 0;
       const count = isFuture
-        ? openOpps.filter((o) => {
-            const d = parseYMD(o.next_action_date);
+        ? apoOpps.filter((o) => {
+            const d = parseYMD(o.first_meeting_date);
             return d && d.getFullYear() === y && d.getMonth() === m;
           }).length
         : opps.filter((o) => {
@@ -82,18 +83,18 @@ export function OppViews({
     }
     return buckets;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opps, openOpps]);
+  }, [opps, apoOpps]);
 
   // カレンダー対象: 当月・来月
   const cal1 = { year: now.getFullYear(), month: now.getMonth() + 1 };
   const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const cal2 = { year: next.getFullYear(), month: next.getMonth() + 1 };
 
-  // 担当者の色凡例(当月・来月に予定がある担当)
+  // 担当者の色凡例(当月・来月にアポ予定がある担当)
   const ownerLegend = useMemo(() => {
     const map = new Map<string, { name: string; color: string }>();
-    for (const o of openOpps) {
-      const d = parseYMD(o.next_action_date);
+    for (const o of apoOpps) {
+      const d = parseYMD(o.first_meeting_date);
       if (!d || !o.owner) continue;
       const inWindow =
         (d.getFullYear() === cal1.year && d.getMonth() === cal1.month - 1) ||
@@ -102,7 +103,7 @@ export function OppViews({
     }
     return Array.from(map.values());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openOpps]);
+  }, [apoOpps]);
 
   return (
     <div className="space-y-4">
@@ -119,7 +120,7 @@ export function OppViews({
           {/* 月次アポ件数 vs 目標 */}
           <div className="card overflow-x-auto">
             <div className="px-5 pt-4 pb-3 border-b border-black/[0.04] flex items-center justify-between">
-              <h2 className="section-title">月次アポ件数 vs 目標</h2>
+              <h2 className="section-title">月次アポ件数 vs 目標<span className="ml-2 text-[11px] font-normal text-ink/40">ヨミ=4.アポ／初回商談日基準</span></h2>
               <span className="text-xs text-ink/40">目標(暫定) {MONTHLY_APPOINTMENT_TARGET}件/月</span>
             </div>
             <table className="w-full">
@@ -165,7 +166,7 @@ export function OppViews({
           <Section title="商談数の推移(実績／予定)">
             <AppointmentTrendChart data={trend} />
             <p className="text-[11px] text-ink/40 mt-2">
-              実績(濃色)=作成日ベースの商談獲得数。予定(淡色)=次アクション予定日ベースのアポ件数。
+              実績(濃色)=作成日ベースの商談獲得数。予定(淡色)=初回商談日ベースのアポ(ヨミ=4.アポ)件数。
             </p>
           </Section>
 
@@ -185,15 +186,15 @@ export function OppViews({
           {/* カレンダー(当月・来月) */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
             <div className="card card-pad">
-              <AppointmentCalendar year={cal1.year} month={cal1.month} opps={openOpps} />
+              <AppointmentCalendar year={cal1.year} month={cal1.month} opps={apoOpps} />
             </div>
             <div className="card card-pad">
-              <AppointmentCalendar year={cal2.year} month={cal2.month} opps={openOpps} />
+              <AppointmentCalendar year={cal2.year} month={cal2.month} opps={apoOpps} />
             </div>
           </div>
 
           <p className="text-xs text-ink/40 leading-relaxed">
-            ※ カレンダーは進行中商談の<b>次アクション予定日</b>を「アポ予定」として表示しています。
+            ※ カレンダーは<b>ヨミ=4.アポ</b>の商談を<b>初回商談日</b>に配置しています(初回商談待ちのアポ)。
             時刻(何時のアポか)は今後データ整備のうえ対応します。日付セルの色丸は担当者、クリックで商談詳細へ移動します。
           </p>
         </div>

@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import type { OppView } from "@/lib/data/select";
-import { STAGES, FORECAST_CATEGORIES } from "@/lib/constants";
-import { ForecastBadge, RiskBadge, StageBadge } from "@/components/ui/badges";
+import { STAGES, YOMI_OPTIONS } from "@/lib/constants";
+import { YomiBadge, RiskBadge, StageBadge } from "@/components/ui/badges";
 import { Avatar } from "@/components/ui/primitives";
 import { formatYen, formatDate, daysSince, cn } from "@/lib/utils";
 import { isStale, noNextAction } from "@/lib/risk";
@@ -32,7 +32,7 @@ export function OppTable({
 }) {
   const [q, setQ] = useState("");
   const [stage, setStage] = useState("");
-  const [forecast, setForecast] = useState("");
+  const [yomi, setYomi] = useState("");
   const [owner, setOwner] = useState("");
   const [product, setProduct] = useState("");
   const [source, setSource] = useState("");
@@ -46,7 +46,7 @@ export function OppTable({
     let list = opps.filter((o) => {
       if (q && !(`${o.name} ${o.account?.name ?? ""}`.toLowerCase().includes(q.toLowerCase()))) return false;
       if (stage && o.stage !== stage) return false;
-      if (forecast && o.forecast_category !== forecast) return false;
+      if (yomi && o.yomi !== yomi) return false;
       if (owner && o.owner_user_id !== owner) return false;
       if (product && o.primary_product_id !== product) return false;
       if (source && o.lead_source_id !== source) return false;
@@ -61,7 +61,7 @@ export function OppTable({
       return asc ? av - bv : bv - av;
     });
     return list;
-  }, [opps, q, stage, forecast, owner, product, source, campaign, onlyStale, onlyNoNext, sort, asc]);
+  }, [opps, q, stage, yomi, owner, product, source, campaign, onlyStale, onlyNoNext, sort, asc]);
 
   const totalAmount = filtered.reduce((s, o) => s + o.amount, 0);
   const totalWeighted = filtered.reduce((s, o) => s + o.weighted, 0);
@@ -90,8 +90,8 @@ export function OppTable({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Select value={yomi} onChange={setYomi} placeholder="ヨミ" options={YOMI_OPTIONS.map((y) => ({ id: y.key, name: y.label }))} />
           <Select value={stage} onChange={setStage} placeholder="ステージ" options={STAGES.map((s) => ({ id: s.key, name: s.label }))} />
-          <Select value={forecast} onChange={setForecast} placeholder="ヨミ" options={FORECAST_CATEGORIES.map((f) => ({ id: f.key, name: f.label }))} />
           <Select value={owner} onChange={setOwner} placeholder="担当営業" options={owners} />
           <Select value={product} onChange={setProduct} placeholder="商材" options={products} />
           <Select value={source} onChange={setSource} placeholder="流入経路" options={sources} />
@@ -115,12 +115,12 @@ export function OppTable({
           <thead className="border-b border-black/[0.06]">
             <tr>
               <th className="th">顧客 / 商談</th>
+              <th className="th">ヨミ</th>
               <th className="th">担当</th>
               <th className="th">商材</th>
               <th className="th">展示会 / 施策</th>
               <SortableTh label="金額" onClick={() => toggleSort("amount")} active={sort === "amount"} asc={asc} align="right" />
               <th className="th">ステージ</th>
-              <th className="th">ヨミ</th>
               <SortableTh label="確度" onClick={() => toggleSort("probability")} active={sort === "probability"} asc={asc} align="right" />
               <SortableTh label="受注予定" onClick={() => toggleSort("expected_close_date")} active={sort === "expected_close_date"} asc={asc} />
               <th className="th">次アクション</th>
@@ -138,6 +138,7 @@ export function OppTable({
                       <span className="text-xs text-ink/45 truncate block">{o.name}</span>
                     </Link>
                   </td>
+                  <td className="td"><YomiBadge yomi={o.yomi} /></td>
                   <td className="td"><div className="flex items-center gap-1.5"><Avatar user={o.owner} size={22} /><span className="text-xs">{o.owner?.name}</span></div></td>
                   <td className="td text-xs text-ink/70">{o.product?.name ?? "—"}</td>
                   <td className="td text-xs max-w-[160px]">
@@ -154,7 +155,6 @@ export function OppTable({
                   </td>
                   <td className="td text-right font-semibold tabular-nums">{formatYen(o.amount)}</td>
                   <td className="td"><StageBadge stage={o.stage} /></td>
-                  <td className="td"><ForecastBadge category={o.forecast_category} /></td>
                   <td className="td text-right tabular-nums">{o.probability}%</td>
                   <td className="td text-xs">{formatDate(o.expected_close_date)}</td>
                   <td className="td">

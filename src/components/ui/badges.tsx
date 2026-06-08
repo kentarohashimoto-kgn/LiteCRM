@@ -38,6 +38,26 @@ export function ForecastBadge({ category }: { category: ForecastCategory }) {
   return <span className={cn("pill", forecastColor[category])}>{def.label}</span>;
 }
 
+/** ヨミ(原本値)バッジ。先頭の番号で色分け。 */
+const yomiColor: Record<string, string> = {
+  "0": "bg-emerald-100 text-emerald-700", // 受注
+  "1": "bg-teal-primary text-white", // A(80%)
+  "2": "bg-teal-light text-teal-deep", // B(50%)
+  "3": "bg-sky-50 text-sky-700 border border-sky-200", // C(30%)
+  "4": "bg-accent-orange text-white", // アポ
+  "5": "bg-amber-50 text-accent-orange border border-accent-orange/20", // リスケ
+  "6": "bg-mist-soft text-ink/70 border border-black/5", // 定期追い
+  "7": "bg-rose-100 text-rose-600", // オチ
+  "8": "bg-rose-50 text-rose-400", // キャンセル
+  "9": "bg-violet-50 text-violet-600 border border-violet-200", // 調整中
+};
+
+export function YomiBadge({ yomi }: { yomi?: string | null }) {
+  if (!yomi) return <span className="pill bg-mist-soft text-ink/40">—</span>;
+  const cls = yomiColor[yomi.charAt(0)] ?? "bg-mist-soft text-ink/60";
+  return <span className={cn("pill", cls)}>{yomi}</span>;
+}
+
 const statusColor: Record<OpportunityStatus, string> = {
   open: "bg-teal-light text-teal-deep",
   won: "bg-emerald-100 text-emerald-700",

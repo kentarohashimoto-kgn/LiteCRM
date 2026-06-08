@@ -218,6 +218,10 @@ export interface Opportunity {
   name: string;
   stage: OpportunityStage;
   forecast_category: ForecastCategory;
+  /** Notion原本の「ヨミ」フィールド値(例: 4.アポ / 0.受注)。 */
+  yomi?: string;
+  /** 初回商談日(初回営業日)。カレンダーのアポ予定日に使用。 */
+  first_meeting_date?: string;
   amount: number;
   gross_profit?: number;
   gross_profit_rate?: number;

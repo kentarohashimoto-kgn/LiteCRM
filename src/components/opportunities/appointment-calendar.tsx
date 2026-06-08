@@ -13,7 +13,7 @@ function parseYMD(s?: string | null): Date | null {
   return new Date(y, m - 1, d);
 }
 
-/** 当月/来月などの単月カレンダー。next_action_date を「アポ予定日」として配置する。 */
+/** 当月/来月などの単月カレンダー。first_meeting_date(初回商談日)を「アポ予定日」として配置する。 */
 export function AppointmentCalendar({
   year,
   month, // 1-based
@@ -28,7 +28,7 @@ export function AppointmentCalendar({
 
   const byDay = new Map<number, OppView[]>();
   for (const o of opps) {
-    const d = parseYMD(o.next_action_date);
+    const d = parseYMD(o.first_meeting_date);
     if (d && d.getFullYear() === year && d.getMonth() === month - 1) {
       const day = d.getDate();
       const arr = byDay.get(day);
@@ -94,7 +94,7 @@ export function AppointmentCalendar({
                       key={o.id}
                       href={`/app/opportunities/${o.id}`}
                       className="flex items-center gap-1 rounded bg-teal-light/60 px-1 py-0.5 hover:bg-teal-light"
-                      title={`${o.account?.name ?? o.name}｜担当: ${o.owner?.name ?? "—"}｜${o.next_action_text ?? ""}`}
+                      title={`${o.account?.name ?? o.name}｜担当: ${o.owner?.name ?? "—"}｜ヨミ: ${o.yomi ?? "—"}`}
                     >
                       <span
                         className="w-1.5 h-1.5 rounded-full shrink-0"
