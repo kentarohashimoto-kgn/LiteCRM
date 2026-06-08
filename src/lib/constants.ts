@@ -103,6 +103,12 @@ export const ACTIVITY_TYPE_MAP = Object.fromEntries(
 export const STALE_DAYS = 7;
 export const PROPOSAL_FOLLOWUP_DAYS = 7;
 
+/**
+ * 月次アポ獲得目標(暫定)。カレンダー/月次サマリーの達成率判定に利用。
+ * ※ 将来は月ごと・チームごとに設定画面で上書き可能にする。
+ */
+export const MONTHLY_APPOINTMENT_TARGET = 30;
+
 /** CATORCE 流入経路マスタ初期値(8.2) */
 export const CATORCE_LEAD_SOURCES: { name: string; description: string }[] = [
   { name: "X", description: "X投稿、プロフィール、DM経由" },

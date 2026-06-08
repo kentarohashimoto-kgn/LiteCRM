@@ -2,7 +2,7 @@ import { Plus } from "lucide-react";
 import { getWorkspace } from "@/lib/data/workspace";
 import { getLeadSources, getProducts, listMembers, listOpportunities, listCampaigns } from "@/lib/data/select";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
-import { OppTable } from "@/components/opportunities/opp-table";
+import { OppViews } from "@/components/opportunities/opp-views";
 
 export default async function OpportunitiesPage() {
   const ws = await getWorkspace();
@@ -23,7 +23,7 @@ export default async function OpportunitiesPage() {
           </LinkButton>
         }
       />
-      <OppTable opps={opps} owners={owners} products={products} sources={sources} campaigns={campaigns} />
+      <OppViews opps={opps} owners={owners} products={products} sources={sources} campaigns={campaigns} />
     </div>
   );
 }
