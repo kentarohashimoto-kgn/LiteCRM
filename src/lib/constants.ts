@@ -9,6 +9,8 @@ import type {
   OpportunityStage,
   Role,
   ActivityType,
+  ChannelType,
+  CampaignEventStatus,
 } from "./types";
 
 export const APP_NAME = "CATORCE Sales OS";
@@ -118,6 +120,37 @@ export const CATORCE_LEAD_SOURCES: { name: string; description: string }[] = [
   { name: "メルマガ", description: "メール配信経由" },
   { name: "その他", description: "その他" },
 ];
+
+/**
+ * 施策(マーケティングチャネル)種別マスタ。
+ * 展示会を最重点に、代理店・セミナー・経営者アポ・コール・メディア・SNS・交流会へ拡張予定。
+ */
+export const CHANNELS: { key: ChannelType; label: string; short: string }[] = [
+  { key: "exhibition", label: "展示会", short: "展示会" },
+  { key: "agency", label: "代理店", short: "代理店" },
+  { key: "seminar", label: "セミナー", short: "セミナー" },
+  { key: "exec_appt_bt", label: "経営者アポ（ビジネスタンク）", short: "経営者アポ(BT)" },
+  { key: "exec_appt_rm", label: "経営者アポ（ラフメイカー）", short: "経営者アポ(RM)" },
+  { key: "whitelist_call", label: "ホワイトリストコール", short: "WLコール" },
+  { key: "media_ipros", label: "メディア（イプロス）", short: "イプロス" },
+  { key: "media_aismiley", label: "メディア（アイスマイリー）", short: "アイスマイリー" },
+  { key: "sns", label: "SNS", short: "SNS" },
+  { key: "networking", label: "交流会", short: "交流会" },
+  { key: "other", label: "その他", short: "その他" },
+];
+
+export const CHANNEL_MAP = Object.fromEntries(CHANNELS.map((c) => [c.key, c]));
+
+/** 施策インスタンスのステータス表示 */
+export const CAMPAIGN_EVENT_STATUS: { key: CampaignEventStatus; label: string }[] = [
+  { key: "done", label: "実施済み" },
+  { key: "applied", label: "申込み済" },
+  { key: "planned", label: "予定" },
+];
+
+export const CAMPAIGN_EVENT_STATUS_MAP = Object.fromEntries(
+  CAMPAIGN_EVENT_STATUS.map((s) => [s.key, s]),
+);
 
 /** CATORCE 商材マスタ初期値(8.1) */
 export const CATORCE_PRODUCTS: {

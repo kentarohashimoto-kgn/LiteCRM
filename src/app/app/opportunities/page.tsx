@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react";
 import { getWorkspace } from "@/lib/data/workspace";
-import { getLeadSources, getProducts, listMembers, listOpportunities } from "@/lib/data/select";
+import { getLeadSources, getProducts, listMembers, listOpportunities, listCampaigns } from "@/lib/data/select";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { OppTable } from "@/components/opportunities/opp-table";
 
@@ -10,6 +10,7 @@ export default async function OpportunitiesPage() {
   const owners = listMembers(ws).map(({ user }) => ({ id: user.id, name: user.name }));
   const products = getProducts(ws).map((p) => ({ id: p.id, name: p.name }));
   const sources = getLeadSources(ws).map((s) => ({ id: s.id, name: s.name }));
+  const campaigns = listCampaigns(ws).map((c) => ({ id: c.id, name: c.name }));
 
   return (
     <div>
@@ -22,7 +23,7 @@ export default async function OpportunitiesPage() {
           </LinkButton>
         }
       />
-      <OppTable opps={opps} owners={owners} products={products} sources={sources} />
+      <OppTable opps={opps} owners={owners} products={products} sources={sources} campaigns={campaigns} />
     </div>
   );
 }

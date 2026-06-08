@@ -3,7 +3,7 @@
  */
 
 import type { OppView } from "@/lib/data/select";
-import type { Lead } from "@/lib/types";
+import type { Campaign, Lead } from "@/lib/types";
 import { groupBy, sum } from "@/lib/utils";
 import { isStale, noNextAction } from "@/lib/risk";
 
@@ -101,6 +101,103 @@ export interface ChannelMetric {
   wonAmount: number;
   winRate: number; // won / opp
   avgDealSize: number;
+}
+
+/**
+ * 施策インスタンス(展示会など)別の指標。
+ * リード数・アポ数・費用は施策側の実績(campaign)を、成約数・売上はCRM商談を正本とする。
+ */
+export interface CampaignMetric {
+  campaign: Campaign;
+  oppCount: number; // CRM紐付き商談数
+  openCount: number;
+  wonCount: number; // 成約数(CRM=正本)
+  lostCount: number;
+  wonAmount: number; // 売上(CRM=正本)
+  weighted: number; // 進行中の加重パイプライン
+  actualLeads: number | null;
+  appointments: number | null;
+  expectedLeads: number | null;
+  cost: number | null;
+  cpl: number | null; // 費用 / リード数
+  cpa: number | null; // 費用 / アポ数
+  cpo: number | null; // 費用 / 成約数(CRM)
+  roi: number | null; // (売上 - 費用) / 費用
+  apptRate: number | null; // アポ数 / リード数
+  winRate: number | null; // 成約数 / アポ数
+}
+
+export function campaignMetrics(campaigns: Campaign[], opps: OppView[]): CampaignMetric[] {
+  const byCampaign = groupBy(
+    opps.filter((o) => o.campaign_id),
+    (o) => o.campaign_id!,
+  );
+  return campaigns.map((c) => {
+    const list = byCampaign[c.id] ?? [];
+    const won = list.filter((o) => o.status === "won");
+    const open = list.filter((o) => o.status === "open");
+    const lost = list.filter((o) => o.status === "lost");
+    const wonAmount = sum(won, (o) => o.amount);
+    const cost = c.cost ?? null;
+    const actualLeads = c.actual_leads ?? null;
+    const appts = c.appointments ?? null;
+    return {
+      campaign: c,
+      oppCount: list.length,
+      openCount: open.length,
+      wonCount: won.length,
+      lostCount: lost.length,
+      wonAmount,
+      weighted: sum(open, (o) => o.weighted),
+      actualLeads,
+      appointments: appts,
+      expectedLeads: c.expected_leads ?? null,
+      cost,
+      cpl: cost != null && actualLeads ? cost / actualLeads : null,
+      cpa: cost != null && appts ? cost / appts : null,
+      cpo: cost != null && won.length ? cost / won.length : null,
+      roi: cost != null && cost > 0 ? (wonAmount - cost) / cost : null,
+      apptRate: actualLeads && appts != null ? appts / actualLeads : null,
+      winRate: appts ? won.length / appts : null,
+    };
+  });
+}
+
+export interface CampaignTotals {
+  count: number;
+  leads: number;
+  appointments: number;
+  oppCount: number;
+  wonCount: number;
+  wonAmount: number;
+  weighted: number;
+  cost: number;
+  cpl: number | null;
+  cpa: number | null;
+  cpo: number | null;
+  roi: number | null;
+}
+
+export function campaignTotals(metrics: CampaignMetric[]): CampaignTotals {
+  const leads = sum(metrics, (m) => m.actualLeads ?? 0);
+  const appointments = sum(metrics, (m) => m.appointments ?? 0);
+  const wonCount = sum(metrics, (m) => m.wonCount);
+  const wonAmount = sum(metrics, (m) => m.wonAmount);
+  const cost = sum(metrics, (m) => m.cost ?? 0);
+  return {
+    count: metrics.length,
+    leads,
+    appointments,
+    oppCount: sum(metrics, (m) => m.oppCount),
+    wonCount,
+    wonAmount,
+    weighted: sum(metrics, (m) => m.weighted),
+    cost,
+    cpl: leads ? cost / leads : null,
+    cpa: appointments ? cost / appointments : null,
+    cpo: wonCount ? cost / wonCount : null,
+    roi: cost > 0 ? (wonAmount - cost) / cost : null,
+  };
 }
 
 export function channelMetrics(opps: OppView[], leads: Lead[]): ChannelMetric[] {

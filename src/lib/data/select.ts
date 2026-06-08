@@ -7,6 +7,7 @@ import type { Workspace } from "./workspace";
 import type {
   Account,
   Activity,
+  Campaign,
   Contact,
   Lead,
   LeadSource,
@@ -23,6 +24,7 @@ export interface OppView extends Opportunity {
   owner?: User;
   product?: Product;
   leadSource?: LeadSource;
+  campaign?: Campaign;
   weighted: number;
 }
 
@@ -38,6 +40,9 @@ export function getProduct(ws: Workspace, id?: string): Product | undefined {
 export function getLeadSource(ws: Workspace, id?: string): LeadSource | undefined {
   return id ? ws.leadSourcesById.get(id) : undefined;
 }
+export function getCampaign(ws: Workspace, id?: string): Campaign | undefined {
+  return id ? ws.campaignsById.get(id) : undefined;
+}
 
 export function toOppView(ws: Workspace, o: Opportunity): OppView {
   return {
@@ -46,6 +51,7 @@ export function toOppView(ws: Workspace, o: Opportunity): OppView {
     owner: getUser(ws, o.owner_user_id),
     product: getProduct(ws, o.primary_product_id),
     leadSource: getLeadSource(ws, o.lead_source_id),
+    campaign: getCampaign(ws, o.campaign_id),
     weighted: Math.round((o.amount * o.probability) / 100),
   };
 }
@@ -110,6 +116,12 @@ export function getProducts(ws: Workspace): Product[] {
 }
 export function getLeadSources(ws: Workspace): LeadSource[] {
   return ws.leadSources;
+}
+export function listCampaigns(ws: Workspace): Campaign[] {
+  return ws.campaigns;
+}
+export function listCampaignsByChannel(ws: Workspace, channel: string): Campaign[] {
+  return ws.campaigns.filter((c) => c.channel === channel);
 }
 export function getSalesTargets(ws: Workspace) {
   return ws.salesTargets;

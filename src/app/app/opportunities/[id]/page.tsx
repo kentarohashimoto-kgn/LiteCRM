@@ -10,12 +10,13 @@ import {
   getTasksByOpportunity,
   getUser,
   listMembers,
+  listCampaigns,
 } from "@/lib/data/select";
 import { STAGES, FORECAST_CATEGORIES, STAGE_MAP, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP } from "@/lib/constants";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge, StatusBadge } from "@/components/ui/badges";
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
-import { addActivityAction, updateOpportunityAction } from "@/server/actions";
+import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction } from "@/server/actions";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince } from "@/lib/utils";
 
 export default async function OpportunityDetailPage({ params }: { params: { id: string } }) {
@@ -27,6 +28,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
   const tasks = getTasksByOpportunity(ws, o.id);
   const history = getStageHistory(ws, o.id);
   const contacts = o.account ? getContactsByAccount(ws, o.account.id) : [];
+  const campaigns = listCampaigns(ws);
   const risk = evaluateRisk(o);
   const since = daysSince(o.last_activity_at);
 
@@ -195,6 +197,28 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
               <Row label="最終活動">{since != null ? `${since}日前` : "—"}</Row>
               <Row label="作成日">{formatDateFull(o.created_at)}</Row>
             </dl>
+            {/* 展示会・施策の紐付け(修正可) */}
+            <form action={setOpportunityCampaignAction} className="mt-4 pt-3 border-t border-black/[0.05]">
+              <input type="hidden" name="id" value={o.id} />
+              <label className="label flex items-center gap-1.5">
+                展示会・施策
+                {o.campaign_estimated && o.campaign && (
+                  <span className="pill bg-mist-soft text-ink/40 text-[9px]">推定</span>
+                )}
+              </label>
+              <div className="flex gap-2">
+                <select name="campaign_id" defaultValue={o.campaign_id ?? ""} className="input flex-1">
+                  <option value="">—（紐付けなし）</option>
+                  {campaigns.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <button type="submit" className="btn-ghost shrink-0">確定</button>
+              </div>
+              {o.campaign_estimated && (
+                <p className="text-[11px] text-ink/40 mt-1">作成日から自動推定。正しい展示会を選び直して確定すると確定値になります。</p>
+              )}
+            </form>
           </Section>
 
           <Section title="顧客 / 担当者">

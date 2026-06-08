@@ -109,6 +109,22 @@ export async function updateOpportunityAction(formData: FormData) {
   redirect(`/app/opportunities/${id}`);
 }
 
+/** 商談を展示会・施策インスタンスへ紐付け(手動修正)。推定フラグは解除する。 */
+export async function setOpportunityCampaignAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  const campaignId = str(formData.get("campaign_id"));
+  await sb
+    .from("opportunities")
+    .update({ campaign_id: campaignId, campaign_estimated: false })
+    .eq("id", id);
+  revalidatePath(`/app/opportunities/${id}`);
+  revalidatePath("/app/opportunities");
+  revalidatePath("/app/analytics/exhibitions");
+  redirect(`/app/opportunities/${id}`);
+}
+
 // ===================== 活動 =====================
 export async function addActivityAction(formData: FormData) {
   const ctx = await requireCtx();

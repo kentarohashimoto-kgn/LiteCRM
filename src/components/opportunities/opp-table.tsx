@@ -22,11 +22,13 @@ export function OppTable({
   owners,
   products,
   sources,
+  campaigns = [],
 }: {
   opps: OppView[];
   owners: Option[];
   products: Option[];
   sources: Option[];
+  campaigns?: Option[];
 }) {
   const [q, setQ] = useState("");
   const [stage, setStage] = useState("");
@@ -34,6 +36,7 @@ export function OppTable({
   const [owner, setOwner] = useState("");
   const [product, setProduct] = useState("");
   const [source, setSource] = useState("");
+  const [campaign, setCampaign] = useState("");
   const [onlyStale, setOnlyStale] = useState(false);
   const [onlyNoNext, setOnlyNoNext] = useState(false);
   const [sort, setSort] = useState<SortKey>("expected_close_date");
@@ -47,6 +50,7 @@ export function OppTable({
       if (owner && o.owner_user_id !== owner) return false;
       if (product && o.primary_product_id !== product) return false;
       if (source && o.lead_source_id !== source) return false;
+      if (campaign && o.campaign_id !== campaign) return false;
       if (onlyStale && !isStale(o)) return false;
       if (onlyNoNext && !noNextAction(o)) return false;
       return true;
@@ -57,7 +61,7 @@ export function OppTable({
       return asc ? av - bv : bv - av;
     });
     return list;
-  }, [opps, q, stage, forecast, owner, product, source, onlyStale, onlyNoNext, sort, asc]);
+  }, [opps, q, stage, forecast, owner, product, source, campaign, onlyStale, onlyNoNext, sort, asc]);
 
   const totalAmount = filtered.reduce((s, o) => s + o.amount, 0);
   const totalWeighted = filtered.reduce((s, o) => s + o.weighted, 0);
@@ -91,6 +95,9 @@ export function OppTable({
           <Select value={owner} onChange={setOwner} placeholder="担当営業" options={owners} />
           <Select value={product} onChange={setProduct} placeholder="商材" options={products} />
           <Select value={source} onChange={setSource} placeholder="流入経路" options={sources} />
+          {campaigns.length > 0 && (
+            <Select value={campaign} onChange={setCampaign} placeholder="展示会・施策" options={campaigns} />
+          )}
           <Toggle active={onlyNoNext} onClick={() => setOnlyNoNext((v) => !v)} label="次アクション未設定" />
           <Toggle active={onlyStale} onClick={() => setOnlyStale((v) => !v)} label="放置案件" />
         </div>
@@ -110,6 +117,7 @@ export function OppTable({
               <th className="th">顧客 / 商談</th>
               <th className="th">担当</th>
               <th className="th">商材</th>
+              <th className="th">展示会 / 施策</th>
               <SortableTh label="金額" onClick={() => toggleSort("amount")} active={sort === "amount"} asc={asc} align="right" />
               <th className="th">ステージ</th>
               <th className="th">ヨミ</th>
@@ -132,6 +140,18 @@ export function OppTable({
                   </td>
                   <td className="td"><div className="flex items-center gap-1.5"><Avatar user={o.owner} size={22} /><span className="text-xs">{o.owner?.name}</span></div></td>
                   <td className="td text-xs text-ink/70">{o.product?.name ?? "—"}</td>
+                  <td className="td text-xs max-w-[160px]">
+                    {o.campaign ? (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="truncate text-ink/70">{o.campaign.name}</span>
+                        {o.campaign_estimated && (
+                          <span className="pill bg-mist-soft text-ink/40 text-[9px] shrink-0" title="作成日からの自動推定。修正可能です。">推定</span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-ink/30">{o.leadSource?.name ?? "—"}</span>
+                    )}
+                  </td>
                   <td className="td text-right font-semibold tabular-nums">{formatYen(o.amount)}</td>
                   <td className="td"><StageBadge stage={o.stage} /></td>
                   <td className="td"><ForecastBadge category={o.forecast_category} /></td>
@@ -155,7 +175,7 @@ export function OppTable({
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={10} className="td text-center text-ink/40 py-10">条件に一致する商談がありません</td>
+                <td colSpan={11} className="td text-center text-ink/40 py-10">条件に一致する商談がありません</td>
               </tr>
             )}
           </tbody>

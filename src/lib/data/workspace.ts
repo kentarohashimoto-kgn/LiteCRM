@@ -4,6 +4,7 @@ import { requireCtx, type Ctx } from "@/lib/session";
 import type {
   Account,
   Activity,
+  Campaign,
   Contact,
   Lead,
   LeadSource,
@@ -31,6 +32,8 @@ export interface Workspace {
   contacts: Contact[];
   leadSources: LeadSource[];
   leadSourcesById: Map<string, LeadSource>;
+  campaigns: Campaign[];
+  campaignsById: Map<string, Campaign>;
   products: Product[];
   productsById: Map<string, Product>;
   leads: Lead[];
@@ -58,6 +61,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     accounts,
     contacts,
     leadSources,
+    campaigns,
     products,
     leads,
     opportunities,
@@ -71,6 +75,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     sb.from("accounts").select("*").order("name"),
     sb.from("contacts").select("*"),
     sb.from("lead_sources").select("*").order("created_at"),
+    sb.from("campaigns").select("*").order("sort_order"),
     sb.from("products").select("*").order("created_at"),
     sb.from("leads").select("*").order("acquired_at", { ascending: false }),
     sb.from("opportunities").select("*"),
@@ -89,6 +94,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
 
   const accountsArr = (accounts.data ?? []) as Account[];
   const leadSourcesArr = (leadSources.data ?? []) as LeadSource[];
+  const campaignsArr = (campaigns.data ?? []) as Campaign[];
   const productsArr = (products.data ?? []) as Product[];
 
   return {
@@ -101,6 +107,8 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     contacts: (contacts.data ?? []) as Contact[],
     leadSources: leadSourcesArr,
     leadSourcesById: new Map(leadSourcesArr.map((l) => [l.id, l])),
+    campaigns: campaignsArr,
+    campaignsById: new Map(campaignsArr.map((c) => [c.id, c])),
     products: productsArr,
     productsById: new Map(productsArr.map((p) => [p.id, p])),
     leads: (leads.data ?? []) as Lead[],

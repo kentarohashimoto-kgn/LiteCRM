@@ -55,6 +55,23 @@ export type TaskStatus = "todo" | "done" | "cancelled" | "overdue";
 export type Priority = "high" | "middle" | "low";
 export type RiskLevel = "low" | "middle" | "high";
 
+/** 施策(マーケティングチャネル)種別。展示会を起点に他施策へ拡張する。 */
+export type ChannelType =
+  | "exhibition"
+  | "agency"
+  | "seminar"
+  | "exec_appt_bt"
+  | "exec_appt_rm"
+  | "whitelist_call"
+  | "media_ipros"
+  | "media_aismiley"
+  | "sns"
+  | "networking"
+  | "other";
+
+/** 施策インスタンスのステータス(実施済み/申込み済/予定) */
+export type CampaignEventStatus = "done" | "applied" | "planned";
+
 export interface Tenant {
   id: UUID;
   name: string;
@@ -120,6 +137,36 @@ export interface LeadSource {
   status: string;
 }
 
+/**
+ * 施策インスタンス(=1展示会 / 1セミナー など)。
+ * リード数・アポ数・架電数・費用は施策側の実績(CRMに個票が無いため campaign に保持)。
+ * 成約数・売上は紐づく opportunities から集計する(=正本はCRM)。
+ */
+export interface Campaign {
+  id: UUID;
+  tenant_id: UUID;
+  lead_source_id?: UUID;
+  channel: ChannelType;
+  name: string;
+  organizer?: string;
+  venue?: string;
+  event_status: CampaignEventStatus;
+  event_date?: string;
+  end_date?: string;
+  days?: number;
+  expected_leads?: number;
+  actual_leads?: number;
+  action_count?: number;
+  appointments?: number;
+  reported_deals?: number;
+  reported_revenue?: number;
+  cost?: number;
+  sort_order?: number;
+  notes?: string;
+  status: string;
+  created_at: string;
+}
+
 export interface ProductCategory {
   id: UUID;
   tenant_id: UUID;
@@ -179,6 +226,8 @@ export interface Opportunity {
   expected_revenue_month?: string;
   primary_product_id?: UUID;
   lead_source_id?: UUID;
+  campaign_id?: UUID;
+  campaign_estimated?: boolean;
   next_action_date?: string;
   next_action_text?: string;
   last_activity_at?: string;
