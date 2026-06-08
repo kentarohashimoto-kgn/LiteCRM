@@ -97,9 +97,13 @@ export interface ChannelMetric {
   leadCount: number;
   oppCount: number;
   conversionRate: number; // opp / lead
+  openCount: number;
+  openAmount: number;
+  weighted: number; // 進行中の加重パイプライン
   wonCount: number;
   wonAmount: number;
-  winRate: number; // won / opp
+  lostCount: number;
+  winRate: number; // won / (won + lost)
   avgDealSize: number;
 }
 
@@ -216,6 +220,9 @@ export function channelMetrics(opps: OppView[], leads: Lead[]): ChannelMetric[] 
       const list = oppBySource[sourceId] ?? [];
       const leadList = leadBySource[sourceId] ?? [];
       const won = list.filter((o) => o.status === "won");
+      const open = list.filter((o) => o.status === "open");
+      const lost = list.filter((o) => o.status === "lost");
+      const decided = won.length + lost.length;
       const name = list[0]?.leadSource?.name ?? "—";
       return {
         sourceId,
@@ -223,9 +230,13 @@ export function channelMetrics(opps: OppView[], leads: Lead[]): ChannelMetric[] 
         leadCount: leadList.length,
         oppCount: list.length,
         conversionRate: leadList.length ? list.length / leadList.length : 0,
+        openCount: open.length,
+        openAmount: sum(open, (o) => o.amount),
+        weighted: sum(open, (o) => o.weighted),
         wonCount: won.length,
         wonAmount: sum(won, (o) => o.amount),
-        winRate: list.length ? won.length / list.length : 0,
+        lostCount: lost.length,
+        winRate: decided ? won.length / decided : 0,
         avgDealSize: won.length ? sum(won, (o) => o.amount) / won.length : 0,
       };
     })
