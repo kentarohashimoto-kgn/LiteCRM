@@ -42,7 +42,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
         <ChevronLeft size={16} /> 案件一覧
       </Link>
       <PageHeader
-        title={o.account?.name ?? "商談"}
+        title={o.account?.name ?? "案件"}
         subtitle={o.name}
         action={
           <div className="flex items-center gap-2">
@@ -175,7 +175,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
               </div>
               <div>
                 <label className="label">次アクション内容</label>
-                <input name="next_action_text" defaultValue={o.next_action_text ?? ""} className="input" placeholder="open商談は次アクションを必ず設定しましょう" />
+                <input name="next_action_text" defaultValue={o.next_action_text ?? ""} className="input" placeholder="open案件は次アクションを必ず設定しましょう" />
               </div>
               <div>
                 <label className="label">失注理由（失注時のみ）</label>

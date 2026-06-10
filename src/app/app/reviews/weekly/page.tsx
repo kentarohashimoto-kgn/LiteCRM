@@ -106,7 +106,7 @@ export default async function WeeklyReviewPage() {
         </Section>
         <Section title="流入経路別状況">
           <MiniTable
-            head={["経路", "商談", "成約率"]}
+            head={["経路", "案件", "成約率"]}
             rows={channels.map((c) => [c.name, `${c.oppCount}件`, formatPercent(c.winRate)])}
           />
         </Section>

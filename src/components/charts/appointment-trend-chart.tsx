@@ -11,7 +11,7 @@ export interface TrendDatum {
   isFuture?: boolean;
 }
 
-/** 月別の商談数推移(実績=ティール / 予定=ライト) */
+/** 月別の案件数推移(実績=ティール / 予定=ライト) */
 export function AppointmentTrendChart({ data }: { data: TrendDatum[] }) {
   return (
     <ResponsiveContainer width="100%" height={220}>

@@ -40,7 +40,7 @@ export function OppViews({
   const [trendTab, setTrendTab] = useState<"total" | "owner" | "exhibition">("total");
 
   const now = new Date();
-  // 「アポ」= ヨミが 4.アポ の商談。初回商談日(first_meeting_date)を予定日とする。
+  // 「アポ」= ヨミが 4.アポ の案件。初回商談日(first_meeting_date)を予定日とする。
   const apoOpps = useMemo(() => opps.filter((o) => o.yomi === YOMI_APPOINTMENT), [opps]);
 
   // 当月/来月/再来月のアポ件数(ヨミ=アポ × 初回商談日基準)
@@ -64,8 +64,8 @@ export function OppViews({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apoOpps]);
 
-  // 推移の月バケット。過去〜当月=商談獲得(created_at)、先2ヶ月=アポ予定(初回商談日)。
-  // 各月にひも付く商談リストを保持し、全体/担当者別/展示会別で再集計する。
+  // 推移の月バケット。過去〜当月=案件獲得(created_at)、先2ヶ月=アポ予定(初回商談日)。
+  // 各月にひも付く案件リストを保持し、全体/担当者別/展示会別で再集計する。
   const buckets = useMemo(() => {
     const list: { label: string; isFuture: boolean; opps: OppView[] }[] = [];
     for (let offset = -8; offset <= 2; offset++) {
@@ -247,7 +247,7 @@ export function OppViews({
 
           <p className="text-xs text-ink/40 leading-relaxed">
             ※ カレンダーは<b>ヨミ=4.アポ</b>の案件を<b>初回商談日</b>に配置しています(初回商談待ちのアポ)。
-            時刻(何時のアポか)は今後データ整備のうえ対応します。日付セルの色丸は担当者、クリックで商談詳細へ移動します。
+            時刻(何時のアポか)は今後データ整備のうえ対応します。日付セルの色丸は担当者、クリックで案件詳細へ移動します。
           </p>
         </div>
       )}

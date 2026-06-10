@@ -48,7 +48,7 @@ export default async function ExhibitionAnalyticsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="総リード獲得" raw={num(totals.leads)} sub={`実施済み ${totals.count}件`} />
         <StatCard label="総アポ獲得" raw={num(totals.appointments)} sub={`アポ率 ${formatPercent(totals.leads ? totals.appointments / totals.leads : null)}`} />
-        <StatCard label="成約(CRM)" raw={num(totals.wonCount)} sub={`紐付き商談 ${num(totals.oppCount)}件`} />
+        <StatCard label="成約(CRM)" raw={num(totals.wonCount)} sub={`紐付き案件 ${num(totals.oppCount)}件`} />
         <StatCard label="売上(CRM)" amount={totals.wonAmount} accent sub={`進行中Weighted ${formatYen(totals.weighted)}`} />
         <StatCard label="総出展費用" amount={totals.cost} sub="リード獲得費用" />
         <StatCard label="平均CPL" raw={totals.cpl != null ? formatYen(totals.cpl) : "—"} sub="リード単価" />
@@ -172,9 +172,9 @@ export default async function ExhibitionAnalyticsPage() {
       </div>
 
       <p className="text-xs text-ink/40 leading-relaxed">
-        ※ <b>成約数・売上</b>は CRM の商談データを正本に集計（紐付き商談の受注実績）。
+        ※ <b>成約数・売上</b>は CRM の案件データを正本に集計（紐付き案件の受注実績）。
         <b>リード数・アポ数・費用</b>は展示会管理表の実績値。
-        既存商談の展示会への紐付けは作成日からの<b>自動推定</b>（商談詳細で修正可）。
+        既存案件の展示会への紐付けは作成日からの<b>自動推定</b>（案件詳細で修正可）。
         括弧内の「表」は管理表の記載値（参考）。
       </p>
     </div>

@@ -11,7 +11,7 @@ export default async function ActivitiesPage() {
 
   return (
     <div>
-      <PageHeader title="活動履歴" subtitle="商談・顧客に紐づく活動(商談・電話・メール・DM等)の記録です。" />
+      <PageHeader title="活動履歴" subtitle="案件・顧客に紐づく活動(商談・電話・メール・DM等)の記録です。" />
       <div className="card card-pad">
         {activities.length === 0 ? (
           <p className="text-sm text-ink/40 py-8 text-center">活動履歴がありません</p>
@@ -25,7 +25,7 @@ export default async function ActivitiesPage() {
                     <span className="pill bg-teal-light text-teal-deep">{ACTIVITY_TYPE_MAP[a.activity_type]?.label}</span>
                     <span className="text-sm font-medium text-ink">{a.title}</span>
                     {a.opportunity_id && (
-                      <Link href={`/app/opportunities/${a.opportunity_id}`} className="text-xs text-teal-deep hover:underline">商談を見る</Link>
+                      <Link href={`/app/opportunities/${a.opportunity_id}`} className="text-xs text-teal-deep hover:underline">案件を見る</Link>
                     )}
                   </div>
                   {a.body && <p className="text-sm text-ink/60 mt-1">{a.body}</p>}

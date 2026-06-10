@@ -33,11 +33,11 @@ export default async function LeadSourceAnalyticsPage() {
     <div className="space-y-5">
       <PageHeader
         title="流入元分析"
-        subtitle="商談の流入元(展示会・代理店・パートナー・紹介 等)別に、受注・進行中・成約率・単価を分析します。"
+        subtitle="案件の流入元(展示会・代理店・パートナー・紹介 等)別に、受注・進行中・成約率・単価を分析します。"
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="商談総数" raw={num(totalOpps) + " 件"} sub={`流入元 ${channels.length} 種`} />
+        <StatCard label="案件総数" raw={num(totalOpps) + " 件"} sub={`流入元 ${channels.length} 種`} />
         <StatCard label="受注金額(累計)" amount={totalWonAmount} accent sub={`受注 ${totalWon} 件`} />
         <StatCard label="進行中 Weighted" amount={totalWeighted} sub="加重パイプライン" />
         <StatCard label="全体成約率" raw={formatPercent(overallWinRate)} sub={`受注/(受注+失注) ${totalWon}/${totalWon + totalLost}`} />
@@ -52,7 +52,7 @@ export default async function LeadSourceAnalyticsPage() {
           <thead className="border-b border-black/[0.06]">
             <tr>
               <th className="th">流入元</th>
-              <th className="th text-right">商談数</th>
+              <th className="th text-right">案件数</th>
               <th className="th text-right">進行中</th>
               <th className="th text-right">Weighted</th>
               <th className="th text-right">受注数</th>
@@ -92,14 +92,14 @@ export default async function LeadSourceAnalyticsPage() {
               );
             })}
             {channels.length === 0 && (
-              <tr><td colSpan={10} className="td text-center text-ink/40 py-10">商談データがありません</td></tr>
+              <tr><td colSpan={10} className="td text-center text-ink/40 py-10">案件データがありません</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
       <p className="text-xs text-ink/40 leading-relaxed">
-        ※ 成約率は 受注/(受注+失注)。Weighted は進行中商談の 金額×確度。
+        ※ 成約率は 受注/(受注+失注)。Weighted は進行中案件の 金額×確度。
         最重点施策の<b>展示会</b>はリード→アポ→成約→ROIまで<Link href="/app/analytics/exhibitions" className="text-teal-primary hover:underline">展示会分析</Link>でドリルダウンできます。
         代理店・セミナー・経営者アポ等の施策別ドリルダウンは、データが揃い次第このページから辿れるよう追加します。
       </p>

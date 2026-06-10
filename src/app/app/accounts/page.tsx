@@ -30,7 +30,7 @@ export default async function AccountsPage() {
               <th className="th">エリア</th>
               <th className="th">区分</th>
               <th className="th">優先度</th>
-              <th className="th text-right">商談数</th>
+              <th className="th text-right">案件数</th>
               <th className="th text-right">進行中金額</th>
               <th className="th text-right">担当者</th>
             </tr>

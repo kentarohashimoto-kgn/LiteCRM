@@ -67,7 +67,7 @@ export const FORECAST_MAP = Object.fromEntries(
 export const ROLES: { key: Role; label: string; description: string }[] = [
   { key: "owner", label: "代表(Owner)", description: "全権限" },
   { key: "admin", label: "管理者", description: "設定、メンバー管理、全データ管理" },
-  { key: "sales_manager", label: "Sales Ops", description: "全商談閲覧、レビュー、分析" },
+  { key: "sales_manager", label: "Sales Ops", description: "全案件閲覧、レビュー、分析" },
   { key: "sales_rep", label: "営業担当", description: "自分の担当案件を閲覧・編集" },
   { key: "external_sales", label: "外部営業", description: "割り当て案件のみ閲覧・編集" },
   { key: "partner", label: "パートナー営業", description: "自分の紹介案件のみ閲覧" },

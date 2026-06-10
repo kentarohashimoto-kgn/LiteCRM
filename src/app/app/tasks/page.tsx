@@ -82,7 +82,7 @@ function TaskGroup({ ws, title, tone, tasks, empty, done = false }: { ws: Worksp
                   <div className={`text-sm ${done ? "line-through text-ink/40" : "text-ink"}`}>{t.title}</div>
                   <div className="text-xs text-ink/45">
                     {acc?.name}
-                    {t.opportunity_id && <Link href={`/app/opportunities/${t.opportunity_id}`} className="text-teal-deep hover:underline ml-1">商談を見る</Link>}
+                    {t.opportunity_id && <Link href={`/app/opportunities/${t.opportunity_id}`} className="text-teal-deep hover:underline ml-1">案件を見る</Link>}
                   </div>
                 </div>
                 {t.priority === "high" && <Tag tone="orange">高</Tag>}

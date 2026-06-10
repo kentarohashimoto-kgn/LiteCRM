@@ -13,7 +13,7 @@ export default async function ProductAnalyticsPage() {
 
   return (
     <div>
-      <PageHeader title="商品別分析" subtitle="商材別の商談数・成約率・平均単価・粗利・LTVを分析します。" />
+      <PageHeader title="商品別分析" subtitle="商材別の案件数・成約率・平均単価・粗利・LTVを分析します。" />
 
       <Section title="商品別 受注金額" className="mb-5">
         <SimpleBar data={products.map((p) => ({ label: p.name, value: p.wonAmount }))} color="#F59A2A" />
@@ -25,7 +25,7 @@ export default async function ProductAnalyticsPage() {
             <tr>
               <th className="th">商品</th>
               <th className="th">カテゴリ</th>
-              <th className="th text-right">商談数</th>
+              <th className="th text-right">案件数</th>
               <th className="th text-right">進行中金額</th>
               <th className="th text-right">受注数</th>
               <th className="th text-right">受注金額</th>

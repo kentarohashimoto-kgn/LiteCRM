@@ -8,9 +8,9 @@ import { formatDate } from "@/lib/utils";
 const statusLabel: Record<string, string> = {
   new: "新規",
   contacted: "対応中",
-  qualified: "商談化候補",
+  qualified: "案件化候補",
   disqualified: "対象外",
-  converted: "商談化済",
+  converted: "案件化済",
 };
 const statusTone: Record<string, "teal" | "orange" | "gray"> = {
   new: "orange",

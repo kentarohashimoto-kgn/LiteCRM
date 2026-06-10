@@ -94,7 +94,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
           </div>
         </Section>
 
-        <Section title="商談ステージ">
+        <Section title="案件ステージ">
           <ul className="space-y-1.5">
             {STAGES.map((s) => (
               <li key={s.key} className="flex items-center justify-between text-sm">
