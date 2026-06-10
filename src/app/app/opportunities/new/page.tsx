@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getWorkspace } from "@/lib/data/workspace";
 import { getLeadSources, getProducts, listAccounts, listMembers } from "@/lib/data/select";
-import { STAGES, FORECAST_CATEGORIES } from "@/lib/constants";
+import { STAGES, FORECAST_CATEGORIES, CATEGORIES } from "@/lib/constants";
 import { PageHeader } from "@/components/ui/primitives";
 import { createOpportunityAction } from "@/server/actions";
 
@@ -48,6 +48,13 @@ export default async function NewOpportunityPage() {
             <select name="lead_source_id" className="input">
               <option value="">選択してください</option>
               {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">分類</label>
+            <select name="category" className="input" defaultValue="">
+              <option value="">選択してください</option>
+              {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
           </div>
         </div>

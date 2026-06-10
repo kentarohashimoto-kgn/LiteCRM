@@ -7,6 +7,7 @@ import type { Workspace } from "./workspace";
 import type {
   Account,
   Activity,
+  BillingSchedule,
   Campaign,
   Contact,
   Lead,
@@ -134,6 +135,16 @@ export function getMeetingsByAccount(ws: Workspace, accountId: string): MeetingV
 export function getMeeting(ws: Workspace, id: string): MeetingView | undefined {
   const m = ws.meetings.find((x) => x.id === id);
   return m ? toMeetingView(ws, m) : undefined;
+}
+
+export function getBillingByOpportunity(ws: Workspace, opportunityId: string): BillingSchedule[] {
+  return ws.billingSchedules
+    .filter((b) => b.opportunity_id === opportunityId)
+    .sort((a, b) => (a.billing_date ?? a.recurring_start_month ?? "").localeCompare(b.billing_date ?? b.recurring_start_month ?? ""));
+}
+
+export function listBillingSchedules(ws: Workspace): BillingSchedule[] {
+  return ws.billingSchedules;
 }
 
 export function getStageHistory(ws: Workspace, id: string): StageHistory[] {

@@ -50,6 +50,7 @@ export async function createOpportunityAction(formData: FormData) {
       owner_user_id: str(formData.get("owner_user_id")) ?? ctx.userId,
       primary_product_id: str(formData.get("primary_product_id")),
       lead_source_id: str(formData.get("lead_source_id")),
+      category: str(formData.get("category")),
       stage,
       forecast_category: str(formData.get("forecast_category")) ?? "pipeline",
       amount: num(formData.get("amount")) ?? 0,
@@ -92,6 +93,7 @@ export async function updateOpportunityAction(formData: FormData) {
     .update({
       stage,
       forecast_category: str(formData.get("forecast_category")),
+      category: str(formData.get("category")),
       amount: num(formData.get("amount")) ?? 0,
       probability: stage ? STAGE_MAP[stage]?.probability ?? 10 : undefined,
       expected_close_date: close,
@@ -180,6 +182,42 @@ export async function updateMeetingAction(formData: FormData) {
   revalidatePath(`/app/opportunities/${oppId}/meetings/${id}`);
   if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
   redirect(`/app/opportunities/${oppId}/meetings/${id}`);
+}
+
+// ===================== 請求スケジュール(売上計画) =====================
+export async function createBillingScheduleAction(formData: FormData) {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const oppId = str(formData.get("opportunity_id"));
+  if (!oppId) redirect("/app/opportunities");
+  const kind = str(formData.get("kind")) === "recurring" ? "recurring" : "one_time";
+  const startMonth = str(formData.get("recurring_start_month")); // YYYY-MM
+  const endMonth = str(formData.get("recurring_end_month"));
+  await sb.from("billing_schedules").insert({
+    tenant_id: ctx.tenantId,
+    opportunity_id: oppId,
+    account_id: str(formData.get("account_id")),
+    kind,
+    billing_date: kind === "one_time" ? str(formData.get("billing_date")) : null,
+    amount: num(formData.get("amount")) ?? 0,
+    recurring_start_month: kind === "recurring" && startMonth ? startMonth + "-01" : null,
+    recurring_end_month: kind === "recurring" && endMonth ? endMonth + "-01" : null,
+    note: str(formData.get("note")),
+    created_by: ctx.userId,
+  });
+  revalidatePath(`/app/opportunities/${oppId}`);
+  revalidatePath("/app/analytics/revenue");
+  redirect(`/app/opportunities/${oppId}`);
+}
+
+export async function deleteBillingScheduleAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const oppId = str(formData.get("opportunity_id"));
+  await sb.from("billing_schedules").delete().eq("id", String(formData.get("id")));
+  if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
+  revalidatePath("/app/analytics/revenue");
+  redirect(`/app/opportunities/${oppId}`);
 }
 
 // ===================== 活動 =====================

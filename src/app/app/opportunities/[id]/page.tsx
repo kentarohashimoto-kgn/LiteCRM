@@ -9,12 +9,14 @@ import {
   getStageHistory,
   getTasksByOpportunity,
   getMeetingsByOpportunity,
+  getBillingByOpportunity,
   getUser,
   listMembers,
   listCampaigns,
 } from "@/lib/data/select";
 import { MeetingList } from "@/components/meetings/meeting-list";
-import { STAGES, FORECAST_CATEGORIES, STAGE_MAP, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP } from "@/lib/constants";
+import { BillingSection } from "@/components/billing/billing-section";
+import { STAGES, FORECAST_CATEGORIES, CATEGORIES, CATEGORY_MAP, STAGE_MAP, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP } from "@/lib/constants";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/ui/badges";
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
@@ -28,6 +30,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
 
   const activities = getActivitiesByOpportunity(ws, o.id);
   const meetings = getMeetingsByOpportunity(ws, o.id);
+  const billing = getBillingByOpportunity(ws, o.id);
   const members = listMembers(ws).map(({ user }) => user);
   const tasks = getTasksByOpportunity(ws, o.id);
   const history = getStageHistory(ws, o.id);
@@ -152,6 +155,13 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
                   </select>
                 </div>
                 <div>
+                  <label className="label">分類</label>
+                  <select name="category" defaultValue={o.category ?? ""} className="input">
+                    <option value="">—</option>
+                    {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                  </select>
+                </div>
+                <div>
                   <label className="label">金額(円)</label>
                   <input name="amount" type="number" defaultValue={o.amount} className="input" />
                 </div>
@@ -183,6 +193,10 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
               </div>
               <button type="submit" className="btn-primary">保存する</button>
             </form>
+          </Section>
+
+          <Section title="請求スケジュール（売上計画）" action={<span className="text-xs text-ink/40">受注日とは別に請求(売上)を計画</span>}>
+            <BillingSection schedules={billing} opportunityId={o.id} accountId={o.account_id} category={o.category} />
           </Section>
 
           <Section title="活動を記録">
@@ -250,6 +264,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
           <Section title="基本情報">
             <dl className="space-y-2.5 text-sm">
               <Row label="ヨミ"><YomiBadge yomi={o.yomi} /></Row>
+              <Row label="分類">{o.category ? CATEGORY_MAP[o.category]?.label : "—"}</Row>
               <Row label="初回商談日">{formatDateFull(o.first_meeting_date)}</Row>
               <Row label="担当営業"><span className="flex items-center gap-1.5"><Avatar user={o.owner} size={22} />{o.owner?.name}</span></Row>
               <Row label="主商材">{o.product?.name ?? "—"}</Row>

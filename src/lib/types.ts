@@ -55,6 +55,13 @@ export type TaskStatus = "todo" | "done" | "cancelled" | "overdue";
 export type Priority = "high" | "middle" | "low";
 export type RiskLevel = "low" | "middle" | "high";
 
+/** 案件の分類 */
+export type OpportunityCategory =
+  | "development" // 開発
+  | "advisory_subscription" // 顧問・サブスク
+  | "training" // 研修
+  | "other"; // その他
+
 /** 施策(マーケティングチャネル)種別。展示会を起点に他施策へ拡張する。 */
 export type ChannelType =
   | "exhibition"
@@ -228,6 +235,7 @@ export interface Opportunity {
   probability: number;
   expected_close_date?: string;
   expected_revenue_month?: string;
+  category?: OpportunityCategory;
   primary_product_id?: UUID;
   lead_source_id?: UUID;
   campaign_id?: UUID;
@@ -289,6 +297,23 @@ export interface Meeting {
   summary?: string;
   next_action_date?: string;
   next_action_text?: string;
+  created_by?: UUID;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 請求スケジュール(売上計画)。受注とは別に請求(売上)の予定を行単位で管理。 */
+export interface BillingSchedule {
+  id: UUID;
+  tenant_id: UUID;
+  opportunity_id: UUID;
+  account_id?: UUID;
+  kind: "one_time" | "recurring";
+  billing_date?: string;
+  amount: number;
+  recurring_start_month?: string;
+  recurring_end_month?: string;
+  note?: string;
   created_by?: UUID;
   created_at: string;
   updated_at: string;

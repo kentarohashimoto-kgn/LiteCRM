@@ -11,6 +11,7 @@ import type {
   ActivityType,
   ChannelType,
   CampaignEventStatus,
+  OpportunityCategory,
 } from "./types";
 
 export const APP_NAME = "CATORCE Sales OS";
@@ -128,6 +129,21 @@ export const YOMI_OPTIONS: { key: string; label: string }[] = [
 
 /** 「アポ(初回商談待ち)」を表すヨミ値 */
 export const YOMI_APPOINTMENT = "4.アポ";
+
+/** 案件の分類マスタ。請求(売上)スタイルの既定も併記。 */
+export const CATEGORIES: {
+  key: OpportunityCategory;
+  label: string;
+  color: string;
+  billingHint: string;
+}[] = [
+  { key: "development", label: "開発", color: "#3B82F6", billingHint: "請求予定日＋請求額を複数行で。SES開発は『毎月請求』で開始〜終了月と月額を指定。" },
+  { key: "advisory_subscription", label: "顧問・サブスク", color: "#8B5CF6", billingHint: "『毎月請求』で請求開始月〜終了月と月額を指定。" },
+  { key: "training", label: "研修", color: "#008C8C", billingHint: "請求予定日＋請求額を入力(都度請求)。" },
+  { key: "other", label: "その他", color: "#F59A2A", billingHint: "請求予定日＋請求額を入力(都度請求)。" },
+];
+
+export const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map((c) => [c.key, c]));
 
 /** CATORCE 流入経路マスタ初期値(8.2) */
 export const CATORCE_LEAD_SOURCES: { name: string; description: string }[] = [

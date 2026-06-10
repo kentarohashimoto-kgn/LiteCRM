@@ -4,6 +4,7 @@ import { requireCtx, type Ctx } from "@/lib/session";
 import type {
   Account,
   Activity,
+  BillingSchedule,
   Campaign,
   Contact,
   Lead,
@@ -40,6 +41,7 @@ export interface Workspace {
   leads: Lead[];
   opportunities: Opportunity[];
   meetings: Meeting[];
+  billingSchedules: BillingSchedule[];
   activities: Activity[];
   tasks: Task[];
   stageHistories: StageHistory[];
@@ -68,6 +70,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     leads,
     opportunities,
     meetings,
+    billingSchedules,
     activities,
     tasks,
     stageHistories,
@@ -83,6 +86,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     sb.from("leads").select("*").order("acquired_at", { ascending: false }),
     sb.from("opportunities").select("*"),
     sb.from("meetings").select("*").order("meeting_date", { ascending: false }),
+    sb.from("billing_schedules").select("*"),
     sb.from("activities").select("*").order("activity_at", { ascending: false }),
     sb.from("tasks").select("*"),
     sb.from("stage_histories").select("*").order("changed_at", { ascending: false }),
@@ -118,6 +122,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     leads: (leads.data ?? []) as Lead[],
     opportunities: (opportunities.data ?? []) as Opportunity[],
     meetings: (meetings.data ?? []) as Meeting[],
+    billingSchedules: (billingSchedules.data ?? []) as BillingSchedule[],
     activities: (activities.data ?? []) as Activity[],
     tasks: (tasks.data ?? []) as Task[],
     stageHistories: (stageHistories.data ?? []) as StageHistory[],

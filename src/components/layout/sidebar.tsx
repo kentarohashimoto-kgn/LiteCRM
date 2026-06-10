@@ -16,6 +16,7 @@ import {
   Package,
   Radio,
   Presentation,
+  Coins,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
   {
     heading: "分析",
     items: [
+      { href: "/app/analytics/revenue", label: "売上・請求分析", icon: Coins },
       { href: "/app/analytics/channels", label: "流入元分析", icon: Radio },
       { href: "/app/analytics/exhibitions", label: "└ 展示会分析", icon: Presentation },
       { href: "/app/analytics/sales-reps", label: "営業マン別", icon: UserCog },
