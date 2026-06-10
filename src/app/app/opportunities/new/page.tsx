@@ -14,10 +14,10 @@ export default async function NewOpportunityPage() {
 
   return (
     <div className="max-w-2xl">
-      <PageHeader title="商談を作成" subtitle="新しい商談を登録します。" />
+      <PageHeader title="案件を作成" subtitle="新しい案件を登録します。" />
       <form action={createOpportunityAction} className="card card-pad space-y-4">
         <div>
-          <label className="label">商談名 *</label>
+          <label className="label">案件名 *</label>
           <input name="name" required className="input" placeholder="例：株式会社○○ / 生成AI企業研修" />
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -88,7 +88,7 @@ export default async function NewOpportunityPage() {
           <textarea name="notes" rows={3} className="input" />
         </div>
         <div className="flex items-center gap-2 pt-2">
-          <button type="submit" className="btn-primary">作成する</button>
+          <button type="submit" className="btn-primary">案件を作成</button>
           <Link href="/app/opportunities" className="btn-ghost">キャンセル</Link>
         </div>
       </form>

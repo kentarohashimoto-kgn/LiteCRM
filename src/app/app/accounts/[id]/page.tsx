@@ -2,10 +2,21 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { getWorkspace } from "@/lib/data/workspace";
-import { getAccount, getContactsByAccount, listOpportunities } from "@/lib/data/select";
+import {
+  getAccount,
+  getContactsByAccount,
+  listOpportunities,
+  getMeetingsByAccount,
+  listMembers,
+  getProducts,
+  getLeadSources,
+} from "@/lib/data/select";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/badges";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
+import { MeetingList } from "@/components/meetings/meeting-list";
+import { createOpportunityAction, createMeetingAction } from "@/server/actions";
+import { STAGES, FORECAST_CATEGORIES } from "@/lib/constants";
 import { formatYen, sum } from "@/lib/utils";
 
 const statusLabel: Record<string, string> = { prospect: "見込み", customer: "顧客", inactive: "休眠" };
@@ -17,6 +28,10 @@ export default async function AccountDetailPage({ params }: { params: { id: stri
 
   const contacts = getContactsByAccount(ws, account.id);
   const opps = listOpportunities(ws).filter((o) => o.account_id === account.id);
+  const meetings = getMeetingsByAccount(ws, account.id);
+  const members = listMembers(ws).map(({ user }) => user);
+  const products = getProducts(ws);
+  const sources = getLeadSources(ws);
   const won = opps.filter((o) => o.status === "won");
   const open = opps.filter((o) => o.status === "open");
 
@@ -32,16 +47,115 @@ export default async function AccountDetailPage({ params }: { params: { id: stri
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-        <Card><div className="text-xs text-ink/50">進行中商談</div><div className="stat-value mt-1">{open.length}</div></Card>
+        <Card><div className="text-xs text-ink/50">案件数</div><div className="stat-value mt-1">{opps.length}</div></Card>
         <Card><div className="text-xs text-ink/50">進行中金額</div><div className="text-2xl font-bold mt-1 tabular-nums">{formatYen(sum(open, (o) => o.amount))}</div></Card>
         <Card><div className="text-xs text-ink/50">累計受注額(LTV)</div><div className="text-2xl font-bold mt-1 stat-accent tabular-nums">{formatYen(sum(won, (o) => o.amount))}</div></Card>
         <Card><div className="text-xs text-ink/50">担当者</div><div className="stat-value mt-1">{contacts.length}<span className="stat-unit">名</span></div></Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Section title="商談" className="lg:col-span-2">
-          <OppMiniList opps={opps} emptyMessage="商談はありません" />
-        </Section>
+        <div className="lg:col-span-2 space-y-5">
+          {/* 案件 */}
+          <Section title={`案件（${opps.length}）`}>
+            <OppMiniList opps={opps} emptyMessage="案件はありません" />
+            <details className="mt-3">
+              <summary className="cursor-pointer text-sm font-medium text-teal-deep">＋ 案件を登録</summary>
+              <form action={createOpportunityAction} className="mt-3 space-y-3 border-t border-black/[0.05] pt-3">
+                <input type="hidden" name="account_id" value={account.id} />
+                <div>
+                  <label className="label">案件名 *</label>
+                  <input name="name" required className="input" placeholder="例：情報S向けAI研修 / 製品開発アイデアAI開発" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">担当営業</label>
+                    <select name="owner_user_id" defaultValue={ws.ctx.userId} className="input">
+                      {members.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">主商材</label>
+                    <select name="primary_product_id" className="input" defaultValue="">
+                      <option value="">選択してください</option>
+                      {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="label">ステージ</label>
+                    <select name="stage" defaultValue="lead_acquired" className="input">
+                      {STAGES.filter((s) => s.group === "open").map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">ヨミ</label>
+                    <select name="forecast_category" defaultValue="pipeline" className="input">
+                      {FORECAST_CATEGORIES.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">見込み金額</label>
+                    <input name="amount" type="number" className="input" placeholder="1500000" />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">流入経路</label>
+                  <select name="lead_source_id" className="input" defaultValue="">
+                    <option value="">選択してください</option>
+                    {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <button type="submit" className="btn-accent">案件を登録</button>
+              </form>
+            </details>
+          </Section>
+
+          {/* 商談 */}
+          <Section title={`商談（${meetings.length}回）`} action={<span className="text-xs text-ink/40">案件配下の個別商談</span>}>
+            <MeetingList meetings={meetings} showOpportunity emptyMessage="商談はまだありません" />
+            {opps.length > 0 ? (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-sm font-medium text-teal-deep">＋ 商談を登録</summary>
+                <form action={createMeetingAction} className="mt-3 space-y-3 border-t border-black/[0.05] pt-3">
+                  <input type="hidden" name="account_id" value={account.id} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">案件 *</label>
+                      <select name="opportunity_id" required className="input">
+                        {opps.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">商談日</label>
+                      <input name="meeting_date" type="date" className="input" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">タイトル *</label>
+                      <input name="title" required className="input" placeholder="例：初回商談 / 2回目 提案" />
+                    </div>
+                    <div>
+                      <label className="label">担当</label>
+                      <select name="owner_user_id" defaultValue={ws.ctx.userId} className="input">
+                        {members.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">議事・要点</label>
+                    <textarea name="summary" rows={2} className="input" />
+                  </div>
+                  <button type="submit" className="btn-accent">商談を登録</button>
+                </form>
+              </details>
+            ) : (
+              <p className="text-xs text-ink/40 mt-2">商談を登録するには、先に案件を作成してください。</p>
+            )}
+          </Section>
+        </div>
+
         <Section title="担当者">
           {contacts.length === 0 ? (
             <p className="text-sm text-ink/40 py-2">担当者がいません</p>

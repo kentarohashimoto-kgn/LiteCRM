@@ -15,11 +15,11 @@ export default async function OpportunitiesPage() {
   return (
     <div>
       <PageHeader
-        title="商談"
-        subtitle="SFAの中核。金額・ステージ・ヨミ・次アクションを管理します。"
+        title="案件"
+        subtitle="顧客 › 案件 › 商談。金額・ステージ・ヨミ・次アクションを案件単位で管理します。"
         action={
           <LinkButton href="/app/opportunities/new" variant="accent">
-            <Plus size={16} /> 商談を作成
+            <Plus size={16} /> 案件を作成
           </LinkButton>
         }
       />

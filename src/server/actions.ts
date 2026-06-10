@@ -125,6 +125,63 @@ export async function setOpportunityCampaignAction(formData: FormData) {
   redirect(`/app/opportunities/${id}`);
 }
 
+// ===================== 商談(meetings) =====================
+/** 案件配下に商談(1回)を登録。 */
+export async function createMeetingAction(formData: FormData) {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const oppId = str(formData.get("opportunity_id"));
+  if (!oppId) {
+    redirect("/app/opportunities?error=" + encodeURIComponent("案件が指定されていません"));
+  }
+  const meetingDate = str(formData.get("meeting_date"));
+  const nextDate = str(formData.get("next_action_date"));
+  const nextText = str(formData.get("next_action_text"));
+  await sb.from("meetings").insert({
+    tenant_id: ctx.tenantId,
+    opportunity_id: oppId,
+    account_id: str(formData.get("account_id")),
+    owner_user_id: str(formData.get("owner_user_id")) ?? ctx.userId,
+    title: str(formData.get("title")) ?? "商談",
+    meeting_date: meetingDate,
+    method: str(formData.get("method")),
+    summary: str(formData.get("summary")),
+    next_action_date: nextDate,
+    next_action_text: nextText,
+    created_by: ctx.userId,
+  });
+  // 親案件の最終活動/次アクションを更新
+  const patch: Record<string, unknown> = { last_activity_at: new Date().toISOString() };
+  if (nextDate) {
+    patch.next_action_date = nextDate;
+    patch.next_action_text = nextText;
+  }
+  await sb.from("opportunities").update(patch).eq("id", oppId);
+  revalidatePath(`/app/opportunities/${oppId}`);
+  redirect(`/app/opportunities/${oppId}`);
+}
+
+export async function updateMeetingAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  const oppId = str(formData.get("opportunity_id"));
+  await sb
+    .from("meetings")
+    .update({
+      title: str(formData.get("title")) ?? "商談",
+      meeting_date: str(formData.get("meeting_date")),
+      method: str(formData.get("method")),
+      summary: str(formData.get("summary")),
+      next_action_date: str(formData.get("next_action_date")),
+      next_action_text: str(formData.get("next_action_text")),
+    })
+    .eq("id", id);
+  revalidatePath(`/app/opportunities/${oppId}/meetings/${id}`);
+  if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
+  redirect(`/app/opportunities/${oppId}/meetings/${id}`);
+}
+
 // ===================== 活動 =====================
 export async function addActivityAction(formData: FormData) {
   const ctx = await requireCtx();

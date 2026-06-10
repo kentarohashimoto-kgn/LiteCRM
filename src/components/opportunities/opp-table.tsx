@@ -84,7 +84,7 @@ export function OppTable({
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="商談名・顧客名で検索"
+              placeholder="案件名・顧客名で検索"
               className="input pl-9"
             />
           </div>
@@ -114,7 +114,7 @@ export function OppTable({
         <table className="w-full">
           <thead className="border-b border-black/[0.06]">
             <tr>
-              <th className="th">顧客 / 商談</th>
+              <th className="th">顧客 / 案件</th>
               <th className="th">ヨミ</th>
               <th className="th">担当</th>
               <th className="th">商材</th>
@@ -175,7 +175,7 @@ export function OppTable({
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={11} className="td text-center text-ink/40 py-10">条件に一致する商談がありません</td>
+                <td colSpan={11} className="td text-center text-ink/40 py-10">条件に一致する案件がありません</td>
               </tr>
             )}
           </tbody>

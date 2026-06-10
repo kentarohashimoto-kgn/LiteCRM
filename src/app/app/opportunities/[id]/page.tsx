@@ -8,15 +8,17 @@ import {
   getOpportunity,
   getStageHistory,
   getTasksByOpportunity,
+  getMeetingsByOpportunity,
   getUser,
   listMembers,
   listCampaigns,
 } from "@/lib/data/select";
+import { MeetingList } from "@/components/meetings/meeting-list";
 import { STAGES, FORECAST_CATEGORIES, STAGE_MAP, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP } from "@/lib/constants";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/ui/badges";
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
-import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction } from "@/server/actions";
+import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction } from "@/server/actions";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince } from "@/lib/utils";
 
 export default async function OpportunityDetailPage({ params }: { params: { id: string } }) {
@@ -25,6 +27,8 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
   if (!o) notFound();
 
   const activities = getActivitiesByOpportunity(ws, o.id);
+  const meetings = getMeetingsByOpportunity(ws, o.id);
+  const members = listMembers(ws).map(({ user }) => user);
   const tasks = getTasksByOpportunity(ws, o.id);
   const history = getStageHistory(ws, o.id);
   const contacts = o.account ? getContactsByAccount(ws, o.account.id) : [];
@@ -35,7 +39,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
   return (
     <div>
       <Link href="/app/opportunities" className="inline-flex items-center gap-1 text-sm text-ink/50 hover:text-ink mb-3">
-        <ChevronLeft size={16} /> 商談一覧
+        <ChevronLeft size={16} /> 案件一覧
       </Link>
       <PageHeader
         title={o.account?.name ?? "商談"}
@@ -77,7 +81,61 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* 左: 編集 + 情報 */}
         <div className="lg:col-span-2 space-y-5">
-          <Section title="商談を更新">
+          <Section title={`商談（${meetings.length}回）`} action={<span className="text-xs text-ink/40">案件配下の個別商談</span>}>
+            <MeetingList meetings={meetings} />
+            <details className="mt-3">
+              <summary className="cursor-pointer text-sm font-medium text-teal-deep">＋ 商談を登録</summary>
+              <form action={createMeetingAction} className="mt-3 space-y-3 border-t border-black/[0.05] pt-3">
+                <input type="hidden" name="opportunity_id" value={o.id} />
+                <input type="hidden" name="account_id" value={o.account_id} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">タイトル</label>
+                    <input name="title" required className="input" placeholder="例：初回商談 / 2回目 提案" />
+                  </div>
+                  <div>
+                    <label className="label">商談日</label>
+                    <input name="meeting_date" type="date" className="input" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">形式</label>
+                    <select name="method" className="input" defaultValue="">
+                      <option value="">—</option>
+                      <option value="訪問">訪問</option>
+                      <option value="オンライン">オンライン</option>
+                      <option value="電話">電話</option>
+                      <option value="その他">その他</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">担当</label>
+                    <select name="owner_user_id" defaultValue={o.owner_user_id} className="input">
+                      {members.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="label">議事・要点</label>
+                  <textarea name="summary" rows={2} className="input" placeholder="課題・予算・決裁者・反応・次の打ち手など" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">次アクション日</label>
+                    <input name="next_action_date" type="date" className="input" />
+                  </div>
+                  <div>
+                    <label className="label">次アクション内容</label>
+                    <input name="next_action_text" className="input" />
+                  </div>
+                </div>
+                <button type="submit" className="btn-accent">商談を登録</button>
+              </form>
+            </details>
+          </Section>
+
+          <Section title="案件を更新">
             <form action={updateOpportunityAction} className="space-y-4">
               <input type="hidden" name="id" value={o.id} />
               <div className="grid grid-cols-2 gap-4">

@@ -20,7 +20,7 @@ export function AppointmentTrendChart({ data }: { data: TrendDatum[] }) {
         <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#5b6b6b" }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 11, fill: "#9aa6a6" }} axisLine={false} tickLine={false} width={32} allowDecimals={false} />
         <Tooltip
-          formatter={(v: number) => [v + "件", "商談数"]}
+          formatter={(v: number) => [v + "件", "案件数"]}
           contentStyle={{ borderRadius: 12, border: "1px solid #eee", fontSize: 12 }}
         />
         <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={40}>

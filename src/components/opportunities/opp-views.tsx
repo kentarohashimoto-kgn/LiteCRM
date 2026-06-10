@@ -192,9 +192,9 @@ export function OppViews({
             </table>
           </div>
 
-          {/* 商談数の推移(全体／担当者別／展示会別) */}
+          {/* 案件数の推移(全体／担当者別／展示会別) */}
           <Section
-            title="商談数の推移"
+            title="案件数の推移"
             action={
               <div className="inline-flex rounded-lg border border-black/10 bg-white p-0.5 text-xs">
                 <TrendTab active={trendTab === "total"} onClick={() => setTrendTab("total")} label="全体" />
@@ -217,8 +217,8 @@ export function OppViews({
               </>
             )}
             <p className="text-[11px] text-ink/40 mt-2">
-              実績=作成日ベースの商談獲得数(過去〜当月)。予定=初回商談日ベースのアポ(ヨミ=4.アポ)件数(先2ヶ月)。
-              {trendTab === "exhibition" && "「展示会以外」は展示会流入でない商談。"}
+              実績=作成日ベースの案件獲得数(過去〜当月)。予定=初回商談日ベースのアポ(ヨミ=4.アポ)件数(先2ヶ月)。
+              {trendTab === "exhibition" && "「展示会以外」は展示会流入でない案件。"}
             </p>
           </Section>
 
@@ -246,7 +246,7 @@ export function OppViews({
           </div>
 
           <p className="text-xs text-ink/40 leading-relaxed">
-            ※ カレンダーは<b>ヨミ=4.アポ</b>の商談を<b>初回商談日</b>に配置しています(初回商談待ちのアポ)。
+            ※ カレンダーは<b>ヨミ=4.アポ</b>の案件を<b>初回商談日</b>に配置しています(初回商談待ちのアポ)。
             時刻(何時のアポか)は今後データ整備のうえ対応します。日付セルの色丸は担当者、クリックで商談詳細へ移動します。
           </p>
         </div>

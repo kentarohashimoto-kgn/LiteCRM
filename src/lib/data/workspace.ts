@@ -8,6 +8,7 @@ import type {
   Contact,
   Lead,
   LeadSource,
+  Meeting,
   Membership,
   Opportunity,
   Product,
@@ -38,6 +39,7 @@ export interface Workspace {
   productsById: Map<string, Product>;
   leads: Lead[];
   opportunities: Opportunity[];
+  meetings: Meeting[];
   activities: Activity[];
   tasks: Task[];
   stageHistories: StageHistory[];
@@ -65,6 +67,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     products,
     leads,
     opportunities,
+    meetings,
     activities,
     tasks,
     stageHistories,
@@ -79,6 +82,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     sb.from("products").select("*").order("created_at"),
     sb.from("leads").select("*").order("acquired_at", { ascending: false }),
     sb.from("opportunities").select("*"),
+    sb.from("meetings").select("*").order("meeting_date", { ascending: false }),
     sb.from("activities").select("*").order("activity_at", { ascending: false }),
     sb.from("tasks").select("*"),
     sb.from("stage_histories").select("*").order("changed_at", { ascending: false }),
@@ -113,6 +117,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     productsById: new Map(productsArr.map((p) => [p.id, p])),
     leads: (leads.data ?? []) as Lead[],
     opportunities: (opportunities.data ?? []) as Opportunity[],
+    meetings: (meetings.data ?? []) as Meeting[],
     activities: (activities.data ?? []) as Activity[],
     tasks: (tasks.data ?? []) as Task[],
     stageHistories: (stageHistories.data ?? []) as StageHistory[],

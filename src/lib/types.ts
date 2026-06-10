@@ -275,6 +275,25 @@ export interface Task {
   completed_at?: string;
 }
 
+/** 商談(meetings): 案件配下の個別商談(1回ごと)。 */
+export interface Meeting {
+  id: UUID;
+  tenant_id: UUID;
+  opportunity_id: UUID;
+  account_id?: UUID;
+  owner_user_id: UUID;
+  title: string;
+  meeting_date?: string;
+  meeting_at?: string;
+  method?: string;
+  summary?: string;
+  next_action_date?: string;
+  next_action_text?: string;
+  created_by?: UUID;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface StageHistory {
   id: UUID;
   tenant_id: UUID;

@@ -8,7 +8,7 @@ import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
 export function OppMiniList({
   opps,
   showRisk = false,
-  emptyMessage = "該当する商談はありません",
+  emptyMessage = "該当する案件はありません",
   limit,
 }: {
   opps: OppView[];

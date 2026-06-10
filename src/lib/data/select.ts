@@ -11,6 +11,7 @@ import type {
   Contact,
   Lead,
   LeadSource,
+  Meeting,
   Opportunity,
   Product,
   Role,
@@ -18,6 +19,12 @@ import type {
   Task,
   User,
 } from "@/lib/types";
+
+export interface MeetingView extends Meeting {
+  owner?: User;
+  account?: Account;
+  opportunity?: Opportunity;
+}
 
 export interface OppView extends Opportunity {
   account?: Account;
@@ -97,6 +104,36 @@ export function getActivitiesByOpportunity(ws: Workspace, id: string): Activity[
 
 export function getTasksByOpportunity(ws: Workspace, id: string): Task[] {
   return ws.tasks.filter((t) => t.opportunity_id === id);
+}
+
+function toMeetingView(ws: Workspace, m: Meeting): MeetingView {
+  return {
+    ...m,
+    owner: getUser(ws, m.owner_user_id),
+    account: getAccount(ws, m.account_id),
+    opportunity: ws.opportunities.find((o) => o.id === m.opportunity_id),
+  };
+}
+
+/** 案件配下の商談(新しい順) */
+export function getMeetingsByOpportunity(ws: Workspace, opportunityId: string): MeetingView[] {
+  return ws.meetings
+    .filter((m) => m.opportunity_id === opportunityId)
+    .sort((a, b) => (b.meeting_date ?? "").localeCompare(a.meeting_date ?? ""))
+    .map((m) => toMeetingView(ws, m));
+}
+
+/** 顧客配下の商談(新しい順) */
+export function getMeetingsByAccount(ws: Workspace, accountId: string): MeetingView[] {
+  return ws.meetings
+    .filter((m) => m.account_id === accountId)
+    .sort((a, b) => (b.meeting_date ?? "").localeCompare(a.meeting_date ?? ""))
+    .map((m) => toMeetingView(ws, m));
+}
+
+export function getMeeting(ws: Workspace, id: string): MeetingView | undefined {
+  const m = ws.meetings.find((x) => x.id === id);
+  return m ? toMeetingView(ws, m) : undefined;
 }
 
 export function getStageHistory(ws: Workspace, id: string): StageHistory[] {
