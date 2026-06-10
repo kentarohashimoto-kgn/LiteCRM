@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { getWorkspace } from "@/lib/data/workspace";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { StackedTrendChart } from "@/components/charts/stacked-trend-chart";
 import { CATEGORIES } from "@/lib/constants";
-import { ordersByMonth, expandBilling, monthRange, monthlyStacks } from "@/lib/revenue";
+import { ordersByMonth, expandBilling, monthRange, monthlyStacks, type MonthCol } from "@/lib/revenue";
+import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
 import { formatYen } from "@/lib/utils";
 import type { OpportunityCategory } from "@/lib/types";
 
@@ -19,26 +21,47 @@ function CategoryLegend() {
   );
 }
 
-export default async function RevenueAnalyticsPage() {
+export default async function RevenueAnalyticsPage({ searchParams }: { searchParams: { fy?: string } }) {
   const ws = await getWorkspace();
   const opps = ws.opportunities;
   const catMap = new Map<string, OpportunityCategory | undefined>(opps.map((o) => [o.id, o.category]));
 
   const orderPoints = ordersByMonth(opps);
   const billingPoints = expandBilling(ws.billingSchedules, (id) => catMap.get(id));
-  const cols = monthRange([orderPoints, billingPoints]);
+
+  const cur = currentFiscalStartYear();
+  const fyParam = searchParams.fy ?? "all";
+  const cols: MonthCol[] =
+    fyParam === "all"
+      ? monthRange([orderPoints, billingPoints])
+      : fiscalMonths(parseInt(fyParam, 10)).map((m) => ({ key: m.key, label: `${m.year % 100}/${m.month}` }));
+  const fyOptions: { v: string; label: string }[] = [
+    { v: "all", label: "全期間" },
+    { v: String(cur - 1), label: fiscalYearLabel(cur - 1) },
+    { v: String(cur), label: fiscalYearLabel(cur) },
+    { v: String(cur + 1), label: fiscalYearLabel(cur + 1) },
+  ];
 
   const orders = monthlyStacks(orderPoints, cols);
   const billing = monthlyStacks(billingPoints, cols);
 
-  const orderTotal = orderPoints.reduce((s, p) => s + p.amount, 0);
-  const billingTotal = billingPoints.reduce((s, p) => s + p.amount, 0);
+  const orderTotal = orders.totalsByCol.reduce((s, v) => s + v, 0);
+  const billingTotal = billing.totalsByCol.reduce((s, v) => s + v, 0);
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="売上・請求分析"
         subtitle="受注日ベースの月別受注額と、請求日ベースの月別請求額(売上)を分類別に分析します。"
+        action={
+          <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5 text-sm">
+            {fyOptions.map((o) => (
+              <Link key={o.v} href={`/app/analytics/revenue?fy=${o.v}`} className={`rounded-lg px-2.5 py-1.5 font-medium ${o.v === fyParam ? "bg-teal-primary text-white" : "text-ink/60 hover:text-ink"}`}>
+                {o.label}
+              </Link>
+            ))}
+          </div>
+        }
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

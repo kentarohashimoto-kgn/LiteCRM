@@ -10,6 +10,7 @@ import { StackedTrendChart, type StackSeries } from "@/components/charts/stacked
 import { Section } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { MONTHLY_APPOINTMENT_TARGET, YOMI_APPOINTMENT } from "@/lib/constants";
+import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
 
 interface Option {
   id: string;
@@ -38,6 +39,7 @@ export function OppViews({
 }) {
   const [view, setView] = useState<"list" | "calendar">("list");
   const [trendTab, setTrendTab] = useState<"total" | "owner" | "exhibition">("total");
+  const [trendRange, setTrendRange] = useState<string>("rolling");
 
   const now = new Date();
   // 「アポ」= ヨミが 4.アポ の案件。初回商談日(first_meeting_date)を予定日とする。
@@ -64,27 +66,36 @@ export function OppViews({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apoOpps]);
 
-  // 推移の月バケット。過去〜当月=案件獲得(created_at)、先2ヶ月=アポ予定(初回商談日)。
+  // 推移の対象月。直近(直近9ヶ月+先2)か、年度(7月〜翌6月)を選択。
+  const trendCols = useMemo(() => {
+    if (trendRange !== "rolling") {
+      return fiscalMonths(parseInt(trendRange, 10)).map((m) => ({ year: m.year, month: m.month, label: `${m.month}月` }));
+    }
+    const arr: { year: number; month: number; label: string }[] = [];
+    for (let offset = -8; offset <= 2; offset++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      arr.push({ year: d.getFullYear(), month: d.getMonth() + 1, label: `${String(d.getFullYear()).slice(2)}/${d.getMonth() + 1}` });
+    }
+    return arr;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trendRange]);
+
   // 各月にひも付く案件リストを保持し、全体/担当者別/展示会別で再集計する。
   const buckets = useMemo(() => {
-    const list: { label: string; isFuture: boolean; opps: OppView[] }[] = [];
-    for (let offset = -8; offset <= 2; offset++) {
-      const ref = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-      const y = ref.getFullYear();
-      const m = ref.getMonth();
-      const isFuture = offset > 0;
-      const inMonth = (o: OppView, field: "created_at" | "first_meeting_date") => {
-        const d = parseYMD(o[field]);
-        return !!d && d.getFullYear() === y && d.getMonth() === m;
-      };
+    const curMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const inMonth = (s: string | undefined | null, y: number, m: number) => {
+      const d = parseYMD(s);
+      return !!d && d.getFullYear() === y && d.getMonth() === m - 1;
+    };
+    return trendCols.map((c) => {
+      const isFuture = new Date(c.year, c.month - 1, 1).getTime() > curMonthStart;
       const monthOpps = isFuture
-        ? apoOpps.filter((o) => inMonth(o, "first_meeting_date"))
-        : opps.filter((o) => inMonth(o, "created_at"));
-      list.push({ label: `${String(y).slice(2)}/${m + 1}`, isFuture, opps: monthOpps });
-    }
-    return list;
+        ? apoOpps.filter((o) => inMonth(o.first_meeting_date, c.year, c.month))
+        : opps.filter((o) => inMonth(o.created_at, c.year, c.month));
+      return { label: c.label, isFuture, opps: monthOpps };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opps, apoOpps]);
+  }, [trendCols, opps, apoOpps]);
 
   const totalTrend = useMemo(
     () => buckets.map((b) => ({ label: b.label, count: b.opps.length, isFuture: b.isFuture })),
@@ -196,10 +207,22 @@ export function OppViews({
           <Section
             title="案件数の推移"
             action={
-              <div className="inline-flex rounded-lg border border-black/10 bg-white p-0.5 text-xs">
-                <TrendTab active={trendTab === "total"} onClick={() => setTrendTab("total")} label="全体" />
-                <TrendTab active={trendTab === "owner"} onClick={() => setTrendTab("owner")} label="担当者別" />
-                <TrendTab active={trendTab === "exhibition"} onClick={() => setTrendTab("exhibition")} label="展示会別" />
+              <div className="flex items-center gap-2">
+                <select
+                  value={trendRange}
+                  onChange={(e) => setTrendRange(e.target.value)}
+                  className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs outline-none focus:border-teal-primary"
+                >
+                  <option value="rolling">直近</option>
+                  <option value={String(currentFiscalStartYear(now) - 1)}>{fiscalYearLabel(currentFiscalStartYear(now) - 1)}</option>
+                  <option value={String(currentFiscalStartYear(now))}>{fiscalYearLabel(currentFiscalStartYear(now))}</option>
+                  <option value={String(currentFiscalStartYear(now) + 1)}>{fiscalYearLabel(currentFiscalStartYear(now) + 1)}</option>
+                </select>
+                <div className="inline-flex rounded-lg border border-black/10 bg-white p-0.5 text-xs">
+                  <TrendTab active={trendTab === "total"} onClick={() => setTrendTab("total")} label="全体" />
+                  <TrendTab active={trendTab === "owner"} onClick={() => setTrendTab("owner")} label="担当者別" />
+                  <TrendTab active={trendTab === "exhibition"} onClick={() => setTrendTab("exhibition")} label="展示会別" />
+                </div>
               </div>
             }
           >

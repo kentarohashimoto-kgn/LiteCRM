@@ -184,6 +184,29 @@ export async function updateMeetingAction(formData: FormData) {
   redirect(`/app/opportunities/${oppId}/meetings/${id}`);
 }
 
+// ===================== 目標(月別) =====================
+export async function saveTargetsAction(formData: FormData) {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const fy = String(formData.get("fy") ?? "");
+  const months = String(formData.get("months") ?? "").split(",").filter(Boolean);
+  const rows = months.map((mk) => ({
+    tenant_id: ctx.tenantId,
+    target_month: mk,
+    target_amount: num(formData.get(`m_${mk}_amount`)) ?? 0,
+    target_deals: Math.round(num(formData.get(`m_${mk}_deals`)) ?? 0),
+    target_appointments: Math.round(num(formData.get(`m_${mk}_appts`)) ?? 0),
+    target_leads: Math.round(num(formData.get(`m_${mk}_leads`)) ?? 0),
+  }));
+  if (rows.length) {
+    await sb.from("sales_targets").upsert(rows, { onConflict: "tenant_id,target_month" });
+  }
+  revalidatePath("/app/targets");
+  revalidatePath("/app/forecast");
+  revalidatePath("/app/dashboard");
+  redirect("/app/targets?fy=" + encodeURIComponent(fy) + "&ok=1");
+}
+
 // ===================== 請求スケジュール(売上計画) =====================
 export async function createBillingScheduleAction(formData: FormData) {
   const ctx = await requireCtx();

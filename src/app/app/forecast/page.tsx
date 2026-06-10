@@ -1,52 +1,100 @@
+import Link from "next/link";
 import { getWorkspace } from "@/lib/data/workspace";
-import { getSalesTargets, listOpportunities } from "@/lib/data/select";
-import { buildForecast, summarizePeriod } from "@/lib/forecast";
-import { repMetrics, productMetrics } from "@/lib/analytics";
-import { PageHeader, Section, StatCard, Card } from "@/components/ui/primitives";
-import { ForecastChart, SimpleBar } from "@/components/charts/forecast-chart";
-import { formatYen } from "@/lib/utils";
+import { getSalesTargets, listOpportunities, listLeads } from "@/lib/data/select";
+import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
+import { ForecastChart } from "@/components/charts/forecast-chart";
+import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
+import { actualByMonth } from "@/lib/targets";
+import { monthKey, startOfMonth, formatYen, formatPercent, sum } from "@/lib/utils";
+import type { OppView } from "@/lib/data/select";
 
-export default async function ForecastPage() {
+function revMonthKey(o: OppView): string | null {
+  const ref = o.expected_revenue_month || o.expected_close_date;
+  return ref ? monthKey(startOfMonth(new Date(ref))) : null;
+}
+
+export default async function ForecastPage({ searchParams }: { searchParams: { fy?: string } }) {
   const ws = await getWorkspace();
-  const now = new Date();
+  const cur = currentFiscalStartYear();
+  const fy = searchParams.fy ? parseInt(searchParams.fy, 10) : cur;
+  const months = fiscalMonths(fy);
+  const fyOptions = [cur - 1, cur, cur + 1];
+
   const opps = listOpportunities(ws);
   const targets = getSalesTargets(ws);
-  const buckets = buildForecast(opps, targets, 12, now);
+  const targetMap = new Map(targets.map((t) => [t.target_month, t]));
+  const actuals = actualByMonth(opps, listLeads(ws));
 
-  const thisMonth = summarizePeriod(buckets, 0, 1, "今月");
-  const nextMonth = summarizePeriod(buckets, 1, 2, "来月");
-  const quarter = summarizePeriod(buckets, 0, 3, "今四半期(3ヶ月)");
+  const rows = months.map((m) => {
+    const t = targetMap.get(m.key);
+    const a = actuals.get(m.key);
+    const inMonth = opps.filter((o) => revMonthKey(o) === m.key);
+    const open = inMonth.filter((o) => o.status === "open");
+    const won = sum(inMonth.filter((o) => o.status === "won"), (o) => o.amount);
+    const commit = sum(open.filter((o) => o.forecast_category === "commit"), (o) => o.amount) + won;
+    const best = commit + sum(open.filter((o) => o.forecast_category === "best_case"), (o) => o.amount);
+    const pipeline = sum(open.filter((o) => o.forecast_category === "pipeline"), (o) => o.amount);
+    const weighted = sum(open, (o) => o.weighted) + won;
+    return {
+      key: m.key,
+      label: m.label,
+      target: t?.target_amount ?? 0,
+      targetDeals: t?.target_deals ?? 0,
+      targetAppts: t?.target_appointments ?? 0,
+      targetLeads: t?.target_leads ?? 0,
+      revenue: a?.revenue ?? 0,
+      deals: a?.deals ?? 0,
+      appts: a?.appts ?? 0,
+      leads: a?.leads ?? 0,
+      commit,
+      best,
+      pipeline,
+      weighted,
+    };
+  });
 
-  const open = opps.filter((o) => o.status === "open");
-  const reps = repMetrics(open);
-  const products = productMetrics(open).slice(0, 8);
+  const tot = {
+    target: sum(rows, (r) => r.target),
+    revenue: sum(rows, (r) => r.revenue),
+    targetDeals: sum(rows, (r) => r.targetDeals),
+    deals: sum(rows, (r) => r.deals),
+    targetAppts: sum(rows, (r) => r.targetAppts),
+    appts: sum(rows, (r) => r.appts),
+    targetLeads: sum(rows, (r) => r.targetLeads),
+    leads: sum(rows, (r) => r.leads),
+  };
+  const rate = (a: number, t: number) => (t > 0 ? a / t : null);
 
   return (
     <div>
-      <PageHeader title="売上予測" subtitle="今月・来月・四半期・12ヶ月先の売上見込み。weighted = 金額 × 確度。" />
+      <PageHeader
+        title="売上予測"
+        subtitle={`${fiscalYearLabel(fy)}（${fy}年7月〜${fy + 1}年6月）の目標と着地見込み。weighted = 金額 × 確度。`}
+        action={
+          <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5 text-sm">
+            {fyOptions.map((y) => (
+              <Link key={y} href={`/app/forecast?fy=${y}`} className={`rounded-lg px-3 py-1.5 font-medium ${y === fy ? "bg-teal-primary text-white" : "text-ink/60 hover:text-ink"}`}>
+                {fiscalYearLabel(y)}
+              </Link>
+            ))}
+          </div>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-        {[thisMonth, nextMonth, quarter].map((p) => (
-          <Card key={p.label}>
-            <div className="text-sm font-semibold text-ink mb-3">{p.label}</div>
-            <div className="grid grid-cols-2 gap-y-2 text-sm">
-              <span className="text-ink/50">目標</span><span className="text-right tabular-nums">{formatYen(p.target)}</span>
-              <span className="text-ink/50">Commit</span><span className="text-right tabular-nums font-semibold text-teal-deep">{formatYen(p.commit)}</span>
-              <span className="text-ink/50">Best Case込み</span><span className="text-right tabular-nums">{formatYen(p.bestCase)}</span>
-              <span className="text-ink/50">Weighted</span><span className="text-right tabular-nums">{formatYen(p.weighted)}</span>
-              <span className="text-ink/50">Gap</span>
-              <span className={`text-right tabular-nums font-bold ${p.gap >= 0 ? "text-teal-deep" : "stat-accent"}`}>{formatYen(p.gap)}</span>
-            </div>
-          </Card>
-        ))}
+      {/* 年度KPI: 4指標の実績/目標 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <StatCard label="売上(実績/目標)" amount={tot.revenue} accent sub={`目標 ${formatYen(tot.target)}・達成 ${formatPercent(rate(tot.revenue, tot.target))}`} />
+        <StatCard label="成約(実績/目標)" raw={`${tot.deals}`} sub={`目標 ${tot.targetDeals}・達成 ${formatPercent(rate(tot.deals, tot.targetDeals))}`} />
+        <StatCard label="アポ(実績/目標)" raw={`${tot.appts}`} sub={`目標 ${tot.targetAppts}・達成 ${formatPercent(rate(tot.appts, tot.targetAppts))}`} />
+        <StatCard label="リード(実績/目標)" raw={`${tot.leads}`} sub={`目標 ${tot.targetLeads}・達成 ${formatPercent(rate(tot.leads, tot.targetLeads))}`} />
       </div>
 
-      <Section title="月別売上予測(12ヶ月ローリング)" className="mb-5">
+      <Section title={`月別 売上予測（${fiscalYearLabel(fy)}）`} className="mb-5">
         <ForecastChart
-          data={buckets.map((b) => ({
+          data={rows.map((b) => ({
             label: b.label,
             commit: b.commit,
-            bestCase: Math.max(0, b.bestCase - b.commit),
+            bestCase: Math.max(0, b.best - b.commit),
             pipeline: b.pipeline,
             weighted: b.weighted,
             target: b.target,
@@ -54,43 +102,56 @@ export default async function ForecastPage() {
         />
       </Section>
 
-      <div className="card overflow-x-auto mb-5">
+      <div className="card overflow-x-auto">
+        <div className="px-5 pt-4 pb-3 border-b border-black/[0.04]">
+          <h2 className="section-title">月別 目標 vs 実績</h2>
+        </div>
         <table className="w-full">
           <thead className="border-b border-black/[0.06]">
             <tr>
               <th className="th">月</th>
-              <th className="th text-right">目標</th>
-              <th className="th text-right">Commit</th>
-              <th className="th text-right">Best Case込み</th>
-              <th className="th text-right">Pipeline</th>
-              <th className="th text-right">Weighted</th>
-              <th className="th text-right">Gap</th>
+              <th className="th text-right">売上実績</th>
+              <th className="th text-right">売上目標</th>
+              <th className="th text-right">達成率</th>
+              <th className="th text-right">成約 実/目</th>
+              <th className="th text-right">アポ 実/目</th>
+              <th className="th text-right">リード 実/目</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-black/[0.04]">
-            {buckets.map((b) => (
-              <tr key={b.monthKey} className="row-hover">
-                <td className="td font-medium">{b.label}</td>
-                <td className="td text-right tabular-nums text-ink/60">{formatYen(b.target)}</td>
-                <td className="td text-right tabular-nums font-semibold text-teal-deep">{formatYen(b.commit)}</td>
-                <td className="td text-right tabular-nums">{formatYen(b.bestCase)}</td>
-                <td className="td text-right tabular-nums text-ink/60">{formatYen(b.pipeline)}</td>
-                <td className="td text-right tabular-nums">{formatYen(b.weighted)}</td>
-                <td className={`td text-right tabular-nums font-semibold ${b.gap >= 0 ? "text-teal-deep" : "text-accent-orange"}`}>{formatYen(b.gap)}</td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              const ra = rate(r.revenue, r.target);
+              return (
+                <tr key={r.key} className="row-hover">
+                  <td className="td font-medium whitespace-nowrap">{r.label}</td>
+                  <td className="td text-right tabular-nums stat-accent">{formatYen(r.revenue)}</td>
+                  <td className="td text-right tabular-nums text-ink/60">{formatYen(r.target)}</td>
+                  <td className={`td text-right tabular-nums font-medium ${ra != null && ra >= 1 ? "text-teal-deep" : "text-ink/50"}`}>{formatPercent(ra)}</td>
+                  <td className="td text-right tabular-nums">{r.deals} / {r.targetDeals}</td>
+                  <td className="td text-right tabular-nums">{r.appts} / {r.targetAppts}</td>
+                  <td className="td text-right tabular-nums">{r.leads} / {r.targetLeads}</td>
+                </tr>
+              );
+            })}
           </tbody>
+          <tfoot>
+            <tr className="border-t border-black/[0.08] bg-mist-soft/40 font-semibold">
+              <td className="td">年度計</td>
+              <td className="td text-right tabular-nums stat-accent">{formatYen(tot.revenue)}</td>
+              <td className="td text-right tabular-nums text-ink/60">{formatYen(tot.target)}</td>
+              <td className="td text-right tabular-nums">{formatPercent(rate(tot.revenue, tot.target))}</td>
+              <td className="td text-right tabular-nums">{tot.deals} / {tot.targetDeals}</td>
+              <td className="td text-right tabular-nums">{tot.appts} / {tot.targetAppts}</td>
+              <td className="td text-right tabular-nums">{tot.leads} / {tot.targetLeads}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Section title="営業マン別 Weighted予測">
-          <SimpleBar data={reps.map((r) => ({ label: r.name, value: r.weighted }))} />
-        </Section>
-        <Section title="商品別 進行中予測">
-          <SimpleBar data={products.map((p) => ({ label: p.name, value: p.openAmount }))} color="#F59A2A" />
-        </Section>
-      </div>
+      <p className="text-xs text-ink/40 mt-3">
+        ※ 目標は<Link href="/app/targets" className="text-teal-primary hover:underline">目標入力</Link>で設定。
+        実績=売上/成約は受注日、アポは初回商談日、リードはリード獲得日ベース。
+      </p>
     </div>
   );
 }

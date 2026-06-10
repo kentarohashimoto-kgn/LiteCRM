@@ -12,6 +12,7 @@ import {
   CheckSquare,
   Activity as ActivityIcon,
   TrendingUp,
+  Goal,
   UserCog,
   Package,
   Radio,
@@ -30,6 +31,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/reviews/weekly", label: "週次レビュー", icon: CalendarCheck },
       { href: "/app/opportunities", label: "案件", icon: Target },
       { href: "/app/forecast", label: "売上予測", icon: TrendingUp },
+      { href: "/app/targets", label: "目標入力", icon: Goal },
     ],
   },
   {

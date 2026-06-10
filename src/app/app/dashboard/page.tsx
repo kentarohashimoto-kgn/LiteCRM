@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { CalendarCheck, AlertTriangle, Clock, Target as TargetIcon } from "lucide-react";
 import { getWorkspace } from "@/lib/data/workspace";
-import { getSalesTargets, listOpportunities, listTasks } from "@/lib/data/select";
+import { getSalesTargets, listOpportunities, listTasks, listLeads } from "@/lib/data/select";
 import { buildForecast } from "@/lib/forecast";
 import { isStale, noNextAction } from "@/lib/risk";
 import { repMetrics, productMetrics } from "@/lib/analytics";
 import { Card, PageHeader, ProgressBar, Section, StatCard } from "@/components/ui/primitives";
 import { ForecastChart, SimpleBar } from "@/components/charts/forecast-chart";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
-import { formatYen, formatManYen, sameMonth, formatDate } from "@/lib/utils";
+import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
+import { actualByMonth } from "@/lib/targets";
+import { formatYen, formatManYen, formatPercent, sameMonth, formatDate, sum } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const ws = await getWorkspace();
@@ -34,6 +36,25 @@ export default async function DashboardPage() {
   const products = productMetrics(openOpps).slice(0, 6);
   const achieve = thisMonth.target > 0 ? thisMonth.bestCase / thisMonth.target : 0;
 
+  // 今年度(決算6月=7月始まり)の目標 vs 実績
+  const fy = currentFiscalStartYear(now);
+  const fyMonths = fiscalMonths(fy);
+  const targetMap = new Map(targets.map((t) => [t.target_month, t]));
+  const actuals = actualByMonth(opps, listLeads(ws));
+  const fyTarget = {
+    amount: sum(fyMonths, (m) => targetMap.get(m.key)?.target_amount ?? 0),
+    deals: sum(fyMonths, (m) => targetMap.get(m.key)?.target_deals ?? 0),
+    appts: sum(fyMonths, (m) => targetMap.get(m.key)?.target_appointments ?? 0),
+    leads: sum(fyMonths, (m) => targetMap.get(m.key)?.target_leads ?? 0),
+  };
+  const fyActual = {
+    amount: sum(fyMonths, (m) => actuals.get(m.key)?.revenue ?? 0),
+    deals: sum(fyMonths, (m) => actuals.get(m.key)?.deals ?? 0),
+    appts: sum(fyMonths, (m) => actuals.get(m.key)?.appts ?? 0),
+    leads: sum(fyMonths, (m) => actuals.get(m.key)?.leads ?? 0),
+  };
+  const fyRate = (a: number, t: number) => (t > 0 ? a / t : null);
+
   return (
     <div>
       <PageHeader
@@ -54,6 +75,20 @@ export default async function DashboardPage() {
           sub={thisMonth.gap >= 0 ? "目標到達ペース" : "不足"}
         />
       </div>
+
+      {/* 今年度の進捗 */}
+      <Section
+        title={`${fiscalYearLabel(fy)}の進捗`}
+        className="mb-5"
+        action={<Link href="/app/forecast" className="text-xs font-semibold text-teal-primary hover:underline">売上予測 →</Link>}
+      >
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <FyProgress label="売上" actual={formatYen(fyActual.amount)} target={`目標 ${formatYen(fyTarget.amount)}`} rate={fyRate(fyActual.amount, fyTarget.amount)} />
+          <FyProgress label="成約" actual={`${fyActual.deals}件`} target={`目標 ${fyTarget.deals}件`} rate={fyRate(fyActual.deals, fyTarget.deals)} />
+          <FyProgress label="アポ" actual={`${fyActual.appts}件`} target={`目標 ${fyTarget.appts}件`} rate={fyRate(fyActual.appts, fyTarget.appts)} />
+          <FyProgress label="リード" actual={`${fyActual.leads}件`} target={`目標 ${fyTarget.leads}件`} rate={fyRate(fyActual.leads, fyTarget.leads)} />
+        </div>
+      </Section>
 
       <Card className="mb-5">
         <div className="flex items-center justify-between mb-2">
@@ -153,6 +188,22 @@ export default async function DashboardPage() {
           )}
         </Section>
       </div>
+    </div>
+  );
+}
+
+function FyProgress({ label, actual, target, rate }: { label: string; actual: string; target: string; rate: number | null }) {
+  const pct = rate != null ? Math.round(rate * 100) : null;
+  const reached = rate != null && rate >= 1;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <span className="text-xs font-semibold text-ink/60">{label}</span>
+        <span className={`text-xs font-bold ${reached ? "text-teal-deep" : "text-accent-orange"}`}>{pct != null ? pct + "%" : "—"}</span>
+      </div>
+      <div className="text-lg font-bold tabular-nums mt-0.5">{actual}</div>
+      <div className="text-[11px] text-ink/40 mb-1.5">{target}</div>
+      <ProgressBar value={pct ?? 0} max={100} tone={reached ? "teal" : "orange"} />
     </div>
   );
 }

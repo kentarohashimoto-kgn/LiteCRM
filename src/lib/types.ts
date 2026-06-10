@@ -336,6 +336,9 @@ export interface SalesTarget {
   target_month: string; // YYYY-MM-01
   target_amount: number;
   target_gross_profit?: number;
+  target_deals?: number;
+  target_appointments?: number;
+  target_leads?: number;
 }
 
 export interface ForecastSnapshot {
