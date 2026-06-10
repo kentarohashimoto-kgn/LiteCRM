@@ -112,6 +112,8 @@ export interface Account {
   area?: string;
   status: "prospect" | "customer" | "inactive";
   priority?: "A" | "B" | "C";
+  rank?: "S" | "A" | "B" | "C" | "D";
+  focus?: "critical" | "important" | "normal" | "low" | "hold";
   potential?: "high" | "middle" | "low";
   website_url?: string;
   notes?: string;

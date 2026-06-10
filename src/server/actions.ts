@@ -333,6 +333,22 @@ export async function createAccountAction(formData: FormData) {
   redirect(`/app/accounts/${data.id}`);
 }
 
+/** 顧客のランク(S/A/B/C/D)を更新 */
+export async function setAccountRankAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("accounts").update({ rank: str(formData.get("rank")) }).eq("id", String(formData.get("id")));
+  revalidatePath("/app/accounts");
+}
+
+/** 顧客の重点フラグを更新 */
+export async function setAccountFocusAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("accounts").update({ focus: str(formData.get("focus")) }).eq("id", String(formData.get("id")));
+  revalidatePath("/app/accounts");
+}
+
 // ===================== リード =====================
 export async function createLeadAction(formData: FormData) {
   const ctx = await requireCtx();

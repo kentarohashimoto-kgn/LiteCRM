@@ -145,6 +145,29 @@ export const CATEGORIES: {
 
 export const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map((c) => [c.key, c]));
 
+/** 顧客ランク(手動)。S>A>B>C>D。 */
+export const ACCOUNT_RANKS: { key: string; color: string }[] = [
+  { key: "S", color: "bg-accent-orange text-white" },
+  { key: "A", color: "bg-teal-primary text-white" },
+  { key: "B", color: "bg-teal-light text-teal-deep" },
+  { key: "C", color: "bg-mist-soft text-ink/70 border border-black/5" },
+  { key: "D", color: "bg-mist-soft text-ink/40" },
+];
+
+/** 重点フラグ(手動・追客優先度)。 */
+export const ACCOUNT_FOCUS: { key: string; label: string; color: string }[] = [
+  { key: "critical", label: "最重要", color: "bg-rose-100 text-rose-600" },
+  { key: "important", label: "重要", color: "bg-amber-50 text-accent-orange" },
+  { key: "normal", label: "通常", color: "bg-mist-soft text-ink/60" },
+  { key: "low", label: "低", color: "bg-mist-soft text-ink/40" },
+  { key: "hold", label: "保留", color: "bg-violet-50 text-violet-600" },
+];
+
+export const ACCOUNT_FOCUS_MAP = Object.fromEntries(ACCOUNT_FOCUS.map((f) => [f.key, f]));
+/** 重点フラグの並び順(ソート用)。小さいほど重要。 */
+export const FOCUS_ORDER: Record<string, number> = { critical: 0, important: 1, normal: 2, low: 3, hold: 4 };
+export const RANK_ORDER: Record<string, number> = { S: 0, A: 1, B: 2, C: 3, D: 4 };
+
 /** CATORCE 流入経路マスタ初期値(8.2) */
 export const CATORCE_LEAD_SOURCES: { name: string; description: string }[] = [
   { name: "X", description: "X投稿、プロフィール、DM経由" },
