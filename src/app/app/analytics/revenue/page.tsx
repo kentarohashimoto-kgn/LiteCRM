@@ -72,12 +72,12 @@ export default async function RevenueAnalyticsPage({ searchParams }: { searchPar
       </div>
 
       <Section title="月別 受注額(受注日ベース・分類別)">
-        <StackedTrendChart data={orders.data} series={orders.series} />
+        <StackedTrendChart data={orders.data} series={orders.series} unit="yen" />
         <CategoryLegend />
       </Section>
 
       <Section title="月別 請求額(請求日ベース・分類別)">
-        <StackedTrendChart data={billing.data} series={billing.series} />
+        <StackedTrendChart data={billing.data} series={billing.series} unit="yen" />
         <CategoryLegend />
       </Section>
 

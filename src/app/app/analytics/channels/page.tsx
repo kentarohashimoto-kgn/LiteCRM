@@ -5,7 +5,7 @@ import { listOpportunities, listLeads } from "@/lib/data/select";
 import { channelMetrics } from "@/lib/analytics";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { SimpleBar } from "@/components/charts/forecast-chart";
-import { ChannelTrend, type ChannelPoint } from "@/components/analytics/channel-trend";
+import { ShareTrend, type TrendPoint } from "@/components/analytics/share-trend";
 import { formatYen, formatPercent, monthKey, startOfMonth } from "@/lib/utils";
 
 const TREND_PALETTE = [
@@ -37,8 +37,8 @@ export default async function LeadSourceAnalyticsPage() {
 
   // 月別推移用: 流入元を系列に、案件数(作成日)/受注額(受注日)を月別集計
   const trendSeries = channels.map((c, i) => ({ key: c.sourceId, name: c.name, color: TREND_PALETTE[i % TREND_PALETTE.length] }));
-  const countPoints: ChannelPoint[] = [];
-  const revPoints: ChannelPoint[] = [];
+  const countPoints: TrendPoint[] = [];
+  const revPoints: TrendPoint[] = [];
   for (const o of opps) {
     if (!o.lead_source_id) continue;
     if (o.created_at) countPoints.push({ s: o.lead_source_id, m: monthKey(startOfMonth(new Date(o.created_at))), v: 1 });
@@ -66,7 +66,7 @@ export default async function LeadSourceAnalyticsPage() {
         <SimpleBar data={channels.map((c) => ({ label: c.name, value: c.wonAmount }))} />
       </Section>
 
-      <ChannelTrend series={trendSeries} countPoints={countPoints} revPoints={revPoints} />
+      <ShareTrend title="流入元別 月別推移" series={trendSeries} countPoints={countPoints} revPoints={revPoints} />
 
       <div className="card overflow-x-auto">
         <table className="w-full">

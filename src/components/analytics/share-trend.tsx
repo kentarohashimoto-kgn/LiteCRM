@@ -5,22 +5,26 @@ import { StackedTrendChart, type StackSeries } from "@/components/charts/stacked
 import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
 import { monthKey, startOfMonth, addMonths, cn } from "@/lib/utils";
 
-export interface ChannelPoint {
-  s: string; // sourceKey
+export interface TrendPoint {
+  s: string; // seriesKey
   m: string; // monthKey
   v: number;
 }
 
-export function ChannelTrend({
+/** 流入元別・商品別 等の月別推移(実数/シェア・指標切替・期間切替)。 */
+export function ShareTrend({
+  title,
   series,
   countPoints,
   revPoints,
 }: {
+  title: string;
   series: StackSeries[];
-  countPoints: ChannelPoint[];
-  revPoints: ChannelPoint[];
+  countPoints: TrendPoint[];
+  revPoints: TrendPoint[];
 }) {
   const [metric, setMetric] = useState<"count" | "revenue">("count");
+  const [mode, setMode] = useState<"value" | "share">("value");
   const [range, setRange] = useState<string>("rolling");
   const now = new Date();
   const cur = currentFiscalStartYear(now);
@@ -46,8 +50,7 @@ export function ChannelTrend({
     });
     for (const p of points) {
       const i = idx.get(p.m);
-      if (i == null) continue;
-      if (!(p.s in rows[i])) continue;
+      if (i == null || !(p.s in rows[i])) continue;
       rows[i][p.s] = (rows[i][p.s] as number) + p.v;
     }
     return rows;
@@ -56,11 +59,15 @@ export function ChannelTrend({
   return (
     <div className="card">
       <div className="px-5 pt-4 pb-3 border-b border-black/[0.04] flex items-center justify-between gap-2 flex-wrap">
-        <h2 className="section-title">流入元別 月別推移</h2>
-        <div className="flex items-center gap-2">
+        <h2 className="section-title">{title}</h2>
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="inline-flex rounded-lg border border-black/10 bg-white p-0.5 text-xs">
             <Tab active={metric === "count"} onClick={() => setMetric("count")} label="案件数" />
             <Tab active={metric === "revenue"} onClick={() => setMetric("revenue")} label="受注額" />
+          </div>
+          <div className="inline-flex rounded-lg border border-black/10 bg-white p-0.5 text-xs">
+            <Tab active={mode === "value"} onClick={() => setMode("value")} label="実数" />
+            <Tab active={mode === "share"} onClick={() => setMode("share")} label="シェア" />
           </div>
           <select value={range} onChange={(e) => setRange(e.target.value)} className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs outline-none focus:border-teal-primary">
             <option value="rolling">直近12ヶ月</option>
@@ -71,7 +78,7 @@ export function ChannelTrend({
         </div>
       </div>
       <div className="p-5 pt-4">
-        <StackedTrendChart data={data} series={series} />
+        <StackedTrendChart data={data} series={series} unit={metric === "revenue" ? "yen" : "count"} mode={mode} />
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3">
           {series.map((s) => (
             <span key={s.key} className="inline-flex items-center gap-1 text-[11px] text-ink/70">
@@ -82,6 +89,7 @@ export function ChannelTrend({
         </div>
         <p className="text-[11px] text-ink/40 mt-2">
           {metric === "count" ? "案件数は作成日ベース。" : "受注額は受注日ベース（受注済み）。"}
+          {mode === "share" && " シェアは各月の構成比(100%積み上げ)。"}
         </p>
       </div>
     </div>
