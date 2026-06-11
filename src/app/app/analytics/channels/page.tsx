@@ -5,7 +5,13 @@ import { listOpportunities, listLeads } from "@/lib/data/select";
 import { channelMetrics } from "@/lib/analytics";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { SimpleBar } from "@/components/charts/forecast-chart";
-import { formatYen, formatPercent } from "@/lib/utils";
+import { ChannelTrend, type ChannelPoint } from "@/components/analytics/channel-trend";
+import { formatYen, formatPercent, monthKey, startOfMonth } from "@/lib/utils";
+
+const TREND_PALETTE = [
+  "#008C8C", "#F59A2A", "#3B82F6", "#8B5CF6", "#EC4899",
+  "#10B981", "#EF4444", "#0EA5E9", "#A855F7", "#84CC16",
+];
 
 /** 主要施策のドリルダウン先(流入元名 → 詳細分析ページ)。今後 代理店/セミナー 等を追加。 */
 const DRILLDOWN: Record<string, { href: string; label: string }> = {
@@ -29,6 +35,19 @@ export default async function LeadSourceAnalyticsPage() {
   const totalWeighted = channels.reduce((s, c) => s + c.weighted, 0);
   const overallWinRate = totalWon + totalLost ? totalWon / (totalWon + totalLost) : 0;
 
+  // 月別推移用: 流入元を系列に、案件数(作成日)/受注額(受注日)を月別集計
+  const trendSeries = channels.map((c, i) => ({ key: c.sourceId, name: c.name, color: TREND_PALETTE[i % TREND_PALETTE.length] }));
+  const countPoints: ChannelPoint[] = [];
+  const revPoints: ChannelPoint[] = [];
+  for (const o of opps) {
+    if (!o.lead_source_id) continue;
+    if (o.created_at) countPoints.push({ s: o.lead_source_id, m: monthKey(startOfMonth(new Date(o.created_at))), v: 1 });
+    if (o.status === "won" && o.amount) {
+      const ref = o.expected_close_date || o.expected_revenue_month;
+      if (ref) revPoints.push({ s: o.lead_source_id, m: monthKey(startOfMonth(new Date(ref))), v: o.amount });
+    }
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -46,6 +65,8 @@ export default async function LeadSourceAnalyticsPage() {
       <Section title="流入元別 受注金額">
         <SimpleBar data={channels.map((c) => ({ label: c.name, value: c.wonAmount }))} />
       </Section>
+
+      <ChannelTrend series={trendSeries} countPoints={countPoints} revPoints={revPoints} />
 
       <div className="card overflow-x-auto">
         <table className="w-full">
