@@ -1,59 +1,83 @@
+import Link from "next/link";
 import { getWorkspace } from "@/lib/data/workspace";
-import { listOpportunities } from "@/lib/data/select";
+import { listOpportunities, listMembers, listRepTargets } from "@/lib/data/select";
 import { repMetrics } from "@/lib/analytics";
-import { PageHeader, Section } from "@/components/ui/primitives";
-import { SimpleBar } from "@/components/charts/forecast-chart";
-import { formatYen, formatPercent } from "@/lib/utils";
+import { PageHeader } from "@/components/ui/primitives";
+import { RepAnalysis, type RepRow } from "@/components/analytics/rep-analysis";
+import { monthKey, startOfMonth, addMonths } from "@/lib/utils";
+
+function ymOf(s?: string | null): string | null {
+  if (!s) return null;
+  return monthKey(startOfMonth(new Date(s)));
+}
 
 export default async function SalesRepAnalyticsPage() {
   const ws = await getWorkspace();
   const opps = listOpportunities(ws);
   const reps = repMetrics(opps);
 
+  const statusByUser = new Map(listMembers(ws).map((m) => [m.user.id, m.repStatus]));
+
+  // 直近12ヶ月
+  const now = new Date();
+  const cols = Array.from({ length: 12 }, (_, i) => {
+    const d = addMonths(startOfMonth(now), i - 11);
+    return { key: monthKey(d), label: `${String(d.getFullYear()).slice(2)}/${d.getMonth() + 1}` };
+  });
+
+  // (owner, month) 別の受注額/受注数/アポ
+  const rev = new Map<string, number>();
+  const deals = new Map<string, number>();
+  const appts = new Map<string, number>();
+  for (const o of opps) {
+    if (o.status === "won" && o.amount) {
+      const mk = ymOf(o.expected_close_date || o.expected_revenue_month);
+      if (mk) {
+        const k = `${o.owner_user_id}|${mk}`;
+        rev.set(k, (rev.get(k) ?? 0) + o.amount);
+        deals.set(k, (deals.get(k) ?? 0) + 1);
+      }
+    }
+    const fm = ymOf(o.first_meeting_date);
+    if (fm) {
+      const k = `${o.owner_user_id}|${fm}`;
+      appts.set(k, (appts.get(k) ?? 0) + 1);
+    }
+  }
+  const targetMap = new Map(listRepTargets(ws).map((t) => [`${t.user_id}|${t.target_month}`, t.target_amount]));
+
+  const rows: RepRow[] = reps.map((r) => ({
+    userId: r.userId,
+    name: r.name,
+    status: statusByUser.get(r.userId) ?? undefined,
+    openCount: r.openCount,
+    openAmount: r.openAmount,
+    wonCount: r.wonCount,
+    wonAmount: r.wonAmount,
+    winRate: r.winRate,
+    avgDealSize: r.avgDealSize,
+    nextActionRate: r.nextActionRate,
+    staleCount: r.staleCount,
+    months: cols.map((c) => {
+      const k = `${r.userId}|${c.key}`;
+      return {
+        label: c.label,
+        revenue: rev.get(k) ?? 0,
+        deals: deals.get(k) ?? 0,
+        appts: appts.get(k) ?? 0,
+        target: targetMap.get(k) ?? 0,
+      };
+    }),
+  }));
+
   return (
     <div>
-      <PageHeader title="営業マン別分析" subtitle="担当者別の行動量・受注率・単価・放置案件を可視化します。" />
-
-      <Section title="受注金額" className="mb-5">
-        <SimpleBar data={reps.map((r) => ({ label: r.name, value: r.wonAmount }))} />
-      </Section>
-
-      <div className="card overflow-x-auto">
-        <table className="w-full">
-          <thead className="border-b border-black/[0.06]">
-            <tr>
-              <th className="th">担当営業</th>
-              <th className="th text-right">進行中</th>
-              <th className="th text-right">進行中金額</th>
-              <th className="th text-right">受注数</th>
-              <th className="th text-right">受注金額</th>
-              <th className="th text-right">受注率</th>
-              <th className="th text-right">平均単価</th>
-              <th className="th text-right">次AC設定率</th>
-              <th className="th text-right">放置案件</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-black/[0.04]">
-            {reps.map((r) => (
-              <tr key={r.userId} className="row-hover">
-                <td className="td font-medium">{r.name}</td>
-                <td className="td text-right tabular-nums">{r.openCount}</td>
-                <td className="td text-right tabular-nums">{formatYen(r.openAmount)}</td>
-                <td className="td text-right tabular-nums">{r.wonCount}</td>
-                <td className="td text-right tabular-nums font-semibold stat-accent">{formatYen(r.wonAmount)}</td>
-                <td className="td text-right tabular-nums">{formatPercent(r.winRate)}</td>
-                <td className="td text-right tabular-nums">{formatYen(r.avgDealSize)}</td>
-                <td className="td text-right tabular-nums">
-                  <span className={r.nextActionRate < 0.8 ? "text-accent-orange font-medium" : ""}>{formatPercent(r.nextActionRate)}</span>
-                </td>
-                <td className="td text-right tabular-nums">
-                  <span className={r.staleCount > 0 ? "text-rose-500 font-medium" : "text-ink/50"}>{r.staleCount}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <PageHeader
+        title="営業マン別分析"
+        subtitle="担当者別の行動量・受注率・単価・放置案件と、月別推移・目標・ステータスを管理します。"
+        action={<Link href="/app/targets?scope=rep" className="text-xs font-semibold text-teal-primary hover:underline">月別目標を設定 →</Link>}
+      />
+      <RepAnalysis rows={rows} />
     </div>
   );
 }

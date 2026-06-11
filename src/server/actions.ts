@@ -207,6 +207,39 @@ export async function saveTargetsAction(formData: FormData) {
   redirect("/app/targets?fy=" + encodeURIComponent(fy) + "&ok=1");
 }
 
+/** 営業マンのステータス(継続/契約予定/保留/解約)を更新 */
+export async function setRepStatusAction(formData: FormData) {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  await sb
+    .from("memberships")
+    .update({ rep_status: str(formData.get("rep_status")) })
+    .eq("tenant_id", ctx.tenantId)
+    .eq("user_id", String(formData.get("user_id")));
+  revalidatePath("/app/analytics/sales-reps");
+}
+
+/** 営業マンの月別売上目標を保存(年度分) */
+export async function saveRepTargetsAction(formData: FormData) {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const userId = String(formData.get("user_id"));
+  const fy = String(formData.get("fy") ?? "");
+  const months = String(formData.get("months") ?? "").split(",").filter(Boolean);
+  const rows = months.map((mk) => ({
+    tenant_id: ctx.tenantId,
+    user_id: userId,
+    target_month: mk,
+    target_amount: num(formData.get(`m_${mk}_amount`)) ?? 0,
+  }));
+  if (rows.length) {
+    await sb.from("rep_targets").upsert(rows, { onConflict: "tenant_id,user_id,target_month" });
+  }
+  revalidatePath("/app/targets");
+  revalidatePath("/app/analytics/sales-reps");
+  redirect("/app/targets?scope=" + encodeURIComponent(userId) + "&fy=" + encodeURIComponent(fy) + "&ok=1");
+}
+
 // ===================== 請求スケジュール(売上計画) =====================
 export async function createBillingScheduleAction(formData: FormData) {
   const ctx = await requireCtx();

@@ -99,6 +99,15 @@ export interface Membership {
   user_id: UUID;
   role: Role;
   status: string;
+  rep_status?: "continuing" | "terminated" | "hold" | "pending";
+}
+
+export interface RepTarget {
+  id: UUID;
+  tenant_id: UUID;
+  user_id: UUID;
+  target_month: string; // YYYY-MM-01
+  target_amount: number;
 }
 
 export interface Account {

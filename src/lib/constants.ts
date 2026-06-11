@@ -168,6 +168,15 @@ export const ACCOUNT_FOCUS_MAP = Object.fromEntries(ACCOUNT_FOCUS.map((f) => [f.
 export const FOCUS_ORDER: Record<string, number> = { critical: 0, important: 1, normal: 2, low: 3, hold: 4 };
 export const RANK_ORDER: Record<string, number> = { S: 0, A: 1, B: 2, C: 3, D: 4 };
 
+/** 営業マンのステータス(契約状況)。 */
+export const REP_STATUS: { key: string; label: string; color: string }[] = [
+  { key: "continuing", label: "継続", color: "bg-teal-light text-teal-deep" },
+  { key: "pending", label: "契約予定", color: "bg-amber-50 text-accent-orange" },
+  { key: "hold", label: "保留", color: "bg-violet-50 text-violet-600" },
+  { key: "terminated", label: "解約", color: "bg-rose-100 text-rose-600" },
+];
+export const REP_STATUS_MAP = Object.fromEntries(REP_STATUS.map((s) => [s.key, s]));
+
 /** CATORCE 流入経路マスタ初期値(8.2) */
 export const CATORCE_LEAD_SOURCES: { name: string; description: string }[] = [
   { name: "X", description: "X投稿、プロフィール、DM経由" },

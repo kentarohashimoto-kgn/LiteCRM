@@ -153,10 +153,15 @@ export function getStageHistory(ws: Workspace, id: string): StageHistory[] {
     .sort((a, b) => +new Date(b.changed_at) - +new Date(a.changed_at));
 }
 
-export function listMembers(ws: Workspace): { user: User; role: Role }[] {
-  return ws.memberships
-    .map((m) => ({ user: ws.usersById.get(m.user_id), role: m.role }))
-    .filter((x): x is { user: User; role: Role } => Boolean(x.user));
+export function listMembers(ws: Workspace): { user: User; role: Role; repStatus?: string }[] {
+  return ws.memberships.flatMap((m) => {
+    const user = ws.usersById.get(m.user_id);
+    return user ? [{ user, role: m.role, repStatus: m.rep_status as string | undefined }] : [];
+  });
+}
+
+export function listRepTargets(ws: Workspace) {
+  return ws.repTargets;
 }
 
 export function getProducts(ws: Workspace): Product[] {
