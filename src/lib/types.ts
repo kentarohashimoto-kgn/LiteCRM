@@ -266,6 +266,7 @@ export interface Lead {
   tags?: string;
   raw_event?: string;
   deal_owner_name?: string;
+  acquirer?: string;
   scanned_at?: string;
   import_batch_id?: UUID;
   extra?: Record<string, string>;
@@ -277,6 +278,13 @@ export interface Lead {
   budget_band?: string;
   budget_amount?: number;
   priority_base?: number;
+}
+
+export interface AcquirerAlias {
+  id: UUID;
+  tenant_id: UUID;
+  raw: string;
+  display_name?: string;
 }
 
 export interface LeadImportBatch {

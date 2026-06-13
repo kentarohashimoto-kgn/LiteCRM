@@ -20,6 +20,7 @@ export interface RawLeadInput {
   disposition?: string;
   call_owner?: string;
   deal_owner?: string;
+  acquirer?: string;
   tags?: string;
   memo?: string;
   scanned_at?: string;
@@ -80,6 +81,7 @@ export const TARGET_FIELDS: { key: keyof RawLeadInput; label: string; required?:
   { key: "disposition", label: "決着/ステータス", hints: ["決着", "ステータス", "状態", "対応状況"] },
   { key: "call_owner", label: "架電担当(対応)", hints: ["対応", "架電担当", "コール担当"] },
   { key: "deal_owner", label: "商談担当", hints: ["商談担当", "営業担当", "担当"] },
+  { key: "acquirer", label: "取得担当(ブース読取)", hints: ["担当者の氏名", "読取担当", "端末名", "スキャン担当", "取得担当", "acquirer"] },
   { key: "tags", label: "タグ/興味", hints: ["タグ", "tag", "商談希望度", "興味", "関心"] },
   { key: "memo", label: "メモ/備考", hints: ["メモ", "備考", "コメント", "議事", "理由", "課題"] },
   { key: "scanned_at", label: "取得日/来場日", hints: ["スキャン", "来場", "日時", "タイムスタンプ", "取得日", "登録日"] },
@@ -192,6 +194,13 @@ function pdate(s?: string): string | null {
   if (!m) return null;
   return `${m[1]}-${String(+m[2]).padStart(2, "0")}-${String(+m[3]).padStart(2, "0")}`;
 }
+/** 日付＋時刻(あれば)をJSTのISOで返す。時間帯分析のため時刻を保持。 */
+function pdatetime(s?: string): string | null {
+  const d = pdate(s);
+  if (!d) return null;
+  const tm = (s ?? "").match(/(\d{1,2}):(\d{2})/);
+  return tm ? `${d}T${String(+tm[1]).padStart(2, "0")}:${tm[2]}:00+09:00` : `${d}T00:00:00+09:00`;
+}
 
 /** RawLeadInput を leads テーブルのレコードへ正規化。 */
 export function normalizeLead(
@@ -206,8 +215,8 @@ export function normalizeLead(
   const status = disposition === "appointment" ? "qualified" : disposition === "ng" || disposition === "excluded" ? "disqualified" : "new";
   const roleLevel = deriveRoleLevel(r.job_title);
   const score = priorityScore(opts.base, { employee_size: r.employee_size, role_level: roleLevel });
-  const scanned = pdate(r.scanned_at);
-  const acquired = scanned ?? opts.eventDate ?? new Date().toISOString().slice(0, 10);
+  const scanned = pdatetime(r.scanned_at);
+  const acquired = (scanned ? scanned.slice(0, 10) : null) ?? opts.eventDate ?? new Date().toISOString().slice(0, 10);
   const t = (v?: string) => {
     const s = (v ?? "").trim();
     return s === "" ? null : s.slice(0, 300);
@@ -224,6 +233,7 @@ export function normalizeLead(
     role_level: roleLevel,
     call_owner: t(r.call_owner),
     deal_owner_name: t(r.deal_owner),
+    acquirer: t(r.acquirer),
     company_name: t(company),
     company_norm: normCompany(company),
     title: (company + " / " + opts.rawEvent).slice(0, 200),

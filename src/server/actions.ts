@@ -506,6 +506,17 @@ export async function importLeadsBatchAction(
   return { inserted: recs.length };
 }
 
+/** 取得担当(ブース読取担当)の別名(数字→名前)を設定。 */
+export async function setAcquirerAliasAction(raw: string, displayName: string): Promise<{ ok: boolean }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  await sb
+    .from("acquirer_aliases")
+    .upsert({ tenant_id: ctx.tenantId, raw, display_name: displayName || null }, { onConflict: "tenant_id,raw" });
+  revalidatePath("/app/leads");
+  return { ok: true };
+}
+
 /** リードの決着ステータスを更新 */
 export async function setLeadDispositionAction(formData: FormData) {
   await requireCtx();

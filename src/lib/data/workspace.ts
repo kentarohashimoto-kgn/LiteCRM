@@ -2,6 +2,7 @@ import { cache } from "react";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { requireCtx, type Ctx } from "@/lib/session";
 import type {
+  AcquirerAlias,
   Account,
   Activity,
   BillingSchedule,
@@ -52,6 +53,7 @@ export interface Workspace {
   repTargets: RepTarget[];
   seminarResponses: SeminarResponse[];
   leadImportBatches: LeadImportBatch[];
+  acquirerAliases: AcquirerAlias[];
 }
 
 interface ProfileRow {
@@ -84,6 +86,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     repTargets,
     seminarResponses,
     leadImportBatches,
+    acquirerAliases,
   ] = await Promise.all([
     sb.from("profiles").select("id, email, display_name, avatar_color"),
     sb.from("memberships").select("*"),
@@ -103,6 +106,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     sb.from("rep_targets").select("*"),
     sb.from("seminar_responses").select("*").order("responded_at"),
     sb.from("lead_import_batches").select("*").order("created_at", { ascending: false }),
+    sb.from("acquirer_aliases").select("*"),
   ]);
 
   const users: User[] = (profiles.data ?? []).map((p: ProfileRow) => ({
@@ -142,5 +146,6 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     repTargets: (repTargets.data ?? []) as RepTarget[],
     seminarResponses: (seminarResponses.data ?? []) as SeminarResponse[],
     leadImportBatches: (leadImportBatches.data ?? []) as LeadImportBatch[],
+    acquirerAliases: (acquirerAliases.data ?? []) as AcquirerAlias[],
   };
 });

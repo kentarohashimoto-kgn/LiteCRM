@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, Phone, List, Building2, BarChart3, History, Trash2 } from "lucide-react";
 import { LEAD_DISPOSITIONS, LEAD_DISPOSITION_MAP } from "@/lib/constants";
-import { setLeadDispositionAction, setLeadCallOwnerAction, deleteImportBatchAction } from "@/server/actions";
+import { setLeadDispositionAction, setLeadCallOwnerAction, deleteImportBatchAction, setAcquirerAliasAction } from "@/server/actions";
 import { cn, formatDateFull } from "@/lib/utils";
 
 export interface BatchRow {
@@ -35,7 +35,10 @@ export interface LeadRow {
   event: string;
   dealOwner: string;
   tags: string;
+  acquirer: string;
+  scannedAt: string;
 }
+export interface AliasRow { raw: string; name: string }
 
 const EVENTS: Record<string, string> = { AIDX: "AIDX展(3/24)", ODEX: "ODEX東京(5/13)", AINATIVE: "AI NATIVE(6/10)" };
 const evLabel = (e: string) => EVENTS[e] ?? e ?? "—";
@@ -58,7 +61,7 @@ function DispBadge({ d }: { d: string }) {
   return <span className={cn("pill text-[10px]", def?.color ?? "bg-mist-soft text-ink/50")}>{def?.label ?? d}</span>;
 }
 
-export function LeadsWorkspace({ rows, batches = [] }: { rows: LeadRow[]; batches?: BatchRow[] }) {
+export function LeadsWorkspace({ rows, batches = [], aliases = [] }: { rows: LeadRow[]; batches?: BatchRow[]; aliases?: AliasRow[] }) {
   const [tab, setTab] = useState<"list" | "queue" | "company" | "analysis" | "batches">("list");
   return (
     <div className="space-y-4">
@@ -72,7 +75,7 @@ export function LeadsWorkspace({ rows, batches = [] }: { rows: LeadRow[]; batche
       {tab === "list" && <LeadList rows={rows} />}
       {tab === "queue" && <CallQueue rows={rows} />}
       {tab === "company" && <CompanyView rows={rows} />}
-      {tab === "analysis" && <Analysis rows={rows} />}
+      {tab === "analysis" && <Analysis rows={rows} aliases={aliases} />}
       {tab === "batches" && <Batches batches={batches} />}
     </div>
   );
@@ -301,7 +304,44 @@ function CompanyView({ rows }: { rows: LeadRow[] }) {
   );
 }
 
-function Analysis({ rows }: { rows: LeadRow[] }) {
+function Analysis({ rows: allRows, aliases }: { rows: LeadRow[]; aliases: AliasRow[] }) {
+  const router = useRouter();
+  const [ev, setEv] = useState("");
+  const events = useMemo(() => [...new Set(allRows.map((r) => r.event).filter(Boolean))], [allRows]);
+  const rows = useMemo(() => (ev ? allRows.filter((r) => r.event === ev) : allRows), [allRows, ev]);
+
+  const aliasMap = useMemo(() => new Map(aliases.map((a) => [a.raw, a.name])), [aliases]);
+  const resolveAcq = (raw: string) => (raw ? aliasMap.get(raw) || raw : "(不明)");
+
+  // 取得担当別パフォーマンス
+  const acqPerf = useMemo(() => {
+    const m = new Map<string, { total: number; appt: number }>();
+    for (const r of rows) {
+      const k = resolveAcq(r.acquirer);
+      const v = m.get(k) ?? { total: 0, appt: 0 };
+      v.total++; if (r.disposition === "appointment") v.appt++;
+      m.set(k, v);
+    }
+    return [...m.entries()].map(([k, v]) => ({ k, ...v, rate: v.total ? v.appt / v.total : 0 })).sort((a, b) => b.total - a.total);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, aliasMap]);
+  const maxAcq = Math.max(1, ...acqPerf.map((a) => a.total));
+
+  // 時間帯別(スキャン時刻のJST時)
+  const hourDist = useMemo(() => {
+    const arr = Array.from({ length: 24 }, () => 0);
+    for (const r of rows) {
+      const m = r.scannedAt.match(/T(\d{2}):/);
+      if (m) arr[parseInt(m[1], 10)]++;
+    }
+    return arr;
+  }, [rows]);
+  const hours = hourDist.map((n, h) => ({ h, n })).filter((x) => x.n > 0);
+  const maxHour = Math.max(1, ...hourDist);
+
+  // 取得担当の生値(別名設定用・特に数字)
+  const rawAcquirers = useMemo(() => [...new Set(allRows.map((r) => r.acquirer).filter(Boolean))].sort(), [allRows]);
+
   const total = rows.length;
   const called = rows.filter((r) => r.disposition !== "untouched").length;
   const appt = rows.filter((r) => r.disposition === "appointment").length;
@@ -338,12 +378,54 @@ function Analysis({ rows }: { rows: LeadRow[] }) {
 
   return (
     <div className="space-y-5">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-ink/40">対象:</span>
+        <select value={ev} onChange={(e) => setEv(e.target.value)} className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-primary">
+          <option value="">全体</option>
+          {events.map((e) => <option key={e} value={e}>{e}</option>)}
+        </select>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Kpi label="総リード" v={`${total}`} />
         <Kpi label="架電済" v={`${called}`} sub={pct(called, total)} />
         <Kpi label="アポ獲得" v={`${appt}`} sub={pct(appt, total)} accent />
         <Kpi label="アポ率(架電比)" v={pct(appt, called)} />
         <Kpi label="高優先×未着手" v={`${highUntouched}`} sub="取りこぼし注意" warn={highUntouched > 0} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="card overflow-hidden">
+          <div className="px-4 pt-3 pb-2 border-b border-black/[0.04]"><h3 className="text-sm font-semibold">取得担当別 パフォーマンス</h3></div>
+          <table className="w-full">
+            <thead className="text-[11px] text-ink/40"><tr><th className="th">取得担当</th><th className="th text-right">取得数</th><th className="th w-1/3">構成</th><th className="th text-right">アポ率</th></tr></thead>
+            <tbody className="divide-y divide-black/[0.04]">
+              {acqPerf.map((a) => (
+                <tr key={a.k}>
+                  <td className="td text-xs">{a.k}</td>
+                  <td className="td text-right tabular-nums text-xs font-semibold">{a.total}</td>
+                  <td className="td"><div className="h-2 rounded-full bg-mist-soft overflow-hidden"><div className="h-full bg-teal-primary rounded-full" style={{ width: `${(a.total / maxAcq) * 100}%` }} /></div></td>
+                  <td className="td text-right tabular-nums text-xs text-teal-deep">{Math.round(a.rate * 100)}%</td>
+                </tr>
+              ))}
+              {acqPerf.length === 0 && <tr><td colSpan={4} className="td text-center text-ink/40 py-4 text-xs">取得担当データなし</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="card card-pad">
+          <h3 className="text-sm font-semibold mb-3">時間帯別 リード取得数</h3>
+          {hours.length === 0 ? <p className="text-xs text-ink/40">スキャン時刻データなし</p> : (
+            <div className="space-y-1.5">
+              {hours.map((x) => (
+                <div key={x.h} className="flex items-center gap-2">
+                  <span className="w-10 text-[11px] text-ink/50 tabular-nums">{x.h}時</span>
+                  <div className="flex-1 h-3 rounded-full bg-mist-soft overflow-hidden"><div className="h-full bg-accent-orange rounded-full" style={{ width: `${(x.n / maxHour) * 100}%` }} /></div>
+                  <span className="w-8 text-right text-xs tabular-nums">{x.n}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="card card-pad">
@@ -390,6 +472,36 @@ function Analysis({ rows }: { rows: LeadRow[] }) {
           <li>NG(お断り) <b>{ng}</b> 件 → 理由を蓄積し、ターゲティング/トークを改善。</li>
           <li>架電未着手 <b>{total - called}</b> 件（全体の {pct(total - called, total)}）→ 架電チームの稼働を確認。</li>
         </ul>
+      </div>
+
+      {rawAcquirers.length > 0 && (
+        <AcquirerAliasEditor raws={rawAcquirers} aliasMap={aliasMap} onSaved={() => router.refresh()} />
+      )}
+    </div>
+  );
+}
+
+function AcquirerAliasEditor({ raws, aliasMap, onSaved }: { raws: string[]; aliasMap: Map<string, string>; onSaved: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  async function save(raw: string, name: string) {
+    setBusy(raw);
+    await setAcquirerAliasAction(raw, name);
+    onSaved();
+    setBusy(null);
+  }
+  return (
+    <div className="card card-pad">
+      <h3 className="text-sm font-semibold mb-1">取得担当の名前設定（数字 → 氏名）</h3>
+      <p className="text-[11px] text-ink/40 mb-3">読取端末のIDや番号で記録された取得担当に、表示名を割り当てます（分析に反映）。</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {raws.map((raw) => (
+          <form key={raw} onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); save(raw, String(fd.get("name") ?? "")); }} className="flex items-center gap-2">
+            <span className="w-32 text-xs text-ink/60 truncate" title={raw}>{raw}</span>
+            <span className="text-ink/30 text-xs">→</span>
+            <input name="name" defaultValue={aliasMap.get(raw) ?? ""} placeholder="表示名" className="input text-xs flex-1" />
+            <button type="submit" disabled={busy === raw} className="btn-ghost text-xs disabled:opacity-40">{busy === raw ? "…" : "保存"}</button>
+          </form>
+        ))}
       </div>
     </div>
   );

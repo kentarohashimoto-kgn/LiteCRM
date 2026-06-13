@@ -35,7 +35,11 @@ export default async function LeadsPage() {
     event: l.raw_event ?? "",
     dealOwner: l.deal_owner_name ?? "",
     tags: l.tags ?? "",
+    acquirer: l.acquirer ?? "",
+    scannedAt: l.scanned_at ?? "",
   }));
+
+  const aliases = ws.acquirerAliases.map((a) => ({ raw: a.raw, name: a.display_name ?? "" }));
 
   return (
     <div>
@@ -44,7 +48,7 @@ export default async function LeadsPage() {
         subtitle="展示会・セミナーのリストを優先度付けし、架電→アポ獲得まで管理・分析します。"
         action={<LinkButton href="/app/leads/import" variant="accent"><Upload size={16} /> 取込</LinkButton>}
       />
-      <LeadsWorkspace rows={rows} batches={batches} />
+      <LeadsWorkspace rows={rows} batches={batches} aliases={aliases} />
     </div>
   );
 }
