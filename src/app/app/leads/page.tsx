@@ -24,6 +24,7 @@ export default async function LeadsPage() {
     name: l.contact_name ?? "",
     email: l.email ?? "",
     phone: l.phone ?? "",
+    mobilePhone: l.mobile_phone ?? "",
     jobTitle: l.job_title ?? "",
     empSize: l.employee_size ?? "",
     industry: l.industry ?? "",

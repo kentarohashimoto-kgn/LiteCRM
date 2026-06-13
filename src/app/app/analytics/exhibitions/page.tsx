@@ -3,6 +3,7 @@ import { listOpportunities, listCampaignsByChannel } from "@/lib/data/select";
 import { campaignMetrics, campaignTotals, type CampaignMetric } from "@/lib/analytics";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { ExhibitionChart } from "@/components/charts/exhibition-chart";
+import { EditableName } from "@/components/analytics/editable-name";
 import { formatYen, formatPercent, formatDateFull } from "@/lib/utils";
 
 function num(v: number | null | undefined): string {
@@ -149,8 +150,8 @@ export default async function ExhibitionAnalyticsPage() {
             {future.map((m) => (
               <tr key={m.campaign.id} className="row-hover">
                 <td className="td">
-                  <span className="font-medium text-ink block">{m.campaign.name}</span>
-                  <span className="text-xs text-ink/45">{m.campaign.organizer ?? "—"}</span>
+                  <EditableName id={m.campaign.id} name={m.campaign.name} />
+                  <span className="text-xs text-ink/45 block">{m.campaign.organizer ?? "—"}</span>
                 </td>
                 <td className="td text-xs text-ink/70">{m.campaign.venue ?? "—"}</td>
                 <td className="td text-xs">
@@ -190,8 +191,8 @@ function ExhibitionRow({ m }: { m: CampaignMetric }) {
   return (
     <tr className="row-hover">
       <td className="td max-w-[220px]">
-        <span className="font-medium text-ink block truncate">{c.name}</span>
-        <span className="text-xs text-ink/45">{c.organizer ?? "—"}</span>
+        <EditableName id={c.id} name={c.name} />
+        <span className="text-xs text-ink/45 block">{c.organizer ?? "—"}</span>
       </td>
       <td className="td text-xs whitespace-nowrap">{formatDateFull(c.event_date)}</td>
       <td className="td text-right tabular-nums">{num(m.actualLeads)}</td>

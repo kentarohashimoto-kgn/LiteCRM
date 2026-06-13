@@ -24,6 +24,7 @@ export interface LeadRow {
   name: string;
   email: string;
   phone: string;
+  mobilePhone: string;
   jobTitle: string;
   empSize: string;
   industry: string;
@@ -187,7 +188,7 @@ function LeadList({ rows }: { rows: LeadRow[] }) {
                     <input name="call_owner" defaultValue={r.callOwner} onBlur={(e) => { if (e.currentTarget.value !== r.callOwner) e.currentTarget.form?.requestSubmit(); }} placeholder="—" className="w-24 rounded-lg border border-black/10 bg-white px-1.5 py-1 text-xs outline-none focus:border-teal-primary" />
                   </form>
                 </td>
-                <td className="td text-xs text-ink/60 tabular-nums">{r.phone || "—"}</td>
+                <td className="td text-xs text-ink/60 tabular-nums">{r.phone || "—"}{r.mobilePhone && <span className="block text-ink/40">{r.mobilePhone}</span>}</td>
               </tr>
             ))}
           </tbody>
@@ -229,7 +230,7 @@ function CallQueue({ rows }: { rows: LeadRow[] }) {
                 <td className="td text-xs text-ink/60">{r.jobTitle || "—"}</td>
                 <td className="td text-xs">{evLabel(r.event)}</td>
                 <td className="td"><DispBadge d={r.disposition} /></td>
-                <td className="td text-xs tabular-nums">{r.phone || "—"}</td>
+                <td className="td text-xs tabular-nums">{r.phone || "—"}{r.mobilePhone && <span className="block text-ink/40">{r.mobilePhone}</span>}</td>
                 <td className="td text-xs text-ink/60">{r.callOwner || "—"}</td>
               </tr>
             ))}

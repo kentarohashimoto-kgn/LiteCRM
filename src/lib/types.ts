@@ -255,6 +255,7 @@ export interface Lead {
   contact_name?: string;
   email?: string;
   phone?: string;
+  mobile_phone?: string;
   department?: string;
   job_title?: string;
   industry?: string;

@@ -29,7 +29,8 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
             <F label="会社名"><input name="company_name" defaultValue={l.company_name ?? ""} className="input" /></F>
             <F label="氏名"><input name="contact_name" defaultValue={l.contact_name ?? ""} className="input" /></F>
             <F label="メール"><input name="email" defaultValue={l.email ?? ""} className="input" /></F>
-            <F label="電話"><input name="phone" defaultValue={l.phone ?? ""} className="input" /></F>
+            <F label="電話(代表)"><input name="phone" defaultValue={l.phone ?? ""} className="input" /></F>
+            <F label="携帯電話"><input name="mobile_phone" defaultValue={l.mobile_phone ?? ""} className="input" /></F>
             <F label="部署"><input name="department" defaultValue={l.department ?? ""} className="input" /></F>
             <F label="役職(テキスト)"><input name="job_title" defaultValue={l.job_title ?? ""} className="input" /></F>
             <F label="業種"><input name="industry" defaultValue={l.industry ?? ""} className="input" /></F>

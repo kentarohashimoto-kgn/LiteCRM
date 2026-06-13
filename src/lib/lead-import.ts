@@ -11,6 +11,7 @@ export interface RawLeadInput {
   first_name?: string;
   email?: string;
   phone?: string;
+  mobile_phone?: string;
   department?: string;
   job_title?: string;
   industry?: string;
@@ -71,7 +72,8 @@ export const TARGET_FIELDS: { key: keyof RawLeadInput; label: string; required?:
   { key: "last_name", label: "姓", hints: ["姓", "名前：姓", "lastname"] },
   { key: "first_name", label: "名", hints: ["名", "名前：名", "firstname"] },
   { key: "email", label: "メール", hints: ["メール", "mail", "email", "e-mail"] },
-  { key: "phone", label: "電話", hints: ["電話", "tel", "phone", "携帯"] },
+  { key: "phone", label: "電話(代表)", hints: ["電話", "tel", "phone", "代表電話", "固定"] },
+  { key: "mobile_phone", label: "携帯電話", hints: ["携帯", "mobile", "携帯番号", "携帯電話"] },
   { key: "department", label: "部署", hints: ["部署", "部門", "department"] },
   { key: "job_title", label: "役職", hints: ["役職", "title", "役職名"] },
   { key: "industry", label: "業種", hints: ["業種", "industry"] },
@@ -127,8 +129,8 @@ export function normCompany(c?: string): string {
   return s.replace(/[\s　]/g, "").trim();
 }
 
-/** 決着の生値を統一コードへ。 */
-export function normDisposition(raw?: string, hasCallOwner = false, hasDealOwner = false): string {
+/** 決着の生値を統一コードへ。架電担当(対応)/商談担当のテキストも参照して判定。 */
+export function normDisposition(raw?: string, callOwner?: string, dealOwner?: string): string {
   const s = (raw ?? "").trim();
   if (s) {
     if (s.includes("①") || /お断り|断り|NG/i.test(s)) return "ng";
@@ -138,8 +140,12 @@ export function normDisposition(raw?: string, hasCallOwner = false, hasDealOwner
     if (s.includes("⑤") || /アポ/.test(s)) return "appointment";
     if (/対象外|除外/.test(s) || s === "X") return "excluded";
   }
-  if (hasDealOwner) return "appointment";
-  if (hasCallOwner) return "calling";
+  const co = (callOwner ?? "").trim();
+  const do_ = (dealOwner ?? "").trim();
+  if (/対象外|除外/.test(co)) return "excluded";
+  // 商談担当が実在(=アポ獲得)。「重複」やAIDX等のマーカーは除外。
+  if (do_ && !/重複|×|x/i.test(do_)) return "appointment";
+  if (co) return "calling";
   return "untouched";
 }
 
@@ -210,7 +216,7 @@ export function normalizeLead(
   const company = (r.company ?? "").trim();
   const name = (r.contact_name ?? "").trim() || `${(r.last_name ?? "").trim()} ${(r.first_name ?? "").trim()}`.trim();
   const { rank, excluded } = normRank(r.rank);
-  let disposition = normDisposition(r.disposition, !!(r.call_owner ?? "").trim(), !!(r.deal_owner ?? "").trim());
+  let disposition = normDisposition(r.disposition, r.call_owner, r.deal_owner);
   if (excluded) disposition = "excluded";
   const status = disposition === "appointment" ? "qualified" : disposition === "ng" || disposition === "excluded" ? "disqualified" : "new";
   const roleLevel = deriveRoleLevel(r.job_title);
@@ -240,6 +246,7 @@ export function normalizeLead(
     contact_name: t(name),
     email: t(r.email),
     phone: t(r.phone),
+    mobile_phone: t(r.mobile_phone),
     department: t(r.department),
     job_title: t(r.job_title),
     industry: t(r.industry),

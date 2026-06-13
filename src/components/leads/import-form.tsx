@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Upload, ChevronLeft } from "lucide-react";
 import { TARGET_FIELDS, LEAD_KINDS, suggestMapping, type RawLeadInput } from "@/lib/lead-import";
-import { importLeadsBatchAction, clearLeadsForEventAction, startImportBatchAction } from "@/server/actions";
+import { importLeadsBatchAction, upsertLeadsBatchAction, clearLeadsForEventAction, startImportBatchAction } from "@/server/actions";
 
 interface Opt { id: string; name: string; event_date?: string }
 
@@ -38,7 +38,7 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
   const [leadSourceId, setLeadSourceId] = useState(leadSources.find((s) => s.name === "展示会")?.id ?? "");
   const [kind, setKind] = useState("exhibition");
   const [eventLabel, setEventLabel] = useState("");
-  const [replace, setReplace] = useState(true);
+  const [mode, setMode] = useState<"replace" | "update">("replace");
   const [customFields, setCustomFields] = useState<{ key: string; header: string }[]>([]);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -106,20 +106,23 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
     setResult(null);
     setProgress(0);
     try {
-      if (replace) await clearLeadsForEventAction(rawEvent);
+      if (mode === "replace") await clearLeadsForEventAction(rawEvent);
       const inputs = dataRows.map(rowToInput);
       const { batchId } = await startImportBatchAction({ rawEvent, label: rawEvent, sourceName: fileName, rowCount: inputs.length });
       const opts = { campaignId: campaignId || null, leadSourceId: leadSourceId || null, rawEvent, base, eventDate: camp?.event_date ?? null, importBatchId: batchId };
       let inserted = 0;
+      let updated = 0;
       const CHUNK = 300;
       for (let i = 0; i < inputs.length; i += CHUNK) {
-        const res = await importLeadsBatchAction(inputs.slice(i, i + CHUNK), opts);
+        const slice = inputs.slice(i, i + CHUNK);
+        const res = mode === "update" ? await upsertLeadsBatchAction(slice, opts) : await importLeadsBatchAction(slice, opts);
         if (res.error) throw new Error(res.error);
         inserted += res.inserted;
+        updated += (res as { updated?: number }).updated ?? 0;
         setProgress(Math.round(((i + CHUNK) / inputs.length) * 100));
       }
       setProgress(100);
-      setResult(`✅ ${inserted}件を取り込みました（${rawEvent}）。`);
+      setResult(mode === "update" ? `✅ 更新${updated}件・新規${inserted}件を反映しました（${rawEvent}）。` : `✅ ${inserted}件を取り込みました（${rawEvent}）。`);
     } catch (e) {
       setResult("エラー: " + (e instanceof Error ? e.message : String(e)));
     } finally {
@@ -175,10 +178,19 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
                 </select>
               </div>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} className="accent-teal-primary" />
-              同じイベント名の既存リードを置き換える（再取込で重複を防止）
-            </label>
+            <div>
+              <label className="label">取込モード</label>
+              <div className="flex flex-col gap-1.5 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="mode" checked={mode === "replace"} onChange={() => setMode("replace")} className="accent-teal-primary" />
+                  <span><b>新規取込（置換）</b>：同じイベント名の既存リードを一旦削除して入れ直す</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="mode" checked={mode === "update"} onChange={() => setMode("update")} className="accent-teal-primary" />
+                  <span><b>更新（重複は上書き）</b>：メール一致の既存リードは変更分を上書き（決着など）。新規は追加。手入力のBANT等は保持</span>
+                </label>
+              </div>
+            </div>
           </div>
 
           {/* 3. 列マッピング */}

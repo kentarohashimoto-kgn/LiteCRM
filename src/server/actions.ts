@@ -436,6 +436,7 @@ export async function updateLeadAction(formData: FormData) {
     contact_name: str(formData.get("contact_name")),
     email: str(formData.get("email")),
     phone: str(formData.get("phone")),
+    mobile_phone: str(formData.get("mobile_phone")),
     job_title: str(formData.get("job_title")),
     department: str(formData.get("department")),
     industry: str(formData.get("industry")),
@@ -504,6 +505,84 @@ export async function importLeadsBatchAction(
   if (error) return { inserted: 0, error: error.message };
   revalidatePath("/app/leads");
   return { inserted: recs.length };
+}
+
+/** リードを一括更新(重複=メール一致は上書き、新規は追加)。決着など変更分を反映。 */
+const OVERWRITE_KEYS = [
+  "disposition", "status", "call_owner", "deal_owner_name", "rank", "phone", "mobile_phone",
+  "company_name", "contact_name", "department", "job_title", "industry", "employee_size",
+  "prefecture", "acquirer", "tags", "notes", "scanned_at", "acquired_at", "campaign_id", "raw_event",
+] as const;
+
+export async function upsertLeadsBatchAction(
+  rows: RawLeadInput[],
+  opts: { campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null; importBatchId?: string | null },
+): Promise<{ inserted: number; updated: number; error?: string }> {
+  const ctx = await requireCtx();
+  if (!["owner", "admin", "sales_manager", "sales_rep", "external_sales"].includes(ctx.role)) {
+    return { inserted: 0, updated: 0, error: "権限がありません" };
+  }
+  const sb = getSupabaseServer();
+  const recs = rows
+    .filter((r) => (r.company ?? "").trim() !== "")
+    .map((r) => normalizeLead(r, { ...opts, tenantId: ctx.tenantId }));
+  if (recs.length === 0) return { inserted: 0, updated: 0 };
+
+  const emails = [...new Set(recs.map((r) => (r.email as string | null) ?? "").filter(Boolean).map((e) => e.toLowerCase()))];
+  const existing = new Map<string, Record<string, unknown>>();
+  if (emails.length) {
+    const { data } = await sb
+      .from("leads")
+      .select("id,email,priority_base,role_level,needs,timing,authority,budget_band,revenue_size,employee_size")
+      .eq("tenant_id", ctx.tenantId)
+      .in("email", emails);
+    for (const row of data ?? []) existing.set(String((row.email ?? "")).toLowerCase(), row);
+  }
+
+  const toInsert: Record<string, unknown>[] = [];
+  const updates: { id: string; patch: Record<string, unknown> }[] = [];
+  for (const rec of recs) {
+    const em = rec.email ? String(rec.email).toLowerCase() : null;
+    const ex = em ? existing.get(em) : null;
+    if (ex) {
+      const patch: Record<string, unknown> = {};
+      for (const k of OVERWRITE_KEYS) if (rec[k] != null) patch[k] = rec[k];
+      patch.priority_score = priorityScore((ex.priority_base as number) ?? (rec.priority_base as number) ?? 20, {
+        employee_size: (patch.employee_size as string) ?? (ex.employee_size as string),
+        revenue_size: ex.revenue_size as string,
+        role_level: (rec.role_level as string) ?? (ex.role_level as string),
+        needs: ex.needs as string,
+        timing: ex.timing as string,
+        authority: ex.authority as string,
+        budget_band: ex.budget_band as string,
+      });
+      updates.push({ id: String(ex.id), patch });
+    } else {
+      toInsert.push(rec);
+    }
+  }
+
+  if (toInsert.length) {
+    const { error } = await sb.from("leads").insert(toInsert);
+    if (error) return { inserted: 0, updated: 0, error: error.message };
+  }
+  for (let i = 0; i < updates.length; i += 20) {
+    await Promise.all(updates.slice(i, i + 20).map((u) => sb.from("leads").update(u.patch).eq("id", u.id).eq("tenant_id", ctx.tenantId)));
+  }
+  revalidatePath("/app/leads");
+  return { inserted: toInsert.length, updated: updates.length };
+}
+
+/** 展示会・施策(campaign)の表示名を変更。 */
+export async function updateCampaignNameAction(id: string, name: string): Promise<{ ok: boolean }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const n = name.trim();
+  if (!n) return { ok: false };
+  await sb.from("campaigns").update({ name: n.slice(0, 200) }).eq("id", id).eq("tenant_id", ctx.tenantId);
+  revalidatePath("/app/analytics/exhibitions");
+  revalidatePath("/app/analytics/channels");
+  return { ok: true };
 }
 
 /** 取得担当(ブース読取担当)の別名(数字→名前)を設定。 */
