@@ -399,6 +399,37 @@ export async function createLeadAction(formData: FormData) {
   revalidatePath("/app/leads");
 }
 
+// ===================== リード取込(インポート) =====================
+import { normalizeLead, type RawLeadInput } from "@/lib/lead-import";
+
+/** 指定イベントの既存リードを削除(置換取込の前処理)。 */
+export async function clearLeadsForEventAction(rawEvent: string): Promise<{ deleted: boolean }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("leads").delete().eq("tenant_id", ctx.tenantId).eq("raw_event", rawEvent);
+  return { deleted: true };
+}
+
+/** リードを一括投入(クライアントから分割呼び出し)。 */
+export async function importLeadsBatchAction(
+  rows: RawLeadInput[],
+  opts: { campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null },
+): Promise<{ inserted: number; error?: string }> {
+  const ctx = await requireCtx();
+  if (!["owner", "admin", "sales_manager", "sales_rep", "external_sales"].includes(ctx.role)) {
+    return { inserted: 0, error: "権限がありません" };
+  }
+  const sb = getSupabaseServer();
+  const recs = rows
+    .filter((r) => (r.company ?? "").trim() !== "")
+    .map((r) => normalizeLead(r, { ...opts, tenantId: ctx.tenantId }));
+  if (recs.length === 0) return { inserted: 0 };
+  const { error } = await sb.from("leads").insert(recs);
+  if (error) return { inserted: 0, error: error.message };
+  revalidatePath("/app/leads");
+  return { inserted: recs.length };
+}
+
 /** リードの決着ステータスを更新 */
 export async function setLeadDispositionAction(formData: FormData) {
   await requireCtx();

@@ -1,6 +1,7 @@
+import { Upload } from "lucide-react";
 import { getWorkspace } from "@/lib/data/workspace";
 import { listLeads } from "@/lib/data/select";
-import { PageHeader } from "@/components/ui/primitives";
+import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { LeadsWorkspace, type LeadRow } from "@/components/leads/leads-workspace";
 
 export default async function LeadsPage() {
@@ -32,6 +33,7 @@ export default async function LeadsPage() {
       <PageHeader
         title="リード"
         subtitle="展示会・セミナーのリストを優先度付けし、架電→アポ獲得まで管理・分析します。"
+        action={<LinkButton href="/app/leads/import" variant="accent"><Upload size={16} /> 取込</LinkButton>}
       />
       <LeadsWorkspace rows={rows} />
     </div>

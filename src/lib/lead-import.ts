@@ -1,0 +1,184 @@
+/**
+ * リード取込の共通ロジック(クライアント/サーバー共用・純粋関数)。
+ * 元データの形式は毎回変わりうるため、列マッピング方式で正規化する。
+ */
+
+/** 取込先のリード項目。company は必須、他は任意。 */
+export interface RawLeadInput {
+  company?: string;
+  contact_name?: string;
+  last_name?: string;
+  first_name?: string;
+  email?: string;
+  phone?: string;
+  department?: string;
+  job_title?: string;
+  industry?: string;
+  employee_size?: string;
+  prefecture?: string;
+  rank?: string;
+  disposition?: string;
+  call_owner?: string;
+  deal_owner?: string;
+  tags?: string;
+  memo?: string;
+  scanned_at?: string;
+}
+
+/** マッピングUIで選べる取込先フィールド定義(自動サジェスト用キーワードつき)。 */
+export const TARGET_FIELDS: { key: keyof RawLeadInput; label: string; required?: boolean; hints: string[] }[] = [
+  { key: "company", label: "会社名", required: true, hints: ["会社", "法人", "組織", "company", "得意先", "企業"] },
+  { key: "contact_name", label: "氏名(姓名まとめ)", hints: ["氏名", "お名前", "name", "担当者名", "来場者名"] },
+  { key: "last_name", label: "姓", hints: ["姓", "名前：姓", "lastname"] },
+  { key: "first_name", label: "名", hints: ["名", "名前：名", "firstname"] },
+  { key: "email", label: "メール", hints: ["メール", "mail", "email", "e-mail"] },
+  { key: "phone", label: "電話", hints: ["電話", "tel", "phone", "携帯"] },
+  { key: "department", label: "部署", hints: ["部署", "部門", "department"] },
+  { key: "job_title", label: "役職", hints: ["役職", "title", "役職名"] },
+  { key: "industry", label: "業種", hints: ["業種", "industry"] },
+  { key: "employee_size", label: "従業員規模", hints: ["従業員", "規模", "社員数", "従業員規模"] },
+  { key: "prefecture", label: "都道府県", hints: ["都道府県", "県", "pref"] },
+  { key: "rank", label: "ランク/優先順位", hints: ["ランク", "rank", "優先順位", "優先", "判定"] },
+  { key: "disposition", label: "決着/ステータス", hints: ["決着", "ステータス", "状態", "対応状況"] },
+  { key: "call_owner", label: "架電担当(対応)", hints: ["対応", "架電担当", "コール担当"] },
+  { key: "deal_owner", label: "商談担当", hints: ["商談担当", "営業担当", "担当"] },
+  { key: "tags", label: "タグ/興味", hints: ["タグ", "tag", "商談希望度", "興味", "関心"] },
+  { key: "memo", label: "メモ/備考", hints: ["メモ", "備考", "コメント", "議事", "理由", "課題"] },
+  { key: "scanned_at", label: "取得日/来場日", hints: ["スキャン", "来場", "日時", "タイムスタンプ", "取得日", "登録日"] },
+];
+
+/** 施策区分(優先度の基礎点)。展示会管理表の区分→優先度に準拠(S50/A40/B30/C20)。 */
+export const LEAD_KINDS: { key: string; label: string; base: number }[] = [
+  { key: "inquiry", label: "問い合わせ", base: 50 },
+  { key: "outbound_form", label: "アウトバウンド(フォーム)", base: 40 },
+  { key: "matching_rm", label: "マッチング(レディクル)", base: 40 },
+  { key: "seminar", label: "セミナー", base: 40 },
+  { key: "existing", label: "既契約者", base: 40 },
+  { key: "exhibition", label: "展示会", base: 30 },
+  { key: "outbound_call", label: "アウトバウンド(コール)", base: 30 },
+  { key: "matching_bt", label: "マッチング(BT)", base: 30 },
+  { key: "sns", label: "SNS", base: 30 },
+  { key: "media", label: "メディア/ポータル", base: 30 },
+  { key: "networking", label: "交流会", base: 20 },
+  { key: "alliance", label: "アライアンス", base: 20 },
+  { key: "other", label: "その他", base: 20 },
+];
+
+/** ヘッダー名から取込先フィールドを推測(自動マッピング)。 */
+export function suggestMapping(headers: string[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  const used = new Set<string>();
+  for (const f of TARGET_FIELDS) {
+    const hit = headers.find((h) => {
+      const hl = h.toLowerCase();
+      return !used.has(h) && f.hints.some((k) => hl.includes(k.toLowerCase()));
+    });
+    if (hit) {
+      map[f.key as string] = hit;
+      used.add(hit);
+    }
+  }
+  return map;
+}
+
+export function normCompany(c?: string): string {
+  let s = (c ?? "").trim();
+  s = s.replace(/(株式会社|有限会社|合同会社|一般社団法人|学校法人|\(株\)|（株）|株\))/g, "");
+  return s.replace(/[\s　]/g, "").trim();
+}
+
+/** 決着の生値を統一コードへ。 */
+export function normDisposition(raw?: string, hasCallOwner = false, hasDealOwner = false): string {
+  const s = (raw ?? "").trim();
+  if (s) {
+    if (s.includes("①") || /お断り|断り|NG/i.test(s)) return "ng";
+    if (s.includes("②") || /架電中|実行中/.test(s)) return "calling";
+    if (s.includes("③") || /継続/.test(s)) return "continuing";
+    if (s.includes("④") || /不通|留守/.test(s)) return "no_answer";
+    if (s.includes("⑤") || /アポ/.test(s)) return "appointment";
+    if (/対象外|除外/.test(s) || s === "X") return "excluded";
+  }
+  if (hasDealOwner) return "appointment";
+  if (hasCallOwner) return "calling";
+  return "untouched";
+}
+
+export function normRank(raw?: string): { rank: string | null; excluded: boolean } {
+  const s = (raw ?? "").trim().toUpperCase();
+  if (["S", "A", "B", "C", "D"].includes(s)) return { rank: s, excluded: false };
+  if (s === "X" || s.includes("対象外")) return { rank: null, excluded: true };
+  return { rank: null, excluded: false };
+}
+
+function rolePts(t?: string): number {
+  const s = t ?? "";
+  if (/社長|代表|CEO|会長|役員|取締役/.test(s)) return 20;
+  if (/本部長|部長|次長|部門長/.test(s)) return 10;
+  return 0;
+}
+function sizePts(s?: string): number {
+  const nums = (s ?? "").match(/[\d,]+/g)?.map((x) => parseInt(x.replace(/,/g, ""), 10)) ?? [];
+  const m = nums.length ? Math.max(...nums) : 0;
+  return m >= 1000 ? 20 : m >= 300 ? 10 : 0;
+}
+function rankPts(r: string | null): number {
+  return { S: 40, A: 30, B: 20, C: 10, D: 0 }[r ?? ""] ?? 0;
+}
+
+export function priorityScore(base: number, rank: string | null, jobTitle?: string, empSize?: string): number {
+  return base + rankPts(rank) + rolePts(jobTitle) + sizePts(empSize);
+}
+
+function pdate(s?: string): string | null {
+  if (!s) return null;
+  const m = s.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (!m) return null;
+  return `${m[1]}-${String(+m[2]).padStart(2, "0")}-${String(+m[3]).padStart(2, "0")}`;
+}
+
+/** RawLeadInput を leads テーブルのレコードへ正規化。 */
+export function normalizeLead(
+  r: RawLeadInput,
+  opts: { tenantId: string; campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null },
+): Record<string, unknown> {
+  const company = (r.company ?? "").trim();
+  const name = (r.contact_name ?? "").trim() || `${(r.last_name ?? "").trim()} ${(r.first_name ?? "").trim()}`.trim();
+  const { rank, excluded } = normRank(r.rank);
+  let disposition = normDisposition(r.disposition, !!(r.call_owner ?? "").trim(), !!(r.deal_owner ?? "").trim());
+  if (excluded) disposition = "excluded";
+  const status = disposition === "appointment" ? "qualified" : disposition === "ng" || disposition === "excluded" ? "disqualified" : "new";
+  const score = priorityScore(opts.base, rank, r.job_title, r.employee_size);
+  const scanned = pdate(r.scanned_at);
+  const acquired = scanned ?? opts.eventDate ?? new Date().toISOString().slice(0, 10);
+  const t = (v?: string) => {
+    const s = (v ?? "").trim();
+    return s === "" ? null : s.slice(0, 300);
+  };
+  return {
+    tenant_id: opts.tenantId,
+    campaign_id: opts.campaignId ?? null,
+    lead_source_id: opts.leadSourceId ?? null,
+    status,
+    rank,
+    disposition,
+    priority_score: score,
+    call_owner: t(r.call_owner),
+    deal_owner_name: t(r.deal_owner),
+    company_name: t(company),
+    company_norm: normCompany(company),
+    title: (company + " / " + opts.rawEvent).slice(0, 200),
+    contact_name: t(name),
+    email: t(r.email),
+    phone: t(r.phone),
+    department: t(r.department),
+    job_title: t(r.job_title),
+    industry: t(r.industry),
+    employee_size: t(r.employee_size),
+    prefecture: t(r.prefecture),
+    tags: t(r.tags),
+    notes: t(r.memo),
+    raw_event: opts.rawEvent,
+    acquired_at: acquired,
+    scanned_at: scanned,
+  };
+}
