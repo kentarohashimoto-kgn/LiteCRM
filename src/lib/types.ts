@@ -217,13 +217,31 @@ export interface Lead {
   primary_product_id?: UUID;
   title: string;
   status: "new" | "contacted" | "qualified" | "disqualified" | "converted";
-  rank?: "A" | "B" | "C";
+  rank?: string;
   acquired_at: string;
   first_contacted_at?: string;
   converted_at?: string;
   disqualified_reason?: string;
   notes?: string;
   created_at: string;
+  // リード管理拡張
+  company_name?: string;
+  company_norm?: string;
+  contact_name?: string;
+  email?: string;
+  phone?: string;
+  department?: string;
+  job_title?: string;
+  industry?: string;
+  employee_size?: string;
+  prefecture?: string;
+  priority_score?: number;
+  call_owner?: string;
+  disposition?: string;
+  tags?: string;
+  raw_event?: string;
+  deal_owner_name?: string;
+  scanned_at?: string;
 }
 
 export interface Opportunity {

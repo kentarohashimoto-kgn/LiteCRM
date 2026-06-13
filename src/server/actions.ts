@@ -399,6 +399,24 @@ export async function createLeadAction(formData: FormData) {
   revalidatePath("/app/leads");
 }
 
+/** リードの決着ステータスを更新 */
+export async function setLeadDispositionAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const disp = str(formData.get("disposition"));
+  const status = disp === "appointment" ? "qualified" : disp === "ng" || disp === "excluded" ? "disqualified" : "new";
+  await sb.from("leads").update({ disposition: disp, status }).eq("id", String(formData.get("id")));
+  revalidatePath("/app/leads");
+}
+
+/** リードの架電担当(対応)を更新 */
+export async function setLeadCallOwnerAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("leads").update({ call_owner: str(formData.get("call_owner")) }).eq("id", String(formData.get("id")));
+  revalidatePath("/app/leads");
+}
+
 // ===================== メンバー発行(管理者) =====================
 export async function createMemberAction(formData: FormData) {
   const ctx = await requireCtx();

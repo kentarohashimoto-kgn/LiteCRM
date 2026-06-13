@@ -177,6 +177,18 @@ export const REP_STATUS: { key: string; label: string; color: string }[] = [
 ];
 export const REP_STATUS_MAP = Object.fromEntries(REP_STATUS.map((s) => [s.key, s]));
 
+/** リードの決着ステータス(架電結果)。 */
+export const LEAD_DISPOSITIONS: { key: string; label: string; color: string; group: "open" | "appt" | "dead" }[] = [
+  { key: "untouched", label: "未着手", color: "bg-mist-soft text-ink/60", group: "open" },
+  { key: "calling", label: "架電中", color: "bg-sky-50 text-sky-700 border border-sky-200", group: "open" },
+  { key: "no_answer", label: "不通", color: "bg-amber-50 text-accent-orange", group: "open" },
+  { key: "continuing", label: "継続", color: "bg-violet-50 text-violet-600", group: "open" },
+  { key: "appointment", label: "アポ獲得", color: "bg-emerald-100 text-emerald-700", group: "appt" },
+  { key: "ng", label: "NG(お断り)", color: "bg-rose-100 text-rose-600", group: "dead" },
+  { key: "excluded", label: "対象外", color: "bg-mist-soft text-ink/40", group: "dead" },
+];
+export const LEAD_DISPOSITION_MAP = Object.fromEntries(LEAD_DISPOSITIONS.map((d) => [d.key, d]));
+
 /** CATORCE 流入経路マスタ初期値(8.2) */
 export const CATORCE_LEAD_SOURCES: { name: string; description: string }[] = [
   { name: "X", description: "X投稿、プロフィール、DM経由" },
