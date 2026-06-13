@@ -1,10 +1,21 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Phone, List, Building2, BarChart3 } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Search, Phone, List, Building2, BarChart3, History, Trash2 } from "lucide-react";
 import { LEAD_DISPOSITIONS, LEAD_DISPOSITION_MAP } from "@/lib/constants";
-import { setLeadDispositionAction, setLeadCallOwnerAction } from "@/server/actions";
-import { cn } from "@/lib/utils";
+import { setLeadDispositionAction, setLeadCallOwnerAction, deleteImportBatchAction } from "@/server/actions";
+import { cn, formatDateFull } from "@/lib/utils";
+
+export interface BatchRow {
+  id: string;
+  label: string;
+  rawEvent: string;
+  sourceName: string;
+  rowCount: number;
+  createdAt: string;
+}
 
 export interface LeadRow {
   id: string;
@@ -47,20 +58,62 @@ function DispBadge({ d }: { d: string }) {
   return <span className={cn("pill text-[10px]", def?.color ?? "bg-mist-soft text-ink/50")}>{def?.label ?? d}</span>;
 }
 
-export function LeadsWorkspace({ rows }: { rows: LeadRow[] }) {
-  const [tab, setTab] = useState<"list" | "queue" | "company" | "analysis">("list");
+export function LeadsWorkspace({ rows, batches = [] }: { rows: LeadRow[]; batches?: BatchRow[] }) {
+  const [tab, setTab] = useState<"list" | "queue" | "company" | "analysis" | "batches">("list");
   return (
     <div className="space-y-4">
-      <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5">
+      <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5 flex-wrap">
         <Tab active={tab === "list"} onClick={() => setTab("list")} icon={<List size={15} />} label="リード一覧" />
         <Tab active={tab === "queue"} onClick={() => setTab("queue")} icon={<Phone size={15} />} label="架電キュー" />
         <Tab active={tab === "company"} onClick={() => setTab("company")} icon={<Building2 size={15} />} label="企業ビュー" />
         <Tab active={tab === "analysis"} onClick={() => setTab("analysis")} icon={<BarChart3 size={15} />} label="分析" />
+        <Tab active={tab === "batches"} onClick={() => setTab("batches")} icon={<History size={15} />} label="取込履歴" />
       </div>
       {tab === "list" && <LeadList rows={rows} />}
       {tab === "queue" && <CallQueue rows={rows} />}
       {tab === "company" && <CompanyView rows={rows} />}
       {tab === "analysis" && <Analysis rows={rows} />}
+      {tab === "batches" && <Batches batches={batches} />}
+    </div>
+  );
+}
+
+function Batches({ batches }: { batches: BatchRow[] }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<string | null>(null);
+  async function undo(b: BatchRow) {
+    if (!confirm(`「${b.label}」の取込(${b.rowCount}件)を取り消します。よろしいですか？`)) return;
+    setBusy(b.id);
+    await deleteImportBatchAction(b.id);
+    router.refresh();
+    setBusy(null);
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-ink/60 px-1">取込の履歴です。マッピングを間違えた取込は<b>「一括取り消し」</b>でまとめて削除できます（その取込ぶんのリードを削除）。</p>
+      <div className="card overflow-x-auto">
+        <table className="w-full">
+          <thead className="border-b border-black/[0.06]">
+            <tr><th className="th">取込日時</th><th className="th">イベント名</th><th className="th">元ファイル</th><th className="th text-right">件数</th><th className="th"></th></tr>
+          </thead>
+          <tbody className="divide-y divide-black/[0.04]">
+            {batches.map((b) => (
+              <tr key={b.id} className="row-hover">
+                <td className="td text-xs whitespace-nowrap">{formatDateFull(b.createdAt)}</td>
+                <td className="td font-medium">{b.label}</td>
+                <td className="td text-xs text-ink/50 max-w-[200px] truncate">{b.sourceName || "—"}</td>
+                <td className="td text-right tabular-nums">{b.rowCount}</td>
+                <td className="td text-right">
+                  <button onClick={() => undo(b)} disabled={busy === b.id} className="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700 disabled:opacity-40">
+                    <Trash2 size={13} /> {busy === b.id ? "取消中…" : "一括取り消し"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {batches.length === 0 && <tr><td colSpan={5} className="td text-center text-ink/40 py-8">取込履歴がありません</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -111,7 +164,7 @@ function LeadList({ rows }: { rows: LeadRow[] }) {
             {shown.map((r) => (
               <tr key={r.id} className="row-hover">
                 <td className="td max-w-[240px]">
-                  <span className="font-medium text-ink block truncate">{r.company}</span>
+                  <Link href={`/app/leads/${r.id}`} className="font-medium text-ink hover:text-teal-deep block truncate">{r.company}</Link>
                   <span className="text-xs text-ink/45 truncate block">{r.name}{r.rank && <span className="ml-1 pill bg-mist-soft text-ink/50 text-[9px]">{r.rank}</span>}</span>
                 </td>
                 <td className="td text-xs text-ink/60">{r.jobTitle || "—"}<span className="block text-ink/40">{sizeBucket(r.empSize)}</span></td>

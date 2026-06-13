@@ -400,7 +400,83 @@ export async function createLeadAction(formData: FormData) {
 }
 
 // ===================== リード取込(インポート) =====================
-import { normalizeLead, type RawLeadInput } from "@/lib/lead-import";
+import { normalizeLead, priorityScore, type RawLeadInput } from "@/lib/lead-import";
+
+/** 取込バッチを開始(履歴記録)。バッチIDを返す。 */
+export async function startImportBatchAction(meta: { rawEvent: string; label?: string; sourceName?: string; rowCount: number }): Promise<{ batchId: string | null }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const { data, error } = await sb
+    .from("lead_import_batches")
+    .insert({ tenant_id: ctx.tenantId, raw_event: meta.rawEvent, label: meta.label, source_name: meta.sourceName, row_count: meta.rowCount, created_by: ctx.userId })
+    .select("id")
+    .single();
+  if (error || !data) return { batchId: null };
+  return { batchId: data.id };
+}
+
+/** 取込バッチを一括取り消し(リード削除＋履歴削除)。 */
+export async function deleteImportBatchAction(batchId: string): Promise<{ ok: boolean }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("leads").delete().eq("tenant_id", ctx.tenantId).eq("import_batch_id", batchId);
+  await sb.from("lead_import_batches").delete().eq("tenant_id", ctx.tenantId).eq("id", batchId);
+  revalidatePath("/app/leads");
+  return { ok: true };
+}
+
+/** リード1件を更新(優先度の必須項目含む)。スコアを再計算。 */
+export async function updateLeadAction(formData: FormData) {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  const base = num(formData.get("priority_base")) ?? 20;
+  const fields = {
+    company_name: str(formData.get("company_name")),
+    contact_name: str(formData.get("contact_name")),
+    email: str(formData.get("email")),
+    phone: str(formData.get("phone")),
+    job_title: str(formData.get("job_title")),
+    department: str(formData.get("department")),
+    industry: str(formData.get("industry")),
+    employee_size: str(formData.get("employee_size")),
+    revenue_size: str(formData.get("revenue_size")),
+    prefecture: str(formData.get("prefecture")),
+    role_level: str(formData.get("role_level")),
+    needs: str(formData.get("needs")),
+    timing: str(formData.get("timing")),
+    authority: str(formData.get("authority")),
+    budget_band: str(formData.get("budget_band")),
+    budget_amount: num(formData.get("budget_amount")),
+    disposition: str(formData.get("disposition")),
+    call_owner: str(formData.get("call_owner")),
+    rank: str(formData.get("rank")),
+    notes: str(formData.get("notes")),
+  };
+  const score = priorityScore(base, {
+    employee_size: fields.employee_size,
+    revenue_size: fields.revenue_size,
+    role_level: fields.role_level,
+    job_title: fields.job_title,
+    needs: fields.needs,
+    timing: fields.timing,
+    authority: fields.authority,
+    budget_band: fields.budget_band,
+  });
+  const status = fields.disposition === "appointment" ? "qualified" : fields.disposition === "ng" || fields.disposition === "excluded" ? "disqualified" : "new";
+  await sb.from("leads").update({ ...fields, company_name: fields.company_name, priority_score: score, status }).eq("id", id).eq("tenant_id", ctx.tenantId);
+  revalidatePath("/app/leads");
+  redirect("/app/leads/" + id);
+}
+
+/** リード1件を削除。 */
+export async function deleteLeadAction(formData: FormData) {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("leads").delete().eq("id", String(formData.get("id"))).eq("tenant_id", ctx.tenantId);
+  revalidatePath("/app/leads");
+  redirect("/app/leads");
+}
 
 /** 指定イベントの既存リードを削除(置換取込の前処理)。 */
 export async function clearLeadsForEventAction(rawEvent: string): Promise<{ deleted: boolean }> {
@@ -413,7 +489,7 @@ export async function clearLeadsForEventAction(rawEvent: string): Promise<{ dele
 /** リードを一括投入(クライアントから分割呼び出し)。 */
 export async function importLeadsBatchAction(
   rows: RawLeadInput[],
-  opts: { campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null },
+  opts: { campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null; importBatchId?: string | null },
 ): Promise<{ inserted: number; error?: string }> {
   const ctx = await requireCtx();
   if (!["owner", "admin", "sales_manager", "sales_rep", "external_sales"].includes(ctx.role)) {

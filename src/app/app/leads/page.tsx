@@ -8,6 +8,15 @@ export default async function LeadsPage() {
   const ws = await getWorkspace();
   const leads = listLeads(ws);
 
+  const batches = ws.leadImportBatches.map((b) => ({
+    id: b.id,
+    label: b.label ?? b.raw_event ?? "—",
+    rawEvent: b.raw_event ?? "",
+    sourceName: b.source_name ?? "",
+    rowCount: b.row_count,
+    createdAt: b.created_at,
+  }));
+
   const rows: LeadRow[] = leads.map((l) => ({
     id: l.id,
     company: l.company_name ?? "",
@@ -35,7 +44,7 @@ export default async function LeadsPage() {
         subtitle="展示会・セミナーのリストを優先度付けし、架電→アポ獲得まで管理・分析します。"
         action={<LinkButton href="/app/leads/import" variant="accent"><Upload size={16} /> 取込</LinkButton>}
       />
-      <LeadsWorkspace rows={rows} />
+      <LeadsWorkspace rows={rows} batches={batches} />
     </div>
   );
 }

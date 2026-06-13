@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Upload, ChevronLeft } from "lucide-react";
 import { TARGET_FIELDS, LEAD_KINDS, suggestMapping, type RawLeadInput } from "@/lib/lead-import";
-import { importLeadsBatchAction, clearLeadsForEventAction } from "@/server/actions";
+import { importLeadsBatchAction, clearLeadsForEventAction, startImportBatchAction } from "@/server/actions";
 
 interface Opt { id: string; name: string; event_date?: string }
 
@@ -39,10 +39,23 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
   const [kind, setKind] = useState("exhibition");
   const [eventLabel, setEventLabel] = useState("");
   const [replace, setReplace] = useState(true);
+  const [customFields, setCustomFields] = useState<{ key: string; header: string }[]>([]);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
+
+  // 指定ヘッダーの実データサンプル(先頭の非空値)
+  function sampleOf(header: string): string {
+    if (!header) return "";
+    const idx = headers.indexOf(header);
+    if (idx < 0) return "";
+    for (const row of dataRows.slice(0, 8)) {
+      const v = (row[idx] ?? "").trim();
+      if (v) return v.length > 28 ? v.slice(0, 28) + "…" : v;
+    }
+    return "（空）";
+  }
 
   async function onFile(file: File) {
     const text = await file.text();
@@ -70,6 +83,14 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
       const v = get(f.key as string);
       if (v) (o as Record<string, string>)[f.key as string] = v;
     }
+    const extra: Record<string, string> = {};
+    for (const cf of customFields) {
+      if (!cf.key || !cf.header) continue;
+      const idx = headers.indexOf(cf.header);
+      const v = idx >= 0 && idx < row.length ? (row[idx] ?? "").trim() : "";
+      if (v) extra[cf.key] = v;
+    }
+    if (Object.keys(extra).length) o.extra = extra;
     return o;
   }
 
@@ -87,7 +108,8 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
     try {
       if (replace) await clearLeadsForEventAction(rawEvent);
       const inputs = dataRows.map(rowToInput);
-      const opts = { campaignId: campaignId || null, leadSourceId: leadSourceId || null, rawEvent, base, eventDate: camp?.event_date ?? null };
+      const { batchId } = await startImportBatchAction({ rawEvent, label: rawEvent, sourceName: fileName, rowCount: inputs.length });
+      const opts = { campaignId: campaignId || null, leadSourceId: leadSourceId || null, rawEvent, base, eventDate: camp?.event_date ?? null, importBatchId: batchId };
       let inserted = 0;
       const CHUNK = 300;
       for (let i = 0; i < inputs.length; i += CHUNK) {
@@ -164,13 +186,39 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
             <h2 className="section-title mb-1">3. 列マッピング</h2>
             <p className="text-xs text-ink/40 mb-3">ヘッダー名から自動推測済み。違う場合は選び直してください（会社名は必須）。</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {TARGET_FIELDS.map((f) => (
-                <div key={f.key as string}>
-                  <label className="label">{f.label}{f.required && <span className="text-accent-orange"> *</span>}</label>
-                  <select value={mapping[f.key as string] ?? ""} onChange={(e) => setMapping((m) => ({ ...m, [f.key]: e.target.value }))} className="input text-xs">
-                    <option value="">（なし）</option>
+              {TARGET_FIELDS.map((f) => {
+                const src = mapping[f.key as string] ?? "";
+                return (
+                  <div key={f.key as string}>
+                    <label className="label">{f.label}{f.required && <span className="text-accent-orange"> *</span>}</label>
+                    <select value={src} onChange={(e) => setMapping((m) => ({ ...m, [f.key]: e.target.value }))} className="input text-xs">
+                      <option value="">（なし）</option>
+                      {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                    <div className="text-[10px] text-ink/40 mt-0.5 truncate" title={src ? sampleOf(src) : ""}>
+                      {src ? `例: ${sampleOf(src)}` : "未設定"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 項目追加(拡張フィールド) */}
+            <div className="mt-4 border-t border-black/[0.05] pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">追加項目（不足分を拡張フィールドに保存）</span>
+                <button type="button" onClick={() => setCustomFields((c) => [...c, { key: "", header: "" }])} className="text-xs text-teal-deep hover:underline">＋ 項目追加</button>
+              </div>
+              {customFields.map((cf, i) => (
+                <div key={i} className="flex items-center gap-2 mb-2">
+                  <input value={cf.key} onChange={(e) => setCustomFields((c) => c.map((x, j) => j === i ? { ...x, key: e.target.value } : x))} placeholder="項目名(例: 興味製品)" className="input text-xs w-40" />
+                  <span className="text-ink/30">←</span>
+                  <select value={cf.header} onChange={(e) => setCustomFields((c) => c.map((x, j) => j === i ? { ...x, header: e.target.value } : x))} className="input text-xs flex-1">
+                    <option value="">列を選択</option>
                     {headers.map((h) => <option key={h} value={h}>{h}</option>)}
                   </select>
+                  <span className="text-[10px] text-ink/40 w-28 truncate">{cf.header ? `例: ${sampleOf(cf.header)}` : ""}</span>
+                  <button type="button" onClick={() => setCustomFields((c) => c.filter((_, j) => j !== i))} className="text-ink/30 hover:text-rose-500 text-xs">×</button>
                 </div>
               ))}
             </div>

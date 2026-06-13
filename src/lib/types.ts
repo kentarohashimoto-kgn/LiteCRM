@@ -267,6 +267,27 @@ export interface Lead {
   raw_event?: string;
   deal_owner_name?: string;
   scanned_at?: string;
+  import_batch_id?: UUID;
+  extra?: Record<string, string>;
+  revenue_size?: string;
+  role_level?: string;
+  needs?: string;
+  timing?: string;
+  authority?: string;
+  budget_band?: string;
+  budget_amount?: number;
+  priority_base?: number;
+}
+
+export interface LeadImportBatch {
+  id: UUID;
+  tenant_id: UUID;
+  raw_event?: string;
+  label?: string;
+  source_name?: string;
+  row_count: number;
+  created_by?: UUID;
+  created_at: string;
 }
 
 export interface Opportunity {

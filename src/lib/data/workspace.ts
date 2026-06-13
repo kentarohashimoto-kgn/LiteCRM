@@ -8,6 +8,7 @@ import type {
   Campaign,
   Contact,
   Lead,
+  LeadImportBatch,
   LeadSource,
   Meeting,
   Membership,
@@ -50,6 +51,7 @@ export interface Workspace {
   salesTargets: SalesTarget[];
   repTargets: RepTarget[];
   seminarResponses: SeminarResponse[];
+  leadImportBatches: LeadImportBatch[];
 }
 
 interface ProfileRow {
@@ -81,6 +83,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     salesTargets,
     repTargets,
     seminarResponses,
+    leadImportBatches,
   ] = await Promise.all([
     sb.from("profiles").select("id, email, display_name, avatar_color"),
     sb.from("memberships").select("*"),
@@ -99,6 +102,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     sb.from("sales_targets").select("*"),
     sb.from("rep_targets").select("*"),
     sb.from("seminar_responses").select("*").order("responded_at"),
+    sb.from("lead_import_batches").select("*").order("created_at", { ascending: false }),
   ]);
 
   const users: User[] = (profiles.data ?? []).map((p: ProfileRow) => ({
@@ -137,5 +141,6 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     salesTargets: (salesTargets.data ?? []) as SalesTarget[],
     repTargets: (repTargets.data ?? []) as RepTarget[],
     seminarResponses: (seminarResponses.data ?? []) as SeminarResponse[],
+    leadImportBatches: (leadImportBatches.data ?? []) as LeadImportBatch[],
   };
 });
