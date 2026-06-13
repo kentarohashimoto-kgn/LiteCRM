@@ -15,6 +15,7 @@ import type {
   Product,
   RepTarget,
   SalesTarget,
+  SeminarResponse,
   StageHistory,
   Task,
   User,
@@ -48,6 +49,7 @@ export interface Workspace {
   stageHistories: StageHistory[];
   salesTargets: SalesTarget[];
   repTargets: RepTarget[];
+  seminarResponses: SeminarResponse[];
 }
 
 interface ProfileRow {
@@ -78,6 +80,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     stageHistories,
     salesTargets,
     repTargets,
+    seminarResponses,
   ] = await Promise.all([
     sb.from("profiles").select("id, email, display_name, avatar_color"),
     sb.from("memberships").select("*"),
@@ -95,6 +98,7 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     sb.from("stage_histories").select("*").order("changed_at", { ascending: false }),
     sb.from("sales_targets").select("*"),
     sb.from("rep_targets").select("*"),
+    sb.from("seminar_responses").select("*").order("responded_at"),
   ]);
 
   const users: User[] = (profiles.data ?? []).map((p: ProfileRow) => ({
@@ -132,5 +136,6 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     stageHistories: (stageHistories.data ?? []) as StageHistory[],
     salesTargets: (salesTargets.data ?? []) as SalesTarget[],
     repTargets: (repTargets.data ?? []) as RepTarget[],
+    seminarResponses: (seminarResponses.data ?? []) as SeminarResponse[],
   };
 });

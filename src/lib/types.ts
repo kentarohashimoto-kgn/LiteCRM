@@ -110,6 +110,31 @@ export interface RepTarget {
   target_amount: number;
 }
 
+/** セミナーアンケート回答(別管理)。 */
+export interface SeminarResponse {
+  id: UUID;
+  tenant_id: UUID;
+  campaign_id?: UUID;
+  seminar_name?: string;
+  responded_at?: string;
+  email?: string;
+  name?: string;
+  company?: string;
+  company_norm?: string;
+  phone?: string;
+  employee_size?: string;
+  job_title?: string;
+  satisfaction?: number;
+  satisfaction_reason?: string;
+  understanding?: number;
+  challenges?: string;
+  ai_usage?: string;
+  follow_up?: string;
+  comment?: string;
+  consent?: boolean;
+  created_at: string;
+}
+
 export interface Account {
   id: UUID;
   tenant_id: UUID;

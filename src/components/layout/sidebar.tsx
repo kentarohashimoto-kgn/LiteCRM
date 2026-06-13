@@ -18,6 +18,7 @@ import {
   Radio,
   Presentation,
   Coins,
+  ClipboardList,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/analytics/revenue", label: "売上・請求分析", icon: Coins },
       { href: "/app/analytics/channels", label: "流入元分析", icon: Radio },
       { href: "/app/analytics/exhibitions", label: "└ 展示会分析", icon: Presentation },
+      { href: "/app/analytics/seminars", label: "└ セミナー分析", icon: ClipboardList },
       { href: "/app/analytics/sales-reps", label: "営業マン別", icon: UserCog },
       { href: "/app/analytics/products", label: "商品別", icon: Package },
     ],

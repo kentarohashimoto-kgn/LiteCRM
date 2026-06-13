@@ -164,6 +164,10 @@ export function listRepTargets(ws: Workspace) {
   return ws.repTargets;
 }
 
+export function listSeminarResponses(ws: Workspace) {
+  return ws.seminarResponses;
+}
+
 export function getProducts(ws: Workspace): Product[] {
   return ws.products;
 }
