@@ -63,6 +63,24 @@ interface ProfileRow {
   avatar_color: string | null;
 }
 
+/**
+ * PostgREST の1リクエスト上限(既定1000行)を超えるテーブルを全件取得する。
+ * 1000行未満なら1リクエストで終了するため、小さいテーブルに追加コストは無い。
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+async function fetchAll<T>(build: () => any): Promise<T[]> {
+  const PAGE = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build().range(from, from + PAGE - 1);
+    if (error || !data || data.length === 0) break;
+    out.push(...(data as T[]));
+    if (data.length < PAGE) break;
+  }
+  return out;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export const getWorkspace = cache(async (): Promise<Workspace> => {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
@@ -88,64 +106,64 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     leadImportBatches,
     acquirerAliases,
   ] = await Promise.all([
-    sb.from("profiles").select("id, email, display_name, avatar_color"),
-    sb.from("memberships").select("*"),
-    sb.from("accounts").select("*").order("name"),
-    sb.from("contacts").select("*"),
-    sb.from("lead_sources").select("*").order("created_at"),
-    sb.from("campaigns").select("*").order("sort_order"),
-    sb.from("products").select("*").order("created_at"),
-    sb.from("leads").select("*").order("acquired_at", { ascending: false }),
-    sb.from("opportunities").select("*"),
-    sb.from("meetings").select("*").order("meeting_date", { ascending: false }),
-    sb.from("billing_schedules").select("*"),
-    sb.from("activities").select("*").order("activity_at", { ascending: false }),
-    sb.from("tasks").select("*"),
-    sb.from("stage_histories").select("*").order("changed_at", { ascending: false }),
-    sb.from("sales_targets").select("*"),
-    sb.from("rep_targets").select("*"),
-    sb.from("seminar_responses").select("*").order("responded_at"),
-    sb.from("lead_import_batches").select("*").order("created_at", { ascending: false }),
-    sb.from("acquirer_aliases").select("*"),
+    fetchAll<ProfileRow>(() => sb.from("profiles").select("id, email, display_name, avatar_color")),
+    fetchAll<Membership>(() => sb.from("memberships").select("*")),
+    fetchAll<Account>(() => sb.from("accounts").select("*").order("name")),
+    fetchAll<Contact>(() => sb.from("contacts").select("*").order("id")),
+    fetchAll<LeadSource>(() => sb.from("lead_sources").select("*").order("created_at")),
+    fetchAll<Campaign>(() => sb.from("campaigns").select("*").order("sort_order")),
+    fetchAll<Product>(() => sb.from("products").select("*").order("created_at")),
+    fetchAll<Lead>(() => sb.from("leads").select("*").order("acquired_at", { ascending: false }).order("id")),
+    fetchAll<Opportunity>(() => sb.from("opportunities").select("*").order("id")),
+    fetchAll<Meeting>(() => sb.from("meetings").select("*").order("meeting_date", { ascending: false }).order("id")),
+    fetchAll<BillingSchedule>(() => sb.from("billing_schedules").select("*")),
+    fetchAll<Activity>(() => sb.from("activities").select("*").order("activity_at", { ascending: false }).order("id")),
+    fetchAll<Task>(() => sb.from("tasks").select("*").order("id")),
+    fetchAll<StageHistory>(() => sb.from("stage_histories").select("*").order("changed_at", { ascending: false }).order("id")),
+    fetchAll<SalesTarget>(() => sb.from("sales_targets").select("*")),
+    fetchAll<RepTarget>(() => sb.from("rep_targets").select("*")),
+    fetchAll<SeminarResponse>(() => sb.from("seminar_responses").select("*").order("responded_at")),
+    fetchAll<LeadImportBatch>(() => sb.from("lead_import_batches").select("*").order("created_at", { ascending: false })),
+    fetchAll<AcquirerAlias>(() => sb.from("acquirer_aliases").select("*")),
   ]);
 
-  const users: User[] = (profiles.data ?? []).map((p: ProfileRow) => ({
+  const users: User[] = profiles.map((p) => ({
     id: p.id,
     name: p.display_name ?? p.email ?? "—",
     email: p.email ?? "",
     avatarColor: p.avatar_color ?? "#008C8C",
   }));
 
-  const accountsArr = (accounts.data ?? []) as Account[];
-  const leadSourcesArr = (leadSources.data ?? []) as LeadSource[];
-  const campaignsArr = (campaigns.data ?? []) as Campaign[];
-  const productsArr = (products.data ?? []) as Product[];
+  const accountsArr = accounts;
+  const leadSourcesArr = leadSources;
+  const campaignsArr = campaigns;
+  const productsArr = products;
 
   return {
     ctx,
     users,
     usersById: new Map(users.map((u) => [u.id, u])),
-    memberships: (memberships.data ?? []) as Membership[],
+    memberships,
     accounts: accountsArr,
     accountsById: new Map(accountsArr.map((a) => [a.id, a])),
-    contacts: (contacts.data ?? []) as Contact[],
+    contacts,
     leadSources: leadSourcesArr,
     leadSourcesById: new Map(leadSourcesArr.map((l) => [l.id, l])),
     campaigns: campaignsArr,
     campaignsById: new Map(campaignsArr.map((c) => [c.id, c])),
     products: productsArr,
     productsById: new Map(productsArr.map((p) => [p.id, p])),
-    leads: (leads.data ?? []) as Lead[],
-    opportunities: (opportunities.data ?? []) as Opportunity[],
-    meetings: (meetings.data ?? []) as Meeting[],
-    billingSchedules: (billingSchedules.data ?? []) as BillingSchedule[],
-    activities: (activities.data ?? []) as Activity[],
-    tasks: (tasks.data ?? []) as Task[],
-    stageHistories: (stageHistories.data ?? []) as StageHistory[],
-    salesTargets: (salesTargets.data ?? []) as SalesTarget[],
-    repTargets: (repTargets.data ?? []) as RepTarget[],
-    seminarResponses: (seminarResponses.data ?? []) as SeminarResponse[],
-    leadImportBatches: (leadImportBatches.data ?? []) as LeadImportBatch[],
-    acquirerAliases: (acquirerAliases.data ?? []) as AcquirerAlias[],
+    leads,
+    opportunities,
+    meetings,
+    billingSchedules,
+    activities,
+    tasks,
+    stageHistories,
+    salesTargets,
+    repTargets,
+    seminarResponses,
+    leadImportBatches,
+    acquirerAliases,
   };
 });
