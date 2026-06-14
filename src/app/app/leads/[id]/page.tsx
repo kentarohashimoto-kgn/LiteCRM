@@ -4,6 +4,7 @@ import { ChevronLeft, Trash2 } from "lucide-react";
 import { getWorkspace } from "@/lib/data/workspace";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { updateLeadAction, deleteLeadAction } from "@/server/actions";
+import { PromoteLeadButton } from "@/components/leads/promote-button";
 import { LEAD_DISPOSITIONS } from "@/lib/constants";
 import { ROLE_LEVELS, NEEDS_OPTS, TIMING_OPTS, AUTHORITY_OPTS, BUDGET_OPTS, REVENUE_OPTS } from "@/lib/lead-import";
 
@@ -12,13 +13,29 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
   const l = ws.leads.find((x) => x.id === params.id);
   if (!l) notFound();
   const ev = l.raw_event ?? "—";
+  const converted = !!l.account_id || l.status === "converted";
+  const linkedOpp = ws.opportunities.find((o) => o.lead_id === l.id);
 
   return (
     <div className="max-w-3xl">
       <Link href="/app/leads" className="inline-flex items-center gap-1 text-sm text-ink/50 hover:text-ink mb-3">
         <ChevronLeft size={16} /> リード一覧
       </Link>
-      <PageHeader title={l.company_name ?? "リード"} subtitle={`${l.contact_name ?? ""}｜流入: ${ev}｜優先度 ${l.priority_score ?? 0}`} />
+      <PageHeader
+        title={l.company_name ?? "リード"}
+        subtitle={`${l.contact_name ?? ""}｜流入: ${ev}｜優先度 ${l.priority_score ?? 0}`}
+        action={
+          converted ? (
+            linkedOpp ? (
+              <Link href={`/app/opportunities/${linkedOpp.id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-deep hover:underline">案件化済み｜商談を開く →</Link>
+            ) : (
+              <span className="pill bg-teal-light text-teal-deep">案件化済み</span>
+            )
+          ) : (
+            <PromoteLeadButton leadId={l.id} />
+          )
+        }
+      />
 
       <form action={updateLeadAction} className="space-y-5">
         <input type="hidden" name="id" value={l.id} />

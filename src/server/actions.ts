@@ -6,6 +6,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireCtx } from "@/lib/session";
 import { STAGE_MAP } from "@/lib/constants";
+import { normCompany } from "@/lib/lead-import";
 
 function num(v: FormDataEntryValue | null): number | null {
   if (v == null || v === "") return null;
@@ -704,13 +705,160 @@ export async function setAcquirerAliasAction(raw: string, displayName: string): 
   return { ok: true };
 }
 
-/** リードの決着ステータスを更新 */
-export async function setLeadDispositionAction(formData: FormData) {
-  await requireCtx();
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/**
+ * リードを案件化(opportunity に昇格)。連結ファネルの中核。
+ *  - 会社名で既存 account を名寄せ(無ければ作成)
+ *  - 既にオープン案件があれば二重作成せず lead を紐付け、無ければ新規案件を作成
+ *  - 担当者(contact)を作成/再利用し、lead を converted にして紐付け
+ * 冪等: 既に account_id が付いたリードは何もしない。
+ */
+async function promoteLeadCore(
+  sb: any,
+  tenantId: string,
+  userId: string,
+  leadId: string,
+): Promise<{ opportunityId: string | null; already: boolean }> {
+  const { data: lead } = await sb.from("leads").select("*").eq("id", leadId).eq("tenant_id", tenantId).single();
+  if (!lead) return { opportunityId: null, already: false };
+  if (lead.account_id) return { opportunityId: null, already: true };
+
+  const company = (lead.company_name ?? "").trim();
+  const norm = lead.company_norm || normCompany(company);
+
+  // 会社の名寄せ(正規化名で一致する account を探す)
+  const { data: accs } = await sb.from("accounts").select("id,name").eq("tenant_id", tenantId);
+  let accountId: string | null = null;
+  for (const a of accs ?? []) {
+    if (normCompany(a.name) === norm && norm) { accountId = a.id; break; }
+  }
+  if (!accountId) {
+    const { data: newAcc } = await sb
+      .from("accounts")
+      .insert({
+        tenant_id: tenantId,
+        owner_user_id: lead.owner_user_id ?? userId,
+        name: company || "(無名)",
+        industry: lead.industry ?? null,
+        employee_size: lead.employee_size ?? null,
+        revenue_size: lead.revenue_size ?? null,
+        area: lead.prefecture ?? null,
+        status: "prospect",
+      })
+      .select("id")
+      .single();
+    accountId = newAcc?.id ?? null;
+  }
+  if (!accountId) return { opportunityId: null, already: false };
+
+  // 担当者(contact)を作成/再利用(メール優先)
+  let contactId: string | null = null;
+  const email = (lead.email ?? "").trim();
+  if (email) {
+    const { data: c } = await sb.from("contacts").select("id").eq("tenant_id", tenantId).eq("account_id", accountId).ilike("email", email).limit(1);
+    contactId = c?.[0]?.id ?? null;
+  }
+  if (!contactId && (lead.contact_name || email)) {
+    const { data: nc } = await sb
+      .from("contacts")
+      .insert({
+        tenant_id: tenantId,
+        account_id: accountId,
+        name: lead.contact_name || email || "(担当者)",
+        department: lead.department ?? null,
+        title: lead.job_title ?? null,
+        email: email || null,
+        phone: lead.phone ?? lead.mobile_phone ?? null,
+      })
+      .select("id")
+      .single();
+    contactId = nc?.id ?? null;
+  }
+
+  // 既存のオープン案件があれば紐付け、無ければ新規作成(二重計上防止)
+  const { data: openOpps } = await sb
+    .from("opportunities")
+    .select("id,lead_id")
+    .eq("tenant_id", tenantId)
+    .eq("account_id", accountId)
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  let opportunityId: string | null = openOpps?.[0]?.id ?? null;
+
+  if (opportunityId) {
+    if (!openOpps[0].lead_id) await sb.from("opportunities").update({ lead_id: leadId }).eq("id", opportunityId);
+  } else {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: opp } = await sb
+      .from("opportunities")
+      .insert({
+        tenant_id: tenantId,
+        account_id: accountId,
+        contact_id: contactId,
+        lead_id: leadId,
+        owner_user_id: lead.owner_user_id ?? userId,
+        name: `${company || "新規"} / 新規商談`,
+        stage: "meeting_scheduled",
+        forecast_category: "pipeline",
+        amount: 0,
+        probability: STAGE_MAP["meeting_scheduled"]?.probability ?? 20,
+        first_meeting_date: today,
+        lead_source_id: lead.lead_source_id ?? null,
+        campaign_id: lead.campaign_id ?? null,
+        status: "open",
+        last_activity_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    opportunityId = opp?.id ?? null;
+    if (opportunityId) {
+      await sb.from("stage_histories").insert({
+        tenant_id: tenantId,
+        opportunity_id: opportunityId,
+        to_stage: "meeting_scheduled",
+        changed_by: userId,
+        reason: "リードから案件化",
+      });
+    }
+  }
+
+  await sb
+    .from("leads")
+    .update({ account_id: accountId, contact_id: contactId, status: "converted", converted_at: new Date().toISOString() })
+    .eq("id", leadId);
+
+  return { opportunityId, already: false };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/** リードを案件化(手動ボタン)。 */
+export async function promoteLeadToOpportunityAction(leadId: string): Promise<{ ok: boolean; opportunityId: string | null }> {
+  const ctx = await requireCtx();
+  if (!["owner", "admin", "sales_manager", "sales_rep", "external_sales"].includes(ctx.role)) {
+    return { ok: false, opportunityId: null };
+  }
   const sb = getSupabaseServer();
+  const { opportunityId } = await promoteLeadCore(sb, ctx.tenantId, ctx.userId, leadId);
+  revalidatePath("/app/leads");
+  revalidatePath("/app/opportunities");
+  revalidatePath("/app/dashboard");
+  return { ok: true, opportunityId };
+}
+
+/** リードの決着ステータスを更新。アポ獲得にした時は自動で案件化する。 */
+export async function setLeadDispositionAction(formData: FormData) {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
   const disp = str(formData.get("disposition"));
   const status = disp === "appointment" ? "qualified" : disp === "ng" || disp === "excluded" ? "disqualified" : "new";
-  await sb.from("leads").update({ disposition: disp, status }).eq("id", String(formData.get("id")));
+  await sb.from("leads").update({ disposition: disp, status }).eq("id", id);
+  if (disp === "appointment") {
+    await promoteLeadCore(sb, ctx.tenantId, ctx.userId, id);
+    revalidatePath("/app/opportunities");
+    revalidatePath("/app/dashboard");
+  }
   revalidatePath("/app/leads");
 }
 

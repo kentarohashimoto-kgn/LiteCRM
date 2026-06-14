@@ -7,6 +7,7 @@ import { Search, Phone, List, Building2, BarChart3, History, Trash2, Upload } fr
 import { LEAD_DISPOSITIONS, LEAD_DISPOSITION_MAP } from "@/lib/constants";
 import { setLeadDispositionAction, setLeadCallOwnerAction, deleteImportBatchAction, setAcquirerAliasAction, upsertLeadsBatchAction } from "@/server/actions";
 import { parseDelimited, detectDelim, rowToRawInput, dedupLeads, LEAD_KINDS } from "@/lib/lead-import";
+import { PromoteLeadButton } from "@/components/leads/promote-button";
 import { cn, formatDateFull } from "@/lib/utils";
 
 export interface BatchRow {
@@ -40,6 +41,7 @@ export interface LeadRow {
   tags: string;
   acquirer: string;
   scannedAt: string;
+  converted: boolean;
 }
 export interface AliasRow { raw: string; name: string }
 
@@ -209,6 +211,7 @@ function LeadList({ rows }: { rows: LeadRow[] }) {
               <th className="th">決着</th>
               <th className="th">架電担当</th>
               <th className="th">電話</th>
+              <th className="th">案件化</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-black/[0.04]">
@@ -236,6 +239,9 @@ function LeadList({ rows }: { rows: LeadRow[] }) {
                   </form>
                 </td>
                 <td className="td text-xs text-ink/60 tabular-nums">{r.phone || "—"}{r.mobilePhone && <span className="block text-ink/40">{r.mobilePhone}</span>}</td>
+                <td className="td">
+                  {r.converted ? <span className="pill bg-teal-light text-teal-deep text-[10px]">済</span> : <PromoteLeadButton leadId={r.id} size="mini" />}
+                </td>
               </tr>
             ))}
           </tbody>

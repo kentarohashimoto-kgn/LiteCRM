@@ -39,6 +39,7 @@ export default async function LeadsPage() {
     tags: l.tags ?? "",
     acquirer: l.acquirer ?? "",
     scannedAt: l.scanned_at ?? "",
+    converted: !!l.account_id || l.status === "converted",
   }));
 
   const aliases = ws.acquirerAliases.map((a) => ({ raw: a.raw, name: a.display_name ?? "" }));
