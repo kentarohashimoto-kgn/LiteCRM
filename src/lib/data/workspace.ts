@@ -8,7 +8,6 @@ import type {
   BillingSchedule,
   Campaign,
   Contact,
-  Lead,
   LeadImportBatch,
   LeadSource,
   Meeting,
@@ -42,7 +41,6 @@ export interface Workspace {
   campaignsById: Map<string, Campaign>;
   products: Product[];
   productsById: Map<string, Product>;
-  leads: Lead[];
   opportunities: Opportunity[];
   meetings: Meeting[];
   billingSchedules: BillingSchedule[];
@@ -93,7 +91,6 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     leadSources,
     campaigns,
     products,
-    leads,
     opportunities,
     meetings,
     billingSchedules,
@@ -113,7 +110,6 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     fetchAll<LeadSource>(() => sb.from("lead_sources").select("*").order("created_at")),
     fetchAll<Campaign>(() => sb.from("campaigns").select("*").order("sort_order")),
     fetchAll<Product>(() => sb.from("products").select("*").order("created_at")),
-    fetchAll<Lead>(() => sb.from("leads").select("*").order("acquired_at", { ascending: false }).order("id")),
     fetchAll<Opportunity>(() => sb.from("opportunities").select("*").order("id")),
     fetchAll<Meeting>(() => sb.from("meetings").select("*").order("meeting_date", { ascending: false }).order("id")),
     fetchAll<BillingSchedule>(() => sb.from("billing_schedules").select("*")),
@@ -153,7 +149,6 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     campaignsById: new Map(campaignsArr.map((c) => [c.id, c])),
     products: productsArr,
     productsById: new Map(productsArr.map((p) => [p.id, p])),
-    leads,
     opportunities,
     meetings,
     billingSchedules,

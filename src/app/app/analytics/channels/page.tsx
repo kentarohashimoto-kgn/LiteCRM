@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { getWorkspace } from "@/lib/data/workspace";
-import { listOpportunities, listLeads } from "@/lib/data/select";
+import { listOpportunities } from "@/lib/data/select";
+import { getLeadMetrics } from "@/lib/data/leads";
 import { channelMetrics } from "@/lib/analytics";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { SimpleBar } from "@/components/charts/forecast-chart";
@@ -25,8 +26,7 @@ function num(v: number): string {
 export default async function LeadSourceAnalyticsPage() {
   const ws = await getWorkspace();
   const opps = listOpportunities(ws);
-  const leads = listLeads(ws);
-  const channels = channelMetrics(opps, leads);
+  const channels = channelMetrics(opps, (await getLeadMetrics(opps)).bySource);
 
   const totalOpps = channels.reduce((s, c) => s + c.oppCount, 0);
   const totalWon = channels.reduce((s, c) => s + c.wonCount, 0);

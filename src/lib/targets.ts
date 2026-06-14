@@ -5,7 +5,6 @@
  *   リード    … leads.acquired_at で計上
  */
 import type { OppView } from "@/lib/data/select";
-import type { Lead } from "@/lib/types";
 import { monthKey, startOfMonth } from "@/lib/utils";
 
 export interface MonthlyActual {
@@ -19,7 +18,11 @@ export function emptyActual(): MonthlyActual {
   return { revenue: 0, deals: 0, appts: 0, leads: 0 };
 }
 
-export function actualByMonth(opps: OppView[], leads: Lead[]): Map<string, MonthlyActual> {
+/**
+ * 月別実績。リードは件数が大きいため行ではなく「月別件数マップ」を受け取る。
+ *   leadsByMonth: acquired_at 月(YYYY-MM-01) -> 件数
+ */
+export function actualByMonth(opps: OppView[], leadsByMonth: Map<string, number>): Map<string, MonthlyActual> {
   const map = new Map<string, MonthlyActual>();
   const ensure = (k: string) => {
     let v = map.get(k);
@@ -42,8 +45,6 @@ export function actualByMonth(opps: OppView[], leads: Lead[]): Map<string, Month
       ensure(monthKey(startOfMonth(new Date(o.first_meeting_date)))).appts += 1;
     }
   }
-  for (const l of leads) {
-    if (l.acquired_at) ensure(monthKey(startOfMonth(new Date(l.acquired_at)))).leads += 1;
-  }
+  for (const [k, n] of leadsByMonth) ensure(k).leads += n;
   return map;
 }

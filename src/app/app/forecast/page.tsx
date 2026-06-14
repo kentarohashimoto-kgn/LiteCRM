@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getWorkspace } from "@/lib/data/workspace";
-import { getSalesTargets, listOpportunities, listLeads, listBillingSchedules } from "@/lib/data/select";
+import { getSalesTargets, listOpportunities, listBillingSchedules } from "@/lib/data/select";
+import { getLeadMetrics } from "@/lib/data/leads";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { ForecastChart } from "@/components/charts/forecast-chart";
 import { ForecastTabs, type WonRow, type PipelineRow, type InputRow } from "@/components/forecast/forecast-tabs";
@@ -39,7 +40,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
   const opps = listOpportunities(ws);
   const targets = getSalesTargets(ws);
   const targetMap = new Map(targets.map((t) => [t.target_month, t]));
-  const actuals = actualByMonth(opps, listLeads(ws));
+  const actuals = actualByMonth(opps, (await getLeadMetrics(opps)).byMonth);
 
   const rows = months.map((m) => {
     const t = targetMap.get(m.key);

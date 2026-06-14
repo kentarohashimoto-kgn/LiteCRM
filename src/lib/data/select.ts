@@ -10,7 +10,6 @@ import type {
   BillingSchedule,
   Campaign,
   Contact,
-  Lead,
   LeadSource,
   Meeting,
   Opportunity,
@@ -83,10 +82,6 @@ export function getContactsByAccount(ws: Workspace, accountId: string): Contact[
 
 export function listContacts(ws: Workspace): Contact[] {
   return ws.contacts;
-}
-
-export function listLeads(ws: Workspace): Lead[] {
-  return ws.leads;
 }
 
 export function listTasks(ws: Workspace): Task[] {

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { CalendarCheck, AlertTriangle, Clock, Target as TargetIcon } from "lucide-react";
 import { getWorkspace } from "@/lib/data/workspace";
-import { getSalesTargets, listOpportunities, listTasks, listLeads } from "@/lib/data/select";
+import { getSalesTargets, listOpportunities, listTasks } from "@/lib/data/select";
+import { getLeadMetrics } from "@/lib/data/leads";
 import { buildForecast } from "@/lib/forecast";
 import { isStale, noNextAction } from "@/lib/risk";
 import { repMetrics, productMetrics } from "@/lib/analytics";
@@ -42,7 +43,8 @@ export default async function DashboardPage() {
   const fy = currentFiscalStartYear(now);
   const fyMonths = fiscalMonths(fy);
   const targetMap = new Map(targets.map((t) => [t.target_month, t]));
-  const actuals = actualByMonth(opps, listLeads(ws));
+  const leadMetrics = await getLeadMetrics(opps);
+  const actuals = actualByMonth(opps, leadMetrics.byMonth);
   const fyTarget = {
     amount: sum(fyMonths, (m) => targetMap.get(m.key)?.target_amount ?? 0),
     deals: sum(fyMonths, (m) => targetMap.get(m.key)?.target_deals ?? 0),
@@ -86,21 +88,16 @@ export default async function DashboardPage() {
     };
   });
 
-  // ファネル(リード起点): リード→アポ獲得→受注。獲得月でコホート集計。
+  // ファネル(リード起点): リード→アポ獲得→受注。獲得月でコホート集計(集計値のみ使用)。
   //   アポ = 決着がアポ獲得のリード / 成約 = そのリードに紐づく案件が受注(won)
-  const allLeads = listLeads(ws);
   const thisKey = monthKey(startOfMonth(now));
   const lastKey = monthKey(addMonths(startOfMonth(now), -1));
-  const wonLeadIds = new Set(opps.filter((o) => o.lead_id && o.status === "won").map((o) => o.lead_id));
-  const leadMonth = (acq?: string) => (acq ? monthKey(startOfMonth(new Date(acq))) : null);
-  const funnelScope = (k: string | null) => {
-    const ls = k ? allLeads.filter((l) => leadMonth(l.acquired_at) === k) : allLeads;
-    return {
-      leads: ls.length,
-      appts: ls.filter((l) => l.disposition === "appointment").length,
-      deals: ls.filter((l) => wonLeadIds.has(l.id)).length,
-    };
-  };
+  const sumMap = (m: Map<string, number>) => Array.from(m.values()).reduce((s, n) => s + n, 0);
+  const funnelScope = (k: string | null) => ({
+    leads: k ? leadMetrics.byMonth.get(k) ?? 0 : leadMetrics.total,
+    appts: k ? leadMetrics.apptByMonth.get(k) ?? 0 : sumMap(leadMetrics.apptByMonth),
+    deals: k ? leadMetrics.wonByMonth.get(k) ?? 0 : sumMap(leadMetrics.wonByMonth),
+  });
   const funnelData = {
     total: funnelScope(null),
     lastMonth: funnelScope(lastKey),

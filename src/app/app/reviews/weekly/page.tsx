@@ -1,6 +1,7 @@
 import { CalendarCheck, TrendingUp, AlertTriangle, Target, Pause } from "lucide-react";
 import { getWorkspace } from "@/lib/data/workspace";
-import { getSalesTargets, getStageHistory, listOpportunities, listLeads } from "@/lib/data/select";
+import { getSalesTargets, getStageHistory, listOpportunities } from "@/lib/data/select";
+import { getLeadMetrics } from "@/lib/data/leads";
 import { buildForecast } from "@/lib/forecast";
 import { isAtRisk, isStale } from "@/lib/risk";
 import { repMetrics, productMetrics, channelMetrics } from "@/lib/analytics";
@@ -39,7 +40,7 @@ export default async function WeeklyReviewPage() {
 
   const reps = repMetrics(open);
   const products = productMetrics(open).slice(0, 6);
-  const channels = channelMetrics(open, listLeads(ws)).slice(0, 6);
+  const channels = channelMetrics(open, (await getLeadMetrics(opps)).bySource).slice(0, 6);
   const achieve = thisMonth.target > 0 ? thisMonth.bestCase / thisMonth.target : 0;
 
   return (

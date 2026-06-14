@@ -1,12 +1,12 @@
 import { Upload } from "lucide-react";
 import { getWorkspace } from "@/lib/data/workspace";
-import { listLeads } from "@/lib/data/select";
+import { getAllLeads } from "@/lib/data/leads";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { LeadsWorkspace, type LeadRow } from "@/components/leads/leads-workspace";
 
 export default async function LeadsPage() {
   const ws = await getWorkspace();
-  const leads = listLeads(ws);
+  const leads = await getAllLeads();
 
   const batches = ws.leadImportBatches.map((b) => ({
     id: b.id,

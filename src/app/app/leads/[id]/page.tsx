@@ -5,12 +5,13 @@ import { getWorkspace } from "@/lib/data/workspace";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { updateLeadAction, deleteLeadAction } from "@/server/actions";
 import { PromoteLeadButton } from "@/components/leads/promote-button";
+import { getLead } from "@/lib/data/leads";
 import { LEAD_DISPOSITIONS } from "@/lib/constants";
 import { ROLE_LEVELS, NEEDS_OPTS, TIMING_OPTS, AUTHORITY_OPTS, BUDGET_OPTS, REVENUE_OPTS } from "@/lib/lead-import";
 
 export default async function LeadEditPage({ params }: { params: { id: string } }) {
   const ws = await getWorkspace();
-  const l = ws.leads.find((x) => x.id === params.id);
+  const l = await getLead(params.id);
   if (!l) notFound();
   const ev = l.raw_event ?? "—";
   const converted = !!l.account_id || l.status === "converted";

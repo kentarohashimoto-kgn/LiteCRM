@@ -3,7 +3,7 @@
  */
 
 import type { OppView } from "@/lib/data/select";
-import type { Campaign, Lead } from "@/lib/types";
+import type { Campaign } from "@/lib/types";
 import { groupBy, sum } from "@/lib/utils";
 import { isStale, noNextAction } from "@/lib/risk";
 
@@ -204,32 +204,28 @@ export function campaignTotals(metrics: CampaignMetric[]): CampaignTotals {
   };
 }
 
-export function channelMetrics(opps: OppView[], leads: Lead[]): ChannelMetric[] {
+export function channelMetrics(opps: OppView[], leadCountBySource: Map<string, number>): ChannelMetric[] {
   const oppBySource = groupBy(
     opps.filter((o) => o.lead_source_id),
     (o) => o.lead_source_id!,
   );
-  const leadBySource = groupBy(
-    leads.filter((l) => l.lead_source_id),
-    (l) => l.lead_source_id!,
-  );
-  const sourceIds = new Set([...Object.keys(oppBySource), ...Object.keys(leadBySource)]);
+  const sourceIds = new Set([...Object.keys(oppBySource), ...leadCountBySource.keys()]);
 
   return Array.from(sourceIds)
     .map((sourceId) => {
       const list = oppBySource[sourceId] ?? [];
-      const leadList = leadBySource[sourceId] ?? [];
       const won = list.filter((o) => o.status === "won");
       const open = list.filter((o) => o.status === "open");
       const lost = list.filter((o) => o.status === "lost");
       const decided = won.length + lost.length;
       const name = list[0]?.leadSource?.name ?? "—";
+      const leadCount = leadCountBySource.get(sourceId) ?? 0;
       return {
         sourceId,
         name,
-        leadCount: leadList.length,
+        leadCount,
         oppCount: list.length,
-        conversionRate: leadList.length ? list.length / leadList.length : 0,
+        conversionRate: leadCount ? list.length / leadCount : 0,
         openCount: open.length,
         openAmount: sum(open, (o) => o.amount),
         weighted: sum(open, (o) => o.weighted),

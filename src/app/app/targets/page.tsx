@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getWorkspace } from "@/lib/data/workspace";
-import { getSalesTargets, listOpportunities, listLeads, listMembers, listRepTargets } from "@/lib/data/select";
+import { getSalesTargets, listOpportunities, listMembers, listRepTargets } from "@/lib/data/select";
+import { getLeadMetrics } from "@/lib/data/leads";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { saveTargetsAction, saveRepTargetsAction } from "@/server/actions";
 import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
@@ -64,10 +65,11 @@ export default async function TargetsPage({ searchParams }: { searchParams: { fy
   );
 }
 
-function AllTargetForm({ ws, fy, months }: { ws: Awaited<ReturnType<typeof getWorkspace>>; fy: number; months: ReturnType<typeof fiscalMonths> }) {
+async function AllTargetForm({ ws, fy, months }: { ws: Awaited<ReturnType<typeof getWorkspace>>; fy: number; months: ReturnType<typeof fiscalMonths> }) {
   const targets = getSalesTargets(ws);
   const targetMap = new Map(targets.map((t) => [t.target_month, t]));
-  const actuals = actualByMonth(listOpportunities(ws), listLeads(ws));
+  const opps = listOpportunities(ws);
+  const actuals = actualByMonth(opps, (await getLeadMetrics(opps)).byMonth);
 
   return (
     <Section title={`全社 ${fiscalYearLabel(fy)} の月別目標`} action={<span className="text-xs text-ink/40">下段は実績（参考）</span>}>
