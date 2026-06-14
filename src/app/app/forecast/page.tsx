@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { getWorkspace } from "@/lib/data/workspace";
-import { getSalesTargets, listOpportunities, listLeads } from "@/lib/data/select";
+import { getSalesTargets, listOpportunities, listLeads, listBillingSchedules } from "@/lib/data/select";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { ForecastChart } from "@/components/charts/forecast-chart";
 import { ForecastTabs, type WonRow, type PipelineRow, type InputRow } from "@/components/forecast/forecast-tabs";
+import { buildSubscriptionForecast } from "@/lib/subscription";
 import { STAGE_MAP } from "@/lib/constants";
 import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
 import { actualByMonth } from "@/lib/targets";
@@ -122,6 +123,9 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
     stageLabel: STAGE_MAP[o.stage]?.label ?? o.stage,
   }));
 
+  // ===== 継続売上(サブスク) =====
+  const { monthly: subMonthly, subs } = buildSubscriptionForecast(opps, listBillingSchedules(ws), months);
+
   const monthly = (
     <>
       {/* 年度KPI: 4指標の実績/目標 */}
@@ -214,7 +218,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
         }
       />
 
-      <ForecastTabs monthly={monthly} won={wonRows} pipeline={pipelineRows} inputs={inputRows} />
+      <ForecastTabs monthly={monthly} won={wonRows} pipeline={pipelineRows} inputs={inputRows} subMonthly={subMonthly} subs={subs} />
     </div>
   );
 }

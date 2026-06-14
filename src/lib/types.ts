@@ -320,6 +320,10 @@ export interface Opportunity {
   probability: number;
   /** 担当者の受注予測確率(0-100)。ヨミ・ステージ由来のprobabilityとは別。 */
   rep_probability?: number;
+  /** サブスク継続を見込む終了月(YYYY-MM-01)。契約満了の翌月〜この月を更新見込みとして計上。 */
+  renewal_until_month?: string;
+  /** サブスク更新(継続)確度 0-100。 */
+  renewal_probability?: number;
   expected_close_date?: string;
   expected_revenue_month?: string;
   category?: OpportunityCategory;

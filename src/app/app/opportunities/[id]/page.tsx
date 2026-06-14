@@ -16,6 +16,7 @@ import {
 } from "@/lib/data/select";
 import { MeetingList } from "@/components/meetings/meeting-list";
 import { BillingSection } from "@/components/billing/billing-section";
+import { SubscriptionForm } from "@/components/billing/subscription-form";
 import { STAGES, FORECAST_CATEGORIES, CATEGORIES, CATEGORY_MAP, STAGE_MAP, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP } from "@/lib/constants";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/ui/badges";
@@ -183,6 +184,14 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
                   <input name="rep_probability" type="number" min={0} max={100} defaultValue={o.rep_probability ?? ""} className="input" placeholder="ヨミとは別の担当者の主観確率" />
                 </div>
                 <div>
+                  <label className="label">継続見込み終了月（サブスク）</label>
+                  <input name="renewal_until_month" type="month" defaultValue={o.renewal_until_month ? o.renewal_until_month.slice(0, 7) : ""} className="input" />
+                </div>
+                <div>
+                  <label className="label">更新確度(%)（サブスク）</label>
+                  <input name="renewal_probability" type="number" min={0} max={100} defaultValue={o.renewal_probability ?? ""} className="input" placeholder="継続すると見込む確度" />
+                </div>
+                <div>
                   <label className="label">次アクション日</label>
                   <input name="next_action_date" type="date" defaultValue={o.next_action_date ?? ""} className="input" />
                 </div>
@@ -201,6 +210,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
 
           <Section title="請求スケジュール（売上計画）" action={<span className="text-xs text-ink/40">受注日とは別に請求(売上)を計画</span>}>
             <BillingSection schedules={billing} opportunityId={o.id} accountId={o.account_id} category={o.category} />
+            <SubscriptionForm opportunityId={o.id} accountId={o.account_id} />
           </Section>
 
           <Section title="活動を記録">

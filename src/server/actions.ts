@@ -97,6 +97,8 @@ export async function updateOpportunityAction(formData: FormData) {
       amount: num(formData.get("amount")) ?? 0,
       probability: stage ? STAGE_MAP[stage]?.probability ?? 10 : undefined,
       rep_probability: num(formData.get("rep_probability")) ?? null,
+      renewal_until_month: (() => { const m = str(formData.get("renewal_until_month")); return m ? m.slice(0, 7) + "-01" : null; })(),
+      renewal_probability: num(formData.get("renewal_probability")) ?? null,
       expected_close_date: close,
       expected_revenue_month: close ? close.slice(0, 7) + "-01" : null,
       next_action_date: str(formData.get("next_action_date")),
@@ -303,6 +305,75 @@ export async function deleteBillingScheduleAction(formData: FormData) {
   if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
   revalidatePath("/app/analytics/revenue");
   redirect(`/app/opportunities/${oppId}`);
+}
+
+/**
+ * サブスク型(月額×契約期間)を一括登録。(b軸+c補助)
+ *  - 契約期間ぶんの recurring 請求スケジュールを作成（毎月の確定売上）
+ *  - 案件の受注金額(amount)を 月額×契約月数(契約確定TCV)に更新、分類をサブスクに
+ *  - 更新見込み(継続終了月・更新確度)を案件に保存（更新見込みレイヤー）
+ *  - 任意で「更新提案」タスクを契約満了の約1ヶ月前に自動生成（c補助）
+ */
+export async function addSubscriptionAction(formData: FormData): Promise<{ ok: boolean }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const oppId = str(formData.get("opportunity_id"));
+  if (!oppId) return { ok: false };
+  const monthly = num(formData.get("monthly_amount")) ?? 0;
+  const startMonth = str(formData.get("start_month")); // YYYY-MM
+  const term = Math.max(1, num(formData.get("term_months")) ?? 1);
+  if (!startMonth || monthly <= 0) return { ok: false };
+
+  // 契約期間: 開始月〜開始月+term-1
+  const start = new Date(startMonth + "-01T00:00:00Z");
+  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + term - 1, 1));
+  const fmt = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
+
+  await sb.from("billing_schedules").insert({
+    tenant_id: ctx.tenantId,
+    opportunity_id: oppId,
+    account_id: str(formData.get("account_id")),
+    kind: "recurring",
+    amount: monthly,
+    recurring_start_month: fmt(start),
+    recurring_end_month: fmt(end),
+    note: str(formData.get("note")) ?? "サブスク月額",
+    created_by: ctx.userId,
+  });
+
+  const renewalUntil = str(formData.get("renewal_until_month"));
+  await sb
+    .from("opportunities")
+    .update({
+      amount: monthly * term,
+      category: "advisory_subscription",
+      expected_close_date: str(formData.get("expected_close_date")) ?? fmt(start),
+      expected_revenue_month: fmt(start),
+      renewal_until_month: renewalUntil ? renewalUntil + "-01" : null,
+      renewal_probability: num(formData.get("renewal_probability")) ?? null,
+    })
+    .eq("id", oppId);
+
+  // c補助: 契約満了の約1ヶ月前に更新提案タスク
+  if (str(formData.get("make_task"))) {
+    const taskDue = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
+    await sb.from("tasks").insert({
+      tenant_id: ctx.tenantId,
+      title: "サブスク更新提案（契約満了前）",
+      opportunity_id: oppId,
+      account_id: str(formData.get("account_id")),
+      assigned_to: ctx.userId,
+      created_by: ctx.userId,
+      due_date: fmt(taskDue),
+      priority: "high",
+      status: "todo",
+    });
+  }
+
+  revalidatePath(`/app/opportunities/${oppId}`);
+  revalidatePath("/app/forecast");
+  revalidatePath("/app/tasks");
+  return { ok: true };
 }
 
 // ===================== 活動 =====================

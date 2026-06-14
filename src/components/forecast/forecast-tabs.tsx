@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BarChart3, Trophy, Layers, PencilLine, Search } from "lucide-react";
+import { BarChart3, Trophy, Layers, PencilLine, Search, Repeat } from "lucide-react";
 import { YOMI_OPTIONS } from "@/lib/constants";
 import { setOppForecastAction } from "@/server/actions";
 import { formatYen, formatDateFull } from "@/lib/utils";
@@ -42,12 +42,36 @@ export interface InputRow {
   stageLabel: string;
 }
 
-type Tab = "monthly" | "won" | "pipeline" | "input";
+export interface SubMonthRow {
+  key: string;
+  label: string;
+  confirmed: number;
+  openWeighted: number;
+  renewalWeighted: number;
+}
+
+export interface SubOppRow {
+  id: string;
+  account: string;
+  name: string;
+  status: string;
+  mrr: number;
+  startMonth: string | null;
+  endMonth: string | null;
+  termMonths: number;
+  contractedTcv: number;
+  renewalUntil: string | null;
+  renewalProbability: number | null;
+  renewalWeightedTcv: number;
+}
+
+type Tab = "monthly" | "won" | "pipeline" | "sub" | "input";
 
 const TABS: { key: Tab; label: string; icon: typeof BarChart3 }[] = [
   { key: "monthly", label: "月別予測", icon: BarChart3 },
   { key: "won", label: "受注一覧", icon: Trophy },
   { key: "pipeline", label: "受注見込み", icon: Layers },
+  { key: "sub", label: "継続売上", icon: Repeat },
   { key: "input", label: "予測入力", icon: PencilLine },
 ];
 
@@ -56,11 +80,15 @@ export function ForecastTabs({
   won,
   pipeline,
   inputs,
+  subMonthly,
+  subs,
 }: {
   monthly: ReactNode;
   won: WonRow[];
   pipeline: PipelineRow[];
   inputs: InputRow[];
+  subMonthly: SubMonthRow[];
+  subs: SubOppRow[];
 }) {
   const [tab, setTab] = useState<Tab>("monthly");
   return (
@@ -83,6 +111,7 @@ export function ForecastTabs({
       {tab === "monthly" && monthly}
       {tab === "won" && <WonList rows={won} />}
       {tab === "pipeline" && <PipelineScenario rows={pipeline} />}
+      {tab === "sub" && <SubscriptionView monthly={subMonthly} subs={subs} />}
       {tab === "input" && <ForecastInput rows={inputs} />}
     </div>
   );
@@ -236,6 +265,112 @@ function PipelineScenario({ rows }: { rows: PipelineRow[] }) {
           ※ ヨミ A/B/C 以外のオープン案件 {other.length} 件（アポ・調整中など）は試算対象外です。「予測入力」でヨミを設定すると反映されます。
         </p>
       )}
+    </div>
+  );
+}
+
+// ============ 継続売上(サブスク) ============
+function fmtMonth(key: string | null): string {
+  if (!key) return "—";
+  const [y, m] = key.split("-");
+  return `${y}/${Number(m)}`;
+}
+
+function SubscriptionView({ monthly, subs }: { monthly: SubMonthRow[]; subs: SubOppRow[] }) {
+  const totalConfirmed = monthly.reduce((s, m) => s + m.confirmed, 0);
+  const totalOpen = monthly.reduce((s, m) => s + m.openWeighted, 0);
+  const totalRenewal = monthly.reduce((s, m) => s + m.renewalWeighted, 0);
+  const wonMrr = subs.filter((s) => s.status === "won").reduce((s, x) => s + x.mrr, 0);
+
+  if (subs.length === 0) {
+    return (
+      <div className="card card-pad text-sm text-ink/55">
+        サブスク（継続課金）案件がまだありません。案件詳細の「サブスク契約」から月額×契約期間で登録すると、ここに毎月の継続売上と更新見込みが表示されます。
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-ink/60 px-1">
+        請求スケジュール(毎月)を月次展開した継続売上です。<b>契約確定</b>＝受注済の月額、<b>進行中</b>＝オープン案件の月額×受注確度、
+        <b>更新見込み</b>＝契約満了の翌月〜想定継続終了月を月額×更新確度で加重。
+      </p>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="card card-pad"><div className="text-xs text-ink/50">受注済MRR(月額計)</div><div className="stat-value stat-accent mt-1">{formatYen(wonMrr)}</div></div>
+        <div className="card card-pad"><div className="text-xs text-ink/50">契約確定(年度計)</div><div className="text-2xl font-bold mt-1 tabular-nums">{formatYen(totalConfirmed)}</div></div>
+        <div className="card card-pad"><div className="text-xs text-ink/50">進行中(加重)</div><div className="text-2xl font-bold mt-1 tabular-nums">{formatYen(totalOpen)}</div></div>
+        <div className="card card-pad"><div className="text-xs text-ink/50">更新見込み(加重)</div><div className="text-2xl font-bold mt-1 tabular-nums">{formatYen(totalRenewal)}</div></div>
+      </div>
+
+      {/* 月次ロールフォワード */}
+      <div className="card overflow-x-auto">
+        <div className="px-5 pt-4 pb-3 border-b border-black/[0.04]"><h2 className="section-title">月次 継続売上</h2></div>
+        <table className="w-full">
+          <thead className="border-b border-black/[0.06]">
+            <tr>
+              <th className="th">月</th>
+              <th className="th text-right">契約確定</th>
+              <th className="th text-right">進行中(加重)</th>
+              <th className="th text-right">更新見込み(加重)</th>
+              <th className="th text-right">合計</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-black/[0.04]">
+            {monthly.map((m) => (
+              <tr key={m.key} className="row-hover">
+                <td className="td font-medium whitespace-nowrap">{m.label}</td>
+                <td className="td text-right tabular-nums stat-accent">{formatYen(m.confirmed)}</td>
+                <td className="td text-right tabular-nums text-ink/70">{formatYen(m.openWeighted)}</td>
+                <td className="td text-right tabular-nums text-violet-600">{formatYen(m.renewalWeighted)}</td>
+                <td className="td text-right tabular-nums font-semibold">{formatYen(m.confirmed + m.openWeighted + m.renewalWeighted)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-black/[0.08] bg-mist-soft/40 font-semibold">
+              <td className="td">年度計</td>
+              <td className="td text-right tabular-nums stat-accent">{formatYen(totalConfirmed)}</td>
+              <td className="td text-right tabular-nums">{formatYen(totalOpen)}</td>
+              <td className="td text-right tabular-nums text-violet-600">{formatYen(totalRenewal)}</td>
+              <td className="td text-right tabular-nums">{formatYen(totalConfirmed + totalOpen + totalRenewal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* サブスク案件一覧 */}
+      <div className="card overflow-x-auto">
+        <div className="px-5 pt-4 pb-3 border-b border-black/[0.04]"><h2 className="section-title">サブスク案件</h2></div>
+        <table className="w-full">
+          <thead className="border-b border-black/[0.06]">
+            <tr>
+              <th className="th">顧客名 / 案件</th>
+              <th className="th text-right">月額(MRR)</th>
+              <th className="th">契約期間</th>
+              <th className="th text-right">契約TCV</th>
+              <th className="th">更新見込み</th>
+              <th className="th text-right">更新見込み(加重)</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-black/[0.04]">
+            {subs.map((s) => (
+              <tr key={s.id} className="row-hover">
+                <td className="td max-w-[240px]">
+                  <Link href={`/app/opportunities/${s.id}`} className="font-medium text-ink hover:text-teal-deep block truncate">{s.account}</Link>
+                  <span className="text-xs text-ink/45 truncate block">{s.name}</span>
+                </td>
+                <td className="td text-right tabular-nums">{formatYen(s.mrr)}</td>
+                <td className="td text-xs whitespace-nowrap">{fmtMonth(s.startMonth)}〜{fmtMonth(s.endMonth)}<span className="text-ink/40">（{s.termMonths}ヶ月）</span></td>
+                <td className="td text-right tabular-nums">{formatYen(s.contractedTcv)}</td>
+                <td className="td text-xs whitespace-nowrap">{s.renewalUntil ? `〜${fmtMonth(s.renewalUntil)}・${s.renewalProbability ?? 0}%` : "—"}</td>
+                <td className="td text-right tabular-nums text-violet-600">{s.renewalWeightedTcv ? formatYen(s.renewalWeightedTcv) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
