@@ -9,7 +9,7 @@ import { setLeadDispositionAction, setLeadCallOwnerAction, deleteImportBatchActi
 import { parseDelimited, detectDelim, rowToRawInput, dedupLeads, LEAD_KINDS } from "@/lib/lead-import";
 import { PromoteLeadButton } from "@/components/leads/promote-button";
 import { cn, formatDateFull } from "@/lib/utils";
-import type { LeadsWorkspaceData, WsQueueRow, WsCompanyRow, WsAnalysisScope, WsAttr, LeadsFilters } from "@/lib/data/leads-workspace";
+import type { WsListRow, WsQueueRow, WsCompanyRow, WsAnalysisScope, WsAttr, LeadsFilters, CompaniesData, AnalysisData } from "@/lib/data/leads-workspace";
 
 export interface BatchRow {
   id: string;
@@ -21,7 +21,9 @@ export interface BatchRow {
   config: Record<string, unknown>;
 }
 export interface AliasRow { raw: string; name: string }
-type Tab = "list" | "queue" | "company" | "analysis" | "batches";
+export type LeadsTab = "list" | "queue" | "company" | "analysis" | "batches";
+interface ListData { rows: WsListRow[]; total: number; page: number; pageSize: number }
+interface QueueData { rows: WsQueueRow[]; total: number }
 
 const EVENTS: Record<string, string> = { AIDX: "AIDX展(3/24)", ODEX: "ODEX東京(5/13)", AINATIVE: "AI NATIVE(6/10)" };
 const evLabel = (e: string) => EVENTS[e] ?? e ?? "—";
@@ -32,39 +34,46 @@ function DispBadge({ d }: { d: string }) {
 }
 
 export function LeadsWorkspace({
-  data,
+  tab,
+  list,
+  queue,
+  company,
+  analysis,
   batches = [],
   aliases = [],
-  initialTab = "list",
+  events = [],
   filters,
 }: {
-  data: LeadsWorkspaceData;
+  tab: LeadsTab;
+  list?: ListData;
+  queue?: QueueData;
+  company?: CompaniesData;
+  analysis?: AnalysisData;
   batches?: BatchRow[];
   aliases?: AliasRow[];
-  initialTab?: Tab;
+  events?: string[];
   filters: LeadsFilters;
 }) {
-  const [tab, setTab] = useState<Tab>(initialTab);
   return (
     <div className="space-y-4">
       <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5 flex-wrap">
-        <Tab active={tab === "list"} onClick={() => setTab("list")} icon={<List size={15} />} label="リード一覧" />
-        <Tab active={tab === "queue"} onClick={() => setTab("queue")} icon={<Phone size={15} />} label="架電キュー" />
-        <Tab active={tab === "company"} onClick={() => setTab("company")} icon={<Building2 size={15} />} label="企業ビュー" />
-        <Tab active={tab === "analysis"} onClick={() => setTab("analysis")} icon={<BarChart3 size={15} />} label="分析" />
-        <Tab active={tab === "batches"} onClick={() => setTab("batches")} icon={<History size={15} />} label="取込履歴" />
+        <TabLink active={tab === "list"} tab="list" icon={<List size={15} />} label="リード一覧" />
+        <TabLink active={tab === "queue"} tab="queue" icon={<Phone size={15} />} label="架電キュー" />
+        <TabLink active={tab === "company"} tab="company" icon={<Building2 size={15} />} label="企業ビュー" />
+        <TabLink active={tab === "analysis"} tab="analysis" icon={<BarChart3 size={15} />} label="分析" />
+        <TabLink active={tab === "batches"} tab="batches" icon={<History size={15} />} label="取込履歴" />
       </div>
-      {tab === "list" && <LeadList list={data.list} filters={filters} events={data.analysis.events} />}
-      {tab === "queue" && <CallQueue queue={data.queue} />}
-      {tab === "company" && <CompanyView companies={data.companies} />}
-      {tab === "analysis" && <Analysis analysis={data.analysis} aliases={aliases} />}
+      {tab === "list" && list && <LeadList list={list} filters={filters} events={events} />}
+      {tab === "queue" && queue && <CallQueue queue={queue} />}
+      {tab === "company" && company && <CompanyView companies={company} />}
+      {tab === "analysis" && analysis && <Analysis analysis={analysis} aliases={aliases} />}
       {tab === "batches" && <Batches batches={batches} />}
     </div>
   );
 }
 
 // ============ リード一覧(サーバー側フィルタ＋ページング) ============
-function LeadList({ list, filters, events }: { list: LeadsWorkspaceData["list"]; filters: LeadsFilters; events: string[] }) {
+function LeadList({ list, filters, events }: { list: ListData; filters: LeadsFilters; events: string[] }) {
   const router = useRouter();
   const [q, setQ] = useState(filters.q ?? "");
 
@@ -157,7 +166,7 @@ function LeadList({ list, filters, events }: { list: LeadsWorkspaceData["list"];
 }
 
 // ============ 架電キュー ============
-function CallQueue({ queue }: { queue: LeadsWorkspaceData["queue"] }) {
+function CallQueue({ queue }: { queue: QueueData }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-4 text-sm text-ink/60 px-1">
@@ -196,7 +205,7 @@ function CallQueue({ queue }: { queue: LeadsWorkspaceData["queue"] }) {
 }
 
 // ============ 企業ビュー ============
-function CompanyView({ companies }: { companies: LeadsWorkspaceData["companies"] }) {
+function CompanyView({ companies }: { companies: CompaniesData }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-4 text-sm text-ink/60 px-1">
@@ -234,7 +243,7 @@ function CompanyView({ companies }: { companies: LeadsWorkspaceData["companies"]
 }
 
 // ============ 分析(イベント別スコープは事前集計済み・即時切替) ============
-function Analysis({ analysis, aliases }: { analysis: LeadsWorkspaceData["analysis"]; aliases: AliasRow[] }) {
+function Analysis({ analysis, aliases }: { analysis: AnalysisData; aliases: AliasRow[] }) {
   const router = useRouter();
   const [ev, setEv] = useState("");
   const s: WsAnalysisScope = analysis.scopes[ev] ?? analysis.scopes[""];
@@ -489,11 +498,11 @@ function AttrTable({ title, rows }: { title: string; rows: WsAttr[] }) {
   );
 }
 
-function Tab({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+function TabLink({ active, tab, icon, label }: { active: boolean; tab: LeadsTab; icon: React.ReactNode; label: string }) {
   return (
-    <button onClick={onClick} className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors", active ? "bg-teal-primary text-white" : "text-ink/60 hover:text-ink")}>
+    <Link href={`/app/leads?tab=${tab}`} prefetch className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors", active ? "bg-teal-primary text-white" : "text-ink/60 hover:text-ink")}>
       {icon}{label}
-    </button>
+    </Link>
   );
 }
 

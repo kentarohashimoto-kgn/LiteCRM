@@ -162,3 +162,59 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
     acquirerAliases,
   };
 });
+
+/**
+ * 軽量版ワークスペース。案件(OppView)とKPIに必要なテーブルのみ読み込む。
+ * contacts / meetings / billing / activities / stage_histories / seminar /
+ * 取込履歴 / 取得担当別名 は読み込まない(空配列)。
+ * → ダッシュボード等、詳細データが不要な高頻度ページの初期表示を高速化。
+ */
+export const getWorkspaceLite = cache(async (): Promise<Workspace> => {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+
+  const [profiles, memberships, accounts, leadSources, campaigns, products, opportunities, tasks, salesTargets, repTargets] =
+    await Promise.all([
+      fetchAll<ProfileRow>(() => sb.from("profiles").select("id, email, display_name, avatar_color")),
+      fetchAll<Membership>(() => sb.from("memberships").select("*")),
+      fetchAll<Account>(() => sb.from("accounts").select("*").order("name")),
+      fetchAll<LeadSource>(() => sb.from("lead_sources").select("*").order("created_at")),
+      fetchAll<Campaign>(() => sb.from("campaigns").select("*").order("sort_order")),
+      fetchAll<Product>(() => sb.from("products").select("*").order("created_at")),
+      fetchAll<Opportunity>(() => sb.from("opportunities").select("*").order("id")),
+      fetchAll<Task>(() => sb.from("tasks").select("*").order("id")),
+      fetchAll<SalesTarget>(() => sb.from("sales_targets").select("*")),
+      fetchAll<RepTarget>(() => sb.from("rep_targets").select("*")),
+    ]);
+
+  const users: User[] = profiles.map((p) => ({
+    id: p.id, name: p.display_name ?? p.email ?? "—", email: p.email ?? "", avatarColor: p.avatar_color ?? "#008C8C",
+  }));
+
+  return {
+    ctx,
+    users,
+    usersById: new Map(users.map((u) => [u.id, u])),
+    memberships,
+    accounts,
+    accountsById: new Map(accounts.map((a) => [a.id, a])),
+    contacts: [],
+    leadSources,
+    leadSourcesById: new Map(leadSources.map((l) => [l.id, l])),
+    campaigns,
+    campaignsById: new Map(campaigns.map((c) => [c.id, c])),
+    products,
+    productsById: new Map(products.map((p) => [p.id, p])),
+    opportunities,
+    meetings: [],
+    billingSchedules: [],
+    activities: [],
+    tasks,
+    stageHistories: [],
+    salesTargets,
+    repTargets,
+    seminarResponses: [],
+    leadImportBatches: [],
+    acquirerAliases: [],
+  };
+});

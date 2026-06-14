@@ -10,6 +10,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { monthKey, startOfMonth } from "@/lib/utils";
 import type { OppView } from "@/lib/data/select";
 import type { Lead, LeadImportBatch, AcquirerAlias } from "@/lib/types";
+import { sizeBucket, type AggLead, type WsListRow, type WsQueueRow, type LeadsFilters } from "@/lib/data/leads-workspace";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 async function paginate<T>(build: (from: number, to: number) => any): Promise<T[]> {
@@ -67,12 +68,73 @@ export async function getLeadMetrics(opps: OppView[]): Promise<LeadMetrics> {
   return { total: rows.length, byMonth, apptByMonth, wonByMonth, bySource };
 }
 
-/** リード画面専用: 全件取得(獲得日の新しい順)。この画面でのみ全件を materialize する。 */
-export async function getAllLeads(): Promise<Lead[]> {
+const LIST_PAGE = 100;
+const LIST_COLS = "id,company_name,contact_name,rank,job_title,employee_size,raw_event,priority_score,disposition,call_owner,phone,mobile_phone,account_id,status";
+
+/** リード一覧: SQL でフィルタ＋優先度降順＋ページング(全件ロードしない)。 */
+export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[]; total: number; page: number; pageSize: number }> {
   const sb = getSupabaseServer();
-  return paginate<Lead>((from, to) =>
-    sb.from("leads").select("*").order("acquired_at", { ascending: false }).order("id").range(from, to),
+  const page = Math.max(1, f.page ?? 1);
+  const start = (page - 1) * LIST_PAGE;
+  let qy = sb.from("leads").select(LIST_COLS, { count: "exact" });
+  const q = (f.q ?? "").replace(/[,%_()]/g, " ").trim();
+  if (q) qy = qy.or(`company_name.ilike.%${q}%,contact_name.ilike.%${q}%`);
+  if (f.event) qy = qy.eq("raw_event", f.event);
+  if (f.disposition) qy = qy.eq("disposition", f.disposition);
+  if (f.rank) qy = qy.eq("rank", f.rank);
+  const { data, count } = await qy
+    .order("priority_score", { ascending: false, nullsFirst: false })
+    .order("id")
+    .range(start, start + LIST_PAGE - 1);
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const rows: WsListRow[] = (data ?? []).map((l: any) => ({
+    id: l.id, company: l.company_name ?? "", name: l.contact_name ?? "", rank: l.rank ?? "",
+    jobTitle: l.job_title ?? "", empSizeBucket: sizeBucket(l.employee_size ?? ""), event: l.raw_event ?? "",
+    score: l.priority_score ?? 0, disposition: l.disposition ?? "untouched", callOwner: l.call_owner ?? "",
+    phone: l.phone ?? "", mobilePhone: l.mobile_phone ?? "", converted: !!l.account_id || l.status === "converted",
+  }));
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  return { rows, total: count ?? 0, page, pageSize: LIST_PAGE };
+}
+
+/** 架電キュー: 未着手・不通を優先度降順で上位300件(SQL)。 */
+export async function queryCallQueue(): Promise<{ rows: WsQueueRow[]; total: number }> {
+  const sb = getSupabaseServer();
+  const { data, count } = await sb
+    .from("leads")
+    .select("id,company_name,contact_name,rank,job_title,raw_event,priority_score,disposition,phone,mobile_phone,call_owner", { count: "exact" })
+    .in("disposition", ["untouched", "no_answer"])
+    .order("priority_score", { ascending: false, nullsFirst: false })
+    .order("id")
+    .range(0, 299);
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const rows: WsQueueRow[] = (data ?? []).map((l: any) => ({
+    id: l.id, score: l.priority_score ?? 0, company: l.company_name ?? "", name: l.contact_name ?? "",
+    rank: l.rank ?? "", jobTitle: l.job_title ?? "", event: l.raw_event ?? "", disposition: l.disposition ?? "untouched",
+    phone: l.phone ?? "", mobilePhone: l.mobile_phone ?? "", callOwner: l.call_owner ?? "",
+  }));
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  return { rows, total: count ?? 0 };
+}
+
+/** 企業ビュー・分析用: 集計に必要な最小列のみを全件取得。 */
+export async function fetchLeadsForAggregation(): Promise<AggLead[]> {
+  const sb = getSupabaseServer();
+  return paginate<AggLead>((from, to) =>
+    sb.from("leads")
+      .select("id,company_name,company_norm,contact_name,rank,job_title,employee_size,raw_event,priority_score,disposition,acquirer,scanned_at")
+      .order("id")
+      .range(from, to),
   );
+}
+
+/** 流入フィルタ用の取込イベント一覧(取込履歴の小テーブルから)。 */
+export async function getLeadEvents(): Promise<string[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.from("lead_import_batches").select("raw_event");
+  const set = new Set<string>();
+  for (const r of (data ?? []) as { raw_event: string | null }[]) if (r.raw_event) set.add(r.raw_event);
+  return [...set];
 }
 
 /** 単票取得。 */

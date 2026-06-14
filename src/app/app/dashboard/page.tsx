@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CalendarCheck, AlertTriangle, Clock, Target as TargetIcon } from "lucide-react";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getSalesTargets, listOpportunities, listTasks } from "@/lib/data/select";
 import { getLeadMetrics } from "@/lib/data/leads";
 import { buildForecast } from "@/lib/forecast";
@@ -16,7 +16,7 @@ import { actualByMonth } from "@/lib/targets";
 import { formatYen, formatManYen, formatPercent, sameMonth, formatDate, sum, monthKey, startOfMonth, addMonths } from "@/lib/utils";
 
 export default async function DashboardPage() {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite();
   const now = new Date();
   const opps = listOpportunities(ws);
   const tasks = listTasks(ws);
