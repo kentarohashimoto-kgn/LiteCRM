@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Upload, ChevronLeft } from "lucide-react";
 import { TARGET_FIELDS, LEAD_KINDS, suggestMapping, parseDelimited, detectDelim, rowToRawInput, dedupLeads, type RawLeadInput } from "@/lib/lead-import";
-import { importLeadsBatchAction, upsertLeadsBatchAction, clearLeadsForEventAction, startImportBatchAction } from "@/server/actions";
+import { importLeadsBatchAction, upsertLeadsBatchAction, clearLeadsForEventAction, startImportBatchAction, recomputeEngagementAction } from "@/server/actions";
 
 interface Opt { id: string; name: string; event_date?: string }
 
@@ -81,6 +81,7 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
         updated += (res as { updated?: number }).updated ?? 0;
         setProgress(Math.round(((i + CHUNK) / inputs.length) * 100));
       }
+      await recomputeEngagementAction();
       setProgress(100);
       setResult(mode === "update" ? `✅ 更新${updated}件・新規${inserted}件を反映しました（${rawEvent}）。` : `✅ ${inserted}件を取り込みました（${rawEvent}）。`);
     } catch (e) {

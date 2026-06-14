@@ -69,7 +69,7 @@ export async function getLeadMetrics(opps: OppView[]): Promise<LeadMetrics> {
 }
 
 const LIST_PAGE = 100;
-const LIST_COLS = "id,company_name,contact_name,rank,job_title,employee_size,raw_event,priority_score,disposition,call_owner,phone,mobile_phone,account_id,status";
+const LIST_COLS = "id,company_name,contact_name,email,rank,job_title,employee_size,raw_event,priority_score,disposition,call_owner,phone,mobile_phone,account_id,status";
 
 /** リード一覧: SQL でフィルタ＋優先度降順＋ページング(全件ロードしない)。 */
 export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[]; total: number; page: number; pageSize: number }> {
@@ -87,12 +87,24 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
     .order("id")
     .range(start, start + LIST_PAGE - 1);
   /* eslint-disable @typescript-eslint/no-explicit-any */
-  const rows: WsListRow[] = (data ?? []).map((l: any) => ({
-    id: l.id, company: l.company_name ?? "", name: l.contact_name ?? "", rank: l.rank ?? "",
-    jobTitle: l.job_title ?? "", empSizeBucket: sizeBucket(l.employee_size ?? ""), event: l.raw_event ?? "",
-    score: l.priority_score ?? 0, disposition: l.disposition ?? "untouched", callOwner: l.call_owner ?? "",
-    phone: l.phone ?? "", mobilePhone: l.mobile_phone ?? "", converted: !!l.account_id || l.status === "converted",
-  }));
+  const list = (data ?? []) as any[];
+  // エンゲージメント(person_engagement)をメールで突き合わせ
+  const emails = [...new Set(list.map((l) => (l.email ?? "").toLowerCase()).filter(Boolean))];
+  const engMap = new Map<string, { rank: string; score: number }>();
+  if (emails.length) {
+    const { data: eng } = await sb.from("person_engagement").select("email,rank,score").in("email", emails);
+    for (const e of eng ?? []) engMap.set(String(e.email).toLowerCase(), { rank: e.rank ?? "D", score: e.score ?? 0 });
+  }
+  const rows: WsListRow[] = list.map((l) => {
+    const e = engMap.get((l.email ?? "").toLowerCase());
+    return {
+      id: l.id, company: l.company_name ?? "", name: l.contact_name ?? "", rank: l.rank ?? "",
+      jobTitle: l.job_title ?? "", empSizeBucket: sizeBucket(l.employee_size ?? ""), event: l.raw_event ?? "",
+      score: l.priority_score ?? 0, disposition: l.disposition ?? "untouched", callOwner: l.call_owner ?? "",
+      phone: l.phone ?? "", mobilePhone: l.mobile_phone ?? "", converted: !!l.account_id || l.status === "converted",
+      engRank: e?.rank ?? "D", engScore: e?.score ?? 0,
+    };
+  });
   /* eslint-enable @typescript-eslint/no-explicit-any */
   return { rows, total: count ?? 0, page, pageSize: LIST_PAGE };
 }
@@ -142,6 +154,24 @@ export async function getLead(id: string): Promise<Lead | null> {
   const sb = getSupabaseServer();
   const { data } = await sb.from("leads").select("*").eq("id", id).maybeSingle();
   return (data as Lead) ?? null;
+}
+
+/** 単票のエンゲージメントと接点履歴(リード詳細用)。 */
+export async function getPersonEngagement(email?: string | null): Promise<{ rank: string; score: number; touch_count: number; types: string[] } | null> {
+  const e = (email ?? "").trim().toLowerCase();
+  if (!e) return null;
+  const sb = getSupabaseServer();
+  const { data } = await sb.from("person_engagement").select("rank,score,touch_count,types").eq("email", e).maybeSingle();
+  return data ? { rank: data.rank ?? "D", score: data.score ?? 0, touch_count: data.touch_count ?? 0, types: data.types ?? [] } : null;
+}
+export async function getPersonTouchpoints(email?: string | null): Promise<{ type: string; weight: number; occurred_at: string | null; source: string | null; meta: Record<string, unknown> }[]> {
+  const e = (email ?? "").trim().toLowerCase();
+  if (!e) return [];
+  const sb = getSupabaseServer();
+  const { data } = await sb.from("touchpoints").select("type,weight,occurred_at,source,meta").eq("email", e).order("occurred_at", { ascending: false });
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  return ((data ?? []) as any[]).map((t) => ({ type: t.type, weight: t.weight, occurred_at: t.occurred_at, source: t.source, meta: t.meta ?? {} }));
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 }
 
 /** リード画面で使う小さめの付随データ(取込履歴・取得担当の別名)。 */

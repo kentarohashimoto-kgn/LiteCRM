@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, Phone, List, Building2, BarChart3, History, Trash2, Upload, ChevronLeft, ChevronRight } from "lucide-react";
 import { LEAD_DISPOSITIONS, LEAD_DISPOSITION_MAP } from "@/lib/constants";
-import { setLeadDispositionAction, setLeadCallOwnerAction, deleteImportBatchAction, setAcquirerAliasAction, upsertLeadsBatchAction } from "@/server/actions";
+import { setLeadDispositionAction, setLeadCallOwnerAction, deleteImportBatchAction, setAcquirerAliasAction, upsertLeadsBatchAction, recomputeEngagementAction } from "@/server/actions";
 import { parseDelimited, detectDelim, rowToRawInput, dedupLeads, LEAD_KINDS } from "@/lib/lead-import";
 import { PromoteLeadButton } from "@/components/leads/promote-button";
 import { cn, formatDateFull } from "@/lib/utils";
@@ -31,6 +31,14 @@ const evLabel = (e: string) => EVENTS[e] ?? e ?? "—";
 function DispBadge({ d }: { d: string }) {
   const def = LEAD_DISPOSITION_MAP[d];
   return <span className={cn("pill text-[10px]", def?.color ?? "bg-mist-soft text-ink/50")}>{def?.label ?? d}</span>;
+}
+
+const ENG_COLOR: Record<string, string> = {
+  S: "bg-rose-100 text-rose-600", A: "bg-amber-100 text-amber-700", B: "bg-teal-light text-teal-deep",
+  C: "bg-mist-soft text-ink/60", D: "bg-mist-soft text-ink/35",
+};
+function EngBadge({ rank, score }: { rank: string; score: number }) {
+  return <span className={cn("pill text-[10px] tabular-nums", ENG_COLOR[rank] ?? ENG_COLOR.D)} title={`エンゲージメント ${score}pt`}>{rank}</span>;
 }
 
 export function LeadsWorkspace({
@@ -113,6 +121,7 @@ function LeadList({ list, filters, events }: { list: ListData; filters: LeadsFil
               <th className="th">会社 / 担当者</th>
               <th className="th">役職 / 規模</th>
               <th className="th">流入</th>
+              <th className="th text-center">エンゲージ</th>
               <th className="th text-right">優先度</th>
               <th className="th">決着</th>
               <th className="th">架電担当</th>
@@ -129,6 +138,7 @@ function LeadList({ list, filters, events }: { list: ListData; filters: LeadsFil
                 </td>
                 <td className="td text-xs text-ink/60">{r.jobTitle || "—"}<span className="block text-ink/40">{r.empSizeBucket}</span></td>
                 <td className="td text-xs">{evLabel(r.event)}</td>
+                <td className="td text-center"><EngBadge rank={r.engRank} score={r.engScore} /></td>
                 <td className="td text-right tabular-nums font-semibold">{r.score}</td>
                 <td className="td">
                   <form action={setLeadDispositionAction}>
@@ -150,7 +160,7 @@ function LeadList({ list, filters, events }: { list: ListData; filters: LeadsFil
                 </td>
               </tr>
             ))}
-            {list.rows.length === 0 && <tr><td colSpan={8} className="td text-center text-ink/40 py-8">該当するリードがありません</td></tr>}
+            {list.rows.length === 0 && <tr><td colSpan={9} className="td text-center text-ink/40 py-8">該当するリードがありません</td></tr>}
           </tbody>
         </table>
       </div>
@@ -418,6 +428,7 @@ function Batches({ batches }: { batches: BatchRow[] }) {
         upd += res.updated; ins += res.inserted;
         setStatus((st) => ({ ...st, [b.id]: `更新中… ${Math.min(100, Math.round(((i + CHUNK) / inputs.length) * 100))}%` }));
       }
+      await recomputeEngagementAction();
       setStatus((st) => ({ ...st, [b.id]: `✅ 更新${upd}件・新規${ins}件` }));
       router.refresh();
     } catch (e) {

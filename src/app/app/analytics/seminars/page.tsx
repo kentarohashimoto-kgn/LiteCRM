@@ -1,6 +1,7 @@
+import { Upload } from "lucide-react";
 import { getWorkspace } from "@/lib/data/workspace";
 import { listSeminarResponses } from "@/lib/data/select";
-import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
+import { PageHeader, Section, StatCard, LinkButton } from "@/components/ui/primitives";
 import { formatDateFull } from "@/lib/utils";
 
 function avg(ns: number[]): number {
@@ -42,7 +43,11 @@ export default async function SeminarAnalyticsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="セミナー分析" subtitle="セミナーアンケートの満足度・課題・AI活用度・フォロー希望を分析し、ホットな見込みを抽出します。" />
+      <PageHeader
+        title="セミナー分析"
+        subtitle="セミナーアンケートの満足度・課題・AI活用度・フォロー希望を分析し、ホットな見込みを抽出します。"
+        action={<LinkButton href="/app/seminars/import" variant="accent"><Upload size={16} /> セミナー取込</LinkButton>}
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatCard label="回答数" raw={`${n}`} sub="ODEX共催セミナー(5/13)" />

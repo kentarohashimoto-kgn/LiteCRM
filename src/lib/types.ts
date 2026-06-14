@@ -151,6 +151,8 @@ export interface Account {
   potential?: "high" | "middle" | "low";
   website_url?: string;
   notes?: string;
+  engagement_score?: number;
+  engagement_rank?: string;
   created_at: string;
   updated_at: string;
 }
@@ -279,6 +281,34 @@ export interface Lead {
   budget_band?: string;
   budget_amount?: number;
   priority_base?: number;
+}
+
+/** 接点(エンゲージメントの基盤)。あらゆる接触を人(メール)/企業単位で記録。 */
+export interface Touchpoint {
+  id: UUID;
+  tenant_id: UUID;
+  email?: string;
+  company_norm?: string;
+  account_id?: UUID;
+  lead_id?: UUID;
+  type: string;
+  weight: number;
+  occurred_at?: string;
+  source?: string;
+  meta?: Record<string, unknown>;
+  created_at: string;
+}
+
+/** 人単位のエンゲージメント(接点から再計算)。 */
+export interface PersonEngagement {
+  tenant_id: UUID;
+  email: string;
+  score: number;
+  rank?: string;
+  touch_count: number;
+  types: string[];
+  last_touch_at?: string;
+  updated_at: string;
 }
 
 export interface AcquirerAlias {

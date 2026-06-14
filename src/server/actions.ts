@@ -584,9 +584,25 @@ export async function deleteLeadAction(formData: FormData) {
 export async function clearLeadsForEventAction(rawEvent: string): Promise<{ deleted: boolean }> {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
+  // リード由来の接点(同イベント)も削除して、置換再取込での二重計上を防ぐ
+  await sb.from("touchpoints").delete().eq("tenant_id", ctx.tenantId).eq("source", "lead").contains("meta", { event: rawEvent });
   await sb.from("leads").delete().eq("tenant_id", ctx.tenantId).eq("raw_event", rawEvent);
   return { deleted: true };
 }
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/** 取込済みリード行から接点(展示会で名刺交換・架電ログ)を生成。 */
+function buildLeadTouchpoints(tenantId: string, rows: any[]): Record<string, unknown>[] {
+  const tps: Record<string, unknown>[] = [];
+  for (const l of rows) {
+    const email = (l.email ?? "").toLowerCase() || null;
+    const base = { tenant_id: tenantId, email, company_norm: l.company_norm ?? null, lead_id: l.id, occurred_at: l.acquired_at ?? null, source: "lead", meta: { event: l.raw_event ?? null } };
+    tps.push({ ...base, type: "exhibition", weight: 1 });
+    if (l.disposition && !["untouched", "excluded"].includes(l.disposition)) tps.push({ ...base, type: "call", weight: 2 });
+  }
+  return tps;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /** リードを一括投入(クライアントから分割呼び出し)。 */
 export async function importLeadsBatchAction(
@@ -602,8 +618,10 @@ export async function importLeadsBatchAction(
     .filter((r) => (r.company ?? "").trim() !== "")
     .map((r) => normalizeLead(r, { ...opts, tenantId: ctx.tenantId }));
   if (recs.length === 0) return { inserted: 0 };
-  const { error } = await sb.from("leads").insert(recs);
+  const { data, error } = await sb.from("leads").insert(recs).select("id,email,company_norm,acquired_at,raw_event,disposition");
   if (error) return { inserted: 0, error: error.message };
+  const tps = buildLeadTouchpoints(ctx.tenantId, data ?? []);
+  if (tps.length) await sb.from("touchpoints").insert(tps);
   revalidatePath("/app/leads");
   return { inserted: recs.length };
 }
@@ -672,8 +690,10 @@ export async function upsertLeadsBatchAction(
   }
 
   if (toInsert.length) {
-    const { error } = await sb.from("leads").insert(toInsert);
+    const { data, error } = await sb.from("leads").insert(toInsert).select("id,email,company_norm,acquired_at,raw_event,disposition");
     if (error) return { inserted: 0, updated: 0, error: error.message };
+    const tps = buildLeadTouchpoints(ctx.tenantId, data ?? []);
+    if (tps.length) await sb.from("touchpoints").insert(tps);
   }
   for (let i = 0; i < updates.length; i += 20) {
     await Promise.all(updates.slice(i, i + 20).map((u) => sb.from("leads").update(u.patch).eq("id", u.id).eq("tenant_id", ctx.tenantId)));
@@ -828,6 +848,14 @@ async function promoteLeadCore(
     .update({ account_id: accountId, contact_id: contactId, status: "converted", converted_at: new Date().toISOString() })
     .eq("id", leadId);
 
+  // 案件化=商談獲得の接点を記録(エンゲージメント加点)
+  if (lead.email) {
+    await sb.from("touchpoints").insert({
+      tenant_id: tenantId, email: String(lead.email).toLowerCase(), company_norm: norm, account_id: accountId, lead_id: leadId,
+      type: "meeting", weight: 5, occurred_at: new Date().toISOString().slice(0, 10), source: "opportunity", meta: { from: "promote" },
+    });
+  }
+
   return { opportunityId, already: false };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -840,6 +868,7 @@ export async function promoteLeadToOpportunityAction(leadId: string): Promise<{ 
   }
   const sb = getSupabaseServer();
   const { opportunityId } = await promoteLeadCore(sb, ctx.tenantId, ctx.userId, leadId);
+  await sb.rpc("recompute_engagement", { p_tenant: ctx.tenantId });
   revalidatePath("/app/leads");
   revalidatePath("/app/opportunities");
   revalidatePath("/app/dashboard");
@@ -901,4 +930,102 @@ export async function createMemberAction(formData: FormData) {
   });
   revalidatePath("/app/settings");
   redirect("/app/settings?ok=" + encodeURIComponent(`${email} を発行しました`));
+}
+
+// ===================== セミナー取込 / エンゲージメント =====================
+import { normalizeSeminar, type SeminarInput } from "@/lib/seminar-import";
+import { deriveRoleLevel } from "@/lib/lead-import";
+
+const ENG_EDIT_ROLES = ["owner", "admin", "sales_manager", "sales_rep", "external_sales"];
+
+/** 接点からエンゲージメント(person_engagement / accounts)を再計算。 */
+export async function recomputeEngagementAction(): Promise<{ ok: boolean }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.rpc("recompute_engagement", { p_tenant: ctx.tenantId });
+  revalidatePath("/app/leads");
+  revalidatePath("/app/accounts");
+  return { ok: true };
+}
+
+/** 同名セミナーを置換取込するため、回答と接点を一旦削除。 */
+export async function clearSeminarAction(seminarName: string): Promise<{ ok: boolean }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const name = (seminarName ?? "").trim();
+  if (!name) return { ok: false };
+  await sb.from("seminar_responses").delete().eq("tenant_id", ctx.tenantId).eq("seminar_name", name);
+  await sb.from("touchpoints").delete().eq("tenant_id", ctx.tenantId).eq("source", "seminar").contains("meta", { seminar: name });
+  return { ok: true };
+}
+
+/**
+ * セミナー参加者＋アンケートを取込。
+ *  - seminar_responses に記録
+ *  - メール名寄せ: 既存リードには接点を追加(ナーチャリング)、未登録は新規リード化
+ *  - touchpoints(seminar / survey / doc_request)を作成しエンゲージメントに反映
+ */
+export async function importSeminarBatchAction(
+  rows: SeminarInput[],
+  opts: { campaignId?: string | null; leadSourceId?: string | null; seminarName: string; eventDate?: string | null },
+): Promise<{ inserted: number; newLeads: number; error?: string }> {
+  const ctx = await requireCtx();
+  if (!ENG_EDIT_ROLES.includes(ctx.role)) return { inserted: 0, newLeads: 0, error: "権限がありません" };
+  const sb = getSupabaseServer();
+  const recs = rows
+    .map((r) => normalizeSeminar(r, { tenantId: ctx.tenantId, campaignId: opts.campaignId, seminarName: opts.seminarName, eventDate: opts.eventDate }))
+    .filter((r) => (r.company as string) || (r.email as string));
+  if (!recs.length) return { inserted: 0, newLeads: 0 };
+
+  const emails = [...new Set(recs.map((r) => (r.email as string | null) ?? "").filter(Boolean))];
+  const existing = new Map<string, string>();
+  if (emails.length) {
+    const { data } = await sb.from("leads").select("id,email").eq("tenant_id", ctx.tenantId).in("email", emails);
+    for (const row of data ?? []) if (row.email) existing.set(String(row.email).toLowerCase(), row.id);
+  }
+
+  // 未登録メール → 新規リード化(流入元=セミナー)
+  const newLeadRecs: Record<string, unknown>[] = [];
+  const seenNew = new Set<string>();
+  for (const r of recs) {
+    const em = r.email as string | null;
+    if (!em || existing.has(em) || seenNew.has(em) || !(r.company as string)) continue;
+    seenNew.add(em);
+    const roleLevel = deriveRoleLevel(r.job_title as string | undefined);
+    newLeadRecs.push({
+      tenant_id: ctx.tenantId, lead_source_id: opts.leadSourceId ?? null, campaign_id: opts.campaignId ?? null,
+      raw_event: opts.seminarName, title: `${r.company} / ${opts.seminarName}`.slice(0, 200),
+      company_name: r.company, company_norm: r.company_norm, contact_name: r.name, email: em,
+      phone: r.phone, job_title: r.job_title, employee_size: r.employee_size, role_level: roleLevel,
+      disposition: "untouched", status: "new", priority_base: 20,
+      priority_score: priorityScore(20, { employee_size: r.employee_size as string, role_level: roleLevel }),
+      acquired_at: opts.eventDate ?? (r.responded_at as string | null)?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+    });
+  }
+  let newLeads = 0;
+  if (newLeadRecs.length) {
+    const { data, error } = await sb.from("leads").insert(newLeadRecs).select("id,email");
+    if (error) return { inserted: 0, newLeads: 0, error: error.message };
+    for (const row of data ?? []) if (row.email) existing.set(String(row.email).toLowerCase(), row.id);
+    newLeads = data?.length ?? 0;
+  }
+
+  const { error: sErr } = await sb.from("seminar_responses").insert(recs);
+  if (sErr) return { inserted: 0, newLeads, error: sErr.message };
+
+  const tps: Record<string, unknown>[] = [];
+  for (const r of recs) {
+    const em = r.email as string | null;
+    const leadId = em ? existing.get(em) ?? null : null;
+    const occ = (r.responded_at as string | null)?.slice(0, 10) ?? opts.eventDate ?? null;
+    const base = { tenant_id: ctx.tenantId, email: em, company_norm: r.company_norm, lead_id: leadId, occurred_at: occ, source: "seminar", meta: { seminar: opts.seminarName } };
+    tps.push({ ...base, type: "seminar", weight: 3 });
+    if (r.satisfaction != null) tps.push({ ...base, type: "survey", weight: 2 });
+    if (typeof r.follow_up === "string" && /資料/.test(r.follow_up)) tps.push({ ...base, type: "doc_request", weight: 3 });
+  }
+  if (tps.length) await sb.from("touchpoints").insert(tps);
+
+  revalidatePath("/app/leads");
+  revalidatePath("/app/analytics/seminars");
+  return { inserted: recs.length, newLeads };
 }

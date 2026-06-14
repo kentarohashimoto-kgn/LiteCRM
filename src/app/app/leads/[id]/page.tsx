@@ -5,9 +5,19 @@ import { getWorkspace } from "@/lib/data/workspace";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { updateLeadAction, deleteLeadAction } from "@/server/actions";
 import { PromoteLeadButton } from "@/components/leads/promote-button";
-import { getLead } from "@/lib/data/leads";
+import { getLead, getPersonEngagement, getPersonTouchpoints } from "@/lib/data/leads";
 import { LEAD_DISPOSITIONS } from "@/lib/constants";
 import { ROLE_LEVELS, NEEDS_OPTS, TIMING_OPTS, AUTHORITY_OPTS, BUDGET_OPTS, REVENUE_OPTS } from "@/lib/lead-import";
+import { formatDateFull } from "@/lib/utils";
+
+const TP_LABEL: Record<string, string> = {
+  exhibition: "展示会で名刺交換", call: "架電ログ", seminar: "セミナー参加", survey: "アンケート回答",
+  doc_request: "資料請求", meeting: "商談実施", meeting_repeat: "再商談", visit: "訪問", proposal: "見積・提案提出",
+};
+const ENG_COLOR: Record<string, string> = {
+  S: "bg-rose-100 text-rose-600", A: "bg-amber-100 text-amber-700", B: "bg-teal-light text-teal-deep",
+  C: "bg-mist-soft text-ink/60", D: "bg-mist-soft text-ink/40",
+};
 
 export default async function LeadEditPage({ params }: { params: { id: string } }) {
   const ws = await getWorkspace();
@@ -16,6 +26,7 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
   const ev = l.raw_event ?? "—";
   const converted = !!l.account_id || l.status === "converted";
   const linkedOpp = ws.opportunities.find((o) => o.lead_id === l.id);
+  const [eng, touchpoints] = await Promise.all([getPersonEngagement(l.email), getPersonTouchpoints(l.email)]);
 
   return (
     <div className="max-w-3xl">
@@ -37,6 +48,33 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
           )
         }
       />
+
+      {/* エンゲージメント(接点の積み上げ) */}
+      <Card className="mb-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-ink">エンゲージメント</span>
+            <span className={`pill text-sm font-bold ${ENG_COLOR[eng?.rank ?? "D"]}`}>{eng?.rank ?? "D"}</span>
+            <span className="text-xs text-ink/50 tabular-nums">{eng?.score ?? 0} pt・接点 {eng?.touch_count ?? touchpoints.length} 件</span>
+          </div>
+          <span className="text-[11px] text-ink/40">名刺→架電→セミナー→アンケート→商談→提案…と接点が増えるほど高ランク</span>
+        </div>
+        {touchpoints.length === 0 ? (
+          <p className="text-xs text-ink/40">接点の記録はまだありません。</p>
+        ) : (
+          <ul className="flex flex-wrap gap-2">
+            {touchpoints.map((t, i) => (
+              <li key={i} className="inline-flex items-center gap-1.5 rounded-lg bg-mist-soft/70 px-2.5 py-1 text-xs">
+                <span className="font-medium text-ink/80">{TP_LABEL[t.type] ?? t.type}</span>
+                <span className="text-ink/40">+{t.weight}</span>
+                {t.occurred_at && <span className="text-ink/35">{formatDateFull(t.occurred_at)}</span>}
+                {typeof (t.meta as { seminar?: string; event?: string }).seminar === "string" && <span className="text-ink/40">（{(t.meta as { seminar?: string }).seminar}）</span>}
+                {typeof (t.meta as { event?: string }).event === "string" && <span className="text-ink/40">（{(t.meta as { event?: string }).event}）</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <form action={updateLeadAction} className="space-y-5">
         <input type="hidden" name="id" value={l.id} />

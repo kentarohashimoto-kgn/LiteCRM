@@ -15,6 +15,7 @@ export type AggLead = Pick<
 export interface WsListRow {
   id: string; company: string; name: string; rank: string; jobTitle: string; empSizeBucket: string;
   event: string; score: number; disposition: string; callOwner: string; phone: string; mobilePhone: string; converted: boolean;
+  engRank: string; engScore: number;
 }
 export interface WsQueueRow {
   id: string; score: number; company: string; name: string; rank: string; jobTitle: string;
