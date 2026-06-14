@@ -179,6 +179,10 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
                   <input name="expected_close_date" type="date" defaultValue={o.expected_close_date ?? ""} className="input" />
                 </div>
                 <div>
+                  <label className="label">担当者予測確率(%)</label>
+                  <input name="rep_probability" type="number" min={0} max={100} defaultValue={o.rep_probability ?? ""} className="input" placeholder="ヨミとは別の担当者の主観確率" />
+                </div>
+                <div>
                   <label className="label">次アクション日</label>
                   <input name="next_action_date" type="date" defaultValue={o.next_action_date ?? ""} className="input" />
                 </div>
@@ -264,6 +268,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
           <Section title="基本情報">
             <dl className="space-y-2.5 text-sm">
               <Row label="ヨミ"><YomiBadge yomi={o.yomi} /></Row>
+              <Row label="担当者予測確率">{o.rep_probability != null ? `${o.rep_probability}%（${formatYen(Math.round((o.amount * o.rep_probability) / 100))}）` : "—"}</Row>
               <Row label="分類">{o.category ? CATEGORY_MAP[o.category]?.label : "—"}</Row>
               <Row label="初回商談日">{formatDateFull(o.first_meeting_date)}</Row>
               <Row label="担当営業"><span className="flex items-center gap-1.5"><Avatar user={o.owner} size={22} />{o.owner?.name}</span></Row>

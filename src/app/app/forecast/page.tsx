@@ -3,6 +3,8 @@ import { getWorkspace } from "@/lib/data/workspace";
 import { getSalesTargets, listOpportunities, listLeads } from "@/lib/data/select";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { ForecastChart } from "@/components/charts/forecast-chart";
+import { ForecastTabs, type WonRow, type PipelineRow, type InputRow } from "@/components/forecast/forecast-tabs";
+import { STAGE_MAP } from "@/lib/constants";
 import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
 import { actualByMonth } from "@/lib/targets";
 import { monthKey, startOfMonth, formatYen, formatPercent, sum } from "@/lib/utils";
@@ -11,6 +13,19 @@ import type { OppView } from "@/lib/data/select";
 function revMonthKey(o: OppView): string | null {
   const ref = o.expected_revenue_month || o.expected_close_date;
   return ref ? monthKey(startOfMonth(new Date(ref))) : null;
+}
+
+function yomiTier(yomi?: string): "A" | "B" | "C" | "other" {
+  if (!yomi) return "other";
+  if (yomi.startsWith("1.A")) return "A";
+  if (yomi.startsWith("2.B")) return "B";
+  if (yomi.startsWith("3.C")) return "C";
+  return "other";
+}
+
+function daysBetween(end?: string | null, start?: string | null): number | null {
+  if (!end || !start) return null;
+  return Math.round((+new Date(end) - +new Date(start)) / 86400000);
 }
 
 export default async function ForecastPage({ searchParams }: { searchParams: { fy?: string } }) {
@@ -65,22 +80,50 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
   };
   const rate = (a: number, t: number) => (t > 0 ? a / t : null);
 
-  return (
-    <div>
-      <PageHeader
-        title="売上予測"
-        subtitle={`${fiscalYearLabel(fy)}（${fy}年7月〜${fy + 1}年6月）の目標と着地見込み。weighted = 金額 × 確度。`}
-        action={
-          <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5 text-sm">
-            {fyOptions.map((y) => (
-              <Link key={y} href={`/app/forecast?fy=${y}`} className={`rounded-lg px-3 py-1.5 font-medium ${y === fy ? "bg-teal-primary text-white" : "text-ink/60 hover:text-ink"}`}>
-                {fiscalYearLabel(y)}
-              </Link>
-            ))}
-          </div>
-        }
-      />
+  // ===== 受注一覧(選択年度内に受注計上された案件) =====
+  const monthSet = new Set(months.map((m) => m.key));
+  const wonRows: WonRow[] = opps
+    .filter((o) => o.status === "won" && revMonthKey(o) && monthSet.has(revMonthKey(o)!))
+    .map((o) => ({
+      id: o.id,
+      date: o.expected_close_date ?? o.expected_revenue_month ?? null,
+      account: o.account?.name ?? "—",
+      name: o.name,
+      amount: o.amount,
+      owner: o.owner?.name ?? "",
+      days: daysBetween(o.expected_close_date, o.first_meeting_date),
+      source: o.leadSource?.name ?? "",
+      sourceDetail: o.campaign?.name ?? "",
+    }))
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
+  // ===== 受注見込み(オープン案件のヨミ別) =====
+  const openOpps = opps.filter((o) => o.status === "open");
+  const pipelineRows: PipelineRow[] = openOpps.map((o) => ({
+    id: o.id,
+    account: o.account?.name ?? "—",
+    name: o.name,
+    amount: o.amount,
+    tier: yomiTier(o.yomi),
+    yomiLabel: o.yomi ?? "—",
+    expectedClose: o.expected_close_date ?? null,
+    repProbability: o.rep_probability ?? null,
+  }));
+
+  // ===== 予測入力(オープン案件) =====
+  const inputRows: InputRow[] = openOpps.map((o) => ({
+    id: o.id,
+    account: o.account?.name ?? "—",
+    name: o.name,
+    amount: o.amount,
+    expectedClose: o.expected_close_date ?? null,
+    repProbability: o.rep_probability ?? null,
+    yomi: o.yomi ?? "",
+    stageLabel: STAGE_MAP[o.stage]?.label ?? o.stage,
+  }));
+
+  const monthly = (
+    <>
       {/* 年度KPI: 4指標の実績/目標 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <StatCard label="売上(実績/目標)" amount={tot.revenue} accent sub={`目標 ${formatYen(tot.target)}・達成 ${formatPercent(rate(tot.revenue, tot.target))}`} />
@@ -152,6 +195,26 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
         ※ 目標は<Link href="/app/targets" className="text-teal-primary hover:underline">目標入力</Link>で設定。
         実績=売上/成約は受注日、アポは初回商談日、リードはリード獲得日ベース。
       </p>
+    </>
+  );
+
+  return (
+    <div>
+      <PageHeader
+        title="売上予測"
+        subtitle={`${fiscalYearLabel(fy)}（${fy}年7月〜${fy + 1}年6月）の目標と着地見込み。weighted = 金額 × 確度。`}
+        action={
+          <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5 text-sm">
+            {fyOptions.map((y) => (
+              <Link key={y} href={`/app/forecast?fy=${y}`} className={`rounded-lg px-3 py-1.5 font-medium ${y === fy ? "bg-teal-primary text-white" : "text-ink/60 hover:text-ink"}`}>
+                {fiscalYearLabel(y)}
+              </Link>
+            ))}
+          </div>
+        }
+      />
+
+      <ForecastTabs monthly={monthly} won={wonRows} pipeline={pipelineRows} inputs={inputRows} />
     </div>
   );
 }

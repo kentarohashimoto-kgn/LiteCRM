@@ -318,6 +318,8 @@ export interface Opportunity {
   gross_profit?: number;
   gross_profit_rate?: number;
   probability: number;
+  /** 担当者の受注予測確率(0-100)。ヨミ・ステージ由来のprobabilityとは別。 */
+  rep_probability?: number;
   expected_close_date?: string;
   expected_revenue_month?: string;
   category?: OpportunityCategory;

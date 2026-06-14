@@ -96,6 +96,7 @@ export async function updateOpportunityAction(formData: FormData) {
       category: str(formData.get("category")),
       amount: num(formData.get("amount")) ?? 0,
       probability: stage ? STAGE_MAP[stage]?.probability ?? 10 : undefined,
+      rep_probability: num(formData.get("rep_probability")) ?? null,
       expected_close_date: close,
       expected_revenue_month: close ? close.slice(0, 7) + "-01" : null,
       next_action_date: str(formData.get("next_action_date")),
@@ -109,6 +110,34 @@ export async function updateOpportunityAction(formData: FormData) {
   revalidatePath(`/app/opportunities/${id}`);
   revalidatePath("/app/opportunities");
   redirect(`/app/opportunities/${id}`);
+}
+
+/**
+ * 受注予測入力(売上予測画面のインライン編集)。
+ * 受注予定額(amount)・受注予定日(expected_close_date)・ヨミ・担当者予測確率(rep_probability)のみ更新。
+ * ステージや予測区分は変更しない。
+ */
+export async function setOppForecastAction(formData: FormData): Promise<{ ok: boolean }> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  if (!id) return { ok: false };
+  const close = str(formData.get("expected_close_date"));
+  const rep = num(formData.get("rep_probability"));
+  await sb
+    .from("opportunities")
+    .update({
+      amount: num(formData.get("amount")) ?? 0,
+      expected_close_date: close,
+      expected_revenue_month: close ? close.slice(0, 7) + "-01" : null,
+      yomi: str(formData.get("yomi")),
+      rep_probability: rep == null ? null : Math.max(0, Math.min(100, rep)),
+    })
+    .eq("id", id);
+  revalidatePath("/app/forecast");
+  revalidatePath(`/app/opportunities/${id}`);
+  revalidatePath("/app/opportunities");
+  return { ok: true };
 }
 
 /** 商談を展示会・施策インスタンスへ紐付け(手動修正)。推定フラグは解除する。 */
