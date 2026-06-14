@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Search, Phone, List, Building2, BarChart3, History, Trash2, Upload } from "lucide-react";
 import { LEAD_DISPOSITIONS, LEAD_DISPOSITION_MAP } from "@/lib/constants";
 import { setLeadDispositionAction, setLeadCallOwnerAction, deleteImportBatchAction, setAcquirerAliasAction, upsertLeadsBatchAction } from "@/server/actions";
-import { parseDelimited, detectDelim, rowToRawInput, LEAD_KINDS } from "@/lib/lead-import";
+import { parseDelimited, detectDelim, rowToRawInput, dedupLeads, LEAD_KINDS } from "@/lib/lead-import";
 import { cn, formatDateFull } from "@/lib/utils";
 
 export interface BatchRow {
@@ -106,7 +106,7 @@ function Batches({ batches }: { batches: BatchRow[] }) {
       const text = await file.text();
       const all = parseDelimited(text, detectDelim(text));
       const headers = all[0].map((h) => h.trim());
-      const inputs = all.slice(1).map((row) => rowToRawInput(headers, row, cfg.mapping!, cfg.customFields ?? []));
+      const inputs = dedupLeads(all.slice(1).map((row) => rowToRawInput(headers, row, cfg.mapping!, cfg.customFields ?? [])));
       const base = LEAD_KINDS.find((k) => k.key === cfg.kind)?.base ?? 20;
       const opts = { campaignId: cfg.campaignId ?? null, leadSourceId: cfg.leadSourceId ?? null, rawEvent: b.rawEvent, base, eventDate: cfg.eventDate ?? null, importBatchId: b.id };
       let upd = 0, ins = 0;

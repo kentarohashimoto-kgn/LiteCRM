@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Upload, ChevronLeft } from "lucide-react";
-import { TARGET_FIELDS, LEAD_KINDS, suggestMapping, parseDelimited, detectDelim, rowToRawInput, type RawLeadInput } from "@/lib/lead-import";
+import { TARGET_FIELDS, LEAD_KINDS, suggestMapping, parseDelimited, detectDelim, rowToRawInput, dedupLeads, type RawLeadInput } from "@/lib/lead-import";
 import { importLeadsBatchAction, upsertLeadsBatchAction, clearLeadsForEventAction, startImportBatchAction } from "@/server/actions";
 
 interface Opt { id: string; name: string; event_date?: string }
@@ -64,7 +64,7 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
     setProgress(0);
     try {
       if (mode === "replace") await clearLeadsForEventAction(rawEvent);
-      const inputs = dataRows.map(rowToInput);
+      const inputs = dedupLeads(dataRows.map(rowToInput));
       const config = { mapping, customFields, kind, campaignId: campaignId || null, leadSourceId: leadSourceId || null, eventDate: camp?.event_date ?? null };
       const { batchId } = await startImportBatchAction({ rawEvent, label: rawEvent, sourceName: fileName, rowCount: inputs.length, config });
       const opts = { campaignId: campaignId || null, leadSourceId: leadSourceId || null, rawEvent, base, eventDate: camp?.event_date ?? null, importBatchId: batchId };

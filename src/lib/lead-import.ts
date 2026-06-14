@@ -123,6 +123,26 @@ export function rowToRawInput(
   return o;
 }
 
+/**
+ * 同一人物の重複行を1件に集約。展示会では同じ人を複数回スキャンする/
+ * 同じファイルを再取込するなどで重複が発生するため、取込前に名寄せする。
+ * キー: メール(小文字)優先。メールが無い行は 会社+氏名+電話 で判定。
+ */
+export function dedupLeads(rows: RawLeadInput[]): RawLeadInput[] {
+  const seen = new Set<string>();
+  const out: RawLeadInput[] = [];
+  for (const r of rows) {
+    const email = (r.email ?? "").trim().toLowerCase();
+    const name = (r.contact_name ?? `${r.last_name ?? ""}${r.first_name ?? ""}`).trim();
+    const key = email || `${(r.company ?? "").trim()}|${name}|${(r.phone ?? r.mobile_phone ?? "").trim()}`;
+    if (!key || key === "||") { out.push(r); continue; }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
+}
+
 /** マッピングUIで選べる取込先フィールド定義(自動サジェスト用キーワードつき)。 */
 export const TARGET_FIELDS: { key: keyof RawLeadInput; label: string; required?: boolean; hints: string[] }[] = [
   { key: "company", label: "会社名", required: true, hints: ["会社", "法人", "組織", "company", "得意先", "企業"] },
@@ -183,7 +203,8 @@ export function suggestMapping(headers: string[]): Record<string, string> {
 
 export function normCompany(c?: string): string {
   let s = (c ?? "").trim();
-  s = s.replace(/(株式会社|有限会社|合同会社|一般社団法人|学校法人|\(株\)|（株）|株\))/g, "");
+  // 法人格を除去(㈱㈲などの合字グリフ・全角括弧含む)。
+  s = s.replace(/(株式会社|有限会社|合同会社|一般社団法人|一般財団法人|学校法人|\(株\)|（株）|\(有\)|（有）|株\)|㈱|㈲)/g, "");
   return s.replace(/[\s　]/g, "").trim();
 }
 
