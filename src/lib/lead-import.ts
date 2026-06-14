@@ -187,23 +187,19 @@ export function normCompany(c?: string): string {
   return s.replace(/[\s　]/g, "").trim();
 }
 
-/** 決着の生値を統一コードへ。架電担当(対応)/商談担当のテキストも参照して判定。 */
-export function normDisposition(raw?: string, callOwner?: string, dealOwner?: string): string {
+/**
+ * 決着の判定は「決着」列の手入力値のみを正とする(人が手動でのみ更新するルール)。
+ * 列が空白なら未決着(untouched)。架電担当/商談担当からの推測は行わない。
+ */
+export function normDisposition(raw?: string): string {
   const s = (raw ?? "").trim();
-  if (s) {
-    if (s.includes("①") || /お断り|断り|NG/i.test(s)) return "ng";
-    if (s.includes("②") || /架電中|実行中/.test(s)) return "calling";
-    if (s.includes("③") || /継続/.test(s)) return "continuing";
-    if (s.includes("④") || /不通|留守/.test(s)) return "no_answer";
-    if (s.includes("⑤") || /アポ/.test(s)) return "appointment";
-    if (/対象外|除外/.test(s) || s === "X") return "excluded";
-  }
-  const co = (callOwner ?? "").trim();
-  const do_ = (dealOwner ?? "").trim();
-  if (/対象外|除外/.test(co)) return "excluded";
-  // 商談担当が実在(=アポ獲得)。「重複」やAIDX等のマーカーは除外。
-  if (do_ && !/重複|×|x/i.test(do_)) return "appointment";
-  if (co) return "calling";
+  if (!s) return "untouched";
+  if (s.includes("①") || /お断り|断り|NG/i.test(s)) return "ng";
+  if (s.includes("②") || /架電中|実行中/.test(s)) return "calling";
+  if (s.includes("③") || /継続/.test(s)) return "continuing";
+  if (s.includes("④") || /不通|留守/.test(s)) return "no_answer";
+  if (s.includes("⑤") || /アポ/.test(s)) return "appointment";
+  if (/対象外|除外/.test(s) || s === "X") return "excluded";
   return "untouched";
 }
 
@@ -274,7 +270,7 @@ export function normalizeLead(
   const company = (r.company ?? "").trim();
   const name = (r.contact_name ?? "").trim() || `${(r.last_name ?? "").trim()} ${(r.first_name ?? "").trim()}`.trim();
   const { rank, excluded } = normRank(r.rank);
-  let disposition = normDisposition(r.disposition, r.call_owner, r.deal_owner);
+  let disposition = normDisposition(r.disposition);
   if (excluded) disposition = "excluded";
   const status = disposition === "appointment" ? "qualified" : disposition === "ng" || disposition === "excluded" ? "disqualified" : "new";
   const roleLevel = deriveRoleLevel(r.job_title);

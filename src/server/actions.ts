@@ -508,8 +508,10 @@ export async function importLeadsBatchAction(
 }
 
 /** リードを一括更新(重複=メール一致は上書き、新規は追加)。決着など変更分を反映。 */
+// 決着(disposition)/status は手動管理が正のため、ここでは一律上書きしない。
+// 取込ファイルに明示の決着がある場合のみ別途反映する(下記の特別処理)。
 const OVERWRITE_KEYS = [
-  "disposition", "status", "call_owner", "deal_owner_name", "rank", "phone", "mobile_phone",
+  "call_owner", "deal_owner_name", "rank", "phone", "mobile_phone",
   "company_name", "contact_name", "department", "job_title", "industry", "employee_size",
   "prefecture", "acquirer", "tags", "notes", "scanned_at", "acquired_at", "campaign_id", "raw_event",
 ] as const;
@@ -547,6 +549,12 @@ export async function upsertLeadsBatchAction(
     if (ex) {
       const patch: Record<string, unknown> = {};
       for (const k of OVERWRITE_KEYS) if (rec[k] != null) patch[k] = rec[k];
+      // 決着は手動が正。ファイルに明示の決着(未決着以外)がある時だけ上書きし、
+      // 空白(=untouched)の場合は既存の手入力値を保持する。
+      if (rec.disposition && rec.disposition !== "untouched") {
+        patch.disposition = rec.disposition;
+        patch.status = rec.status;
+      }
       patch.priority_score = priorityScore((ex.priority_base as number) ?? (rec.priority_base as number) ?? 20, {
         employee_size: (patch.employee_size as string) ?? (ex.employee_size as string),
         revenue_size: ex.revenue_size as string,
