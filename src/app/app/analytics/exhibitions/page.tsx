@@ -1,4 +1,4 @@
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { listOpportunities, listCampaignsByChannel } from "@/lib/data/select";
 import { campaignMetrics, campaignTotals, type CampaignMetric } from "@/lib/analytics";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
@@ -11,7 +11,7 @@ function num(v: number | null | undefined): string {
 }
 
 export default async function ExhibitionAnalyticsPage() {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite();
   const opps = listOpportunities(ws);
   const exhibitions = listCampaignsByChannel(ws, "exhibition");
   const metrics = campaignMetrics(exhibitions, opps);

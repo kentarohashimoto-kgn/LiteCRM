@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Check, RotateCcw } from "lucide-react";
-import { getWorkspace, type Workspace } from "@/lib/data/workspace";
+import { getWorkspaceLite, type Workspace } from "@/lib/data/workspace";
 import { getAccount, getUser, listMembers, listTasks } from "@/lib/data/select";
 import { PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/badges";
@@ -9,7 +9,7 @@ import { formatDateFull } from "@/lib/utils";
 import type { Task } from "@/lib/types";
 
 export default async function TasksPage() {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite();
   const tasks = listTasks(ws);
   const owners = listMembers(ws).map(({ user }) => user);
   const today = new Date().toISOString().slice(0, 10);

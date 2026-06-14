@@ -1,12 +1,12 @@
 import { Plus } from "lucide-react";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { listAccounts, listOpportunities } from "@/lib/data/select";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { AccountsTable, type AccountRow } from "@/components/accounts/accounts-table";
 import { groupBy } from "@/lib/utils";
 
 export default async function AccountsPage() {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite();
   const accounts = listAccounts(ws);
   const opps = listOpportunities(ws);
   const oppByAcc = groupBy(opps, (o) => o.account_id);

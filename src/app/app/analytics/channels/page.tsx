@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { listOpportunities } from "@/lib/data/select";
 import { getLeadMetrics } from "@/lib/data/leads";
 import { channelMetrics } from "@/lib/analytics";
@@ -24,7 +24,7 @@ function num(v: number): string {
 }
 
 export default async function LeadSourceAnalyticsPage() {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite();
   const opps = listOpportunities(ws);
   const channels = channelMetrics(opps, (await getLeadMetrics(opps)).bySource);
 

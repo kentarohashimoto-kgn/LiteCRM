@@ -1,11 +1,11 @@
 import { Plus } from "lucide-react";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getLeadSources, getProducts, listMembers, listOpportunities, listCampaigns } from "@/lib/data/select";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { OppViews } from "@/components/opportunities/opp-views";
 
 export default async function OpportunitiesPage() {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite();
   const opps = listOpportunities(ws);
   const owners = listMembers(ws).map(({ user }) => ({ id: user.id, name: user.name }));
   const products = getProducts(ws).map((p) => ({ id: p.id, name: p.name }));
