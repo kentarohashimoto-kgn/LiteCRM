@@ -295,6 +295,7 @@ export interface LeadImportBatch {
   label?: string;
   source_name?: string;
   row_count: number;
+  config?: Record<string, unknown>;
   created_by?: UUID;
   created_at: string;
 }

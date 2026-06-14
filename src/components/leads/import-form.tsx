@@ -3,32 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Upload, ChevronLeft } from "lucide-react";
-import { TARGET_FIELDS, LEAD_KINDS, suggestMapping, type RawLeadInput } from "@/lib/lead-import";
+import { TARGET_FIELDS, LEAD_KINDS, suggestMapping, parseDelimited, detectDelim, rowToRawInput, type RawLeadInput } from "@/lib/lead-import";
 import { importLeadsBatchAction, upsertLeadsBatchAction, clearLeadsForEventAction, startImportBatchAction } from "@/server/actions";
 
 interface Opt { id: string; name: string; event_date?: string }
-
-function parseDelimited(text: string, delim: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cur = "";
-  let inQ = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQ) {
-      if (c === '"') {
-        if (text[i + 1] === '"') { cur += '"'; i++; }
-        else inQ = false;
-      } else cur += c;
-    } else if (c === '"') inQ = true;
-    else if (c === delim) { row.push(cur); cur = ""; }
-    else if (c === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
-    else if (c === "\r") { /* skip */ }
-    else cur += c;
-  }
-  if (cur !== "" || row.length) { row.push(cur); rows.push(row); }
-  return rows.filter((r) => r.some((x) => x.trim() !== ""));
-}
 
 export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadSources: Opt[] }) {
   const [headers, setHeaders] = useState<string[]>([]);
@@ -59,9 +37,7 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
 
   async function onFile(file: File) {
     const text = await file.text();
-    const firstLine = text.slice(0, text.indexOf("\n") >= 0 ? text.indexOf("\n") : text.length);
-    const delim = (firstLine.split("\t").length > firstLine.split(",").length) ? "\t" : ",";
-    const all = parseDelimited(text, delim);
+    const all = parseDelimited(text, detectDelim(text));
     if (all.length < 2) return;
     const hs = all[0].map((h) => h.trim());
     setHeaders(hs);
@@ -72,26 +48,7 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
   }
 
   function rowToInput(row: string[]): RawLeadInput {
-    const get = (k: string) => {
-      const h = mapping[k];
-      if (!h) return "";
-      const idx = headers.indexOf(h);
-      return idx >= 0 && idx < row.length ? row[idx] : "";
-    };
-    const o: RawLeadInput = {};
-    for (const f of TARGET_FIELDS) {
-      const v = get(f.key as string);
-      if (v) (o as Record<string, string>)[f.key as string] = v;
-    }
-    const extra: Record<string, string> = {};
-    for (const cf of customFields) {
-      if (!cf.key || !cf.header) continue;
-      const idx = headers.indexOf(cf.header);
-      const v = idx >= 0 && idx < row.length ? (row[idx] ?? "").trim() : "";
-      if (v) extra[cf.key] = v;
-    }
-    if (Object.keys(extra).length) o.extra = extra;
-    return o;
+    return rowToRawInput(headers, row, mapping, customFields);
   }
 
   const camp = campaigns.find((c) => c.id === campaignId);
@@ -108,7 +65,8 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
     try {
       if (mode === "replace") await clearLeadsForEventAction(rawEvent);
       const inputs = dataRows.map(rowToInput);
-      const { batchId } = await startImportBatchAction({ rawEvent, label: rawEvent, sourceName: fileName, rowCount: inputs.length });
+      const config = { mapping, customFields, kind, campaignId: campaignId || null, leadSourceId: leadSourceId || null, eventDate: camp?.event_date ?? null };
+      const { batchId } = await startImportBatchAction({ rawEvent, label: rawEvent, sourceName: fileName, rowCount: inputs.length, config });
       const opts = { campaignId: campaignId || null, leadSourceId: leadSourceId || null, rawEvent, base, eventDate: camp?.event_date ?? null, importBatchId: batchId };
       let inserted = 0;
       let updated = 0;

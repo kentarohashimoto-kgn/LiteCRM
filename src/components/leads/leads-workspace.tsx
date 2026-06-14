@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Phone, List, Building2, BarChart3, History, Trash2 } from "lucide-react";
+import { Search, Phone, List, Building2, BarChart3, History, Trash2, Upload } from "lucide-react";
 import { LEAD_DISPOSITIONS, LEAD_DISPOSITION_MAP } from "@/lib/constants";
-import { setLeadDispositionAction, setLeadCallOwnerAction, deleteImportBatchAction, setAcquirerAliasAction } from "@/server/actions";
+import { setLeadDispositionAction, setLeadCallOwnerAction, deleteImportBatchAction, setAcquirerAliasAction, upsertLeadsBatchAction } from "@/server/actions";
+import { parseDelimited, detectDelim, rowToRawInput, LEAD_KINDS } from "@/lib/lead-import";
 import { cn, formatDateFull } from "@/lib/utils";
 
 export interface BatchRow {
@@ -15,6 +16,7 @@ export interface BatchRow {
   sourceName: string;
   rowCount: number;
   createdAt: string;
+  config: Record<string, unknown>;
 }
 
 export interface LeadRow {
@@ -85,6 +87,8 @@ export function LeadsWorkspace({ rows, batches = [], aliases = [] }: { rows: Lea
 function Batches({ batches }: { batches: BatchRow[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [status, setStatus] = useState<Record<string, string>>({});
+
   async function undo(b: BatchRow) {
     if (!confirm(`「${b.label}」の取込(${b.rowCount}件)を取り消します。よろしいですか？`)) return;
     setBusy(b.id);
@@ -92,28 +96,71 @@ function Batches({ batches }: { batches: BatchRow[] }) {
     router.refresh();
     setBusy(null);
   }
+
+  // 保存済みマッピングで再アップロード→上書き更新(決着など変更分を反映)
+  async function updateFromFile(b: BatchRow, file: File) {
+    const cfg = b.config as { mapping?: Record<string, string>; customFields?: { key: string; header: string }[]; kind?: string; campaignId?: string | null; leadSourceId?: string | null; eventDate?: string | null };
+    if (!cfg.mapping) { alert("この取込にはマッピング情報が保存されていません。新規投入画面から取り込んでください。"); return; }
+    setBusy(b.id);
+    try {
+      const text = await file.text();
+      const all = parseDelimited(text, detectDelim(text));
+      const headers = all[0].map((h) => h.trim());
+      const inputs = all.slice(1).map((row) => rowToRawInput(headers, row, cfg.mapping!, cfg.customFields ?? []));
+      const base = LEAD_KINDS.find((k) => k.key === cfg.kind)?.base ?? 20;
+      const opts = { campaignId: cfg.campaignId ?? null, leadSourceId: cfg.leadSourceId ?? null, rawEvent: b.rawEvent, base, eventDate: cfg.eventDate ?? null, importBatchId: b.id };
+      let upd = 0, ins = 0;
+      const CHUNK = 300;
+      for (let i = 0; i < inputs.length; i += CHUNK) {
+        const res = await upsertLeadsBatchAction(inputs.slice(i, i + CHUNK), opts);
+        if (res.error) throw new Error(res.error);
+        upd += res.updated; ins += res.inserted;
+        setStatus((s) => ({ ...s, [b.id]: `更新中… ${Math.min(100, Math.round(((i + CHUNK) / inputs.length) * 100))}%` }));
+      }
+      setStatus((s) => ({ ...s, [b.id]: `✅ 更新${upd}件・新規${ins}件` }));
+      router.refresh();
+    } catch (e) {
+      setStatus((s) => ({ ...s, [b.id]: "エラー: " + (e instanceof Error ? e.message : String(e)) }));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="space-y-3">
-      <p className="text-sm text-ink/60 px-1">取込の履歴です。マッピングを間違えた取込は<b>「一括取り消し」</b>でまとめて削除できます（その取込ぶんのリードを削除）。</p>
+      <p className="text-sm text-ink/60 px-1">
+        取込の履歴です。<b>「上書き更新」</b>＝同じファイルを再アップロードするだけで、保存済みマッピングを使い<b>決着など変更分を上書き</b>（マッピング不要）。
+        <b>「一括取り消し」</b>＝その取込ぶんを削除。マッピングを変えたい時は「取込」画面から新規投入してください。
+      </p>
       <div className="card overflow-x-auto">
         <table className="w-full">
           <thead className="border-b border-black/[0.06]">
-            <tr><th className="th">取込日時</th><th className="th">イベント名</th><th className="th">元ファイル</th><th className="th text-right">件数</th><th className="th"></th></tr>
+            <tr><th className="th">取込日時</th><th className="th">イベント名</th><th className="th">元ファイル</th><th className="th text-right">件数</th><th className="th text-right">操作</th></tr>
           </thead>
           <tbody className="divide-y divide-black/[0.04]">
-            {batches.map((b) => (
-              <tr key={b.id} className="row-hover">
-                <td className="td text-xs whitespace-nowrap">{formatDateFull(b.createdAt)}</td>
-                <td className="td font-medium">{b.label}</td>
-                <td className="td text-xs text-ink/50 max-w-[200px] truncate">{b.sourceName || "—"}</td>
-                <td className="td text-right tabular-nums">{b.rowCount}</td>
-                <td className="td text-right">
-                  <button onClick={() => undo(b)} disabled={busy === b.id} className="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700 disabled:opacity-40">
-                    <Trash2 size={13} /> {busy === b.id ? "取消中…" : "一括取り消し"}
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {batches.map((b) => {
+              const hasCfg = !!(b.config as { mapping?: unknown }).mapping;
+              return (
+                <tr key={b.id} className="row-hover">
+                  <td className="td text-xs whitespace-nowrap">{formatDateFull(b.createdAt)}</td>
+                  <td className="td font-medium">{b.label}</td>
+                  <td className="td text-xs text-ink/50 max-w-[180px] truncate">{b.sourceName || "—"}</td>
+                  <td className="td text-right tabular-nums">{b.rowCount}</td>
+                  <td className="td text-right">
+                    <div className="inline-flex items-center gap-3 justify-end">
+                      {status[b.id] && <span className="text-[11px] text-ink/50">{status[b.id]}</span>}
+                      <label className={cn("inline-flex items-center gap-1 text-xs cursor-pointer", hasCfg ? "text-teal-deep hover:text-teal-primary" : "text-ink/30 cursor-not-allowed")} title={hasCfg ? "同じ形式のファイルを再アップロードして上書き更新" : "マッピング未保存（新規投入から取込）"}>
+                        <Upload size={13} /> {busy === b.id ? "更新中…" : "上書き更新"}
+                        <input type="file" accept=".tsv,.csv,.txt" className="hidden" disabled={!hasCfg || busy === b.id} onChange={(e) => { const f = e.target.files?.[0]; if (f) updateFromFile(b, f); e.currentTarget.value = ""; }} />
+                      </label>
+                      <button onClick={() => undo(b)} disabled={busy === b.id} className="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700 disabled:opacity-40">
+                        <Trash2 size={13} /> 一括取り消し
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {batches.length === 0 && <tr><td colSpan={5} className="td text-center text-ink/40 py-8">取込履歴がありません</td></tr>}
           </tbody>
         </table>

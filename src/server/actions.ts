@@ -403,12 +403,12 @@ export async function createLeadAction(formData: FormData) {
 import { normalizeLead, priorityScore, type RawLeadInput } from "@/lib/lead-import";
 
 /** 取込バッチを開始(履歴記録)。バッチIDを返す。 */
-export async function startImportBatchAction(meta: { rawEvent: string; label?: string; sourceName?: string; rowCount: number }): Promise<{ batchId: string | null }> {
+export async function startImportBatchAction(meta: { rawEvent: string; label?: string; sourceName?: string; rowCount: number; config?: Record<string, unknown> }): Promise<{ batchId: string | null }> {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const { data, error } = await sb
     .from("lead_import_batches")
-    .insert({ tenant_id: ctx.tenantId, raw_event: meta.rawEvent, label: meta.label, source_name: meta.sourceName, row_count: meta.rowCount, created_by: ctx.userId })
+    .insert({ tenant_id: ctx.tenantId, raw_event: meta.rawEvent, label: meta.label, source_name: meta.sourceName, row_count: meta.rowCount, config: meta.config ?? {}, created_by: ctx.userId })
     .select("id")
     .single();
   if (error || !data) return { batchId: null };

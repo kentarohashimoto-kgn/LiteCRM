@@ -65,6 +65,64 @@ export const REVENUE_OPTS = [
 ];
 const optPts = (opts: { key: string; pts: number }[], v?: string | null) => opts.find((o) => o.key === v)?.pts ?? 0;
 
+/** TSV/CSVを区切りで2次元配列にパース(クォート対応)。 */
+export function parseDelimited(text: string, delim: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cur = "";
+  let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cur += '"'; i++; }
+        else inQ = false;
+      } else cur += c;
+    } else if (c === '"') inQ = true;
+    else if (c === delim) { row.push(cur); cur = ""; }
+    else if (c === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
+    else if (c === "\r") { /* skip */ }
+    else cur += c;
+  }
+  if (cur !== "" || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter((r) => r.some((x) => x.trim() !== ""));
+}
+
+/** 先頭行からタブ/カンマ区切りを推定。 */
+export function detectDelim(text: string): string {
+  const fl = text.slice(0, text.indexOf("\n") >= 0 ? text.indexOf("\n") : text.length);
+  return fl.split("\t").length > fl.split(",").length ? "\t" : ",";
+}
+
+/** ヘッダー＋マッピングから1行を RawLeadInput に変換。 */
+export function rowToRawInput(
+  headers: string[],
+  row: string[],
+  mapping: Record<string, string>,
+  customFields: { key: string; header: string }[] = [],
+): RawLeadInput {
+  const get = (key: string) => {
+    const h = mapping[key];
+    if (!h) return "";
+    const i = headers.indexOf(h);
+    return i >= 0 && i < row.length ? row[i] : "";
+  };
+  const o: RawLeadInput = {};
+  for (const f of TARGET_FIELDS) {
+    const v = get(f.key as string);
+    if (v) (o as Record<string, string>)[f.key as string] = v;
+  }
+  const extra: Record<string, string> = {};
+  for (const cf of customFields) {
+    if (!cf.key || !cf.header) continue;
+    const i = headers.indexOf(cf.header);
+    const v = i >= 0 && i < row.length ? (row[i] ?? "").trim() : "";
+    if (v) extra[cf.key] = v;
+  }
+  if (Object.keys(extra).length) o.extra = extra;
+  return o;
+}
+
 /** マッピングUIで選べる取込先フィールド定義(自動サジェスト用キーワードつき)。 */
 export const TARGET_FIELDS: { key: keyof RawLeadInput; label: string; required?: boolean; hints: string[] }[] = [
   { key: "company", label: "会社名", required: true, hints: ["会社", "法人", "組織", "company", "得意先", "企業"] },

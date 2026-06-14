@@ -15,6 +15,7 @@ export default async function LeadsPage() {
     sourceName: b.source_name ?? "",
     rowCount: b.row_count,
     createdAt: b.created_at,
+    config: (b.config ?? {}) as Record<string, unknown>,
   }));
 
   const rows: LeadRow[] = leads.map((l) => ({
