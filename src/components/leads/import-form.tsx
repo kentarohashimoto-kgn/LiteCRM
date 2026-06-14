@@ -16,6 +16,7 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
   const [leadSourceId, setLeadSourceId] = useState(leadSources.find((s) => s.name === "展示会")?.id ?? "");
   const [kind, setKind] = useState("exhibition");
   const [eventLabel, setEventLabel] = useState("");
+  const [acquiredMonth, setAcquiredMonth] = useState("");
   const [mode, setMode] = useState<"replace" | "update">("replace");
   const [customFields, setCustomFields] = useState<{ key: string; header: string }[]>([]);
   const [running, setRunning] = useState(false);
@@ -65,9 +66,10 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
     try {
       if (mode === "replace") await clearLeadsForEventAction(rawEvent);
       const inputs = dedupLeads(dataRows.map(rowToInput));
-      const config = { mapping, customFields, kind, campaignId: campaignId || null, leadSourceId: leadSourceId || null, eventDate: camp?.event_date ?? null };
+      const acquiredDate = acquiredMonth ? acquiredMonth + "-01" : (camp?.event_date ?? null);
+      const config = { mapping, customFields, kind, campaignId: campaignId || null, leadSourceId: leadSourceId || null, eventDate: camp?.event_date ?? null, acquiredDate };
       const { batchId } = await startImportBatchAction({ rawEvent, label: rawEvent, sourceName: fileName, rowCount: inputs.length, config });
-      const opts = { campaignId: campaignId || null, leadSourceId: leadSourceId || null, rawEvent, base, eventDate: camp?.event_date ?? null, importBatchId: batchId };
+      const opts = { campaignId: campaignId || null, leadSourceId: leadSourceId || null, rawEvent, base, eventDate: camp?.event_date ?? null, acquiredDate, importBatchId: batchId };
       let inserted = 0;
       let updated = 0;
       const CHUNK = 300;
@@ -113,7 +115,7 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">展示会・施策（任意）</label>
-                <select value={campaignId} onChange={(e) => { setCampaignId(e.target.value); const c = campaigns.find((x) => x.id === e.target.value); if (c) setEventLabel(c.name); }} className="input">
+                <select value={campaignId} onChange={(e) => { setCampaignId(e.target.value); const c = campaigns.find((x) => x.id === e.target.value); if (c) { setEventLabel(c.name); if (c.event_date) setAcquiredMonth(c.event_date.slice(0, 7)); } }} className="input">
                   <option value="">—（campaign未選択）</option>
                   {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -121,6 +123,11 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
               <div>
                 <label className="label">イベント名（置換・表示のキー）*</label>
                 <input value={eventLabel} onChange={(e) => setEventLabel(e.target.value)} className="input" placeholder="例：AIDX展(3/24)" disabled={!!camp} />
+              </div>
+              <div>
+                <label className="label">リード獲得年月</label>
+                <input type="month" value={acquiredMonth} onChange={(e) => setAcquiredMonth(e.target.value)} className="input" />
+                <div className="text-[10px] text-ink/40 mt-0.5">名刺にスキャン日が無い場合の獲得日に使用（展示会の開催月など）。月別推移・ファネルの基準。</div>
               </div>
               <div>
                 <label className="label">施策区分（優先度の基礎点）</label>

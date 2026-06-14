@@ -101,7 +101,7 @@ function Batches({ batches }: { batches: BatchRow[] }) {
 
   // 保存済みマッピングで再アップロード→上書き更新(決着など変更分を反映)
   async function updateFromFile(b: BatchRow, file: File) {
-    const cfg = b.config as { mapping?: Record<string, string>; customFields?: { key: string; header: string }[]; kind?: string; campaignId?: string | null; leadSourceId?: string | null; eventDate?: string | null };
+    const cfg = b.config as { mapping?: Record<string, string>; customFields?: { key: string; header: string }[]; kind?: string; campaignId?: string | null; leadSourceId?: string | null; eventDate?: string | null; acquiredDate?: string | null };
     if (!cfg.mapping) { alert("この取込にはマッピング情報が保存されていません。新規投入画面から取り込んでください。"); return; }
     setBusy(b.id);
     try {
@@ -110,7 +110,7 @@ function Batches({ batches }: { batches: BatchRow[] }) {
       const headers = all[0].map((h) => h.trim());
       const inputs = dedupLeads(all.slice(1).map((row) => rowToRawInput(headers, row, cfg.mapping!, cfg.customFields ?? [])));
       const base = LEAD_KINDS.find((k) => k.key === cfg.kind)?.base ?? 20;
-      const opts = { campaignId: cfg.campaignId ?? null, leadSourceId: cfg.leadSourceId ?? null, rawEvent: b.rawEvent, base, eventDate: cfg.eventDate ?? null, importBatchId: b.id };
+      const opts = { campaignId: cfg.campaignId ?? null, leadSourceId: cfg.leadSourceId ?? null, rawEvent: b.rawEvent, base, eventDate: cfg.eventDate ?? null, acquiredDate: cfg.acquiredDate ?? null, importBatchId: b.id };
       let upd = 0, ins = 0;
       const CHUNK = 300;
       for (let i = 0; i < inputs.length; i += CHUNK) {

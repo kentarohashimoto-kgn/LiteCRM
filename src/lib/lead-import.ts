@@ -286,7 +286,7 @@ function pdatetime(s?: string): string | null {
 /** RawLeadInput を leads テーブルのレコードへ正規化。 */
 export function normalizeLead(
   r: RawLeadInput,
-  opts: { tenantId: string; campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null; importBatchId?: string | null },
+  opts: { tenantId: string; campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null; acquiredDate?: string | null; importBatchId?: string | null },
 ): Record<string, unknown> {
   const company = (r.company ?? "").trim();
   const name = (r.contact_name ?? "").trim() || `${(r.last_name ?? "").trim()} ${(r.first_name ?? "").trim()}`.trim();
@@ -297,7 +297,8 @@ export function normalizeLead(
   const roleLevel = deriveRoleLevel(r.job_title);
   const score = priorityScore(opts.base, { employee_size: r.employee_size, role_level: roleLevel });
   const scanned = pdatetime(r.scanned_at);
-  const acquired = (scanned ? scanned.slice(0, 10) : null) ?? opts.eventDate ?? new Date().toISOString().slice(0, 10);
+  // 獲得日の優先: 行ごとのスキャン日 > 取込時に指定した獲得年月 > 施策(campaign)開催日 > 当日
+  const acquired = (scanned ? scanned.slice(0, 10) : null) ?? opts.acquiredDate ?? opts.eventDate ?? new Date().toISOString().slice(0, 10);
   const t = (v?: string) => {
     const s = (v ?? "").trim();
     return s === "" ? null : s.slice(0, 300);

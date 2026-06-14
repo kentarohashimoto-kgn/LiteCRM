@@ -591,7 +591,7 @@ export async function clearLeadsForEventAction(rawEvent: string): Promise<{ dele
 /** リードを一括投入(クライアントから分割呼び出し)。 */
 export async function importLeadsBatchAction(
   rows: RawLeadInput[],
-  opts: { campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null; importBatchId?: string | null },
+  opts: { campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null; acquiredDate?: string | null; importBatchId?: string | null },
 ): Promise<{ inserted: number; error?: string }> {
   const ctx = await requireCtx();
   if (!["owner", "admin", "sales_manager", "sales_rep", "external_sales"].includes(ctx.role)) {
@@ -619,7 +619,7 @@ const OVERWRITE_KEYS = [
 
 export async function upsertLeadsBatchAction(
   rows: RawLeadInput[],
-  opts: { campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null; importBatchId?: string | null },
+  opts: { campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null; acquiredDate?: string | null; importBatchId?: string | null },
 ): Promise<{ inserted: number; updated: number; error?: string }> {
   const ctx = await requireCtx();
   if (!["owner", "admin", "sales_manager", "sales_rep", "external_sales"].includes(ctx.role)) {

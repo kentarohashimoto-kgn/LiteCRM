@@ -86,22 +86,25 @@ export default async function DashboardPage() {
     };
   });
 
-  // ファネル(リード→アポ→成約)。アポ=初回商談あり / 成約=受注。
+  // ファネル(リード起点): リード→アポ獲得→受注。獲得月でコホート集計。
+  //   アポ = 決着がアポ獲得のリード / 成約 = そのリードに紐づく案件が受注(won)
   const allLeads = listLeads(ws);
   const thisKey = monthKey(startOfMonth(now));
   const lastKey = monthKey(addMonths(startOfMonth(now), -1));
-  const scope = (k: string) => {
-    const a = actuals.get(k);
-    return { leads: a?.leads ?? 0, appts: a?.appts ?? 0, deals: a?.deals ?? 0 };
+  const wonLeadIds = new Set(opps.filter((o) => o.lead_id && o.status === "won").map((o) => o.lead_id));
+  const leadMonth = (acq?: string) => (acq ? monthKey(startOfMonth(new Date(acq))) : null);
+  const funnelScope = (k: string | null) => {
+    const ls = k ? allLeads.filter((l) => leadMonth(l.acquired_at) === k) : allLeads;
+    return {
+      leads: ls.length,
+      appts: ls.filter((l) => l.disposition === "appointment").length,
+      deals: ls.filter((l) => wonLeadIds.has(l.id)).length,
+    };
   };
   const funnelData = {
-    total: {
-      leads: allLeads.length,
-      appts: opps.filter((o) => o.first_meeting_date).length,
-      deals: opps.filter((o) => o.status === "won").length,
-    },
-    lastMonth: scope(lastKey),
-    thisMonth: scope(thisKey),
+    total: funnelScope(null),
+    lastMonth: funnelScope(lastKey),
+    thisMonth: funnelScope(thisKey),
   };
 
   return (
@@ -149,7 +152,7 @@ export default async function DashboardPage() {
         >
           <MetricTrendChart data={trendData} />
         </Section>
-        <Section title="ファネル分析" action={<span className="text-[11px] text-ink/40">リード→アポ→成約</span>}>
+        <Section title="ファネル分析" action={<span className="text-[11px] text-ink/40">リード起点・獲得月</span>}>
           <FunnelView data={funnelData} />
         </Section>
       </div>
