@@ -9,7 +9,7 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { monthKey, startOfMonth } from "@/lib/utils";
 import type { OppView } from "@/lib/data/select";
-import type { Lead } from "@/lib/types";
+import type { Lead, LeadImportBatch, AcquirerAlias } from "@/lib/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 async function paginate<T>(build: (from: number, to: number) => any): Promise<T[]> {
@@ -80,4 +80,16 @@ export async function getLead(id: string): Promise<Lead | null> {
   const sb = getSupabaseServer();
   const { data } = await sb.from("leads").select("*").eq("id", id).maybeSingle();
   return (data as Lead) ?? null;
+}
+
+/** リード画面で使う小さめの付随データ(取込履歴・取得担当の別名)。 */
+export async function getLeadImportBatches(): Promise<LeadImportBatch[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.from("lead_import_batches").select("*").order("created_at", { ascending: false });
+  return (data ?? []) as LeadImportBatch[];
+}
+export async function getAcquirerAliases(): Promise<AcquirerAlias[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.from("acquirer_aliases").select("*");
+  return (data ?? []) as AcquirerAlias[];
 }

@@ -1,14 +1,31 @@
 import { Upload } from "lucide-react";
-import { getWorkspace } from "@/lib/data/workspace";
-import { getAllLeads } from "@/lib/data/leads";
+import { getAllLeads, getLeadImportBatches, getAcquirerAliases } from "@/lib/data/leads";
+import { buildLeadsWorkspace } from "@/lib/data/leads-workspace";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
-import { LeadsWorkspace, type LeadRow } from "@/components/leads/leads-workspace";
+import { LeadsWorkspace } from "@/components/leads/leads-workspace";
 
-export default async function LeadsPage() {
-  const ws = await getWorkspace();
-  const leads = await getAllLeads();
+export default async function LeadsPage({
+  searchParams,
+}: {
+  searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; page?: string };
+}) {
+  const [leads, batchRows, aliasRows] = await Promise.all([
+    getAllLeads(),
+    getLeadImportBatches(),
+    getAcquirerAliases(),
+  ]);
 
-  const batches = ws.leadImportBatches.map((b) => ({
+  const aliases = aliasRows.map((a) => ({ raw: a.raw, name: a.display_name ?? "" }));
+  const filters = {
+    q: searchParams.q ?? "",
+    event: searchParams.ev ?? "",
+    disposition: searchParams.disp ?? "",
+    rank: searchParams.rank ?? "",
+    page: searchParams.page ? Math.max(1, parseInt(searchParams.page, 10) || 1) : 1,
+  };
+  const data = buildLeadsWorkspace(leads, aliases, filters);
+
+  const batches = batchRows.map((b) => ({
     id: b.id,
     label: b.label ?? b.raw_event ?? "—",
     rawEvent: b.raw_event ?? "",
@@ -18,32 +35,6 @@ export default async function LeadsPage() {
     config: (b.config ?? {}) as Record<string, unknown>,
   }));
 
-  const rows: LeadRow[] = leads.map((l) => ({
-    id: l.id,
-    company: l.company_name ?? "",
-    companyNorm: l.company_norm ?? l.company_name ?? "",
-    name: l.contact_name ?? "",
-    email: l.email ?? "",
-    phone: l.phone ?? "",
-    mobilePhone: l.mobile_phone ?? "",
-    jobTitle: l.job_title ?? "",
-    empSize: l.employee_size ?? "",
-    industry: l.industry ?? "",
-    pref: l.prefecture ?? "",
-    rank: l.rank ?? "",
-    disposition: l.disposition ?? "untouched",
-    score: l.priority_score ?? 0,
-    callOwner: l.call_owner ?? "",
-    event: l.raw_event ?? "",
-    dealOwner: l.deal_owner_name ?? "",
-    tags: l.tags ?? "",
-    acquirer: l.acquirer ?? "",
-    scannedAt: l.scanned_at ?? "",
-    converted: !!l.account_id || l.status === "converted",
-  }));
-
-  const aliases = ws.acquirerAliases.map((a) => ({ raw: a.raw, name: a.display_name ?? "" }));
-
   return (
     <div>
       <PageHeader
@@ -51,7 +42,13 @@ export default async function LeadsPage() {
         subtitle="展示会・セミナーのリストを優先度付けし、架電→アポ獲得まで管理・分析します。"
         action={<LinkButton href="/app/leads/import" variant="accent"><Upload size={16} /> 取込</LinkButton>}
       />
-      <LeadsWorkspace rows={rows} batches={batches} aliases={aliases} />
+      <LeadsWorkspace
+        data={data}
+        batches={batches}
+        aliases={aliases}
+        initialTab={(searchParams.tab as "list" | "queue" | "company" | "analysis" | "batches") ?? "list"}
+        filters={filters}
+      />
     </div>
   );
 }
