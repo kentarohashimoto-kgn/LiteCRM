@@ -7,10 +7,12 @@ import { isStale, noNextAction } from "@/lib/risk";
 import { repMetrics, productMetrics } from "@/lib/analytics";
 import { Card, PageHeader, ProgressBar, Section, StatCard } from "@/components/ui/primitives";
 import { ForecastChart, SimpleBar } from "@/components/charts/forecast-chart";
+import { MetricTrendChart, type TrendPoint } from "@/components/charts/trend-chart";
+import { FunnelView } from "@/components/dashboard/funnel-view";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
 import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
 import { actualByMonth } from "@/lib/targets";
-import { formatYen, formatManYen, formatPercent, sameMonth, formatDate, sum } from "@/lib/utils";
+import { formatYen, formatManYen, formatPercent, sameMonth, formatDate, sum, monthKey, startOfMonth, addMonths } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const ws = await getWorkspace();
@@ -55,6 +57,53 @@ export default async function DashboardPage() {
   };
   const fyRate = (a: number, t: number) => (t > 0 ? a / t : null);
 
+  // 月別 推移(実績 + 予測/目標)。売上見込みは weighted を月次集計。
+  const weightedByMonth = new Map<string, number>();
+  for (const o of opps) {
+    const ref = o.expected_revenue_month || o.expected_close_date;
+    if (!ref) continue;
+    const k = monthKey(startOfMonth(new Date(ref)));
+    const add = o.status === "won" ? o.amount : o.status === "open" ? o.weighted : 0;
+    weightedByMonth.set(k, (weightedByMonth.get(k) ?? 0) + add);
+  }
+  const trendData: TrendPoint[] = fyMonths.map((m) => {
+    const a = actuals.get(m.key);
+    const t = targetMap.get(m.key);
+    const appts = a?.appts ?? 0;
+    const deals = a?.deals ?? 0;
+    return {
+      label: m.label,
+      leads: a?.leads ?? 0,
+      appts,
+      deals,
+      revenue: a?.revenue ?? 0,
+      closeRate: appts > 0 ? Math.round((deals / appts) * 100) : null,
+      tLeads: t?.target_leads ?? 0,
+      tAppts: t?.target_appointments ?? 0,
+      tDeals: t?.target_deals ?? 0,
+      tAmount: t?.target_amount ?? 0,
+      wRevenue: weightedByMonth.get(m.key) ?? 0,
+    };
+  });
+
+  // ファネル(リード→アポ→成約)。アポ=初回商談あり / 成約=受注。
+  const allLeads = listLeads(ws);
+  const thisKey = monthKey(startOfMonth(now));
+  const lastKey = monthKey(addMonths(startOfMonth(now), -1));
+  const scope = (k: string) => {
+    const a = actuals.get(k);
+    return { leads: a?.leads ?? 0, appts: a?.appts ?? 0, deals: a?.deals ?? 0 };
+  };
+  const funnelData = {
+    total: {
+      leads: allLeads.length,
+      appts: opps.filter((o) => o.first_meeting_date).length,
+      deals: opps.filter((o) => o.status === "won").length,
+    },
+    lastMonth: scope(lastKey),
+    thisMonth: scope(thisKey),
+  };
+
   return (
     <div>
       <PageHeader
@@ -89,6 +138,21 @@ export default async function DashboardPage() {
           <FyProgress label="リード" actual={`${fyActual.leads}件`} target={`目標 ${fyTarget.leads}件`} rate={fyRate(fyActual.leads, fyTarget.leads)} />
         </div>
       </Section>
+
+      {/* 月別推移(実績/予測) + ファネル */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+        <Section
+          title="月別 推移（実績と予測）"
+          icon={<TargetIcon size={15} />}
+          className="lg:col-span-2"
+          action={<span className="text-[11px] text-ink/40">棒=実績／線=見込み(予測)・目標</span>}
+        >
+          <MetricTrendChart data={trendData} />
+        </Section>
+        <Section title="ファネル分析" action={<span className="text-[11px] text-ink/40">リード→アポ→成約</span>}>
+          <FunnelView data={funnelData} />
+        </Section>
+      </div>
 
       <Card className="mb-5">
         <div className="flex items-center justify-between mb-2">
