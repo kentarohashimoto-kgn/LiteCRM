@@ -57,6 +57,11 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
   const base = LEAD_KINDS.find((k) => k.key === kind)?.base ?? 20;
   const mappedCompany = mapping["company"];
   const preview = dataRows.slice(0, 5).map(rowToInput);
+  // マッピング後の全項目をプレビュー列に(設定済みフィールド＋追加項目)
+  const previewCols: { key: string; label: string; custom: boolean }[] = [
+    ...TARGET_FIELDS.filter((f) => mapping[f.key as string]).map((f) => ({ key: f.key as string, label: f.label, custom: false })),
+    ...customFields.filter((cf) => cf.key && cf.header).map((cf) => ({ key: cf.key, label: cf.key, custom: true })),
+  ];
 
   async function run() {
     if (!mappedCompany || !rawEvent) return;
@@ -202,15 +207,27 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
             </div>
           </div>
 
-          {/* 4. プレビュー */}
+          {/* 4. プレビュー(マッピング後・全項目) */}
           <div className="card overflow-x-auto">
-            <div className="px-5 pt-4 pb-2 border-b border-black/[0.04]"><h2 className="section-title">4. プレビュー（先頭5件）</h2></div>
-            <table className="w-full text-xs">
-              <thead className="text-ink/40"><tr><th className="th">会社</th><th className="th">氏名</th><th className="th">メール</th><th className="th">役職</th><th className="th">決着(元)</th></tr></thead>
+            <div className="px-5 pt-4 pb-2 border-b border-black/[0.04]">
+              <h2 className="section-title">4. プレビュー（マッピング後・全項目／先頭5件）</h2>
+              <p className="text-[11px] text-ink/40 mt-0.5">設定済みの{previewCols.length}項目で、取り込まれる値を確認できます。</p>
+            </div>
+            <table className="w-max min-w-full text-xs">
+              <thead className="text-ink/40"><tr>{previewCols.map((c) => <th key={c.key} className="th whitespace-nowrap">{c.label}</th>)}</tr></thead>
               <tbody className="divide-y divide-black/[0.04]">
                 {preview.map((p, i) => (
-                  <tr key={i}><td className="td">{p.company || "—"}</td><td className="td">{p.contact_name || `${p.last_name ?? ""} ${p.first_name ?? ""}`.trim() || "—"}</td><td className="td">{p.email || "—"}</td><td className="td">{p.job_title || "—"}</td><td className="td">{p.disposition || "—"}</td></tr>
+                  <tr key={i}>
+                    {previewCols.map((c) => {
+                      let v = "";
+                      if (c.custom) v = (p.extra?.[c.key] as string) ?? "";
+                      else if (c.key === "contact_name") v = p.contact_name || `${p.last_name ?? ""} ${p.first_name ?? ""}`.trim();
+                      else v = ((p as Record<string, unknown>)[c.key] as string) ?? "";
+                      return <td key={c.key} className="td whitespace-nowrap max-w-[200px] truncate" title={v}>{v || "—"}</td>;
+                    })}
+                  </tr>
                 ))}
+                {previewCols.length === 0 && <tr><td className="td text-ink/40 py-4">マッピングを設定するとプレビューが表示されます</td></tr>}
               </tbody>
             </table>
           </div>

@@ -9,7 +9,7 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { monthKey, startOfMonth } from "@/lib/utils";
 import type { OppView } from "@/lib/data/select";
-import type { Lead, LeadImportBatch, AcquirerAlias } from "@/lib/types";
+import type { Lead, LeadImportBatch, AcquirerAlias, LeadExportPreset } from "@/lib/types";
 import { sizeBucket, type AggLead, type WsListRow, type WsQueueRow, type LeadsFilters } from "@/lib/data/leads-workspace";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -184,4 +184,9 @@ export async function getAcquirerAliases(): Promise<AcquirerAlias[]> {
   const sb = getSupabaseServer();
   const { data } = await sb.from("acquirer_aliases").select("*");
   return (data ?? []) as AcquirerAlias[];
+}
+export async function getExportPresets(): Promise<LeadExportPreset[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.from("lead_export_presets").select("*").order("created_at");
+  return (data ?? []) as LeadExportPreset[];
 }

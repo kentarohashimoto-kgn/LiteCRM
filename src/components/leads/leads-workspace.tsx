@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Phone, List, Building2, BarChart3, History, Trash2, Upload, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Phone, List, Building2, BarChart3, History, Trash2, Upload, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { DownloadPanel } from "@/components/leads/download-panel";
 import { LEAD_DISPOSITIONS, LEAD_DISPOSITION_MAP } from "@/lib/constants";
 import { setLeadDispositionAction, setLeadCallOwnerAction, deleteImportBatchAction, setAcquirerAliasAction, upsertLeadsBatchAction, recomputeEngagementAction } from "@/server/actions";
 import { parseDelimited, detectDelim, rowToRawInput, dedupLeads, LEAD_KINDS } from "@/lib/lead-import";
@@ -21,9 +22,10 @@ export interface BatchRow {
   config: Record<string, unknown>;
 }
 export interface AliasRow { raw: string; name: string }
-export type LeadsTab = "list" | "queue" | "company" | "analysis" | "batches";
+export type LeadsTab = "list" | "queue" | "company" | "analysis" | "download" | "batches";
 interface ListData { rows: WsListRow[]; total: number; page: number; pageSize: number }
 interface QueueData { rows: WsQueueRow[]; total: number }
+interface PresetRow { id: string; name: string; columns: string[] }
 
 const EVENTS: Record<string, string> = { AIDX: "AIDX展(3/24)", ODEX: "ODEX東京(5/13)", AINATIVE: "AI NATIVE(6/10)" };
 const evLabel = (e: string) => EVENTS[e] ?? e ?? "—";
@@ -50,6 +52,7 @@ export function LeadsWorkspace({
   batches = [],
   aliases = [],
   events = [],
+  presets = [],
   filters,
 }: {
   tab: LeadsTab;
@@ -60,6 +63,7 @@ export function LeadsWorkspace({
   batches?: BatchRow[];
   aliases?: AliasRow[];
   events?: string[];
+  presets?: PresetRow[];
   filters: LeadsFilters;
 }) {
   return (
@@ -69,12 +73,14 @@ export function LeadsWorkspace({
         <TabLink active={tab === "queue"} tab="queue" icon={<Phone size={15} />} label="架電キュー" />
         <TabLink active={tab === "company"} tab="company" icon={<Building2 size={15} />} label="企業ビュー" />
         <TabLink active={tab === "analysis"} tab="analysis" icon={<BarChart3 size={15} />} label="分析" />
+        <TabLink active={tab === "download"} tab="download" icon={<Download size={15} />} label="ダウンロード" />
         <TabLink active={tab === "batches"} tab="batches" icon={<History size={15} />} label="取込履歴" />
       </div>
       {tab === "list" && list && <LeadList list={list} filters={filters} events={events} />}
       {tab === "queue" && queue && <CallQueue queue={queue} />}
       {tab === "company" && company && <CompanyView companies={company} />}
       {tab === "analysis" && analysis && <Analysis analysis={analysis} aliases={aliases} />}
+      {tab === "download" && <DownloadPanel events={events} presets={presets} />}
       {tab === "batches" && <Batches batches={batches} />}
     </div>
   );

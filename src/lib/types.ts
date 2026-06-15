@@ -318,6 +318,14 @@ export interface AcquirerAlias {
   display_name?: string;
 }
 
+export interface LeadExportPreset {
+  id: UUID;
+  tenant_id: UUID;
+  name: string;
+  columns: string[];
+  created_at: string;
+}
+
 export interface LeadImportBatch {
   id: UUID;
   tenant_id: UUID;

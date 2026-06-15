@@ -6,6 +6,7 @@ import {
   getLeadImportBatches,
   getAcquirerAliases,
   getLeadEvents,
+  getExportPresets,
 } from "@/lib/data/leads";
 import { buildCompanies, buildAnalysis } from "@/lib/data/leads-workspace";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
@@ -16,7 +17,7 @@ export default async function LeadsPage({
 }: {
   searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; page?: string };
 }) {
-  const tab = (["list", "queue", "company", "analysis", "batches"].includes(searchParams.tab ?? "")
+  const tab = (["list", "queue", "company", "analysis", "download", "batches"].includes(searchParams.tab ?? "")
     ? searchParams.tab
     : "list") as LeadsTab;
 
@@ -35,7 +36,8 @@ export default async function LeadsPage({
   const aliasRows = tab === "analysis" ? await getAcquirerAliases() : [];
   const aliases = aliasRows.map((a) => ({ raw: a.raw, name: a.display_name ?? "" }));
   const analysis = tab === "analysis" ? buildAnalysis(await fetchLeadsForAggregation(), aliases) : undefined;
-  const events = tab === "list" ? await getLeadEvents() : [];
+  const events = tab === "list" || tab === "download" ? await getLeadEvents() : [];
+  const presets = tab === "download" ? (await getExportPresets()).map((p) => ({ id: p.id, name: p.name, columns: p.columns })) : [];
   const batchRows = tab === "batches" ? await getLeadImportBatches() : [];
   const batches = batchRows.map((b) => ({
     id: b.id,
@@ -63,6 +65,7 @@ export default async function LeadsPage({
         batches={batches}
         aliases={aliases}
         events={events}
+        presets={presets}
         filters={filters}
       />
     </div>

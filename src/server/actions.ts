@@ -1029,3 +1029,71 @@ export async function importSeminarBatchAction(
   revalidatePath("/app/analytics/seminars");
   return { inserted: recs.length, newLeads };
 }
+
+// ===================== リード ダウンロード(CSV) =====================
+import { EXPORT_FIELD_MAP, exportValue, csvCell } from "@/lib/lead-export";
+
+/** 絞り込み＋指定列・順序でリードをCSV化(BOM付きでExcel対応)。 */
+export async function exportLeadsCsvAction(
+  filters: { q?: string; event?: string; disposition?: string; rank?: string; engRank?: string; converted?: string },
+  columns: string[],
+): Promise<{ csv: string; count: number; error?: string }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const cols = columns.filter((c) => EXPORT_FIELD_MAP[c]);
+  if (!cols.length) return { csv: "", count: 0, error: "列が選択されていません" };
+
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const rows: any[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    let qy = sb.from("leads").select("*").eq("tenant_id", ctx.tenantId);
+    const q = (filters.q ?? "").replace(/[,%_()]/g, " ").trim();
+    if (q) qy = qy.or(`company_name.ilike.%${q}%,contact_name.ilike.%${q}%`);
+    if (filters.event) qy = qy.eq("raw_event", filters.event);
+    if (filters.disposition) qy = qy.eq("disposition", filters.disposition);
+    if (filters.rank) qy = qy.eq("rank", filters.rank);
+    if (filters.converted === "yes") qy = qy.not("account_id", "is", null);
+    if (filters.converted === "no") qy = qy.is("account_id", null);
+    const { data, error } = await qy.order("priority_score", { ascending: false, nullsFirst: false }).order("id").range(from, from + PAGE - 1);
+    if (error) return { csv: "", count: 0, error: error.message };
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < PAGE) break;
+  }
+
+  const emails = [...new Set(rows.map((r) => (r.email ?? "").toLowerCase()).filter(Boolean))];
+  const engMap = new Map<string, { rank: string; score: number }>();
+  for (let i = 0; i < emails.length; i += 1000) {
+    const { data } = await sb.from("person_engagement").select("email,rank,score").in("email", emails.slice(i, i + 1000));
+    for (const e of data ?? []) engMap.set(String(e.email).toLowerCase(), { rank: e.rank ?? "D", score: e.score ?? 0 });
+  }
+  let out = rows.map((r) => ({ r, eng: engMap.get((r.email ?? "").toLowerCase()) }));
+  if (filters.engRank) out = out.filter((x) => (x.eng?.rank ?? "D") === filters.engRank);
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  const header = cols.map((c) => csvCell(EXPORT_FIELD_MAP[c].label)).join(",");
+  const lines = out.map(({ r, eng }) => cols.map((c) => csvCell(exportValue(c, r, eng))).join(","));
+  return { csv: "\uFEFF" + [header, ...lines].join("\r\n"), count: out.length };
+}
+
+/** ダウンロード形式(列・順序)を名前付きで保存(同名は上書き)。 */
+export async function saveExportPresetAction(name: string, columns: string[]): Promise<{ ok: boolean }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const n = (name ?? "").trim();
+  if (!n || !columns.length) return { ok: false };
+  const { data } = await sb.from("lead_export_presets").select("id").eq("tenant_id", ctx.tenantId).eq("name", n).maybeSingle();
+  if (data) await sb.from("lead_export_presets").update({ columns, updated_at: new Date().toISOString() }).eq("id", data.id);
+  else await sb.from("lead_export_presets").insert({ tenant_id: ctx.tenantId, name: n, columns, created_by: ctx.userId });
+  revalidatePath("/app/leads");
+  return { ok: true };
+}
+
+export async function deleteExportPresetAction(id: string): Promise<{ ok: boolean }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("lead_export_presets").delete().eq("id", id).eq("tenant_id", ctx.tenantId);
+  revalidatePath("/app/leads");
+  return { ok: true };
+}
