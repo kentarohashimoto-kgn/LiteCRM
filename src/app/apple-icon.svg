@@ -1,0 +1,16 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mUp" x1="300" y1="360" x2="470" y2="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0FA39B"/>
+      <stop offset="0.55" stop-color="#1FB0E6"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0E2350"/>
+  <!-- 左: 白の M レッグ(上→下) -->
+  <path d="M160 388 L214 150 L298 338" fill="none" stroke="#FFFFFF" stroke-width="54" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- 右: グラデーションの上向き矢印(シャフト) -->
+  <path d="M298 338 L438 196" fill="none" stroke="url(#mUp)" stroke-width="54" stroke-linecap="round"/>
+  <!-- 矢印の先端 -->
+  <path d="M398 150 H482 V234 Z" fill="url(#mUp)"/>
+</svg>
