@@ -9,7 +9,9 @@ export interface ExportField { key: string; label: string }
 export const EXPORT_FIELDS: ExportField[] = [
   { key: "company", label: "会社名" },
   { key: "company_norm", label: "会社名(正規化)" },
-  { key: "contact_name", label: "氏名" },
+  { key: "contact_name", label: "氏名(姓名)" },
+  { key: "last_name", label: "姓" },
+  { key: "first_name", label: "名" },
   { key: "email", label: "メール" },
   { key: "phone", label: "電話(代表)" },
   { key: "mobile_phone", label: "携帯電話" },

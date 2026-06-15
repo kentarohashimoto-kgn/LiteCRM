@@ -289,7 +289,15 @@ export function normalizeLead(
   opts: { tenantId: string; campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null; acquiredDate?: string | null; importBatchId?: string | null },
 ): Record<string, unknown> {
   const company = (r.company ?? "").trim();
-  const name = (r.contact_name ?? "").trim() || `${(r.last_name ?? "").trim()} ${(r.first_name ?? "").trim()}`.trim();
+  // 姓・名は別管理。明示があればそれを、無ければ氏名を空白で分割して推定。
+  let lastName = (r.last_name ?? "").trim();
+  let firstName = (r.first_name ?? "").trim();
+  const fullRaw = (r.contact_name ?? "").trim();
+  if (!lastName && !firstName && fullRaw) {
+    const parts = fullRaw.split(/[\s　]+/).filter(Boolean);
+    if (parts.length >= 2) { lastName = parts[0]; firstName = parts.slice(1).join(" "); }
+  }
+  const name = fullRaw || `${lastName} ${firstName}`.trim();
   const { rank, excluded } = normRank(r.rank);
   let disposition = normDisposition(r.disposition);
   if (excluded) disposition = "excluded";
@@ -320,6 +328,8 @@ export function normalizeLead(
     company_norm: normCompany(company),
     title: (company + " / " + opts.rawEvent).slice(0, 200),
     contact_name: t(name),
+    last_name: t(lastName),
+    first_name: t(firstName),
     email: t(r.email),
     phone: t(r.phone),
     mobile_phone: t(r.mobile_phone),

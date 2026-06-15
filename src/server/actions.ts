@@ -992,10 +992,13 @@ export async function importSeminarBatchAction(
     if (!em || existing.has(em) || seenNew.has(em) || !(r.company as string)) continue;
     seenNew.add(em);
     const roleLevel = deriveRoleLevel(r.job_title as string | undefined);
+    const nameParts = String(r.name ?? "").split(/[\s　]+/).filter(Boolean);
+    const lastName = nameParts.length >= 2 ? nameParts[0] : null;
+    const firstName = nameParts.length >= 2 ? nameParts.slice(1).join(" ") : null;
     newLeadRecs.push({
       tenant_id: ctx.tenantId, lead_source_id: opts.leadSourceId ?? null, campaign_id: opts.campaignId ?? null,
       raw_event: opts.seminarName, title: `${r.company} / ${opts.seminarName}`.slice(0, 200),
-      company_name: r.company, company_norm: r.company_norm, contact_name: r.name, email: em,
+      company_name: r.company, company_norm: r.company_norm, contact_name: r.name, last_name: lastName, first_name: firstName, email: em,
       phone: r.phone, job_title: r.job_title, employee_size: r.employee_size, role_level: roleLevel,
       disposition: "untouched", status: "new", priority_base: 20,
       priority_score: priorityScore(20, { employee_size: r.employee_size as string, role_level: roleLevel }),

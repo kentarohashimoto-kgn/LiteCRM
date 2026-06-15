@@ -255,6 +255,8 @@ export interface Lead {
   company_name?: string;
   company_norm?: string;
   contact_name?: string;
+  last_name?: string;
+  first_name?: string;
   email?: string;
   phone?: string;
   mobile_phone?: string;
