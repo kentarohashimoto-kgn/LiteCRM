@@ -340,6 +340,78 @@ export interface LeadImportBatch {
   created_at: string;
 }
 
+/** 経営レビュー(週次幹部MTG支援) — 新規テーブル。既存DBは参照のみ。 */
+export interface WeeklyKpiTarget {
+  id: UUID;
+  tenant_id: UUID;
+  target_month: string;
+  target_week: number;
+  department: string;
+  kpi_type: string;
+  monthly_target: number;
+  weekly_target: number;
+  owner_user_id?: UUID;
+  created_at: string;
+  updated_at: string;
+}
+export interface WeeklyKpiResult {
+  id: UUID;
+  tenant_id: UUID;
+  target_id: UUID;
+  actual_value: number;
+  actual_source: "auto" | "manual";
+  source_memo?: string;
+  input_user_id?: UUID;
+  updated_at: string;
+}
+export interface WeeklyReview {
+  id: UUID;
+  tenant_id: UUID;
+  target_id?: UUID;
+  result_id?: UUID;
+  evaluation?: string;
+  system_comment?: string;
+  human_comment?: string;
+  root_cause?: string;
+  countermeasure?: string;
+  owner_user_id?: UUID;
+  due_date?: string;
+  status: string;
+  next_check_point?: string;
+  result_comment?: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface MtgAction {
+  id: UUID;
+  tenant_id: UUID;
+  meeting_date?: string;
+  title: string;
+  description?: string;
+  department?: string;
+  related_type?: string;
+  related_id?: UUID;
+  owner_user_id?: UUID;
+  due_date?: string;
+  priority: string;
+  status: string;
+  completion_comment?: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface OpportunityReviewExtension {
+  id: UUID;
+  tenant_id: UUID;
+  existing_opportunity_id: UUID;
+  review_week?: string;
+  read_up_plan?: string;
+  closing_plan?: string;
+  blocking_issue?: string;
+  executive_comment?: string;
+  next_check_point?: string;
+  updated_at: string;
+}
+
 export interface Opportunity {
   id: UUID;
   tenant_id: UUID;

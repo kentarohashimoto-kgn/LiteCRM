@@ -19,6 +19,7 @@ import {
   Presentation,
   Coins,
   ClipboardList,
+  Gauge,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,16 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/opportunities", label: "案件", icon: Target },
       { href: "/app/forecast", label: "売上予測", icon: TrendingUp },
       { href: "/app/targets", label: "目標入力", icon: Goal },
+    ],
+  },
+  {
+    heading: "経営レビュー",
+    items: [
+      { href: "/app/exec", label: "週次サマリー", icon: Gauge },
+      { href: "/app/exec/kpi", label: "営業KPI振り返り", icon: Goal },
+      { href: "/app/exec/deals", label: "商談・読み管理", icon: Target },
+      { href: "/app/exec/actions", label: "アクション管理", icon: CheckSquare },
+      { href: "/app/exec/history", label: "振り返り履歴", icon: ClipboardList },
     ],
   },
   {

@@ -1100,3 +1100,116 @@ export async function deleteExportPresetAction(id: string): Promise<{ ok: boolea
   revalidatePath("/app/leads");
   return { ok: true };
 }
+
+// ===================== 経営レビュー(週次幹部MTG支援) =====================
+import { SALES_KPIS } from "@/lib/exec-review";
+
+const REVIEW_EDIT = ["owner", "admin", "sales_manager", "sales_rep", "external_sales"];
+
+/** 月次・週次KPI目標を保存(営業の各KPIをまとめてupsert)。 */
+export async function saveKpiTargetsAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const month = str(formData.get("target_month"));
+  const week = num(formData.get("target_week")) ?? 0;
+  if (!month) return;
+  const rows = SALES_KPIS.map((k) => ({
+    tenant_id: ctx.tenantId, target_month: month, target_week: week, department: "sales", kpi_type: k.key,
+    monthly_target: num(formData.get(`m_${k.key}`)) ?? 0,
+    weekly_target: num(formData.get(`w_${k.key}`)) ?? 0,
+    owner_user_id: ctx.userId,
+  }));
+  await sb.from("weekly_kpi_targets").upsert(rows, { onConflict: "tenant_id,target_month,target_week,department,kpi_type" });
+  revalidatePath("/app/exec/kpi");
+  revalidatePath("/app/exec");
+  return;
+}
+
+/** KPI実績の手動補正(自動集計を上書き)。 */
+export async function saveKpiActualAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const targetId = str(formData.get("target_id"));
+  if (!targetId) return;
+  const source = str(formData.get("actual_source")) === "manual" ? "manual" : "auto";
+  await sb.from("weekly_kpi_results").upsert({
+    tenant_id: ctx.tenantId, target_id: targetId,
+    actual_value: num(formData.get("actual_value")) ?? 0,
+    actual_source: source, source_memo: str(formData.get("source_memo")), input_user_id: ctx.userId,
+  }, { onConflict: "target_id" });
+  revalidatePath("/app/exec/kpi");
+  return;
+}
+
+/** 振り返り(所感・真因・対策・期限・ステータス)を保存。 */
+export async function saveWeeklyReviewAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const targetId = str(formData.get("target_id"));
+  if (!targetId) return;
+  await sb.from("weekly_reviews").upsert({
+    tenant_id: ctx.tenantId, target_id: targetId,
+    evaluation: str(formData.get("evaluation")), system_comment: str(formData.get("system_comment")),
+    human_comment: str(formData.get("human_comment")), root_cause: str(formData.get("root_cause")),
+    countermeasure: str(formData.get("countermeasure")), owner_user_id: str(formData.get("owner_user_id")) ?? ctx.userId,
+    due_date: str(formData.get("due_date")), status: str(formData.get("status")) ?? "open",
+    next_check_point: str(formData.get("next_check_point")), result_comment: str(formData.get("result_comment")),
+  }, { onConflict: "target_id" });
+  revalidatePath("/app/exec/kpi");
+  revalidatePath("/app/exec");
+  revalidatePath("/app/exec/history");
+  return;
+}
+
+/** MTGアクションを作成。 */
+export async function createMtgActionAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const title = str(formData.get("title"));
+  if (!title) return;
+  await sb.from("mtg_actions").insert({
+    tenant_id: ctx.tenantId, meeting_date: str(formData.get("meeting_date")), title,
+    description: str(formData.get("description")), department: str(formData.get("department")) ?? "sales",
+    related_type: str(formData.get("related_type")), related_id: str(formData.get("related_id")),
+    owner_user_id: str(formData.get("owner_user_id")) ?? ctx.userId, due_date: str(formData.get("due_date")),
+    priority: str(formData.get("priority")) ?? "middle", status: "open",
+  });
+  revalidatePath("/app/exec/actions");
+  revalidatePath("/app/exec");
+  return;
+}
+
+/** MTGアクションのステータス/完了コメント更新。 */
+export async function updateMtgActionAction(formData: FormData): Promise<void> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const patch: Record<string, unknown> = { status: str(formData.get("status")) ?? "open" };
+  if (formData.get("completion_comment") != null) patch.completion_comment = str(formData.get("completion_comment"));
+  await sb.from("mtg_actions").update(patch).eq("id", id);
+  revalidatePath("/app/exec/actions");
+  revalidatePath("/app/exec");
+  return;
+}
+
+/** 商談振り返り拡張(読み上げ方針・クロージング計画など)を保存。 */
+export async function saveOppReviewExtAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const oppId = str(formData.get("existing_opportunity_id"));
+  if (!oppId) return;
+  await sb.from("opportunity_review_extensions").upsert({
+    tenant_id: ctx.tenantId, existing_opportunity_id: oppId, review_week: str(formData.get("review_week")),
+    read_up_plan: str(formData.get("read_up_plan")), closing_plan: str(formData.get("closing_plan")),
+    blocking_issue: str(formData.get("blocking_issue")), executive_comment: str(formData.get("executive_comment")),
+    next_check_point: str(formData.get("next_check_point")),
+  }, { onConflict: "existing_opportunity_id" });
+  revalidatePath("/app/exec/deals");
+  return;
+}
