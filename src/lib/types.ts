@@ -412,6 +412,54 @@ export interface OpportunityReviewExtension {
   updated_at: string;
 }
 
+export interface CampaignReviewExtension {
+  id: UUID;
+  tenant_id: UUID;
+  campaign_id: UUID;
+  review_week?: string;
+  prep_status: string;
+  review_comment?: string;
+  next_improvement?: string;
+  updated_at: string;
+}
+export interface DeliveryReview {
+  id: UUID;
+  tenant_id: UUID;
+  customer_id?: UUID;
+  project_name?: string;
+  delivery_type: string;
+  execution_date?: string;
+  instructor_user_id?: UUID;
+  participants_count?: number;
+  satisfaction_score?: number;
+  issue_flag: boolean;
+  issue_detail?: string;
+  countermeasure?: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface ProjectProfitReview {
+  id: UUID;
+  tenant_id: UUID;
+  customer_id?: UUID;
+  project_type: string;
+  project_name?: string;
+  contract_amount: number;
+  planned_cost: number;
+  actual_cost: number;
+  forecast_cost: number;
+  planned_gross_profit?: number;
+  forecast_gross_profit?: number;
+  quality_risk?: string;
+  cost_risk?: string;
+  continuation_status?: string;
+  satisfaction_status?: string;
+  countermeasure?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Opportunity {
   id: UUID;
   tenant_id: UUID;

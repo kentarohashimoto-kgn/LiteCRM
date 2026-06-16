@@ -182,4 +182,62 @@ export interface DealReadRow {
   ext: { read_up_plan?: string; closing_plan?: string; blocking_issue?: string; executive_comment?: string; next_check_point?: string } | null;
 }
 
+// ===== Phase2: マーケ施策(既存campaigns流用) =====
+import { judgeCampaign, type Evaluation as Ev } from "@/lib/exec-review";
+import type { DeliveryReview, ProjectProfitReview, CampaignReviewExtension } from "@/lib/types";
+
+export interface MarketingRow {
+  id: string; name: string; channel: string; eventDate: string | null; done: boolean;
+  expectedLeads: number; actualLeads: number; appts: number; cost: number;
+  cpaPlan: number | null; cpaActual: number | null; apptRate: number | null;
+  prepStatus: string; ext: CampaignReviewExtension | null; daysToEvent: number | null;
+  evaluation: Ev; reasons: string[];
+}
+export async function getMarketingReview(month: string): Promise<{ rows: MarketingRow[]; leadTarget: number; planLeads: number; coverage: number | null; upcoming: MarketingRow[] }> {
+  const sb = getSupabaseServer();
+  const r = weekRange(month, 0);
+  const today = new Date(); const todayStr = ymd(today);
+  const horizon = ymd(new Date(today.getFullYear(), today.getMonth() + 1, today.getDate()));
+  const [{ data: cData }, { data: eData }, { data: stData }] = await Promise.all([
+    sb.from("campaigns").select("id,name,channel,event_date,event_status,expected_leads,actual_leads,appointments,cost").or(`and(event_date.gte.${r.monthStart},event_date.lte.${r.monthEnd}),and(event_date.gte.${todayStr},event_date.lte.${horizon})`),
+    sb.from("campaign_review_extensions").select("*"),
+    sb.from("sales_targets").select("target_leads").eq("target_month", month),
+  ]);
+  const extByCamp = new Map((eData ?? []).map((e) => [(e as CampaignReviewExtension).campaign_id, e as CampaignReviewExtension]));
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const toRow = (c: any): MarketingRow => {
+    const ext = extByCamp.get(c.id) ?? null;
+    const eventDate = c.event_date ?? null;
+    const done = c.event_status === "done" || (eventDate != null && eventDate < todayStr);
+    const expectedLeads = c.expected_leads ?? 0, actualLeads = c.actual_leads ?? 0, appts = c.appointments ?? 0, cost = c.cost ?? 0;
+    const daysToEvent = eventDate ? Math.round((+new Date(eventDate) - +today) / 86400000) : null;
+    const prepStatus = ext?.prep_status ?? (done ? "done" : "not_started");
+    const j = judgeCampaign({ expectedLeads, actualLeads, appts, cost, daysToEvent, prepStatus, done });
+    return {
+      id: c.id, name: c.name, channel: c.channel, eventDate, done, expectedLeads, actualLeads, appts, cost,
+      cpaPlan: expectedLeads > 0 ? cost / expectedLeads : null, cpaActual: actualLeads > 0 ? cost / actualLeads : null,
+      apptRate: actualLeads > 0 ? appts / actualLeads : null, prepStatus, ext, daysToEvent,
+      evaluation: j.evaluation, reasons: j.reasons,
+    };
+  };
+  const all = (cData ?? []).map(toRow);
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  const rows = all.filter((c) => c.eventDate && c.eventDate >= r.monthStart && c.eventDate <= r.monthEnd);
+  const upcoming = all.filter((c) => !c.done && c.daysToEvent != null && c.daysToEvent <= 30 && c.prepStatus !== "done" && c.prepStatus !== "reviewed");
+  const leadTarget = ((stData ?? [])[0] as { target_leads?: number } | undefined)?.target_leads ?? 0;
+  const planLeads = rows.reduce((s, c) => s + c.expectedLeads, 0);
+  return { rows, leadTarget, planLeads, coverage: leadTarget > 0 ? planLeads / leadTarget : null, upcoming };
+}
+
+export async function listDeliveryReviews(): Promise<DeliveryReview[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.from("delivery_reviews").select("*").order("execution_date", { ascending: false, nullsFirst: false });
+  return (data ?? []) as DeliveryReview[];
+}
+export async function listProjectProfitReviews(): Promise<ProjectProfitReview[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.from("project_profit_reviews").select("*").order("updated_at", { ascending: false });
+  return (data ?? []) as ProjectProfitReview[];
+}
+
 export type { Evaluation };

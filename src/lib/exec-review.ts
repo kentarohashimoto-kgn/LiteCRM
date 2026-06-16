@@ -135,3 +135,84 @@ function checkHint(kpiType: string): string {
     default: return "担当者別の内訳と阻害要因を確認。";
   }
 }
+
+// ===== Phase2: マーケ施策 =====
+export const CAMPAIGN_PREP_STATUS: { key: string; label: string }[] = [
+  { key: "not_started", label: "未着手" },
+  { key: "preparing", label: "準備中" },
+  { key: "done", label: "実施済" },
+  { key: "reviewed", label: "振り返り済" },
+];
+export const PREP_LABEL: Record<string, string> = Object.fromEntries(CAMPAIGN_PREP_STATUS.map((s) => [s.key, s.label]));
+
+/** 施策単体の判定: CPA超過/アポ化率低下/振り返り未実施/1ヶ月前未着手。 */
+export function judgeCampaign(c: { expectedLeads: number; actualLeads: number; appts: number; cost: number; daysToEvent: number | null; prepStatus: string; done: boolean }): { evaluation: Evaluation; reasons: string[] } {
+  const reasons: string[] = [];
+  let ev: Evaluation = "good";
+  const apptRate = c.actualLeads > 0 ? c.appts / c.actualLeads : null;
+  const cpaPlan = c.expectedLeads > 0 ? c.cost / c.expectedLeads : null;
+  const cpaActual = c.actualLeads > 0 ? c.cost / c.actualLeads : null;
+  if (!c.done && c.daysToEvent != null && c.daysToEvent <= 30 && c.prepStatus === "not_started") { ev = "bad"; reasons.push("実施1ヶ月前で準備未着手"); }
+  if (c.done && c.prepStatus !== "reviewed") { ev = worse(ev, "watch"); reasons.push("施策実施後の振り返り未実施"); }
+  if (cpaPlan != null && cpaActual != null && cpaActual >= cpaPlan * 1.1) { ev = "bad"; reasons.push("CPAが想定比110%以上"); }
+  if (c.done && c.actualLeads >= c.expectedLeads && apptRate != null && apptRate < 0.1) { ev = worse(ev, "watch"); reasons.push("リードは取れているがアポ化率が低い"); }
+  if (c.done && c.expectedLeads > 0 && c.actualLeads < c.expectedLeads * 0.6) { ev = "bad"; reasons.push("目標リードに対し実績60%未満"); }
+  return { evaluation: ev, reasons };
+}
+
+// ===== Phase3: デリバリー =====
+export const DELIVERY_TYPES: { key: string; label: string }[] = [
+  { key: "training", label: "研修品質" },
+  { key: "admin", label: "事務手続き" },
+  { key: "prep", label: "事前準備" },
+];
+export const DELIVERY_TYPE_LABEL: Record<string, string> = Object.fromEntries(DELIVERY_TYPES.map((d) => [d.key, d.label]));
+export const DELIVERY_STATUS: { key: string; label: string }[] = [
+  { key: "open", label: "未対応" },
+  { key: "in_progress", label: "対応中" },
+  { key: "done", label: "対応済" },
+];
+
+/** 研修満足度判定(5段階想定): 2.3以上Good / 2.0以上Watch / 未満Bad。低評価で対策未記入はBad。 */
+export function judgeDelivery(d: { satisfaction?: number | null; issueFlag: boolean; countermeasure?: string | null }): { evaluation: Evaluation; reasons: string[] } {
+  const reasons: string[] = [];
+  let ev: Evaluation = "good";
+  const s = d.satisfaction ?? null;
+  if (s != null) {
+    if (s < 2.0) { ev = "bad"; reasons.push("満足度2.0未満"); }
+    else if (s < 2.3) { ev = "watch"; reasons.push("満足度2.0以上2.3未満"); }
+  } else { ev = "watch"; reasons.push("満足度未入力"); }
+  if (d.issueFlag && !(d.countermeasure ?? "").trim()) { ev = "bad"; reasons.push("低評価/課題ありだが対策未記入"); }
+  return { evaluation: ev, reasons };
+}
+
+// ===== Phase4: 開発・顧問 =====
+export const PROJECT_TYPES: { key: string; label: string }[] = [
+  { key: "dev", label: "開発案件" },
+  { key: "advisory", label: "顧問案件" },
+];
+export const PROJECT_TYPE_LABEL: Record<string, string> = Object.fromEntries(PROJECT_TYPES.map((p) => [p.key, p.label]));
+export const CONTINUATION_STATUS: { key: string; label: string }[] = [
+  { key: "agreed", label: "継続合意" },
+  { key: "none", label: "継続なし" },
+  { key: "unconfirmed", label: "未確認" },
+];
+export const CONTINUATION_LABEL: Record<string, string> = Object.fromEntries(CONTINUATION_STATUS.map((c) => [c.key, c.label]));
+
+/** 原価超過/粗利低下/継続未確認/品質・満足リスクで判定。 */
+export function judgeProject(p: { projectType: string; contractAmount: number; plannedCost: number; forecastCost: number; plannedGp?: number | null; forecastGp?: number | null; qualityRisk?: string | null; costRisk?: string | null; continuation?: string | null; satisfaction?: string | null }): { evaluation: Evaluation; reasons: string[]; gpRate: number | null } {
+  const reasons: string[] = [];
+  let ev: Evaluation = "good";
+  const costRatio = p.plannedCost > 0 ? p.forecastCost / p.plannedCost : null;
+  const gpRate = p.contractAmount > 0 && p.forecastGp != null ? p.forecastGp / p.contractAmount : null;
+  if (costRatio != null && costRatio > 1.1) { ev = "bad"; reasons.push("着地原価が予定比110%超"); }
+  else if (costRatio != null && costRatio > 1.0) { ev = worse(ev, "watch"); reasons.push("原価が予定を超過"); }
+  if (gpRate != null && p.plannedGp != null && p.contractAmount > 0) {
+    const plannedRate = p.plannedGp / p.contractAmount;
+    if (plannedRate > 0 && gpRate < plannedRate * 0.8) { ev = "bad"; reasons.push("粗利率が計画を大きく下回る"); }
+  }
+  if ((p.qualityRisk ?? "").trim() && /高|あり|risk|遅延/i.test(p.qualityRisk ?? "")) { ev = worse(ev, "watch"); reasons.push("品質/納期リスクあり"); }
+  if ((p.satisfaction ?? "").trim() && /不満|低|bad/i.test(p.satisfaction ?? "")) { ev = "bad"; reasons.push("顧客不満あり"); }
+  if (p.projectType === "advisory" && p.continuation === "unconfirmed") { ev = worse(ev, "watch"); reasons.push("翌月継続が未確認"); }
+  return { evaluation: ev, reasons, gpRate };
+}

@@ -1213,3 +1213,61 @@ export async function saveOppReviewExtAction(formData: FormData): Promise<void> 
   revalidatePath("/app/exec/deals");
   return;
 }
+
+// ===================== 経営レビュー Phase2-4 =====================
+/** マーケ施策の振り返り(既存campaignsに紐付く拡張)を保存。 */
+export async function saveCampaignReviewExtAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const campaignId = str(formData.get("campaign_id"));
+  if (!campaignId) return;
+  await sb.from("campaign_review_extensions").upsert({
+    tenant_id: ctx.tenantId, campaign_id: campaignId, review_week: str(formData.get("review_week")),
+    prep_status: str(formData.get("prep_status")) ?? "not_started",
+    review_comment: str(formData.get("review_comment")), next_improvement: str(formData.get("next_improvement")),
+  }, { onConflict: "campaign_id" });
+  revalidatePath("/app/exec/marketing");
+}
+
+/** デリバリー品質レビューを保存(idありは更新)。 */
+export async function saveDeliveryReviewAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  const row = {
+    tenant_id: ctx.tenantId, customer_id: str(formData.get("customer_id")), project_name: str(formData.get("project_name")),
+    delivery_type: str(formData.get("delivery_type")) ?? "training", execution_date: str(formData.get("execution_date")),
+    instructor_user_id: str(formData.get("instructor_user_id")), participants_count: num(formData.get("participants_count")),
+    satisfaction_score: num(formData.get("satisfaction_score")), issue_flag: !!formData.get("issue_flag"),
+    issue_detail: str(formData.get("issue_detail")), countermeasure: str(formData.get("countermeasure")),
+    status: str(formData.get("status")) ?? "open",
+  };
+  if (id) await sb.from("delivery_reviews").update(row).eq("id", id);
+  else { if (!row.project_name && !row.customer_id) return; await sb.from("delivery_reviews").insert(row); }
+  revalidatePath("/app/exec/delivery");
+}
+
+/** 開発・顧問案件の原価/粗利レビューを保存(idありは更新)。 */
+export async function saveProjectReviewAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  const contract = num(formData.get("contract_amount")) ?? 0;
+  const fcost = num(formData.get("forecast_cost")) ?? 0;
+  const row = {
+    tenant_id: ctx.tenantId, customer_id: str(formData.get("customer_id")), project_type: str(formData.get("project_type")) ?? "dev",
+    project_name: str(formData.get("project_name")), contract_amount: contract,
+    planned_cost: num(formData.get("planned_cost")) ?? 0, actual_cost: num(formData.get("actual_cost")) ?? 0, forecast_cost: fcost,
+    planned_gross_profit: num(formData.get("planned_gross_profit")) ?? (contract - (num(formData.get("planned_cost")) ?? 0)),
+    forecast_gross_profit: num(formData.get("forecast_gross_profit")) ?? (contract - fcost),
+    quality_risk: str(formData.get("quality_risk")), cost_risk: str(formData.get("cost_risk")),
+    continuation_status: str(formData.get("continuation_status")), satisfaction_status: str(formData.get("satisfaction_status")),
+    countermeasure: str(formData.get("countermeasure")),
+  };
+  if (id) await sb.from("project_profit_reviews").update(row).eq("id", id);
+  else { if (!row.project_name && !row.customer_id) return; await sb.from("project_profit_reviews").insert(row); }
+  revalidatePath("/app/exec/projects");
+}

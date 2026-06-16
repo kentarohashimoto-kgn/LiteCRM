@@ -1,21 +1,33 @@
 import Link from "next/link";
 import { AlertTriangle, Clock } from "lucide-react";
-import { getKpiReview, listMtgActions, getExecAlerts, weeksInMonth, parsePeriod } from "@/lib/data/exec";
+import { getKpiReview, listMtgActions, getExecAlerts, weeksInMonth, parsePeriod, getMarketingReview, listDeliveryReviews, listProjectProfitReviews } from "@/lib/data/exec";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { PeriodSelect } from "@/components/exec/period-select";
-import { EVALUATION_META, KPI_LABEL, DEPARTMENTS, STATUS_LABEL } from "@/lib/exec-review";
+import { EVALUATION_META, KPI_LABEL, DEPARTMENTS, STATUS_LABEL, judgeDelivery, judgeProject, type Evaluation } from "@/lib/exec-review";
 import { formatDateFull } from "@/lib/utils";
+
+function tally(evs: Evaluation[]) {
+  return { good: evs.filter((e) => e === "good").length, watch: evs.filter((e) => e === "watch").length, bad: evs.filter((e) => e === "bad").length };
+}
 
 export default async function ExecSummaryPage({ searchParams }: { searchParams: { month?: string; week?: string } }) {
   const { month, week } = parsePeriod(searchParams);
-  const [rows, actions] = await Promise.all([getKpiReview(month, week), listMtgActions()]);
+  const [rows, actions, mkt, deliveries, projects] = await Promise.all([
+    getKpiReview(month, week), listMtgActions(), getMarketingReview(month), listDeliveryReviews(), listProjectProfitReviews(),
+  ]);
   const alerts = await getExecAlerts(rows, actions);
   const bad = rows.filter((r) => r.judge.evaluation === "bad");
   const watch = rows.filter((r) => r.judge.evaluation === "watch");
   const good = rows.filter((r) => r.judge.evaluation === "good");
 
-  // 部門別 Good/Watch/Bad(現状は営業のみ実データ。他部門はPhase2-4)
-  const salesCounts = { good: good.length, watch: watch.length, bad: bad.length };
+  // 部門別 Good/Watch/Bad
+  const deptCounts: Record<string, { good: number; watch: number; bad: number } | null> = {
+    sales: { good: good.length, watch: watch.length, bad: bad.length },
+    marketing: mkt.rows.length ? tally(mkt.rows.map((c) => c.evaluation)) : null,
+    delivery: deliveries.length ? tally(deliveries.map((d) => judgeDelivery({ satisfaction: d.satisfaction_score, issueFlag: d.issue_flag, countermeasure: d.countermeasure }).evaluation)) : null,
+    dev: projects.filter((p) => p.project_type === "dev").length ? tally(projects.filter((p) => p.project_type === "dev").map((p) => judgeProject({ projectType: p.project_type, contractAmount: p.contract_amount, plannedCost: p.planned_cost, forecastCost: p.forecast_cost, plannedGp: p.planned_gross_profit, forecastGp: p.forecast_gross_profit, qualityRisk: p.quality_risk, costRisk: p.cost_risk, continuation: p.continuation_status, satisfaction: p.satisfaction_status }).evaluation)) : null,
+    advisory: projects.filter((p) => p.project_type === "advisory").length ? tally(projects.filter((p) => p.project_type === "advisory").map((p) => judgeProject({ projectType: p.project_type, contractAmount: p.contract_amount, plannedCost: p.planned_cost, forecastCost: p.forecast_cost, plannedGp: p.planned_gross_profit, forecastGp: p.forecast_gross_profit, qualityRisk: p.quality_risk, costRisk: p.cost_risk, continuation: p.continuation_status, satisfaction: p.satisfaction_status }).evaluation)) : null,
+  };
 
   return (
     <div>
@@ -29,7 +41,7 @@ export default async function ExecSummaryPage({ searchParams }: { searchParams: 
       <Section title="部門別 状態（Good / Watch / Bad）" className="mb-5" action={<Link href="/app/exec/kpi" className="text-xs font-semibold text-teal-primary hover:underline">営業KPI →</Link>}>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {DEPARTMENTS.map((d) => {
-            const c = d.key === "sales" ? salesCounts : null;
+            const c = deptCounts[d.key];
             return (
               <div key={d.key} className="card card-pad">
                 <div className="text-sm font-semibold mb-2">{d.label}</div>
@@ -39,7 +51,7 @@ export default async function ExecSummaryPage({ searchParams }: { searchParams: 
                     <span className="pill bg-amber-100 text-amber-700">W {c.watch}</span>
                     <span className="pill bg-rose-100 text-rose-600">B {c.bad}</span>
                   </div>
-                ) : <div className="text-[11px] text-ink/35">Phase2以降で追加</div>}
+                ) : <div className="text-[11px] text-ink/35">データ未登録</div>}
               </div>
             );
           })}
