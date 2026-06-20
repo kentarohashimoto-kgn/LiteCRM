@@ -85,26 +85,19 @@ export async function getKpiReview(month: string, week: number): Promise<KpiRevi
   const range = weekRange(month, week);
   const remainingWeeks = Math.max(0, weeksInMonth(month) - week);
 
-  const [{ data: tData }, { data: rData }, { data: revData }] = await Promise.all([
+  // 目標/実績/レビュー(各1) + KPI実績(週・月の2RPCで全KPI分)を一括並列取得
+  const [{ data: tData }, { data: rData }, { data: revData }, { data: weekAct }, { data: monthAct }] = await Promise.all([
     sb.from("weekly_kpi_targets").select("*").eq("target_month", month).eq("target_week", week).eq("department", "sales"),
     sb.from("weekly_kpi_results").select("*"),
     sb.from("weekly_reviews").select("*"),
+    sb.rpc("sales_actuals", { p_start: range.start, p_end: range.end }),
+    sb.rpc("sales_actuals", { p_start: range.monthStart, p_end: range.end }),
   ]);
   const targets = (tData ?? []) as WeeklyKpiTarget[];
   const resultByTarget = new Map((rData ?? []).map((r) => [(r as WeeklyKpiResult).target_id, r as WeeklyKpiResult]));
   const reviewByTarget = new Map((revData ?? []).map((r) => [(r as WeeklyReview).target_id, r as WeeklyReview]));
-
-  // 全KPIの週次・月間実績を一括で並列取得(逐次round-tripを排除)
-  const actualPairs = await Promise.all(
-    SALES_KPIS.map(async (kpi) => {
-      const [autoActual, monthlyActual] = await Promise.all([
-        getSalesActual(kpi.key, range.start, range.end),
-        getSalesActual(kpi.key, range.monthStart, range.end),
-      ]);
-      return [kpi.key, { autoActual, monthlyActual }] as const;
-    }),
-  );
-  const actualByKpi = new Map(actualPairs);
+  const wk = (weekAct ?? {}) as Record<string, number>;
+  const mo = (monthAct ?? {}) as Record<string, number>;
 
   return SALES_KPIS.map((kpi) => {
     const target = targets.find((t) => t.kpi_type === kpi.key);
@@ -112,13 +105,14 @@ export async function getKpiReview(month: string, week: number): Promise<KpiRevi
     const review = target ? reviewByTarget.get(target.id) : undefined;
     const monthlyTarget = target?.monthly_target ?? 0;
     const weeklyTarget = target?.weekly_target ?? 0;
-    const a = actualByKpi.get(kpi.key)!;
-    const actual = result?.actual_source === "manual" ? result.actual_value : a.autoActual;
-    const calc = { monthlyTarget, weeklyTarget, actual, monthlyActual: a.monthlyActual, remainingWeeks };
+    const autoActual = wk[kpi.key] ?? 0;
+    const monthlyActual = mo[kpi.key] ?? 0;
+    const actual = result?.actual_source === "manual" ? result.actual_value : autoActual;
+    const calc = { monthlyTarget, weeklyTarget, actual, monthlyActual, remainingWeeks };
     const judge = judgeKpi(calc);
     return {
       kpiType: kpi.key, target, result, review, monthlyTarget, weeklyTarget, actual,
-      actualSource: result?.actual_source ?? "auto", monthlyActual: a.monthlyActual, remainingWeeks, judge,
+      actualSource: result?.actual_source ?? "auto", monthlyActual, remainingWeeks, judge,
       systemComment: buildSystemComment(kpi.key, calc, judge),
     };
   });

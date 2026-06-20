@@ -17,9 +17,12 @@ export interface Ctx {
  */
 export const getCtxOrNull = cache(async (): Promise<Ctx | null> => {
   const supabase = getSupabaseServer();
+  // セッションはCookieからローカルに復元(ネットワーク往復なし)。
+  // トークンの正当性検証・リフレッシュは middleware の getUser() が担保する。
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) return null;
 
   const { data: membership } = await supabase
