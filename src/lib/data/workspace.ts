@@ -61,67 +61,36 @@ interface ProfileRow {
   avatar_color: string | null;
 }
 
-/**
- * PostgREST の1リクエスト上限(既定1000行)を超えるテーブルを全件取得する。
- * 1000行未満なら1リクエストで終了するため、小さいテーブルに追加コストは無い。
- */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-async function fetchAll<T>(build: () => any): Promise<T[]> {
-  const PAGE = 1000;
-  const out: T[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await build().range(from, from + PAGE - 1);
-    if (error || !data || data.length === 0) break;
-    out.push(...(data as T[]));
-    if (data.length < PAGE) break;
-  }
-  return out;
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const getWorkspace = cache(async (): Promise<Workspace> => {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
 
-  const [
-    profiles,
-    memberships,
-    accounts,
-    contacts,
-    leadSources,
-    campaigns,
-    products,
-    opportunities,
-    meetings,
-    billingSchedules,
-    activities,
-    tasks,
-    stageHistories,
-    salesTargets,
-    repTargets,
-    seminarResponses,
-    leadImportBatches,
-    acquirerAliases,
-  ] = await Promise.all([
-    fetchAll<ProfileRow>(() => sb.from("profiles").select("id, email, display_name, avatar_color")),
-    fetchAll<Membership>(() => sb.from("memberships").select("*")),
-    fetchAll<Account>(() => sb.from("accounts").select("*").order("name")),
-    fetchAll<Contact>(() => sb.from("contacts").select("*").order("id")),
-    fetchAll<LeadSource>(() => sb.from("lead_sources").select("*").order("created_at")),
-    fetchAll<Campaign>(() => sb.from("campaigns").select("*").order("sort_order")),
-    fetchAll<Product>(() => sb.from("products").select("*").order("created_at")),
-    fetchAll<Opportunity>(() => sb.from("opportunities").select("*").order("id")),
-    fetchAll<Meeting>(() => sb.from("meetings").select("*").order("meeting_date", { ascending: false }).order("id")),
-    fetchAll<BillingSchedule>(() => sb.from("billing_schedules").select("*")),
-    fetchAll<Activity>(() => sb.from("activities").select("*").order("activity_at", { ascending: false }).order("id")),
-    fetchAll<Task>(() => sb.from("tasks").select("*").order("id")),
-    fetchAll<StageHistory>(() => sb.from("stage_histories").select("*").order("changed_at", { ascending: false }).order("id")),
-    fetchAll<SalesTarget>(() => sb.from("sales_targets").select("*")),
-    fetchAll<RepTarget>(() => sb.from("rep_targets").select("*")),
-    fetchAll<SeminarResponse>(() => sb.from("seminar_responses").select("*").order("responded_at")),
-    fetchAll<LeadImportBatch>(() => sb.from("lead_import_batches").select("*").order("created_at", { ascending: false })),
-    fetchAll<AcquirerAlias>(() => sb.from("acquirer_aliases").select("*")),
-  ]);
+  // 1往復のRPCで全参照データを取得(RLS準拠)。多数クエリの往復を排除。
+  const { data } = await sb.rpc("workspace_full");
+  const j = (data ?? {}) as Record<string, unknown[]>;
+  const profiles = (j.profiles ?? []) as ProfileRow[];
+  const memberships = (j.memberships ?? []) as Membership[];
+  const accounts = (j.accounts ?? []) as Account[];
+  const contacts = (j.contacts ?? []) as Contact[];
+  const leadSources = (j.lead_sources ?? []) as LeadSource[];
+  const campaigns = (j.campaigns ?? []) as Campaign[];
+  const products = (j.products ?? []) as Product[];
+  const opportunities = (j.opportunities ?? []) as Opportunity[];
+  const meetings = (j.meetings ?? []) as Meeting[];
+  const billingSchedules = (j.billing_schedules ?? []) as BillingSchedule[];
+  const activities = (j.activities ?? []) as Activity[];
+  const tasks = (j.tasks ?? []) as Task[];
+  const stageHistories = (j.stage_histories ?? []) as StageHistory[];
+  const salesTargets = (j.sales_targets ?? []) as SalesTarget[];
+  const repTargets = (j.rep_targets ?? []) as RepTarget[];
+  const seminarResponses = (j.seminar_responses ?? []) as SeminarResponse[];
+  const leadImportBatches = (j.lead_import_batches ?? []) as LeadImportBatch[];
+  const acquirerAliases = (j.acquirer_aliases ?? []) as AcquirerAlias[];
+
+  accounts.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  campaigns.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  leadImportBatches.sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
 
   const users: User[] = profiles.map((p) => ({
     id: p.id,
@@ -173,19 +142,21 @@ export const getWorkspaceLite = cache(async (): Promise<Workspace> => {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
 
-  const [profiles, memberships, accounts, leadSources, campaigns, products, opportunities, tasks, salesTargets, repTargets] =
-    await Promise.all([
-      fetchAll<ProfileRow>(() => sb.from("profiles").select("id, email, display_name, avatar_color")),
-      fetchAll<Membership>(() => sb.from("memberships").select("*")),
-      fetchAll<Account>(() => sb.from("accounts").select("*").order("name")),
-      fetchAll<LeadSource>(() => sb.from("lead_sources").select("*").order("created_at")),
-      fetchAll<Campaign>(() => sb.from("campaigns").select("*").order("sort_order")),
-      fetchAll<Product>(() => sb.from("products").select("*").order("created_at")),
-      fetchAll<Opportunity>(() => sb.from("opportunities").select("*").order("id")),
-      fetchAll<Task>(() => sb.from("tasks").select("*").order("id")),
-      fetchAll<SalesTarget>(() => sb.from("sales_targets").select("*")),
-      fetchAll<RepTarget>(() => sb.from("rep_targets").select("*")),
-    ]);
+  // 1往復のRPCで参照データをまとめて取得(RLS準拠)。逐次/並列の多数クエリを排除。
+  const { data } = await sb.rpc("workspace_lite");
+  const j = (data ?? {}) as Record<string, unknown[]>;
+  const profiles = (j.profiles ?? []) as ProfileRow[];
+  const memberships = (j.memberships ?? []) as Membership[];
+  const accounts = (j.accounts ?? []) as Account[];
+  const leadSources = (j.lead_sources ?? []) as LeadSource[];
+  const campaigns = (j.campaigns ?? []) as Campaign[];
+  const products = (j.products ?? []) as Product[];
+  const opportunities = (j.opportunities ?? []) as Opportunity[];
+  const tasks = (j.tasks ?? []) as Task[];
+  const salesTargets = (j.sales_targets ?? []) as SalesTarget[];
+  const repTargets = (j.rep_targets ?? []) as RepTarget[];
+
+  accounts.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
 
   const users: User[] = profiles.map((p) => ({
     id: p.id, name: p.display_name ?? p.email ?? "—", email: p.email ?? "", avatarColor: p.avatar_color ?? "#008C8C",
