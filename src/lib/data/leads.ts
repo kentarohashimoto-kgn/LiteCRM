@@ -7,22 +7,20 @@
  *  - getLead:        単票取得
  */
 import { getSupabaseServer } from "@/lib/supabase/server";
-import { monthKey, startOfMonth } from "@/lib/utils";
 import type { OppView } from "@/lib/data/select";
 import type { Lead, LeadImportBatch, AcquirerAlias, LeadExportPreset } from "@/lib/types";
 import { sizeBucket, type AggLead, type WsListRow, type WsQueueRow, type LeadsFilters } from "@/lib/data/leads-workspace";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-async function paginate<T>(build: (from: number, to: number) => any): Promise<T[]> {
+// 件数を取得→全ページを並列取得(逐次round-tripを排除)。RLSはuserセッションで担保。
+async function selectAll<T>(sb: any, table: string, columns: string, orderCol = "id"): Promise<T[]> {
   const PAGE = 1000;
-  const out: T[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await build(from, from + PAGE - 1);
-    if (error || !data || data.length === 0) break;
-    out.push(...(data as T[]));
-    if (data.length < PAGE) break;
-  }
-  return out;
+  const { count } = await sb.from(table).select("id", { count: "exact", head: true });
+  const pages = Math.max(1, Math.ceil((count ?? 0) / PAGE));
+  const reqs = [];
+  for (let p = 0; p < pages; p++) reqs.push(sb.from(table).select(columns).order(orderCol).range(p * PAGE, (p + 1) * PAGE - 1));
+  const res = await Promise.all(reqs);
+  return res.flatMap((r: any) => (r?.data ?? []) as T[]);
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -34,38 +32,23 @@ export interface LeadMetrics {
   bySource: Map<string, number>; // lead_source_id -> 件数
 }
 
-interface NarrowLead {
-  id: string;
-  acquired_at: string | null;
-  disposition: string | null;
-  lead_source_id: string | null;
-}
-
 /**
- * 集計に必要な最小列だけを取得して集計する(行はクライアントに渡らない)。
- * 受注(won)判定は呼び出し側が持つ opportunities(lead_id 紐付き)から導出。
+ * リード集計。SQL集計関数(lead_metrics)で行を転送せずに取得する。
+ * 引数 opps は後方互換のため受け取るが未使用(受注判定はSQL側で実施)。
  */
-export async function getLeadMetrics(opps: OppView[]): Promise<LeadMetrics> {
+export async function getLeadMetrics(_opps?: OppView[]): Promise<LeadMetrics> {
+  void _opps;
   const sb = getSupabaseServer();
-  const rows = await paginate<NarrowLead>((from, to) =>
-    sb.from("leads").select("id,acquired_at,disposition,lead_source_id").order("id").range(from, to),
-  );
-  const wonLeadIds = new Set(opps.filter((o) => o.lead_id && o.status === "won").map((o) => o.lead_id));
-
-  const byMonth = new Map<string, number>();
-  const apptByMonth = new Map<string, number>();
-  const wonByMonth = new Map<string, number>();
-  const bySource = new Map<string, number>();
-  const inc = (m: Map<string, number>, k: string | null) => { if (k) m.set(k, (m.get(k) ?? 0) + 1); };
-
-  for (const r of rows) {
-    const mk = r.acquired_at ? monthKey(startOfMonth(new Date(r.acquired_at))) : null;
-    inc(byMonth, mk);
-    if (r.disposition === "appointment") inc(apptByMonth, mk);
-    if (wonLeadIds.has(r.id)) inc(wonByMonth, mk);
-    if (r.lead_source_id) inc(bySource, r.lead_source_id);
-  }
-  return { total: rows.length, byMonth, apptByMonth, wonByMonth, bySource };
+  const { data } = await sb.rpc("lead_metrics");
+  const j = (data ?? {}) as { total?: number; byMonth?: Record<string, number>; apptByMonth?: Record<string, number>; wonByMonth?: Record<string, number>; bySource?: Record<string, number> };
+  const toMap = (o?: Record<string, number>) => new Map(Object.entries(o ?? {}));
+  return {
+    total: j.total ?? 0,
+    byMonth: toMap(j.byMonth),
+    apptByMonth: toMap(j.apptByMonth),
+    wonByMonth: toMap(j.wonByMonth),
+    bySource: toMap(j.bySource),
+  };
 }
 
 const LIST_PAGE = 100;
@@ -132,12 +115,7 @@ export async function queryCallQueue(): Promise<{ rows: WsQueueRow[]; total: num
 /** 企業ビュー・分析用: 集計に必要な最小列のみを全件取得。 */
 export async function fetchLeadsForAggregation(): Promise<AggLead[]> {
   const sb = getSupabaseServer();
-  return paginate<AggLead>((from, to) =>
-    sb.from("leads")
-      .select("id,company_name,company_norm,contact_name,rank,job_title,employee_size,raw_event,priority_score,disposition,acquirer,scanned_at")
-      .order("id")
-      .range(from, to),
-  );
+  return selectAll<AggLead>(sb, "leads", "id,company_name,company_norm,contact_name,rank,job_title,employee_size,raw_event,priority_score,disposition,acquirer,scanned_at");
 }
 
 /** 流入フィルタ用の取込イベント一覧(取込履歴の小テーブルから)。 */

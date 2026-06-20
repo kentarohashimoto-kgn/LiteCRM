@@ -94,25 +94,34 @@ export async function getKpiReview(month: string, week: number): Promise<KpiRevi
   const resultByTarget = new Map((rData ?? []).map((r) => [(r as WeeklyKpiResult).target_id, r as WeeklyKpiResult]));
   const reviewByTarget = new Map((revData ?? []).map((r) => [(r as WeeklyReview).target_id, r as WeeklyReview]));
 
-  const out: KpiReviewRow[] = [];
-  for (const kpi of SALES_KPIS) {
+  // 全KPIの週次・月間実績を一括で並列取得(逐次round-tripを排除)
+  const actualPairs = await Promise.all(
+    SALES_KPIS.map(async (kpi) => {
+      const [autoActual, monthlyActual] = await Promise.all([
+        getSalesActual(kpi.key, range.start, range.end),
+        getSalesActual(kpi.key, range.monthStart, range.end),
+      ]);
+      return [kpi.key, { autoActual, monthlyActual }] as const;
+    }),
+  );
+  const actualByKpi = new Map(actualPairs);
+
+  return SALES_KPIS.map((kpi) => {
     const target = targets.find((t) => t.kpi_type === kpi.key);
     const result = target ? resultByTarget.get(target.id) : undefined;
     const review = target ? reviewByTarget.get(target.id) : undefined;
     const monthlyTarget = target?.monthly_target ?? 0;
     const weeklyTarget = target?.weekly_target ?? 0;
-    const autoActual = await getSalesActual(kpi.key, range.start, range.end);
-    const actual = result?.actual_source === "manual" ? result.actual_value : autoActual;
-    const monthlyActual = await getSalesActual(kpi.key, range.monthStart, range.end);
-    const calc = { monthlyTarget, weeklyTarget, actual, monthlyActual, remainingWeeks };
+    const a = actualByKpi.get(kpi.key)!;
+    const actual = result?.actual_source === "manual" ? result.actual_value : a.autoActual;
+    const calc = { monthlyTarget, weeklyTarget, actual, monthlyActual: a.monthlyActual, remainingWeeks };
     const judge = judgeKpi(calc);
-    out.push({
+    return {
       kpiType: kpi.key, target, result, review, monthlyTarget, weeklyTarget, actual,
-      actualSource: result?.actual_source ?? "auto", monthlyActual, remainingWeeks, judge,
+      actualSource: result?.actual_source ?? "auto", monthlyActual: a.monthlyActual, remainingWeeks, judge,
       systemComment: buildSystemComment(kpi.key, calc, judge),
-    });
-  }
-  return out;
+    };
+  });
 }
 
 /** MTGアクション一覧。 */

@@ -9,14 +9,15 @@ import { regionOf, empBucket, industryLabel, deptLabel, abcClassify, type AbcRow
 import { monthKey, startOfMonth } from "@/lib/utils";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-async function paginate(sb: any, build: (from: number, to: number) => any): Promise<any[]> {
-  const PAGE = 1000; const out: any[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data } = await build(from, from + PAGE - 1);
-    if (!data || data.length === 0) break;
-    out.push(...data); if (data.length < PAGE) break;
-  }
-  return out;
+// 件数→全ページ並列取得(逐次round-tripを排除)。
+async function selectAll(sb: any, table: string, columns: string): Promise<any[]> {
+  const PAGE = 1000;
+  const { count } = await sb.from(table).select("id", { count: "exact", head: true });
+  const pages = Math.max(1, Math.ceil((count ?? 0) / PAGE));
+  const reqs = [];
+  for (let p = 0; p < pages; p++) reqs.push(sb.from(table).select(columns).order("id").range(p * PAGE, (p + 1) * PAGE - 1));
+  const res = await Promise.all(reqs);
+  return res.flatMap((r: any) => r?.data ?? []);
 }
 
 interface CompanyDeal { won: boolean; a: boolean; b: boolean; open: boolean; wonAmount: number; pipeline: number; name: string }
@@ -31,9 +32,9 @@ export interface TrendsData {
 export async function buildTrends(scope: string): Promise<TrendsData> {
   const sb = getSupabaseServer();
   const [leads, opps, accounts, sources] = await Promise.all([
-    paginate(sb, (f, t) => sb.from("leads").select("company_norm,company_name,prefecture,industry,employee_size,department,acquired_at,lead_source_id,account_id,status").order("id").range(f, t)),
-    paginate(sb, (f, t) => sb.from("opportunities").select("account_id,status,yomi,amount").order("id").range(f, t)),
-    paginate(sb, (f, t) => sb.from("accounts").select("id,name").order("id").range(f, t)),
+    selectAll(sb, "leads", "company_norm,company_name,prefecture,industry,employee_size,department,acquired_at,lead_source_id,account_id,status"),
+    selectAll(sb, "opportunities", "account_id,status,yomi,amount"),
+    selectAll(sb, "accounts", "id,name"),
     sb.from("lead_sources").select("id,name").then((r: any) => r.data ?? []),
   ]);
   const accName = new Map<string, string>(accounts.map((a: any) => [a.id, a.name]));
