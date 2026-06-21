@@ -212,6 +212,73 @@ export interface Campaign {
   created_at: string;
 }
 
+/** Sランク顧客(エンタープライズ攻略) — 会社単位攻略 + 部署 + キーマン。 */
+export interface SrankAccount {
+  id: UUID;
+  tenant_id: UUID;
+  account_id?: UUID;
+  company_name: string;
+  srank_reason?: string;
+  revenue_potential?: number;
+  target_sales?: number;
+  longterm_target?: number;
+  deal_status: string;
+  stage: string;
+  exec_involved: boolean;
+  manager_involved: boolean;
+  priority_month?: string;
+  exec_contact: boolean;
+  exec_contact_person?: string;
+  exec_contact_route?: string;
+  exec_theme?: string;
+  company_issue?: string;
+  next_upper_person?: string;
+  intro_request_status?: string;
+  next_exec_contact_date?: string;
+  next_dept_contact_date?: string;
+  owner_user_id?: UUID;
+  created_at: string;
+  updated_at: string;
+}
+export interface SrankDepartment {
+  id: UUID;
+  tenant_id: UUID;
+  srank_account_id: UUID;
+  name: string;
+  responsible?: string;
+  keyperson?: string;
+  decision_maker?: string;
+  promoter?: string;
+  issue?: string;
+  interest_products?: string;
+  budget_status?: string;
+  timing?: string;
+  proposal_status: string;
+  amount: number;
+  expansion_potential?: string;
+  next_action?: string;
+  next_action_date?: string;
+  updated_at: string;
+}
+export interface SrankKeyperson {
+  id: UUID;
+  tenant_id: UUID;
+  srank_account_id: UUID;
+  name: string;
+  department?: string;
+  title?: string;
+  role?: string;
+  influence?: string;
+  relationship?: string;
+  interest?: string;
+  last_contact_date?: string;
+  next_contact_date?: string;
+  intro_depts?: string;
+  concern?: string;
+  next_request?: string;
+  updated_at: string;
+}
+
 export interface ProductCategory {
   id: UUID;
   tenant_id: UUID;

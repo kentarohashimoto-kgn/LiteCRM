@@ -1271,3 +1271,103 @@ export async function saveProjectReviewAction(formData: FormData): Promise<void>
   else { if (!row.project_name && !row.customer_id) return; await sb.from("project_profit_reviews").insert(row); }
   revalidatePath("/app/exec/projects");
 }
+
+// ===================== Sランク顧客攻略 =====================
+/** 顧客(account)または会社名でSランク顧客を指定(攻略対象に登録)。 */
+export async function designateSrankAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const accountId = str(formData.get("account_id"));
+  let companyName = str(formData.get("company_name"));
+  if (accountId && !companyName) {
+    const { data } = await sb.from("accounts").select("name").eq("id", accountId).maybeSingle();
+    companyName = data?.name ?? null;
+  }
+  if (!companyName) return;
+  await sb.from("srank_accounts").insert({
+    tenant_id: ctx.tenantId, account_id: accountId, company_name: companyName,
+    srank_reason: str(formData.get("srank_reason")), target_sales: num(formData.get("target_sales")),
+    revenue_potential: num(formData.get("revenue_potential")), stage: "S-01", owner_user_id: ctx.userId,
+  });
+  revalidatePath("/app/srank");
+}
+
+/** Sランク会社の攻略情報を更新。 */
+export async function updateSrankAccountAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await sb.from("srank_accounts").update({
+    srank_reason: str(formData.get("srank_reason")), revenue_potential: num(formData.get("revenue_potential")),
+    target_sales: num(formData.get("target_sales")), longterm_target: num(formData.get("longterm_target")),
+    deal_status: str(formData.get("deal_status")) ?? "none", stage: str(formData.get("stage")) ?? "S-01",
+    exec_involved: !!formData.get("exec_involved"), manager_involved: !!formData.get("manager_involved"),
+    priority_month: str(formData.get("priority_month")), exec_contact: !!formData.get("exec_contact"),
+    exec_contact_person: str(formData.get("exec_contact_person")), exec_contact_route: str(formData.get("exec_contact_route")),
+    exec_theme: str(formData.get("exec_theme")), company_issue: str(formData.get("company_issue")),
+    next_upper_person: str(formData.get("next_upper_person")), intro_request_status: str(formData.get("intro_request_status")),
+    next_exec_contact_date: str(formData.get("next_exec_contact_date")), next_dept_contact_date: str(formData.get("next_dept_contact_date")),
+  }).eq("id", id).eq("tenant_id", ctx.tenantId);
+  revalidatePath(`/app/srank/${id}`);
+  revalidatePath("/app/srank");
+}
+
+/** 部署(create/update)。 */
+export async function saveSrankDeptAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  const srankId = str(formData.get("srank_account_id"));
+  if (!srankId) return;
+  const row = {
+    tenant_id: ctx.tenantId, srank_account_id: srankId, name: str(formData.get("name")) ?? "(部署)",
+    keyperson: str(formData.get("keyperson")), decision_maker: str(formData.get("decision_maker")),
+    issue: str(formData.get("issue")), interest_products: str(formData.get("interest_products")),
+    budget_status: str(formData.get("budget_status")), timing: str(formData.get("timing")),
+    proposal_status: str(formData.get("proposal_status")) ?? "none", amount: num(formData.get("amount")) ?? 0,
+    expansion_potential: str(formData.get("expansion_potential")), next_action: str(formData.get("next_action")),
+    next_action_date: str(formData.get("next_action_date")),
+  };
+  if (id) await sb.from("srank_departments").update(row).eq("id", id).eq("tenant_id", ctx.tenantId);
+  else await sb.from("srank_departments").insert(row);
+  revalidatePath(`/app/srank/${srankId}`);
+}
+export async function deleteSrankDeptAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id")); const srankId = str(formData.get("srank_account_id"));
+  if (id) await sb.from("srank_departments").delete().eq("id", id).eq("tenant_id", ctx.tenantId);
+  if (srankId) revalidatePath(`/app/srank/${srankId}`);
+}
+
+/** キーマン(create/update)。 */
+export async function saveSrankKeypersonAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  const srankId = str(formData.get("srank_account_id"));
+  if (!srankId) return;
+  const row = {
+    tenant_id: ctx.tenantId, srank_account_id: srankId, name: str(formData.get("name")) ?? "(担当者)",
+    department: str(formData.get("department")), title: str(formData.get("title")), role: str(formData.get("role")),
+    influence: str(formData.get("influence")), relationship: str(formData.get("relationship")),
+    interest: str(formData.get("interest")), last_contact_date: str(formData.get("last_contact_date")),
+    next_contact_date: str(formData.get("next_contact_date")), intro_depts: str(formData.get("intro_depts")),
+    concern: str(formData.get("concern")), next_request: str(formData.get("next_request")),
+  };
+  if (id) await sb.from("srank_keypersons").update(row).eq("id", id).eq("tenant_id", ctx.tenantId);
+  else await sb.from("srank_keypersons").insert(row);
+  revalidatePath(`/app/srank/${srankId}`);
+}
+export async function deleteSrankKeypersonAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id")); const srankId = str(formData.get("srank_account_id"));
+  if (id) await sb.from("srank_keypersons").delete().eq("id", id).eq("tenant_id", ctx.tenantId);
+  if (srankId) revalidatePath(`/app/srank/${srankId}`);
+}
