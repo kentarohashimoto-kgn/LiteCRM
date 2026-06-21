@@ -1371,3 +1371,49 @@ export async function deleteSrankKeypersonAction(formData: FormData): Promise<vo
   if (id) await sb.from("srank_keypersons").delete().eq("id", id).eq("tenant_id", ctx.tenantId);
   if (srankId) revalidatePath(`/app/srank/${srankId}`);
 }
+
+// ===================== 既存顧客深耕 =====================
+/** 既存顧客の深耕情報を保存(account単位でupsert)。 */
+export async function saveAccountNurtureAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const accountId = str(formData.get("account_id"));
+  if (!accountId) return;
+  await sb.from("account_nurture").upsert({
+    tenant_id: ctx.tenantId, account_id: accountId,
+    nurture_stage: str(formData.get("nurture_stage")) ?? "just_won",
+    relationship: str(formData.get("relationship")),
+    deep_owner_user_id: str(formData.get("deep_owner_user_id")),
+    next_contact_date: str(formData.get("next_contact_date")),
+    additional_proposal: str(formData.get("additional_proposal")),
+    expansion_depts: str(formData.get("expansion_depts")),
+    exec_contact: !!formData.get("exec_contact"),
+    this_year_additional: num(formData.get("this_year_additional")),
+    next_proposal: str(formData.get("next_proposal")),
+    services_done: str(formData.get("services_done")),
+    notes: str(formData.get("notes")),
+  }, { onConflict: "account_id" });
+  revalidatePath("/app/nurture");
+}
+
+/** 既存顧客への接点履歴を追加。次回接点日も深耕側へ反映。 */
+export async function addNurtureTouchAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const accountId = str(formData.get("account_id"));
+  if (!accountId) return;
+  const nextDate = str(formData.get("next_date"));
+  await sb.from("nurture_touches").insert({
+    tenant_id: ctx.tenantId, account_id: accountId,
+    touched_at: str(formData.get("touched_at")) ?? new Date().toISOString().slice(0, 10),
+    method: str(formData.get("method")), summary: str(formData.get("summary")),
+    reaction: str(formData.get("reaction")), next_date: nextDate, owner_user_id: ctx.userId,
+  });
+  // 深耕レコードが無ければ作成し、次回接点日を更新
+  await sb.from("account_nurture").upsert({
+    tenant_id: ctx.tenantId, account_id: accountId, next_contact_date: nextDate ?? undefined,
+  }, { onConflict: "account_id" });
+  revalidatePath("/app/nurture");
+}

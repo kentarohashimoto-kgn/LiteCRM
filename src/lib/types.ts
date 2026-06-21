@@ -279,6 +279,37 @@ export interface SrankKeyperson {
   updated_at: string;
 }
 
+/** 既存顧客深耕(アップセル)拡張。既存 accounts を参照。 */
+export interface AccountNurture {
+  id: UUID;
+  tenant_id: UUID;
+  account_id: UUID;
+  nurture_stage: string;
+  relationship?: string;
+  deep_owner_user_id?: UUID;
+  next_contact_date?: string;
+  additional_proposal?: string;
+  expansion_depts?: string;
+  exec_contact: boolean;
+  this_year_additional?: number;
+  next_proposal?: string;
+  services_done?: string;
+  notes?: string;
+  updated_at: string;
+}
+export interface NurtureTouch {
+  id: UUID;
+  tenant_id: UUID;
+  account_id: UUID;
+  touched_at?: string;
+  method?: string;
+  summary?: string;
+  reaction?: string;
+  next_date?: string;
+  owner_user_id?: UUID;
+  created_at: string;
+}
+
 export interface ProductCategory {
   id: UUID;
   tenant_id: UUID;
