@@ -9,14 +9,16 @@ import { LEAD_DISPOSITIONS } from "@/lib/constants";
 /** 集計に必要な最小列のみ。 */
 export type AggLead = Pick<
   Lead,
-  "id" | "company_name" | "company_norm" | "contact_name" | "rank" | "job_title" | "employee_size" | "raw_event" | "priority_score" | "disposition" | "acquirer" | "scanned_at"
+  "id" | "company_name" | "company_norm" | "contact_name" | "rank" | "job_title" | "employee_size" | "raw_event" | "priority_score" | "disposition" | "acquirer" | "scanned_at" | "funnel_stage"
 >;
 
 export interface WsListRow {
   id: string; company: string; name: string; rank: string; jobTitle: string; empSizeBucket: string;
   event: string; score: number; disposition: string; callOwner: string; phone: string; mobilePhone: string; converted: boolean;
-  engRank: string; engScore: number;
+  engRank: string; engScore: number; funnelStage: string;
 }
+export interface FunnelStageData { key: string; count: number; rows: { id: string; company: string; name: string; rank: string; score: number }[] }
+export interface FunnelData { stages: Record<string, FunnelStageData>; total: number }
 export interface WsQueueRow {
   id: string; score: number; company: string; name: string; rank: string; jobTitle: string;
   event: string; disposition: string; phone: string; mobilePhone: string; callOwner: string;
@@ -130,4 +132,20 @@ export function buildAnalysis(leads: AggLead[], aliases: { raw: string; name: st
   for (const e of events) scopes[e] = buildScope(leads.filter((l) => l.raw_event === e), aliasMap);
   const rawAcquirers = [...new Set(leads.map((l) => l.acquirer ?? "").filter(Boolean))].sort();
   return { events, scopes, rawAcquirers };
+}
+
+/** アポ前ファネル: ステージ別件数＋各ステージ上位リード(優先度順)。 */
+export function buildFunnel(leads: AggLead[]): FunnelData {
+  const stages: Record<string, FunnelStageData> = {};
+  for (const l of leads) {
+    const k = (l.funnel_stage as string) || "new";
+    if (!stages[k]) stages[k] = { key: k, count: 0, rows: [] };
+    stages[k].count++;
+    stages[k].rows.push({ id: l.id, company: l.company_name ?? "", name: l.contact_name ?? "", rank: l.rank ?? "", score: l.priority_score ?? 0 });
+  }
+  for (const k of Object.keys(stages)) {
+    stages[k].rows.sort((a, b) => b.score - a.score);
+    stages[k].rows = stages[k].rows.slice(0, 50);
+  }
+  return { stages, total: leads.length };
 }

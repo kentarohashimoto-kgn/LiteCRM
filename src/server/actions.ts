@@ -1417,3 +1417,29 @@ export async function addNurtureTouchAction(formData: FormData): Promise<void> {
   }, { onConflict: "account_id" });
   revalidatePath("/app/nurture");
 }
+
+// ===================== リード ファネルステージ =====================
+/**
+ * リードのアポ前ファネルステージを更新。
+ *  new/mql/sql/appointment/nurturing/excluded。
+ *  appointment にした場合は決着もアポ獲得にして自動案件化(promoteLeadCore)。
+ */
+export async function setLeadFunnelStageAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  const stage = str(formData.get("funnel_stage")) ?? "new";
+  if (!id) return;
+  const patch: Record<string, unknown> = { funnel_stage: stage };
+  if (stage === "appointment") { patch.disposition = "appointment"; patch.status = "qualified"; }
+  else if (stage === "excluded") { patch.disposition = "excluded"; patch.status = "disqualified"; }
+  await sb.from("leads").update(patch).eq("id", id).eq("tenant_id", ctx.tenantId);
+  if (stage === "appointment") {
+    await promoteLeadCore(sb, ctx.tenantId, ctx.userId, id);
+    await sb.rpc("recompute_engagement", { p_tenant: ctx.tenantId });
+    revalidatePath("/app/opportunities");
+    revalidatePath("/app/dashboard");
+  }
+  revalidatePath("/app/leads");
+}

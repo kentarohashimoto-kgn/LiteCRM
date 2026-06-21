@@ -52,7 +52,7 @@ export async function getLeadMetrics(_opps?: OppView[]): Promise<LeadMetrics> {
 }
 
 const LIST_PAGE = 100;
-const LIST_COLS = "id,company_name,contact_name,email,rank,job_title,employee_size,raw_event,priority_score,disposition,call_owner,phone,mobile_phone,account_id,status";
+const LIST_COLS = "id,company_name,contact_name,email,rank,job_title,employee_size,raw_event,priority_score,disposition,call_owner,phone,mobile_phone,account_id,status,funnel_stage";
 
 /** リード一覧: SQL でフィルタ＋優先度降順＋ページング(全件ロードしない)。 */
 export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[]; total: number; page: number; pageSize: number }> {
@@ -85,7 +85,7 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
       jobTitle: l.job_title ?? "", empSizeBucket: sizeBucket(l.employee_size ?? ""), event: l.raw_event ?? "",
       score: l.priority_score ?? 0, disposition: l.disposition ?? "untouched", callOwner: l.call_owner ?? "",
       phone: l.phone ?? "", mobilePhone: l.mobile_phone ?? "", converted: !!l.account_id || l.status === "converted",
-      engRank: e?.rank ?? "D", engScore: e?.score ?? 0,
+      engRank: e?.rank ?? "D", engScore: e?.score ?? 0, funnelStage: l.funnel_stage ?? "new",
     };
   });
   /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -115,7 +115,7 @@ export async function queryCallQueue(): Promise<{ rows: WsQueueRow[]; total: num
 /** 企業ビュー・分析用: 集計に必要な最小列のみを全件取得。 */
 export async function fetchLeadsForAggregation(): Promise<AggLead[]> {
   const sb = getSupabaseServer();
-  return selectAll<AggLead>(sb, "leads", "id,company_name,company_norm,contact_name,rank,job_title,employee_size,raw_event,priority_score,disposition,acquirer,scanned_at");
+  return selectAll<AggLead>(sb, "leads", "id,company_name,company_norm,contact_name,rank,job_title,employee_size,raw_event,priority_score,disposition,acquirer,scanned_at,funnel_stage");
 }
 
 /** 流入フィルタ用の取込イベント一覧(取込履歴の小テーブルから)。 */

@@ -3,14 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Phone, List, Building2, BarChart3, History, Trash2, Upload, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { Search, Phone, List, Building2, BarChart3, History, Trash2, Upload, ChevronLeft, ChevronRight, Download, Filter } from "lucide-react";
 import { DownloadPanel } from "@/components/leads/download-panel";
 import { LEAD_DISPOSITIONS, LEAD_DISPOSITION_MAP } from "@/lib/constants";
-import { setLeadDispositionAction, setLeadCallOwnerAction, deleteImportBatchAction, setAcquirerAliasAction, upsertLeadsBatchAction, recomputeEngagementAction } from "@/server/actions";
+import { setLeadDispositionAction, setLeadCallOwnerAction, setLeadFunnelStageAction, deleteImportBatchAction, setAcquirerAliasAction, upsertLeadsBatchAction, recomputeEngagementAction } from "@/server/actions";
 import { parseDelimited, detectDelim, rowToRawInput, dedupLeads, LEAD_KINDS } from "@/lib/lead-import";
+import { FUNNEL_STAGES, FUNNEL_STAGE_MAP, FUNNEL_MAIN, nextFunnelStage, SQL_CRITERIA, NURTURE_CRITERIA } from "@/lib/lead-funnel";
 import { PromoteLeadButton } from "@/components/leads/promote-button";
 import { cn, formatDateFull } from "@/lib/utils";
-import type { WsListRow, WsQueueRow, WsCompanyRow, WsAnalysisScope, WsAttr, LeadsFilters, CompaniesData, AnalysisData } from "@/lib/data/leads-workspace";
+import type { WsListRow, WsQueueRow, WsCompanyRow, WsAnalysisScope, WsAttr, LeadsFilters, CompaniesData, AnalysisData, FunnelData } from "@/lib/data/leads-workspace";
 
 export interface BatchRow {
   id: string;
@@ -22,7 +23,7 @@ export interface BatchRow {
   config: Record<string, unknown>;
 }
 export interface AliasRow { raw: string; name: string }
-export type LeadsTab = "list" | "queue" | "company" | "analysis" | "download" | "batches";
+export type LeadsTab = "list" | "funnel" | "queue" | "company" | "analysis" | "download" | "batches";
 interface ListData { rows: WsListRow[]; total: number; page: number; pageSize: number }
 interface QueueData { rows: WsQueueRow[]; total: number }
 interface PresetRow { id: string; name: string; columns: string[] }
@@ -46,6 +47,7 @@ function EngBadge({ rank, score }: { rank: string; score: number }) {
 export function LeadsWorkspace({
   tab,
   list,
+  funnel,
   queue,
   company,
   analysis,
@@ -57,6 +59,7 @@ export function LeadsWorkspace({
 }: {
   tab: LeadsTab;
   list?: ListData;
+  funnel?: FunnelData;
   queue?: QueueData;
   company?: CompaniesData;
   analysis?: AnalysisData;
@@ -70,6 +73,7 @@ export function LeadsWorkspace({
     <div className="space-y-4">
       <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5 flex-wrap">
         <TabLink active={tab === "list"} tab="list" icon={<List size={15} />} label="リード一覧" />
+        <TabLink active={tab === "funnel"} tab="funnel" icon={<Filter size={15} />} label="ファネル" />
         <TabLink active={tab === "queue"} tab="queue" icon={<Phone size={15} />} label="架電キュー" />
         <TabLink active={tab === "company"} tab="company" icon={<Building2 size={15} />} label="企業ビュー" />
         <TabLink active={tab === "analysis"} tab="analysis" icon={<BarChart3 size={15} />} label="分析" />
@@ -77,6 +81,7 @@ export function LeadsWorkspace({
         <TabLink active={tab === "batches"} tab="batches" icon={<History size={15} />} label="取込履歴" />
       </div>
       {tab === "list" && list && <LeadList list={list} filters={filters} events={events} />}
+      {tab === "funnel" && funnel && <FunnelView funnel={funnel} />}
       {tab === "queue" && queue && <CallQueue queue={queue} />}
       {tab === "company" && company && <CompanyView companies={company} />}
       {tab === "analysis" && analysis && <Analysis analysis={analysis} aliases={aliases} />}
@@ -127,6 +132,7 @@ function LeadList({ list, filters, events }: { list: ListData; filters: LeadsFil
               <th className="th">会社 / 担当者</th>
               <th className="th">役職 / 規模</th>
               <th className="th">流入</th>
+              <th className="th">ファネル</th>
               <th className="th text-center">エンゲージ</th>
               <th className="th text-right">優先度</th>
               <th className="th">決着</th>
@@ -144,6 +150,7 @@ function LeadList({ list, filters, events }: { list: ListData; filters: LeadsFil
                 </td>
                 <td className="td text-xs text-ink/60">{r.jobTitle || "—"}<span className="block text-ink/40">{r.empSizeBucket}</span></td>
                 <td className="td text-xs">{evLabel(r.event)}</td>
+                <td className="td"><StageSelect id={r.id} value={r.funnelStage} /></td>
                 <td className="td text-center"><EngBadge rank={r.engRank} score={r.engScore} /></td>
                 <td className="td text-right tabular-nums font-semibold">{r.score}</td>
                 <td className="td">
@@ -166,7 +173,7 @@ function LeadList({ list, filters, events }: { list: ListData; filters: LeadsFil
                 </td>
               </tr>
             ))}
-            {list.rows.length === 0 && <tr><td colSpan={9} className="td text-center text-ink/40 py-8">該当するリードがありません</td></tr>}
+            {list.rows.length === 0 && <tr><td colSpan={10} className="td text-center text-ink/40 py-8">該当するリードがありません</td></tr>}
           </tbody>
         </table>
       </div>
@@ -512,6 +519,103 @@ function AttrTable({ title, rows }: { title: string; rows: WsAttr[] }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+// ファネルステージのインライン変更(アポにすると自動案件化)
+function StageSelect({ id, value }: { id: string; value: string }) {
+  return (
+    <form action={setLeadFunnelStageAction}>
+      <input type="hidden" name="id" value={id} />
+      <select name="funnel_stage" defaultValue={value} onChange={(e) => e.currentTarget.form?.requestSubmit()} className={cn("rounded-lg border border-black/10 px-1.5 py-1 text-xs outline-none focus:border-teal-primary", FUNNEL_STAGE_MAP[value]?.color ?? "bg-white")}>
+        {FUNNEL_STAGES.map((s) => <option key={s.key} value={s.key}>{s.short}</option>)}
+      </select>
+    </form>
+  );
+}
+
+// ============ アポ前ファネル ============
+function FunnelView({ funnel }: { funnel: FunnelData }) {
+  const count = (k: string) => funnel.stages[k]?.count ?? 0;
+  const main = FUNNEL_MAIN;
+  const newC = count("new");
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-ink/60 px-1">名刺→<b>相談候補(MQL)</b>→<b>商談候補(SQL)</b>→<b>アポ獲得</b>と、ヨミ評価の前段でリードを仕組みで前進させます。各ステージのリードを次へ進めると、アポ獲得で自動的に案件化されます。</p>
+
+      {/* 本流ファネル */}
+      <div className="card card-pad">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-stretch">
+          {main.map((s, i) => {
+            const c = count(s.key);
+            const prev = i > 0 ? count(main[i - 1].key) : null;
+            const conv = prev != null && prev > 0 ? Math.round((c / prev) * 100) : null;
+            return (
+              <div key={s.key} className="relative">
+                <div className={cn("rounded-xl p-4 h-full", s.color)}>
+                  <div className="text-xs font-medium opacity-80">{s.label}</div>
+                  <div className="text-3xl font-bold tabular-nums mt-1">{c.toLocaleString()}</div>
+                  {conv != null && <div className="text-[11px] opacity-70 mt-1">前段からの転換 {conv}%</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex gap-4 mt-3 text-xs text-ink/50">
+          <span>育成対象 <b className="text-violet-700">{count("nurturing")}</b></span>
+          <span>対象外 <b className="text-rose-500">{count("excluded")}</b></span>
+          <span className="ml-auto">新規未着手 <b className="text-ink">{newC}</b></span>
+        </div>
+      </div>
+
+      {/* ステージ別リード(次へ進める) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {main.map((s) => {
+          const st = funnel.stages[s.key];
+          const next = nextFunnelStage(s.key);
+          return (
+            <div key={s.key} className="card overflow-hidden">
+              <div className="px-4 pt-3 pb-2 border-b border-black/[0.04] flex items-center justify-between">
+                <h3 className="text-sm font-semibold"><span className={cn("pill text-[10px] mr-1.5", s.color)}>{s.short}</span>{s.label}</h3>
+                <span className="text-xs text-ink/40">{st?.count ?? 0}件・上位{Math.min(st?.rows.length ?? 0, 8)}表示</span>
+              </div>
+              <table className="w-full text-xs">
+                <tbody className="divide-y divide-black/[0.04]">
+                  {(st?.rows ?? []).slice(0, 8).map((r) => (
+                    <tr key={r.id} className="row-hover">
+                      <td className="td max-w-[160px]"><Link href={`/app/leads/${r.id}`} className="font-medium hover:text-teal-deep block truncate">{r.company}</Link><span className="text-ink/45 truncate block">{r.name}</span></td>
+                      <td className="td text-right tabular-nums w-12">{r.score}</td>
+                      <td className="td w-28">
+                        <div className="flex items-center gap-1 justify-end">
+                          {next && <StageAdvance id={r.id} to={next} label={`→${FUNNEL_STAGE_MAP[next]?.short}`} primary />}
+                          {s.key !== "nurturing" && <StageAdvance id={r.id} to="nurturing" label="育成" />}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {(st?.rows.length ?? 0) === 0 && <tr><td className="td text-center text-ink/40 py-4">なし</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 判定ガイド */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="card card-pad"><h3 className="text-sm font-semibold mb-2">商談候補(SQL)へ上げる条件</h3><ul className="text-xs text-ink/60 space-y-1 list-disc pl-4">{SQL_CRITERIA.map((c) => <li key={c}>{c}</li>)}</ul></div>
+        <div className="card card-pad"><h3 className="text-sm font-semibold mb-2">育成対象に回す条件</h3><ul className="text-xs text-ink/60 space-y-1 list-disc pl-4">{NURTURE_CRITERIA.map((c) => <li key={c}>{c}</li>)}</ul></div>
+      </div>
+    </div>
+  );
+}
+
+function StageAdvance({ id, to, label, primary }: { id: string; to: string; label: string; primary?: boolean }) {
+  return (
+    <form action={setLeadFunnelStageAction}>
+      <input type="hidden" name="id" value={id} /><input type="hidden" name="funnel_stage" value={to} />
+      <button type="submit" className={cn("rounded-lg px-2 py-0.5 text-[11px] font-medium", primary ? "bg-teal-primary text-white hover:bg-teal-deep" : "bg-mist-soft text-ink/60 hover:text-ink")}>{label}</button>
+    </form>
   );
 }
 

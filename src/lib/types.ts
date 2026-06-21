@@ -366,6 +366,7 @@ export interface Lead {
   priority_score?: number;
   call_owner?: string;
   disposition?: string;
+  funnel_stage?: string;
   tags?: string;
   raw_event?: string;
   deal_owner_name?: string;
