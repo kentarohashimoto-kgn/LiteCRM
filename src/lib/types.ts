@@ -310,6 +310,33 @@ export interface NurtureTouch {
   created_at: string;
 }
 
+/** 展示会選定の候補(マーケが入力→自動スコア/ランク→幹部が最終決定)。 */
+export interface ExhibitionCandidate {
+  id: UUID;
+  tenant_id: UUID;
+  organizer?: string;
+  name: string;
+  venue?: string;
+  event_date?: string;
+  days?: number;
+  status: string;
+  has_seminar: boolean;
+  theme_fit: string;
+  expected_visitors?: number;
+  expected_leads?: number;
+  booth_cost?: number;
+  staff_cost?: number;
+  other_cost?: number;
+  expected_deals?: number;
+  expected_unit_price?: number;
+  expected_revenue?: number;
+  decision: string;
+  notes?: string;
+  owner_user_id?: UUID;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProductCategory {
   id: UUID;
   tenant_id: UUID;

@@ -1443,3 +1443,54 @@ export async function setLeadFunnelStageAction(formData: FormData): Promise<void
   }
   revalidatePath("/app/leads");
 }
+
+// ===================== 展示会選定 =====================
+/** 展示会候補の作成/更新(マーケ入力)。 */
+export async function saveExhibitionCandidateAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!REVIEW_EDIT.includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  const row = {
+    tenant_id: ctx.tenantId, organizer: str(formData.get("organizer")), name: str(formData.get("name")) ?? "(展示会)",
+    venue: str(formData.get("venue")), event_date: str(formData.get("event_date")), days: num(formData.get("days")) ?? 1,
+    status: str(formData.get("status")) ?? "considering", has_seminar: !!formData.get("has_seminar"),
+    theme_fit: str(formData.get("theme_fit")) ?? "mid", expected_visitors: num(formData.get("expected_visitors")),
+    expected_leads: num(formData.get("expected_leads")), booth_cost: num(formData.get("booth_cost")) ?? 0,
+    staff_cost: num(formData.get("staff_cost")) ?? 0, other_cost: num(formData.get("other_cost")) ?? 0,
+    expected_deals: num(formData.get("expected_deals")), expected_unit_price: num(formData.get("expected_unit_price")),
+    expected_revenue: num(formData.get("expected_revenue")), notes: str(formData.get("notes")),
+  };
+  if (id) await sb.from("exhibition_candidates").update(row).eq("id", id).eq("tenant_id", ctx.tenantId);
+  else await sb.from("exhibition_candidates").insert({ ...row, owner_user_id: ctx.userId });
+  revalidatePath("/app/analytics/exhibition-select");
+}
+
+/** 出展判断(ステータス)の更新。 */
+export async function setExhibitionStatusAction(formData: FormData): Promise<void> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await sb.from("exhibition_candidates").update({ status: str(formData.get("status")) ?? "considering" }).eq("id", id);
+  revalidatePath("/app/analytics/exhibition-select");
+}
+
+/** 幹部の最終決定の更新。 */
+export async function setExhibitionDecisionAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  if (!["owner", "admin", "sales_manager"].includes(ctx.role)) return;
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await sb.from("exhibition_candidates").update({ decision: str(formData.get("decision")) ?? "pending" }).eq("id", id).eq("tenant_id", ctx.tenantId);
+  revalidatePath("/app/analytics/exhibition-select");
+}
+
+export async function deleteExhibitionCandidateAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  if (id) await sb.from("exhibition_candidates").delete().eq("id", id).eq("tenant_id", ctx.tenantId);
+  revalidatePath("/app/analytics/exhibition-select");
+}
