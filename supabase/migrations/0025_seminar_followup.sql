@@ -1,6 +1,15 @@
 -- セミナー攻略リスト用 RPC。
 -- 参加者(seminar_responses)を過去リード(流入元/獲得日)・過去商談・エンゲージメント・接点履歴と突合し、
 -- フォロー優先度の算出に必要なデータを1往復で返す。セキュリティはinvoker(RLS準拠)。
+--
+-- 性能上の注意:
+--  - lead_match / hist / opps を `as materialized` で固定し、ネステッドループでの再評価を防ぐ
+--    (相関サブクエリが参加者数の二乗回実行され、認証ロールの statement_timeout に達する問題を回避)。
+--  - 商談の company_norm は opp_src で1回だけ算出し、ハッシュ結合可能にする。
+--  - lower(email) 関数インデックスでリード突合の都度のフルスキャンを回避。
+
+create index if not exists idx_leads_lower_email on leads (lower(email));
+create index if not exists idx_touchpoints_email on touchpoints (email);
 
 create or replace function public.seminar_followup(p_seminar text)
 returns jsonb
@@ -9,13 +18,13 @@ stable
 security invoker
 set search_path to 'public'
 as $function$
-  with parts as (
+  with parts as materialized (
     select r.email, r.name, r.company, r.company_norm, r.job_title, r.employee_size,
            r.follow_up, r.comment, r.challenges, r.ai_usage, r.responded_at
     from seminar_responses r
     where r.seminar_name = p_seminar
   ),
-  lead_match as (
+  lead_match as materialized (
     select p.email,
       (select to_jsonb(x) from (
          select l.id, l.raw_event, ls.name as source, l.acquired_at, l.funnel_stage,
@@ -27,7 +36,7 @@ as $function$
       ) x) as lead
     from parts p
   ),
-  hist as (
+  hist as materialized (
     select p.email,
        coalesce(jsonb_agg(distinct jsonb_build_object('source', t.source, 'type', t.type))
          filter (where t.source is not null and t.source <> p_seminar), '[]'::jsonb) as touches,
@@ -35,7 +44,14 @@ as $function$
     from parts p left join touchpoints t on t.email = p.email
     group by p.email
   ),
-  opps as (
+  opp_src as materialized (
+    select norm_company(coalesce(a.name, o.name)) as cnorm,
+           o.name, o.stage, o.status, o.amount, o.first_meeting_date,
+           o.expected_close_date, o.notes, o.yomi
+    from opportunities o
+    left join accounts a on a.id = o.account_id
+  ),
+  opps as materialized (
     select p.email,
       coalesce(jsonb_agg(jsonb_build_object(
          'name', o.name, 'stage', o.stage, 'status', o.status, 'amount', o.amount,
@@ -46,9 +62,8 @@ as $function$
       count(*) filter (where o.status = 'open') as open_count,
       count(*) filter (where o.status = 'lost') as lost_count
     from parts p
-    join opportunities o
-      on norm_company(coalesce((select a.name from accounts a where a.id = o.account_id), o.name)) = p.company_norm
-     and p.company_norm is not null and p.company_norm <> ''
+    join opp_src o on o.cnorm = p.company_norm
+    where p.company_norm is not null and p.company_norm <> ''
     group by p.email
   )
   select coalesce(jsonb_agg(jsonb_build_object(
