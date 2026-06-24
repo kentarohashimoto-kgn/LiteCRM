@@ -72,6 +72,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/analytics/exhibitions", label: "└ 展示会分析", icon: Presentation },
       { href: "/app/analytics/exhibition-select", label: "└ 展示会選定", icon: Presentation },
       { href: "/app/analytics/seminars", label: "└ セミナー分析", icon: ClipboardList },
+      { href: "/app/analytics/seminar-followup", label: "└ セミナー攻略リスト", icon: Star },
       { href: "/app/analytics/sales-reps", label: "営業マン別", icon: UserCog },
       { href: "/app/analytics/products", label: "商品別", icon: Package },
     ],
