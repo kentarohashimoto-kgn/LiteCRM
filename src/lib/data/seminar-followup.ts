@@ -19,7 +19,13 @@ export async function listSeminars(): Promise<SeminarOption[]> {
 
 export async function getSeminarFollowup(seminar: string): Promise<FollowupRow[]> {
   const sb = getSupabaseServer();
-  const { data } = await sb.rpc("seminar_followup", { p_seminar: seminar });
+  // セミナー名はUnicode正規化(NFC)で突合。URLパラメータ等で結合文字(NFD)が混入しても一致させる。
+  const key = (seminar ?? "").normalize("NFC");
+  const { data, error } = await sb.rpc("seminar_followup", { p_seminar: key });
+  if (error) {
+    // 失敗を握りつぶさず可視化(タイムアウト等の早期検知)。
+    console.error("seminar_followup RPC error:", error.message, { seminar: key });
+  }
   const rows = (data ?? []) as FollowupParticipant[];
   const scored = rows.map((r) => ({ ...r, score: scoreFollowup(r) }));
   // 優先度(スコア)降順。同点は回答日時の新しい順。

@@ -13,7 +13,8 @@ export default async function SeminarFollowupPage({
 }) {
   const sp = await searchParams;
   const seminars = await listSeminars();
-  const selected = sp.s || seminars[0]?.name || "";
+  // URLパラメータの日本語(NFD等)を正規化し、DBの値(NFC)と確実に突合。
+  const selected = (sp.s || seminars[0]?.name || "").normalize("NFC");
   const rows = selected ? await getSeminarFollowup(selected) : [];
 
   const counts = {
