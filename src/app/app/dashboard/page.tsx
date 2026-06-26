@@ -11,11 +11,13 @@ import { ForecastChart, SimpleBar } from "@/components/charts/forecast-chart";
 import { MetricTrendChart, type TrendPoint } from "@/components/charts/trend-chart";
 import { FunnelView } from "@/components/dashboard/funnel-view";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
-import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
+import { currentFiscalStartYear, fiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
+import { FyTabs } from "@/components/dashboard/fy-tabs";
 import { actualByMonth } from "@/lib/targets";
 import { formatYen, formatManYen, formatPercent, sameMonth, formatDate, sum, monthKey, startOfMonth, addMonths } from "@/lib/utils";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ fy?: string }> }) {
+  const sp = await searchParams;
   const ws = await getWorkspaceLite();
   const now = new Date();
   const opps = listOpportunities(ws);
@@ -39,12 +41,22 @@ export default async function DashboardPage() {
   const products = productMetrics(openOpps).slice(0, 6);
   const achieve = thisMonth.target > 0 ? thisMonth.bestCase / thisMonth.target : 0;
 
-  // 今年度(決算6月=7月始まり)の目標 vs 実績
-  const fy = currentFiscalStartYear(now);
-  const fyMonths = fiscalMonths(fy);
+  // 年度(決算6月=7月始まり)の目標 vs 実績。?fy= で年度を切替(既定は当年度)。
   const targetMap = new Map(targets.map((t) => [t.target_month, t]));
   const leadMetrics = await getLeadMetrics(opps);
   const actuals = actualByMonth(opps, leadMetrics.byMonth);
+
+  // データが存在する年度を抽出(リード・実績・目標のある月から)。当年度は常に含める。
+  const currentFy = currentFiscalStartYear(now);
+  const yearSet = new Set<number>([currentFy]);
+  for (const k of leadMetrics.byMonth.keys()) yearSet.add(fiscalStartYear(new Date(k)));
+  for (const k of actuals.keys()) yearSet.add(fiscalStartYear(new Date(k)));
+  for (const t of targets) if (t.target_month) yearSet.add(fiscalStartYear(new Date(t.target_month)));
+  const availableYears = Array.from(yearSet).sort((a, b) => b - a);
+
+  const fyParam = parseInt(sp.fy ?? "", 10);
+  const fy = Number.isFinite(fyParam) && availableYears.includes(fyParam) ? fyParam : currentFy;
+  const fyMonths = fiscalMonths(fy);
   const fyTarget = {
     amount: sum(fyMonths, (m) => targetMap.get(m.key)?.target_amount ?? 0),
     deals: sum(fyMonths, (m) => targetMap.get(m.key)?.target_deals ?? 0),
@@ -92,16 +104,21 @@ export default async function DashboardPage() {
   //   アポ = 決着がアポ獲得のリード / 成約 = そのリードに紐づく案件が受注(won)
   const thisKey = monthKey(startOfMonth(now));
   const lastKey = monthKey(addMonths(startOfMonth(now), -1));
-  const sumMap = (m: Map<string, number>) => Array.from(m.values()).reduce((s, n) => s + n, 0);
-  const funnelScope = (k: string | null) => ({
-    leads: k ? leadMetrics.byMonth.get(k) ?? 0 : leadMetrics.total,
-    appts: k ? leadMetrics.apptByMonth.get(k) ?? 0 : sumMap(leadMetrics.apptByMonth),
-    deals: k ? leadMetrics.wonByMonth.get(k) ?? 0 : sumMap(leadMetrics.wonByMonth),
+  // 「累計」は選択年度の合計(年度内12ヶ月の合算)。全期間ではなく年度スコープにする。
+  const sumOverFy = (m: Map<string, number>) => fyMonths.reduce((s, fm) => s + (m.get(fm.key) ?? 0), 0);
+  const funnelMonth = (k: string) => ({
+    leads: leadMetrics.byMonth.get(k) ?? 0,
+    appts: leadMetrics.apptByMonth.get(k) ?? 0,
+    deals: leadMetrics.wonByMonth.get(k) ?? 0,
   });
   const funnelData = {
-    total: funnelScope(null),
-    lastMonth: funnelScope(lastKey),
-    thisMonth: funnelScope(thisKey),
+    total: {
+      leads: sumOverFy(leadMetrics.byMonth),
+      appts: sumOverFy(leadMetrics.apptByMonth),
+      deals: sumOverFy(leadMetrics.wonByMonth),
+    },
+    lastMonth: funnelMonth(lastKey),
+    thisMonth: funnelMonth(thisKey),
   };
 
   return (
@@ -109,6 +126,7 @@ export default async function DashboardPage() {
       <PageHeader
         title="ダッシュボード"
         subtitle="今月の着地と打ち手を一目で。未来の売上を作るための起点です。"
+        action={<FyTabs years={availableYears} selected={fy} currentFy={currentFy} />}
       />
 
       {/* 強調指標 */}
@@ -150,7 +168,7 @@ export default async function DashboardPage() {
           <MetricTrendChart data={trendData} />
         </Section>
         <Section title="ファネル分析" action={<span className="text-[11px] text-ink/40">リード起点・獲得月</span>}>
-          <FunnelView data={funnelData} />
+          <FunnelView data={funnelData} totalLabel={`${fy}年度`} />
         </Section>
       </div>
 

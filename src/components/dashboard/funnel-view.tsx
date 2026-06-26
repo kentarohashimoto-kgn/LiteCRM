@@ -8,12 +8,6 @@ export interface FunnelScope {
   deals: number;
 }
 
-const SCOPES: { key: keyof FunnelData; label: string }[] = [
-  { key: "total", label: "累計" },
-  { key: "lastMonth", label: "先月" },
-  { key: "thisMonth", label: "今月" },
-];
-
 export interface FunnelData {
   total: FunnelScope;
   lastMonth: FunnelScope;
@@ -30,9 +24,14 @@ function pct(n: number, d: number): string {
   return d > 0 ? `${Math.round((n / d) * 100)}%` : "—";
 }
 
-export function FunnelView({ data }: { data: FunnelData }) {
+export function FunnelView({ data, totalLabel = "累計" }: { data: FunnelData; totalLabel?: string }) {
   const [scope, setScope] = useState<keyof FunnelData>("total");
   const s = data[scope];
+  const SCOPES: { key: keyof FunnelData; label: string }[] = [
+    { key: "total", label: totalLabel },
+    { key: "lastMonth", label: "先月" },
+    { key: "thisMonth", label: "今月" },
+  ];
 
   return (
     <div>
