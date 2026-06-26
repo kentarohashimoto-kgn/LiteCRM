@@ -1,7 +1,8 @@
 # CATORCE Sales OS — 現行アーキテクチャ設計書（大幅リニューアル前ベースライン）
 
 > 本書は「マーケ施策/プロダクト/顧客レベルを軸にしたROI分析基盤」への大幅リニューアルに着手する**直前の現状(as-is)**を記録するベースラインです。
-> 同時点のコードは Git タグ **`pre-renewal-baseline`** およびブランチ **`backup/pre-renewal-baseline`** で復元できます（末尾「復元手順」参照）。
+> 同時点のコードは **origin のバックアップブランチ `backup/pre-renewal-baseline`（コミット f96be3c）** で復元できます（末尾「復元手順」参照）。
+> ※ ローカルにタグ `pre-renewal-baseline` も作成済みだが、本環境のGitプロキシがタグpushを受け付けないため、**durableな復元点はバックアップブランチ**です。
 > 作成日: 2026-06-26 / 対象ブランチ: `claude/keen-mayer-yJCVC`
 
 ---
@@ -82,17 +83,17 @@
 
 ## 10. 復元手順（このベースラインへ戻す）
 ```bash
-# タグから現状を確認/チェックアウト
-git fetch origin --tags
-git checkout pre-renewal-baseline        # detached HEAD で内容確認
+# バックアップブランチを取得して内容確認
+git fetch origin backup/pre-renewal-baseline
+git checkout backup/pre-renewal-baseline     # 内容確認(detached/branch)
 
 # 作業ブランチをベースラインへ戻す場合（破壊的・要注意）
 git checkout claude/keen-mayer-yJCVC
-git reset --hard pre-renewal-baseline
+git reset --hard origin/backup/pre-renewal-baseline
 
 # 特定モジュールだけ復元する場合
-git checkout pre-renewal-baseline -- src/app/app/dashboard/page.tsx
-git checkout pre-renewal-baseline -- src/lib/lead-import.ts
+git checkout origin/backup/pre-renewal-baseline -- src/app/app/dashboard/page.tsx
+git checkout origin/backup/pre-renewal-baseline -- src/lib/lead-import.ts
 ```
-- DB側は `supabase/migrations/0001`〜`0025` がこのベースラインのスキーマ。リニューアルの追加は `0026` 以降で行い、各マイグレーションに対応するロールバック手順を併記する。
-- バックアップ参照: タグ `pre-renewal-baseline` / ブランチ `backup/pre-renewal-baseline`（origin にpush済み）。
+- DB側は `supabase/migrations/0001`〜`0025` がこのベースラインのスキーマ。リニューアルの追加は `0026` 以降で行い、各マイグレーションに対応するロールバック手順(`drop ...`)を併記する。
+- 復元点: **origin ブランチ `backup/pre-renewal-baseline`（f96be3c）**。以後の開発で誤って壊しても、ここからモジュール単位/全体で戻せる。
