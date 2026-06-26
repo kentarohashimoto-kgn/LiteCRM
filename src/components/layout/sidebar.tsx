@@ -75,6 +75,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/analytics/trends", label: "トレンド分析", icon: TrendingUp },
       { href: "/app/analytics/channels", label: "流入元分析", icon: Radio },
       { href: "/app/analytics/exhibitions", label: "└ 展示会分析", icon: Presentation },
+      { href: "/app/analytics/exhibition-roi", label: "└ 展示会(時系列/主催/テーマ)", icon: Presentation },
       { href: "/app/analytics/exhibition-select", label: "└ 展示会選定", icon: Presentation },
       { href: "/app/analytics/seminars", label: "└ セミナー分析", icon: ClipboardList },
       { href: "/app/analytics/seminar-followup", label: "└ セミナー攻略リスト", icon: Star },

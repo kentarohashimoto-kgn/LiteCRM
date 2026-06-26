@@ -1,8 +1,10 @@
+import { Fragment } from "react";
+import Link from "next/link";
 import { getChannelRoi, listMarketingChannels, listChannelCosts, getRoiFiscalYears } from "@/lib/data/roi";
 import { saveChannelAction, deleteChannelAction, saveChannelCostAction } from "@/server/actions";
 import { PageHeader, Card } from "@/components/ui/primitives";
 import { FyTabs } from "@/components/dashboard/fy-tabs";
-import { JUDGE_COLOR, JUDGE_LABEL, CHANNEL_CATEGORIES, CHANNEL_KINDS, TARGET_LEVELS, roiPct, pct } from "@/lib/roi";
+import { JUDGE_COLOR, JUDGE_LABEL, CHANNEL_CATEGORIES, CHANNEL_KINDS, TARGET_LEVELS, roiPct, pct, type ChannelRoiRow } from "@/lib/roi";
 import { currentFiscalStartYear } from "@/lib/fiscal";
 import { formatYen, cn } from "@/lib/utils";
 
@@ -48,6 +50,24 @@ export default async function ChannelRoiPage({ searchParams }: { searchParams: P
     costByChannel.set(c.channel_id, arr);
   }
 
+  // マインドマップのカテゴリ単位でグルーピング(＋小計)
+  const CAT_ORDER = ["展示会", "セミナー", "代理店", "顧問", "アポ代行", "マッチング", "交流会・イベント", "広告", "オーガニック", "紹介", "自社営業", "その他"];
+  const byCat = new Map<string, ChannelRoiRow[]>();
+  for (const r of rows) {
+    const k = r.category || "その他";
+    const arr = byCat.get(k) ?? [];
+    arr.push(r);
+    byCat.set(k, arr);
+  }
+  const cats = Array.from(byCat.keys()).sort(
+    (a, b) => (CAT_ORDER.indexOf(a) + 1 || 99) - (CAT_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b),
+  );
+  const catSubtotal = (rs: ChannelRoiRow[]) =>
+    rs.reduce((a, r) => ({
+      cost: a.cost + r.cost, leads: a.leads + r.leads, appts: a.appts + r.appts,
+      deals: a.deals + r.deals, revenue: a.revenue + r.revenue, profit: a.profit + r.profit, open_deals: a.open_deals + r.open_deals,
+    }), { cost: 0, leads: 0, appts: 0, deals: 0, revenue: 0, profit: 0, open_deals: 0 });
+
   return (
     <div>
       <PageHeader
@@ -83,7 +103,29 @@ export default async function ChannelRoiPage({ searchParams }: { searchParams: P
             </tr>
           </thead>
           <tbody className="divide-y divide-black/[0.04]">
-            {rows.map((r) => {
+            {cats.map((cat) => {
+              const crs = byCat.get(cat) ?? [];
+              const st = catSubtotal(crs);
+              const stRoi = st.cost > 0 ? (st.profit - st.cost) / st.cost : null;
+              return (
+              <Fragment key={cat}>
+              <tr className="bg-mist-soft/50">
+                <td className="td"></td>
+                <td className="td font-bold text-ink/70">
+                  {cat}
+                  {cat === "展示会" && <Link href="/app/analytics/exhibition-roi" className="ml-2 text-[11px] font-normal text-teal-primary hover:underline">展示会別の時系列・主催・テーマ分析 →</Link>}
+                </td>
+                <td className="td text-right tabular-nums font-semibold">{st.cost > 0 ? formatYen(st.cost) : "—"}</td>
+                <td className="td text-right tabular-nums font-semibold">{st.leads.toLocaleString()}</td>
+                <td className="td text-right tabular-nums font-semibold">{st.appts.toLocaleString()}</td>
+                <td className="td text-right tabular-nums font-semibold">{st.deals}</td>
+                <td className="td text-right tabular-nums font-semibold">{formatYen(st.revenue)}</td>
+                <td className="td"></td>
+                <td className={cn("td text-right tabular-nums font-bold", stRoi != null && stRoi >= 2 ? "text-teal-deep" : "")}>{roiPct(stRoi)}</td>
+                <td className="td"></td><td className="td"></td>
+                <td className="td text-right tabular-nums text-xs">{st.open_deals}件</td>
+              </tr>
+              {crs.map((r) => {
               const chCosts = costByChannel.get(r.id) ?? [];
               return (
                 <tr key={r.id} className="row-hover align-top">
@@ -136,6 +178,9 @@ export default async function ChannelRoiPage({ searchParams }: { searchParams: P
                   <td className="td text-right tabular-nums text-xs">{pct(r.apptToDeal)}</td>
                   <td className="td text-right tabular-nums text-xs">{r.open_deals}件 / {formatYen(r.open_amount)}</td>
                 </tr>
+              );
+            })}
+              </Fragment>
               );
             })}
             {rows.length === 0 && <tr><td colSpan={12} className="td text-center text-ink/40 py-8">施策がありません。下のフォームから登録してください。</td></tr>}

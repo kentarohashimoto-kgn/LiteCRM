@@ -1586,3 +1586,25 @@ export async function cancelSubscriptionAction(formData: FormData): Promise<void
   }
   revalidatePath("/app/analytics/product-roi");
 }
+
+// ===================== 展示会マスタ(主催/テーマ/費用のタグ付け) =====================
+export async function saveExhibitionEventAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const rawEvent = str(formData.get("raw_event"));
+  if (!rawEvent) return;
+  const ym = (rawEvent.match(/^[0-9]{6}/)?.[0]) ?? null;
+  await sb.from("exhibition_events").upsert(
+    {
+      tenant_id: ctx.tenantId,
+      raw_event: rawEvent,
+      ym,
+      label: str(formData.get("label")),
+      organizer: str(formData.get("organizer")),
+      theme: str(formData.get("theme")),
+      cost: num(formData.get("cost")),
+    },
+    { onConflict: "tenant_id,raw_event" },
+  );
+  revalidatePath("/app/analytics/exhibition-roi");
+}
