@@ -34,11 +34,18 @@ export const DEAL_FIELDS: { key: string; label: string; hints: string[]; require
 export function suggestDealMapping(headers: string[]): Record<string, string> {
   const map: Record<string, string> = {};
   const used = new Set<string>();
+  // パス1: 完全一致を優先(「初回営業日」が「初回商談月」より、「見込月」が「売上見込月」より先に確定する)
   for (const f of DEAL_FIELDS) {
+    const hit = headers.find((h) => !used.has(h) && f.hints.some((k) => h === k));
+    if (hit) { map[f.key] = hit; used.add(hit); }
+  }
+  // パス2: 残りを部分一致で補完
+  for (const f of DEAL_FIELDS) {
+    if (map[f.key]) continue;
     const hit = headers.find((h) => {
       if (used.has(h)) return false;
       const hl = h.toLowerCase();
-      return f.hints.some((k) => h === k || hl.includes(k.toLowerCase()) || h.includes(k));
+      return f.hints.some((k) => hl.includes(k.toLowerCase()) || h.includes(k));
     });
     if (hit) { map[f.key] = hit; used.add(hit); }
   }
