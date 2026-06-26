@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Upload, ChevronLeft } from "lucide-react";
-import { TARGET_FIELDS, LEAD_KINDS, suggestMapping, parseDelimited, detectDelim, rowToRawInput, dedupLeads, type RawLeadInput } from "@/lib/lead-import";
+import { TARGET_FIELDS, LEAD_KINDS, suggestMapping, parseDelimited, detectDelim, decodeFileText, uniquifyHeaders, rowToRawInput, dedupLeads, type RawLeadInput } from "@/lib/lead-import";
 import { importLeadsBatchAction, upsertLeadsBatchAction, clearLeadsForEventAction, startImportBatchAction, recomputeEngagementAction } from "@/server/actions";
 
 interface Opt { id: string; name: string; event_date?: string }
@@ -37,10 +37,10 @@ export function ImportForm({ campaigns, leadSources }: { campaigns: Opt[]; leadS
   }
 
   async function onFile(file: File) {
-    const text = await file.text();
+    const text = decodeFileText(await file.arrayBuffer());
     const all = parseDelimited(text, detectDelim(text));
     if (all.length < 2) return;
-    const hs = all[0].map((h) => h.trim());
+    const hs = uniquifyHeaders(all[0].map((h) => h.trim()));
     setHeaders(hs);
     setDataRows(all.slice(1));
     setMapping(suggestMapping(hs));

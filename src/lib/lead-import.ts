@@ -88,6 +88,40 @@ export function parseDelimited(text: string, delim: string): string[][] {
   return rows.filter((r) => r.some((x) => x.trim() !== ""));
 }
 
+/**
+ * ファイルのバイト列を文字列へ復号。新しいExcel/Googleの書き出しはUTF-8だが、
+ * 2025年以前など古い書き出しは Shift_JIS(CP932) のことが多く、UTF-8固定で読むと
+ * 日本語ヘッダーが文字化けしてマッピングが表示・推測できなくなる。
+ * まずUTF-8として厳密検証し、失敗したら Shift_JIS で復号する。先頭BOMは除去。
+ */
+export function decodeFileText(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes).replace(/^\uFEFF/, "");
+  } catch {
+    try {
+      return new TextDecoder("shift_jis").decode(bytes).replace(/^\uFEFF/, "");
+    } catch {
+      return new TextDecoder("utf-8").decode(bytes).replace(/^\uFEFF/, "");
+    }
+  }
+}
+
+/**
+ * ヘッダーを一意化。空ヘッダーは「列N」、重複は「name (2)」のように採番する。
+ * 重複・空ヘッダーがあると option の React key が衝突して選択肢が欠落し、
+ * その列にマッピングできなくなるため。列の並び順は変えない(データと対応維持)。
+ */
+export function uniquifyHeaders(hs: string[]): string[] {
+  const seen = new Map<string, number>();
+  return hs.map((h, i) => {
+    const base = h === "" ? `列${i + 1}` : h;
+    const n = (seen.get(base) ?? 0) + 1;
+    seen.set(base, n);
+    return n === 1 ? base : `${base} (${n})`;
+  });
+}
+
 /** 先頭行からタブ/カンマ区切りを推定。 */
 export function detectDelim(text: string): string {
   const fl = text.slice(0, text.indexOf("\n") >= 0 ? text.indexOf("\n") : text.length);

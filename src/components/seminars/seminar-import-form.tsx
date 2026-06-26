@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Upload, ChevronLeft } from "lucide-react";
-import { parseDelimited, detectDelim } from "@/lib/lead-import";
+import { parseDelimited, detectDelim, decodeFileText, uniquifyHeaders } from "@/lib/lead-import";
 import { SEMINAR_TARGET_FIELDS, suggestSeminarMapping, rowToSeminarInput, dedupSeminar } from "@/lib/seminar-import";
 import { importSeminarBatchAction, clearSeminarAction, recomputeEngagementAction } from "@/server/actions";
 
@@ -32,10 +32,10 @@ export function SeminarImportForm({ campaigns, leadSources }: { campaigns: Opt[]
   }
 
   async function onFile(file: File) {
-    const text = await file.text();
+    const text = decodeFileText(await file.arrayBuffer());
     const all = parseDelimited(text, detectDelim(text));
     if (all.length < 2) return;
-    const hs = all[0].map((h) => h.trim());
+    const hs = uniquifyHeaders(all[0].map((h) => h.trim()));
     setHeaders(hs);
     setDataRows(all.slice(1));
     setMapping(suggestSeminarMapping(hs));
