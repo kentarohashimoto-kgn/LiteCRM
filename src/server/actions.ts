@@ -1640,6 +1640,10 @@ export async function importNotionDealsAction(
         ?? profList.find((p) => (p.display_name ?? "").split(/[ 　]/)[0] === n);
       return hit?.id ?? null;
     };
+    // owner_user_id は NOT NULL。未割当/管理人、無ければ取込ユーザーをフォールバック。
+    const fallbackOwner = profList.find((p) => p.display_name === "未割当")?.id
+      ?? profList.find((p) => p.display_name === "管理人")?.id
+      ?? ctx.userId;
     const accMap = new Map<string, string>();
     for (const a of accs ?? []) accMap.set(normCompany(a.name as string), a.id as string);
 
@@ -1685,14 +1689,15 @@ export async function importNotionDealsAction(
           import_source: "notion_yomi",
           account_id: accMap.get(normCompany(r.company!)) ?? null,
           name: (r.company! + (r.product ? " / " + r.product : "")).slice(0, 200),
-          owner_user_id: ownerOf(r.owner),
+          owner_user_id: ownerOf(r.owner) ?? fallbackOwner,
           deal_owner_name: t(r.owner),
           stage: yf.stage,
           status: yf.status,
           forecast_category: yf.forecast,
           probability: yf.probability,
+          campaign_estimated: false,
           yomi: t(r.yomi),
-          amount: amount ?? null,
+          amount: amount ?? 0,
           expected_close_date: closeDate,
           expected_revenue_month: t(r.salesMonth) ?? t(r.expMonth) ?? t(r.wonDate),
           first_meeting_date: t(r.firstMeeting),
@@ -1708,11 +1713,12 @@ export async function importNotionDealsAction(
       };
     });
 
-    // 案件 投入(チャンク)＋ rowKey→id
+    // 案件 投入(チャンク)＋ rowKey→id。account_id は NOT NULL のため未解決行は除外。
+    const insertable = oppRecords.filter((x) => x.rec.account_id);
     const keyToId = new Map<string, string>();
     let inserted = 0;
-    for (let i = 0; i < oppRecords.length; i += 300) {
-      const slice = oppRecords.slice(i, i + 300);
+    for (let i = 0; i < insertable.length; i += 300) {
+      const slice = insertable.slice(i, i + 300);
       const { data: ins, error } = await sb.from("opportunities").insert(slice.map((x) => x.rec)).select("id,external_ref");
       if (error) return { ok: false, inserted, meetings: 0, accounts: accountsCreated, error: "opp: " + error.message };
       for (const o of ins ?? []) keyToId.set(o.external_ref as string, o.id as string);
@@ -1726,7 +1732,7 @@ export async function importNotionDealsAction(
         tenant_id: tenant,
         opportunity_id: keyToId.get(r.rowKey)!,
         account_id: accMap.get(normCompany(r.company ?? "")) ?? null,
-        owner_user_id: ownerOf(r.owner),
+        owner_user_id: ownerOf(r.owner) ?? fallbackOwner,
         title: "商談ログ(Notion移行)",
         meeting_date: t(r.firstMeeting),
         method: "商談",
