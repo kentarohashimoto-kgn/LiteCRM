@@ -70,6 +70,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
     heading: "分析",
     items: [
       { href: "/app/analytics/revenue", label: "売上・請求分析", icon: Coins },
+      { href: "/app/analytics/roi", label: "施策ROI分析", icon: Gauge },
       { href: "/app/analytics/trends", label: "トレンド分析", icon: TrendingUp },
       { href: "/app/analytics/channels", label: "流入元分析", icon: Radio },
       { href: "/app/analytics/exhibitions", label: "└ 展示会分析", icon: Presentation },

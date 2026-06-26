@@ -1494,3 +1494,59 @@ export async function deleteExhibitionCandidateAction(formData: FormData): Promi
   if (id) await sb.from("exhibition_candidates").delete().eq("id", id).eq("tenant_id", ctx.tenantId);
   revalidatePath("/app/analytics/exhibition-select");
 }
+
+// ===================== 施策ROI(marketing_channels / channel_costs) =====================
+export async function saveChannelAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  const row = {
+    name: str(formData.get("name")) ?? "",
+    category: str(formData.get("category")),
+    kind: str(formData.get("kind")) ?? "other",
+    cost_model: str(formData.get("cost_model")) ?? "none",
+    committed_metric: str(formData.get("committed_metric")),
+    committed_qty: num(formData.get("committed_qty")),
+    target_level: str(formData.get("target_level")),
+    priority_flag: formData.get("priority_flag") === "1",
+    notes: str(formData.get("notes")),
+  };
+  if (!row.name) return;
+  if (id) {
+    await sb.from("marketing_channels").update(row).eq("id", id).eq("tenant_id", ctx.tenantId);
+  } else {
+    await sb.from("marketing_channels").insert({ tenant_id: ctx.tenantId, ...row });
+  }
+  revalidatePath("/app/analytics/roi");
+}
+
+export async function deleteChannelAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  if (id) await sb.from("marketing_channels").delete().eq("id", id).eq("tenant_id", ctx.tenantId);
+  revalidatePath("/app/analytics/roi");
+}
+
+export async function saveChannelCostAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const channelId = str(formData.get("channel_id"));
+  const month = str(formData.get("month"));
+  if (!channelId || !month) return;
+  const monthKey = month.length === 7 ? month + "-01" : month; // YYYY-MM → YYYY-MM-01
+  await sb.from("channel_costs").upsert(
+    {
+      tenant_id: ctx.tenantId,
+      channel_id: channelId,
+      month: monthKey,
+      fixed_cost: num(formData.get("fixed_cost")) ?? 0,
+      variable_cost: num(formData.get("variable_cost")) ?? 0,
+      result_qty: num(formData.get("result_qty")),
+      memo: str(formData.get("memo")),
+      created_by: ctx.userId,
+    },
+    { onConflict: "tenant_id,channel_id,month" },
+  );
+  revalidatePath("/app/analytics/roi");
+}
