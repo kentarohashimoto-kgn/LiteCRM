@@ -8,6 +8,7 @@ import { requireCtx } from "@/lib/session";
 import { STAGE_MAP } from "@/lib/constants";
 import { normCompany } from "@/lib/lead-import";
 import { yomiToFields, productToCategory, type DealRow } from "@/lib/deal-import";
+import { parsePeriod, parseProbability, parseAmount, parseDateLoose } from "@/lib/revenue-forecast";
 
 function num(v: FormDataEntryValue | null): number | null {
   if (v == null || v === "") return null;
@@ -1760,4 +1761,101 @@ export async function importNotionDealsAction(
   } catch (e) {
     return { ok: false, inserted: 0, meetings: 0, accounts: 0, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+// ===================== 受注見込み(来期計画) =====================
+export interface RevForecastInput {
+  seq?: string; account?: string; product?: string; deal?: string; note?: string;
+  period?: string; amount?: string; cost?: string; prob?: string; orderDate?: string;
+  owner?: string; memo?: string; enteredOn?: string; updatedOn?: string;
+}
+
+export async function importRevenueForecastAction(
+  rows: RevForecastInput[],
+  opts: { fyStart: number; replaceAll: boolean },
+): Promise<{ ok: boolean; inserted: number; error?: string }> {
+  try {
+    const ctx = await requireCtx();
+    const sb = getSupabaseServer();
+    const fy = opts.fyStart;
+    if (opts.replaceAll) {
+      await sb.from("revenue_forecasts").delete()
+        .eq("tenant_id", ctx.tenantId).eq("fy_start", fy).eq("import_source", "sheet");
+    }
+    const recs = rows
+      .filter((r) => (r.account ?? "").trim() || (r.deal ?? "").trim())
+      .map((r) => {
+        const per = parsePeriod(r.period, fy);
+        return {
+          tenant_id: ctx.tenantId,
+          seq: r.seq ? parseInt(r.seq.replace(/[^\d]/g, ""), 10) || null : null,
+          account_name: str(r.account ?? null),
+          product: str(r.product ?? null),
+          deal_name: str(r.deal ?? null),
+          note: str(r.note ?? null),
+          period_label: str(r.period ?? null),
+          period_start: per.start,
+          period_end: per.end,
+          amount: parseAmount(r.amount),
+          cost: parseAmount(r.cost),
+          probability: parseProbability(r.prob),
+          expected_order_date: parseDateLoose(r.orderDate),
+          owner: str(r.owner ?? null),
+          memo: str(r.memo ?? null),
+          entered_on: parseDateLoose(r.enteredOn),
+          source_updated_on: parseDateLoose(r.updatedOn),
+          fy_start: fy,
+          import_source: "sheet",
+        };
+      });
+    let inserted = 0;
+    for (let i = 0; i < recs.length; i += 300) {
+      const { data, error } = await sb.from("revenue_forecasts").insert(recs.slice(i, i + 300)).select("id");
+      if (error) return { ok: false, inserted, error: error.message };
+      inserted += data?.length ?? 0;
+    }
+    revalidatePath("/app/forecast/pipeline");
+    revalidatePath("/app/forecast");
+    return { ok: true, inserted };
+  } catch (e) {
+    return { ok: false, inserted: 0, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function saveRevenueForecastAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  const fy = num(formData.get("fy_start")) ?? new Date().getFullYear();
+  const per = parsePeriod(str(formData.get("period")) ?? "", fy);
+  const probRaw = str(formData.get("prob"));
+  const rec = {
+    account_name: str(formData.get("account")),
+    product: str(formData.get("product")),
+    deal_name: str(formData.get("deal")),
+    period_label: str(formData.get("period")),
+    period_start: per.start,
+    period_end: per.end,
+    amount: parseAmount(str(formData.get("amount")) ?? undefined),
+    cost: parseAmount(str(formData.get("cost")) ?? undefined),
+    probability: parseProbability(probRaw ?? undefined),
+    expected_order_date: parseDateLoose(str(formData.get("orderDate")) ?? undefined),
+    owner: str(formData.get("owner")),
+    memo: str(formData.get("memo")),
+    fy_start: fy,
+  };
+  if (id) {
+    await sb.from("revenue_forecasts").update(rec).eq("id", id).eq("tenant_id", ctx.tenantId);
+  } else {
+    await sb.from("revenue_forecasts").insert({ tenant_id: ctx.tenantId, import_source: "manual", ...rec });
+  }
+  revalidatePath("/app/forecast/pipeline");
+}
+
+export async function deleteRevenueForecastAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  if (id) await sb.from("revenue_forecasts").delete().eq("id", id).eq("tenant_id", ctx.tenantId);
+  revalidatePath("/app/forecast/pipeline");
 }
