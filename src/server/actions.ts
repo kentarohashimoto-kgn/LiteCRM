@@ -7,6 +7,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireCtx } from "@/lib/session";
 import { STAGE_MAP } from "@/lib/constants";
 import { normCompany } from "@/lib/lead-import";
+import { yomiToFields, productToCategory, type DealRow } from "@/lib/deal-import";
 
 function num(v: FormDataEntryValue | null): number | null {
   if (v == null || v === "") return null;
@@ -1607,4 +1608,146 @@ export async function saveExhibitionEventAction(formData: FormData): Promise<voi
     { onConflict: "tenant_id,raw_event" },
   );
   revalidatePath("/app/analytics/exhibition-roi");
+}
+
+// ===================== 商談(案件)CSV取込: Notionヨミ表 → 顧客/案件/商談ログ 全置換 =====================
+export async function importNotionDealsAction(
+  rows: DealRow[],
+  opts: { replaceAll: boolean },
+): Promise<{ ok: boolean; inserted: number; meetings: number; accounts: number; error?: string }> {
+  try {
+    const ctx = await requireCtx();
+    const sb = getSupabaseServer();
+    const tenant = ctx.tenantId;
+
+    // 参照マスタ
+    const [{ data: prods }, { data: srcs }, { data: chans }, { data: profs }, { data: accs }] = await Promise.all([
+      sb.from("products").select("id,name"),
+      sb.from("lead_sources").select("id,name"),
+      sb.from("marketing_channels").select("id,lead_source_id"),
+      sb.from("profiles").select("id,display_name"),
+      sb.from("accounts").select("id,name"),
+    ]);
+    const prodMap = new Map((prods ?? []).map((p) => [p.name as string, p.id as string]));
+    const srcMap = new Map((srcs ?? []).map((s) => [s.name as string, s.id as string]));
+    const chanByLs = new Map((chans ?? []).filter((c) => c.lead_source_id).map((c) => [c.lead_source_id as string, c.id as string]));
+    const profList = (profs ?? []) as { id: string; display_name: string | null }[];
+    const ownerOf = (name?: string): string | null => {
+      const n = (name ?? "").trim();
+      if (!n) return null;
+      const hit = profList.find((p) => p.display_name === n)
+        ?? profList.find((p) => (p.display_name ?? "").startsWith(n))
+        ?? profList.find((p) => (p.display_name ?? "").split(/[ 　]/)[0] === n);
+      return hit?.id ?? null;
+    };
+    const accMap = new Map<string, string>();
+    for (const a of accs ?? []) accMap.set(normCompany(a.name as string), a.id as string);
+
+    // 全置換
+    if (opts.replaceAll) {
+      const { error: pErr } = await sb.rpc("purge_tenant_opportunities");
+      if (pErr) return { ok: false, inserted: 0, meetings: 0, accounts: 0, error: "purge: " + pErr.message };
+    }
+
+    // 不足顧客を作成
+    const needAcc = new Map<string, string>(); // norm -> displayName
+    for (const r of rows) {
+      const co = (r.company ?? "").trim();
+      if (!co) continue;
+      const norm = normCompany(co);
+      if (!accMap.has(norm) && !needAcc.has(norm)) needAcc.set(norm, co);
+    }
+    let accountsCreated = 0;
+    const newAccArr = Array.from(needAcc.entries());
+    for (let i = 0; i < newAccArr.length; i += 200) {
+      const slice = newAccArr.slice(i, i + 200);
+      const { data: ins } = await sb.from("accounts").insert(slice.map(([, name]) => ({ tenant_id: tenant, name }))).select("id,name");
+      for (const a of ins ?? []) { accMap.set(normCompany(a.name as string), a.id as string); accountsCreated++; }
+    }
+
+    const num = (v?: string) => { const s = (v ?? "").replace(/[^\d.-]/g, ""); return s === "" ? null : Number(s); };
+    const t = (v?: string) => { const s = (v ?? "").trim(); return s === "" ? null : s; };
+
+    // 案件レコード
+    const oppRecords = rows.filter((r) => (r.company ?? "").trim()).map((r) => {
+      const yf = yomiToFields(r.yomi);
+      const won = yf.status === "won";
+      const lost = yf.status === "lost";
+      const lsId = r.source ? srcMap.get(r.source.trim()) ?? null : null;
+      const amount = won ? num(r.sales) : (num(r.fsales) ?? num(r.sales));
+      const closeDate = won ? (t(r.wonDate) ?? t(r.salesMonth)) : (t(r.expMonth) ?? t(r.nextAcDate));
+      const notesParts = [r.detail ? `流入詳細:${r.detail}` : "", r.monthly ? `月額:${r.monthly}` : "", r.proposal ? `提案:${r.proposal}` : ""].filter(Boolean);
+      return {
+        rowKey: r.rowKey,
+        rec: {
+          tenant_id: tenant,
+          external_ref: r.rowKey,
+          import_source: "notion_yomi",
+          account_id: accMap.get(normCompany(r.company!)) ?? null,
+          name: (r.company! + (r.product ? " / " + r.product : "")).slice(0, 200),
+          owner_user_id: ownerOf(r.owner),
+          deal_owner_name: t(r.owner),
+          stage: yf.stage,
+          status: yf.status,
+          forecast_category: yf.forecast,
+          probability: yf.probability,
+          yomi: t(r.yomi),
+          amount: amount ?? null,
+          expected_close_date: closeDate,
+          expected_revenue_month: t(r.salesMonth) ?? t(r.expMonth) ?? t(r.wonDate),
+          first_meeting_date: t(r.firstMeeting),
+          next_action_date: t(r.nextAcDate),
+          next_action_text: t(r.nextAcText),
+          lost_reason: lost ? t(r.lostReason) : null,
+          primary_product_id: r.product ? prodMap.get(r.product.trim()) ?? null : null,
+          lead_source_id: lsId,
+          marketing_channel_id: lsId ? chanByLs.get(lsId) ?? null : null,
+          category: productToCategory(r.product),
+          notes: notesParts.length ? notesParts.join(" / ").slice(0, 2000) : null,
+        },
+      };
+    });
+
+    // 案件 投入(チャンク)＋ rowKey→id
+    const keyToId = new Map<string, string>();
+    let inserted = 0;
+    for (let i = 0; i < oppRecords.length; i += 300) {
+      const slice = oppRecords.slice(i, i + 300);
+      const { data: ins, error } = await sb.from("opportunities").insert(slice.map((x) => x.rec)).select("id,external_ref");
+      if (error) return { ok: false, inserted, meetings: 0, accounts: accountsCreated, error: "opp: " + error.message };
+      for (const o of ins ?? []) keyToId.set(o.external_ref as string, o.id as string);
+      inserted += ins?.length ?? 0;
+    }
+
+    // 商談ログ(meetings): 事前情報(memo)＋議事録(minutes)
+    const meetingRecs = rows
+      .filter((r) => keyToId.has(r.rowKey) && (t(r.firstMeeting) || t(r.memo) || t(r.minutes)))
+      .map((r) => ({
+        tenant_id: tenant,
+        opportunity_id: keyToId.get(r.rowKey)!,
+        account_id: accMap.get(normCompany(r.company ?? "")) ?? null,
+        owner_user_id: ownerOf(r.owner),
+        title: "商談ログ(Notion移行)",
+        meeting_date: t(r.firstMeeting),
+        method: "商談",
+        pre_info: t(r.memo),
+        summary: t(r.minutes),
+        next_action_date: t(r.nextAcDate),
+        next_action_text: t(r.nextAcText),
+        created_by: ctx.userId,
+      }));
+    let meetings = 0;
+    for (let i = 0; i < meetingRecs.length; i += 300) {
+      const slice = meetingRecs.slice(i, i + 300);
+      const { error } = await sb.from("meetings").insert(slice);
+      if (!error) meetings += slice.length;
+    }
+
+    await recomputeEngagementAction();
+    revalidatePath("/app/opportunities");
+    revalidatePath("/app/dashboard");
+    return { ok: true, inserted, meetings, accounts: accountsCreated };
+  } catch (e) {
+    return { ok: false, inserted: 0, meetings: 0, accounts: 0, error: e instanceof Error ? e.message : String(e) };
+  }
 }

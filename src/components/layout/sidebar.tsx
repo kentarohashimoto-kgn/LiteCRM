@@ -36,6 +36,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
       { href: "/app/reviews/weekly", label: "週次レビュー", icon: CalendarCheck },
       { href: "/app/opportunities", label: "案件", icon: Target },
+      { href: "/app/opportunities/import", label: "商談取込(Notion)", icon: ClipboardList },
       { href: "/app/forecast", label: "売上予測", icon: TrendingUp },
       { href: "/app/targets", label: "目標入力", icon: Goal },
     ],
