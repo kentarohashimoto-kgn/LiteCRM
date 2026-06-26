@@ -1671,6 +1671,11 @@ export async function importNotionDealsAction(
 
     const num = (v?: string) => { const s = (v ?? "").replace(/[^\d.-]/g, ""); return s === "" ? null : Number(s); };
     const t = (v?: string) => { const s = (v ?? "").trim(); return s === "" ? null : s; };
+    // 日付正規化: "2025年4月1日" / "2025/04/04" / "2025-04-04" → YYYY-MM-DD
+    const d = (v?: string): string | null => {
+      const m = (v ?? "").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+      return m ? `${m[1]}-${String(+m[2]).padStart(2, "0")}-${String(+m[3]).padStart(2, "0")}` : null;
+    };
 
     // 案件レコード
     const oppRecords = rows.filter((r) => (r.company ?? "").trim()).map((r) => {
@@ -1679,7 +1684,7 @@ export async function importNotionDealsAction(
       const lost = yf.status === "lost";
       const lsId = r.source ? srcMap.get(r.source.trim()) ?? null : null;
       const amount = won ? num(r.sales) : (num(r.fsales) ?? num(r.sales));
-      const closeDate = won ? (t(r.wonDate) ?? t(r.salesMonth)) : (t(r.expMonth) ?? t(r.nextAcDate));
+      const closeDate = won ? (d(r.wonDate) ?? d(r.salesMonth)) : (d(r.expMonth) ?? d(r.nextAcDate));
       const notesParts = [r.owner ? `担当:${r.owner}` : "", r.detail ? `流入詳細:${r.detail}` : "", r.monthly ? `月額:${r.monthly}` : "", r.proposal ? `提案:${r.proposal}` : ""].filter(Boolean);
       return {
         rowKey: r.rowKey,
@@ -1698,9 +1703,9 @@ export async function importNotionDealsAction(
           yomi: t(r.yomi),
           amount: amount ?? 0,
           expected_close_date: closeDate,
-          expected_revenue_month: t(r.salesMonth) ?? t(r.expMonth) ?? t(r.wonDate),
-          first_meeting_date: t(r.firstMeeting),
-          next_action_date: t(r.nextAcDate),
+          expected_revenue_month: d(r.salesMonth) ?? d(r.expMonth) ?? d(r.wonDate),
+          first_meeting_date: d(r.firstMeeting),
+          next_action_date: d(r.nextAcDate),
           next_action_text: t(r.nextAcText),
           lost_reason: lost ? t(r.lostReason) : null,
           primary_product_id: r.product ? prodMap.get(r.product.trim()) ?? null : null,
@@ -1733,11 +1738,11 @@ export async function importNotionDealsAction(
         account_id: accMap.get(normCompany(r.company ?? "")) ?? null,
         owner_user_id: ownerOf(r.owner) ?? fallbackOwner,
         title: "商談ログ(Notion移行)",
-        meeting_date: t(r.firstMeeting),
+        meeting_date: d(r.firstMeeting),
         method: "商談",
         pre_info: t(r.memo),
         summary: t(r.minutes),
-        next_action_date: t(r.nextAcDate),
+        next_action_date: d(r.nextAcDate),
         next_action_text: t(r.nextAcText),
         created_by: ctx.userId,
       }));
