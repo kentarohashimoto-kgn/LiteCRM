@@ -1680,7 +1680,7 @@ export async function importNotionDealsAction(
       const lsId = r.source ? srcMap.get(r.source.trim()) ?? null : null;
       const amount = won ? num(r.sales) : (num(r.fsales) ?? num(r.sales));
       const closeDate = won ? (t(r.wonDate) ?? t(r.salesMonth)) : (t(r.expMonth) ?? t(r.nextAcDate));
-      const notesParts = [r.detail ? `流入詳細:${r.detail}` : "", r.monthly ? `月額:${r.monthly}` : "", r.proposal ? `提案:${r.proposal}` : ""].filter(Boolean);
+      const notesParts = [r.owner ? `担当:${r.owner}` : "", r.detail ? `流入詳細:${r.detail}` : "", r.monthly ? `月額:${r.monthly}` : "", r.proposal ? `提案:${r.proposal}` : ""].filter(Boolean);
       return {
         rowKey: r.rowKey,
         rec: {
@@ -1690,7 +1690,6 @@ export async function importNotionDealsAction(
           account_id: accMap.get(normCompany(r.company!)) ?? null,
           name: (r.company! + (r.product ? " / " + r.product : "")).slice(0, 200),
           owner_user_id: ownerOf(r.owner) ?? fallbackOwner,
-          deal_owner_name: t(r.owner),
           stage: yf.stage,
           status: yf.status,
           forecast_category: yf.forecast,
