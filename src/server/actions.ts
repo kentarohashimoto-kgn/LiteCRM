@@ -1550,3 +1550,39 @@ export async function saveChannelCostAction(formData: FormData): Promise<void> {
   );
   revalidatePath("/app/analytics/roi");
 }
+
+// ===================== プロダクト収益(products拡張 / サブスク解約) =====================
+export async function saveProductMetaAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const gpRate = num(formData.get("default_gross_profit_rate"));
+  await sb.from("products").update({
+    product_type: str(formData.get("product_type")),
+    unit_cost: num(formData.get("unit_cost")),
+    delivery_hours: num(formData.get("delivery_hours")),
+    default_gross_profit_rate: gpRate != null ? (gpRate > 1 ? gpRate / 100 : gpRate) : null, // 50→0.5 も許容
+    priority_flag: formData.get("priority_flag") === "1",
+  }).eq("id", id).eq("tenant_id", ctx.tenantId);
+  revalidatePath("/app/analytics/product-roi");
+}
+
+export async function cancelSubscriptionAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const canceledMonthRaw = str(formData.get("canceled_month"));
+  if (canceledMonthRaw) {
+    const m = canceledMonthRaw.length === 7 ? canceledMonthRaw + "-01" : canceledMonthRaw;
+    await sb.from("billing_schedules").update({
+      sub_status: "canceled", canceled_month: m, cancel_reason: str(formData.get("cancel_reason")),
+    }).eq("id", id).eq("tenant_id", ctx.tenantId);
+  } else {
+    // 月未指定は解約取消(再アクティブ化)
+    await sb.from("billing_schedules").update({ sub_status: "active", canceled_month: null, cancel_reason: null })
+      .eq("id", id).eq("tenant_id", ctx.tenantId);
+  }
+  revalidatePath("/app/analytics/product-roi");
+}
