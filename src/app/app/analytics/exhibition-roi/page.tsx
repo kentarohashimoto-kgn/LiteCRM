@@ -16,9 +16,15 @@ export default async function ExhibitionRoiPage() {
   const rows: ExhibitionRow[] = await getExhibitionBreakdown("2020-01-01", "2100-01-01");
 
   const tot = rows.reduce(
-    (a, r) => ({ leads: a.leads + r.leads, appts: a.appts + r.appts, deals: a.deals + r.deals, revenue: a.revenue + r.revenue, cost: a.cost + (r.cost ?? 0) }),
-    { leads: 0, appts: 0, deals: 0, revenue: 0, cost: 0 },
+    (a, r) => ({
+      leads: a.leads + r.leads, appts: a.appts + r.appts, deals: a.deals + r.deals, revenue: a.revenue + r.revenue,
+      cost: a.cost + (r.cost ?? 0), impNoAppt: a.impNoAppt + r.important_no_appt, nurture: a.nurture + r.nurture,
+    }),
+    { leads: 0, appts: 0, deals: 0, revenue: 0, cost: 0, impNoAppt: 0, nurture: 0 },
   );
+  // 掘り起こし優先(未アポの重要リードが多い展示会)
+  const digTop = [...rows].filter((r) => r.important_no_appt > 0).sort((a, b) => b.important_no_appt - a.important_no_appt).slice(0, 6);
+  const digMax = digTop.length ? digTop[0].important_no_appt : 1;
   const leadTrend = trendOf(rows.map((r) => r.leads));
   const revTrend = trendOf(rows.map((r) => r.revenue));
   const apptTrend = trendOf(rows.map((r) => r.appts));
@@ -38,13 +44,15 @@ export default async function ExhibitionRoiPage() {
         subtitle="リード取込の展示会別データ(YYYYMM_展示会名)を時系列で集計。右肩上がり傾向か、主催会社・テーマでばらつきが無いかを分析します。"
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card><div className="text-xs text-ink/50">展示会数</div><div className="text-2xl font-bold mt-1">{rows.length}</div></Card>
         <Card><div className="text-xs text-ink/50">総リード</div><div className="text-xl font-bold mt-1 tabular-nums">{tot.leads.toLocaleString()}</div></Card>
-        <Card><div className="text-xs text-ink/50">総アポ</div><div className="text-xl font-bold mt-1 tabular-nums">{tot.appts.toLocaleString()}</div></Card>
-        <Card><div className="text-xs text-ink/50">受注(CRM)</div><div className="text-xl font-bold mt-1 tabular-nums">{tot.deals}</div></Card>
-        <Card><div className="text-xs text-ink/50">売上(CRM)</div><div className="text-lg font-bold mt-1 tabular-nums stat-accent">{formatYen(tot.revenue)}</div></Card>
+        <Card><div className="text-xs text-ink/50">総アポ</div><div className="text-xl font-bold mt-1 tabular-nums">{tot.appts.toLocaleString()}<span className="text-xs text-ink/40 ml-1">{tot.leads > 0 ? formatPercent(tot.appts / tot.leads) : ""}</span></div></Card>
+        <Card><div className="text-xs text-ink/50">受注 / 受注額(CRM)</div><div className="text-lg font-bold mt-1 tabular-nums stat-accent">{tot.deals}件 {formatYen(tot.revenue)}</div></Card>
+        <Card className="border-rose-200 bg-rose-50/40"><div className="text-xs text-rose-600 font-semibold">掘り起こし対象(重要・未アポ)</div><div className="text-2xl font-bold mt-1 tabular-nums text-rose-600">{tot.impNoAppt.toLocaleString()}</div><div className="text-[10px] text-ink/45">重要リードのうち未アポ</div></Card>
+        <Card className="border-amber-200 bg-amber-50/40"><div className="text-xs text-amber-700 font-semibold">ナーチャリング母数(未アポ全体)</div><div className="text-2xl font-bold mt-1 tabular-nums text-amber-700">{tot.nurture.toLocaleString()}</div></Card>
         <Card><div className="text-xs text-ink/50">出展費用</div><div className="text-lg font-bold mt-1 tabular-nums">{tot.cost > 0 ? formatYen(tot.cost) : "未入力"}</div></Card>
+        <Card><div className="text-xs text-ink/50">受注率(受注/アポ)</div><div className="text-xl font-bold mt-1 tabular-nums">{tot.appts > 0 ? formatPercent(tot.deals / tot.appts) : "—"}</div></Card>
       </div>
 
       {/* 傾向サマリー */}
@@ -56,6 +64,25 @@ export default async function ExhibitionRoiPage() {
         </div>
         {chartData.length ? <ExhibitionChart data={chartData} /> : <p className="text-sm text-ink/40 py-6 text-center">データがありません</p>}
       </Section>
+
+      {/* 掘り起こし優先(未アポの重要リードが多い展示会) */}
+      {digTop.length > 0 && (
+        <Section title="掘り起こし優先 — 未アポの重要リードが多い展示会" action={<span className="text-[11px] text-ink/40">重要=ランクS/A・大企業・決裁層</span>}>
+          <div className="space-y-2">
+            {digTop.map((r) => (
+              <div key={r.raw_event} className="flex items-center gap-3">
+                <span className="w-44 truncate text-sm">{fmtYm(r.ym)} {r.label}</span>
+                <div className="flex-1 h-3 rounded-full bg-mist-soft overflow-hidden">
+                  <div className="h-full rounded-full bg-rose-400" style={{ width: `${Math.max(3, (r.important_no_appt / digMax) * 100)}%` }} />
+                </div>
+                <span className="w-28 text-right text-sm font-semibold tabular-nums text-rose-600">{r.important_no_appt}件 未アポ</span>
+                <span className="w-20 text-right text-[11px] text-ink/45">重要{r.important}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-ink/45 mt-2">※ これらは過去に名刺交換済みだが未アポの重要顧客。架電・ナーチャリングの再アプローチ候補です。</p>
+        </Section>
+      )}
 
       {/* 主催会社別・テーマ別 ばらつき */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -74,8 +101,9 @@ export default async function ExhibitionRoiPage() {
           <thead className="border-b border-black/[0.06] text-ink/50">
             <tr>
               <th className="th">展示会(YYYYMM)</th><th className="th">主催 / テーマ</th>
-              <th className="th text-right">リード</th><th className="th text-right">アポ</th><th className="th text-right">受注</th>
-              <th className="th text-right">売上</th><th className="th text-right">費用</th><th className="th text-right">CPL</th><th className="th text-right">ROI</th>
+              <th className="th text-right">リード</th><th className="th text-right">アポ</th>
+              <th className="th text-right text-rose-600">掘(重要未アポ)</th><th className="th text-right text-amber-700">ナ(未アポ計)</th>
+              <th className="th text-right">受注</th><th className="th text-right">受注額</th><th className="th text-right">費用</th><th className="th text-right">CPL</th><th className="th text-right">ROI</th>
               <th className="th text-right">L→A</th>
             </tr>
           </thead>
@@ -98,6 +126,8 @@ export default async function ExhibitionRoiPage() {
                 <td className="td text-xs"><div>{r.organizer ?? "—"}</div><div className="text-ink/45">{r.theme ?? "—"}</div></td>
                 <td className="td text-right tabular-nums">{r.leads.toLocaleString()}</td>
                 <td className="td text-right tabular-nums">{r.appts}</td>
+                <td className="td text-right tabular-nums font-semibold text-rose-600">{r.important_no_appt}</td>
+                <td className="td text-right tabular-nums text-amber-700">{r.nurture}</td>
                 <td className="td text-right tabular-nums font-semibold">{r.deals}</td>
                 <td className="td text-right tabular-nums stat-accent">{formatYen(r.revenue)}</td>
                 <td className="td text-right tabular-nums text-xs">{r.cost != null ? formatYen(r.cost) : "—"}</td>
@@ -119,13 +149,13 @@ export default async function ExhibitionRoiPage() {
   );
 }
 
-function BreakdownTable({ groups, emptyHint }: { groups: { key: string; count: number; leads: number; appts: number; deals: number; revenue: number; cost: number; cpl: number | null; roi: number | null }[]; emptyHint: string }) {
+function BreakdownTable({ groups, emptyHint }: { groups: import("@/lib/exhibition-analysis").GroupAgg[]; emptyHint: string }) {
   const real = groups.filter((g) => g.key !== "未設定");
   if (real.length === 0) return <p className="text-sm text-ink/40 py-6 text-center">{emptyHint}</p>;
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
-        <thead className="text-ink/50"><tr><th className="th text-left">区分</th><th className="th text-right">展示会数</th><th className="th text-right">リード</th><th className="th text-right">アポ</th><th className="th text-right">受注</th><th className="th text-right">売上</th><th className="th text-right">CPL</th><th className="th text-right">ROI</th></tr></thead>
+        <thead className="text-ink/50"><tr><th className="th text-left">区分</th><th className="th text-right">展示会</th><th className="th text-right">リード</th><th className="th text-right">アポ</th><th className="th text-right text-rose-600">掘</th><th className="th text-right">受注</th><th className="th text-right">売上</th><th className="th text-right">CPL</th><th className="th text-right">ROI</th></tr></thead>
         <tbody className="divide-y divide-black/[0.04]">
           {groups.map((g) => (
             <tr key={g.key} className={cn(g.key === "未設定" && "text-ink/40")}>
@@ -133,6 +163,7 @@ function BreakdownTable({ groups, emptyHint }: { groups: { key: string; count: n
               <td className="td text-right tabular-nums">{g.count}</td>
               <td className="td text-right tabular-nums">{g.leads.toLocaleString()}</td>
               <td className="td text-right tabular-nums">{g.appts}</td>
+              <td className="td text-right tabular-nums text-rose-600">{g.important_no_appt}</td>
               <td className="td text-right tabular-nums">{g.deals}</td>
               <td className="td text-right tabular-nums">{formatYen(g.revenue)}</td>
               <td className="td text-right tabular-nums">{g.cpl != null ? formatYen(g.cpl) : "—"}</td>

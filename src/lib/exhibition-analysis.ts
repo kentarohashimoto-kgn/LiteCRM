@@ -11,6 +11,9 @@ export interface ExhibitionRow {
   appts: number;
   deals: number;
   revenue: number;
+  important: number;          // 重要リード(ランクS/A・大企業・決裁層)
+  important_no_appt: number;  // 重要だが未アポ(掘り起こし最優先)
+  nurture: number;            // 未アポ・未失注(ナーチャリング母数)
 }
 
 export type Trend = "up" | "flat" | "down";
@@ -46,6 +49,8 @@ export interface GroupAgg {
   deals: number;
   revenue: number;
   cost: number;
+  important_no_appt: number;
+  nurture: number;
   cpl: number | null;
   roi: number | null;
 }
@@ -55,8 +60,9 @@ export function groupBy(rows: ExhibitionRow[], pick: (r: ExhibitionRow) => strin
   const map = new Map<string, GroupAgg>();
   for (const r of rows) {
     const key = (pick(r) ?? "").trim() || "未設定";
-    const g = map.get(key) ?? { key, count: 0, leads: 0, appts: 0, deals: 0, revenue: 0, cost: 0, cpl: null, roi: null };
+    const g = map.get(key) ?? { key, count: 0, leads: 0, appts: 0, deals: 0, revenue: 0, cost: 0, important_no_appt: 0, nurture: 0, cpl: null, roi: null };
     g.count += 1; g.leads += r.leads; g.appts += r.appts; g.deals += r.deals; g.revenue += r.revenue; g.cost += r.cost ?? 0;
+    g.important_no_appt += r.important_no_appt; g.nurture += r.nurture;
     map.set(key, g);
   }
   const out = Array.from(map.values());
