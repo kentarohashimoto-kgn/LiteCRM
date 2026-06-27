@@ -6,6 +6,8 @@ import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { ForecastChart } from "@/components/charts/forecast-chart";
 import { ForecastTabs, type WonRow, type PipelineRow, type InputRow } from "@/components/forecast/forecast-tabs";
 import { buildSubscriptionForecast } from "@/lib/subscription";
+import { listRevenueForecasts } from "@/lib/data/revenue-forecast";
+import { monthlySpread, bandOf } from "@/lib/revenue-forecast";
 import { STAGE_MAP } from "@/lib/constants";
 import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
 import { actualByMonth } from "@/lib/targets";
@@ -42,16 +44,35 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
   const targetMap = new Map(targets.map((t) => [t.target_month, t]));
   const actuals = actualByMonth(opps, (await getLeadMetrics(opps)).byMonth);
 
+  // ===== 受注見込み(来期計画)を月次・確度加重で合算 =====
+  const plans = await listRevenueForecasts(fy);
+  const planByMonth = new Map<string, { commit: number; best: number; pipeline: number; weighted: number }>();
+  for (const p of plans) {
+    for (const s of monthlySpread(p)) {
+      if (!s.month) continue;
+      const k = s.month + "-01";
+      const b = planByMonth.get(k) ?? { commit: 0, best: 0, pipeline: 0, weighted: 0 };
+      const band = bandOf(p.probability);
+      if (band === "commit") b.commit += s.amount;
+      else if (band === "best") b.best += s.amount;
+      else b.pipeline += s.amount; // pipeline/upside
+      b.weighted += s.weighted;
+      planByMonth.set(k, b);
+    }
+  }
+
   const rows = months.map((m) => {
     const t = targetMap.get(m.key);
     const a = actuals.get(m.key);
     const inMonth = opps.filter((o) => revMonthKey(o) === m.key);
     const open = inMonth.filter((o) => o.status === "open");
     const won = sum(inMonth.filter((o) => o.status === "won"), (o) => o.amount);
-    const commit = sum(open.filter((o) => o.forecast_category === "commit"), (o) => o.amount) + won;
-    const best = commit + sum(open.filter((o) => o.forecast_category === "best_case"), (o) => o.amount);
-    const pipeline = sum(open.filter((o) => o.forecast_category === "pipeline"), (o) => o.amount);
-    const weighted = sum(open, (o) => o.weighted) + won;
+    const pl = planByMonth.get(m.key) ?? { commit: 0, best: 0, pipeline: 0, weighted: 0 };
+    const commit = sum(open.filter((o) => o.forecast_category === "commit"), (o) => o.amount) + won + pl.commit;
+    const best = commit + sum(open.filter((o) => o.forecast_category === "best_case"), (o) => o.amount) + pl.best;
+    const pipeline = sum(open.filter((o) => o.forecast_category === "pipeline"), (o) => o.amount) + pl.pipeline;
+    const weighted = sum(open, (o) => o.weighted) + won + pl.weighted;
+    const planWeighted = pl.weighted;
     return {
       key: m.key,
       label: m.label,
@@ -67,8 +88,10 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
       best,
       pipeline,
       weighted,
+      planWeighted,
     };
   });
+  const totPlanWeighted = sum(rows, (r) => r.planWeighted);
 
   const tot = {
     target: sum(rows, (r) => r.target),
@@ -134,7 +157,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
         <StatCard label="売上(実績/目標)" amount={tot.revenue} accent sub={`目標 ${formatYen(tot.target)}・達成 ${formatPercent(rate(tot.revenue, tot.target))}`} />
         <StatCard label="成約(実績/目標)" raw={`${tot.deals}`} sub={`目標 ${tot.targetDeals}・達成 ${formatPercent(rate(tot.deals, tot.targetDeals))}`} />
         <StatCard label="アポ(実績/目標)" raw={`${tot.appts}`} sub={`目標 ${tot.targetAppts}・達成 ${formatPercent(rate(tot.appts, tot.targetAppts))}`} />
-        <StatCard label="リード(実績/目標)" raw={`${tot.leads}`} sub={`目標 ${tot.targetLeads}・達成 ${formatPercent(rate(tot.leads, tot.targetLeads))}`} />
+        <StatCard label="受注見込み(計画・加重)" raw={formatYen(Math.round(totPlanWeighted))} sub={totPlanWeighted > 0 ? "売上予測に合算済" : "受注見込みシート未取込"} />
       </div>
 
       <Section title={`月別 売上予測（${fiscalYearLabel(fy)}）`} className="mb-5">
@@ -164,6 +187,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
               <th className="th text-right">成約 実/目</th>
               <th className="th text-right">アポ 実/目</th>
               <th className="th text-right">リード 実/目</th>
+              <th className="th text-right">受注見込み(計画・加重)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-black/[0.04]">
@@ -178,6 +202,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
                   <td className="td text-right tabular-nums">{r.deals} / {r.targetDeals}</td>
                   <td className="td text-right tabular-nums">{r.appts} / {r.targetAppts}</td>
                   <td className="td text-right tabular-nums">{r.leads} / {r.targetLeads}</td>
+                  <td className="td text-right tabular-nums text-teal-deep">{r.planWeighted > 0 ? formatYen(Math.round(r.planWeighted)) : "—"}</td>
                 </tr>
               );
             })}
@@ -191,6 +216,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
               <td className="td text-right tabular-nums">{tot.deals} / {tot.targetDeals}</td>
               <td className="td text-right tabular-nums">{tot.appts} / {tot.targetAppts}</td>
               <td className="td text-right tabular-nums">{tot.leads} / {tot.targetLeads}</td>
+              <td className="td text-right tabular-nums text-teal-deep">{formatYen(Math.round(totPlanWeighted))}</td>
             </tr>
           </tfoot>
         </table>
