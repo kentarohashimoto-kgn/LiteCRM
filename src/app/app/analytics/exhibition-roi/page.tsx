@@ -1,7 +1,8 @@
-import { getExhibitionBreakdown } from "@/lib/data/exhibition-analysis";
-import { saveExhibitionEventAction } from "@/server/actions";
+import { getExhibitionBreakdown, getExhibitionDealRoi } from "@/lib/data/exhibition-analysis";
+import { saveExhibitionEventAction, saveDealDetailCostAction } from "@/server/actions";
 import { PageHeader, Card, Section } from "@/components/ui/primitives";
 import { ExhibitionChart } from "@/components/charts/exhibition-chart";
+import { DealCostImport } from "@/components/analytics/deal-cost-import";
 import { trendOf, groupBy, exhibitionLabel, fmtYm, TREND_LABEL, TREND_COLOR, type ExhibitionRow } from "@/lib/exhibition-analysis";
 import { formatYen, formatPercent, cn } from "@/lib/utils";
 
@@ -14,6 +15,9 @@ function roiPct(rev: number, cost: number): string {
 export default async function ExhibitionRoiPage() {
   // 時系列(右肩上がり判定)のため全期間を取得し、ym昇順で並ぶ
   const rows: ExhibitionRow[] = await getExhibitionBreakdown("2020-01-01", "2100-01-01");
+  // 受注/売上/原価/ROI(案件の詳細=展示会/施策ラベル別)。受注は全期間。
+  const dealRoi = await getExhibitionDealRoi("2020-01-01", "2100-01-01");
+  const dealTot = dealRoi.reduce((a, r) => ({ deals: a.deals + r.deals, revenue: a.revenue + r.revenue, cost: a.cost + r.cost, open: a.open + r.open_amount }), { deals: 0, revenue: 0, cost: 0, open: 0 });
 
   const tot = rows.reduce(
     (a, r) => ({
@@ -48,7 +52,7 @@ export default async function ExhibitionRoiPage() {
         <Card><div className="text-xs text-ink/50">展示会数</div><div className="text-2xl font-bold mt-1">{rows.length}</div></Card>
         <Card><div className="text-xs text-ink/50">総リード</div><div className="text-xl font-bold mt-1 tabular-nums">{tot.leads.toLocaleString()}</div></Card>
         <Card><div className="text-xs text-ink/50">総アポ</div><div className="text-xl font-bold mt-1 tabular-nums">{tot.appts.toLocaleString()}<span className="text-xs text-ink/40 ml-1">{tot.leads > 0 ? formatPercent(tot.appts / tot.leads) : ""}</span></div></Card>
-        <Card><div className="text-xs text-ink/50">受注 / 受注額(CRM)</div><div className="text-lg font-bold mt-1 tabular-nums stat-accent">{tot.deals}件 {formatYen(tot.revenue)}</div></Card>
+        <Card><div className="text-xs text-ink/50">受注 / 受注額(CRM)</div><div className="text-lg font-bold mt-1 tabular-nums stat-accent">{dealTot.deals}件 {formatYen(dealTot.revenue)}</div></Card>
         <Card className="border-rose-200 bg-rose-50/40"><div className="text-xs text-rose-600 font-semibold">掘り起こし対象(重要・未アポ)</div><div className="text-2xl font-bold mt-1 tabular-nums text-rose-600">{tot.impNoAppt.toLocaleString()}</div><div className="text-[10px] text-ink/45">重要リードのうち未アポ</div></Card>
         <Card className="border-amber-200 bg-amber-50/40"><div className="text-xs text-amber-700 font-semibold">ナーチャリング母数(未アポ全体)</div><div className="text-2xl font-bold mt-1 tabular-nums text-amber-700">{tot.nurture.toLocaleString()}</div></Card>
         <Card><div className="text-xs text-ink/50">出展費用</div><div className="text-lg font-bold mt-1 tabular-nums">{tot.cost > 0 ? formatYen(tot.cost) : "未入力"}</div></Card>
@@ -83,6 +87,46 @@ export default async function ExhibitionRoiPage() {
           <p className="text-[11px] text-ink/45 mt-2">※ これらは過去に名刺交換済みだが未アポの重要顧客。架電・ナーチャリングの再アプローチ候補です。</p>
         </Section>
       )}
+
+      {/* 受注・売上・原価・ROI(展示会/施策別) */}
+      <div className="card overflow-x-auto">
+        <div className="px-5 pt-4 pb-3 border-b border-black/[0.04] flex items-center justify-between gap-3">
+          <div>
+            <h2 className="section-title">受注・売上・原価・ROI（展示会/施策別）</h2>
+            <p className="text-[11px] text-ink/40 mt-0.5">案件の「詳細(展示会/施策)」で集計。原価を入力するとROI＝(売上−原価)/原価 を算出。合計 受注{dealTot.deals}件 / 売上{formatYen(dealTot.revenue)} / 原価{dealTot.cost > 0 ? formatYen(dealTot.cost) : "未入力"}</p>
+          </div>
+          <DealCostImport />
+        </div>
+        <table className="w-full text-sm">
+          <thead className="border-b border-black/[0.06] text-ink/50">
+            <tr><th className="th">展示会/施策(詳細)</th><th className="th text-right">受注</th><th className="th text-right">受注売上</th><th className="th text-right">商談中</th><th className="th text-right">原価(費用)</th><th className="th text-right">粗利</th><th className="th text-right">ROI</th></tr>
+          </thead>
+          <tbody className="divide-y divide-black/[0.04]">
+            {dealRoi.map((r) => {
+              const gross = r.revenue - r.cost;
+              const roi = r.cost > 0 ? (r.revenue - r.cost) / r.cost : null;
+              return (
+                <tr key={r.detail} className="row-hover">
+                  <td className="td font-medium max-w-[260px] truncate" title={r.detail}>{r.detail}</td>
+                  <td className="td text-right tabular-nums font-semibold">{r.deals}</td>
+                  <td className="td text-right tabular-nums stat-accent">{formatYen(r.revenue)}</td>
+                  <td className="td text-right tabular-nums text-xs text-ink/60">{r.open_deals}件 / {formatYen(r.open_amount)}</td>
+                  <td className="td text-right">
+                    <form action={saveDealDetailCostAction} className="flex items-center gap-1 justify-end">
+                      <input type="hidden" name="detail" value={r.detail} />
+                      <input name="cost" type="number" defaultValue={r.cost || ""} placeholder="原価" className="input text-xs w-24 py-0.5 text-right" />
+                      <button className="btn-ghost text-[11px] py-0.5 px-2">保存</button>
+                    </form>
+                  </td>
+                  <td className="td text-right tabular-nums text-xs">{r.cost > 0 ? formatYen(gross) : "—"}</td>
+                  <td className={cn("td text-right tabular-nums font-bold", roi != null && roi >= 1 ? "text-teal-deep" : roi != null && roi < 0 ? "text-rose-600" : "")}>{roi != null ? formatPercent(roi) : "—"}</td>
+                </tr>
+              );
+            })}
+            {dealRoi.length === 0 && <tr><td colSpan={7} className="td text-center text-ink/40 py-8">案件に詳細(展示会/施策)が紐づいていません。商談取込で「詳細」列を取り込むと表示されます。</td></tr>}
+          </tbody>
+        </table>
+      </div>
 
       {/* 主催会社別・テーマ別 ばらつき */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

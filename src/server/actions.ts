@@ -1709,6 +1709,7 @@ export async function importNotionDealsAction(
           next_action_date: d(r.nextAcDate),
           next_action_text: t(r.nextAcText),
           lost_reason: lost ? t(r.lostReason) : null,
+          source_detail: t(r.detail),
           primary_product_id: r.product ? prodMap.get(r.product.trim()) ?? null : null,
           lead_source_id: lsId,
           marketing_channel_id: lsId ? chanByLs.get(lsId) ?? null : null,
@@ -1858,4 +1859,36 @@ export async function deleteRevenueForecastAction(formData: FormData): Promise<v
   const id = str(formData.get("id"));
   if (id) await sb.from("revenue_forecasts").delete().eq("id", id).eq("tenant_id", ctx.tenantId);
   revalidatePath("/app/forecast/pipeline");
+}
+
+// ===================== 展示会/施策別 原価(deal_detail_costs) =====================
+export async function saveDealDetailCostAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const detail = str(formData.get("detail"));
+  if (!detail) return;
+  await sb.from("deal_detail_costs").upsert(
+    { tenant_id: ctx.tenantId, detail, cost: num(formData.get("cost")) ?? 0, note: str(formData.get("note")) },
+    { onConflict: "tenant_id,detail" },
+  );
+  revalidatePath("/app/analytics/exhibition-roi");
+}
+
+export async function importDealCostsAction(
+  rows: { detail?: string; cost?: string }[],
+): Promise<{ ok: boolean; upserted: number; error?: string }> {
+  try {
+    const ctx = await requireCtx();
+    const sb = getSupabaseServer();
+    const recs = rows
+      .filter((r) => (r.detail ?? "").trim())
+      .map((r) => ({ tenant_id: ctx.tenantId, detail: (r.detail ?? "").trim(), cost: num(r.cost ?? null) ?? 0 }));
+    if (!recs.length) return { ok: true, upserted: 0 };
+    const { error } = await sb.from("deal_detail_costs").upsert(recs, { onConflict: "tenant_id,detail" });
+    if (error) return { ok: false, upserted: 0, error: error.message };
+    revalidatePath("/app/analytics/exhibition-roi");
+    return { ok: true, upserted: recs.length };
+  } catch (e) {
+    return { ok: false, upserted: 0, error: e instanceof Error ? e.message : String(e) };
+  }
 }
