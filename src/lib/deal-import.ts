@@ -91,6 +91,31 @@ export function yomiToFields(yomi?: string): { stage: string; status: string; fo
   return { stage: "lead_acquired", status: "open", forecast: "pipeline", probability: 5 };
 }
 
+/** 展示会タイプの「詳細」を YYYYMM_展示会名(リード側raw_event)へ統一。非展示会はそのまま。 */
+const EXHIBITION_CANON: Record<string, string> = {
+  "20260610_AINATIVEEXPO": "202606_AIEXPO幕張",
+  "20250730_産業DX": "202507_産業DX総合展（ビッグサイト）",
+  "20260225_AI World春": "202602_AIWorld",
+  "20260513_ODEX": "202605_ODEX",
+  "20260324_AIDX営業マーケティング展": "202603_AIDX営業マーケ",
+  "20250917_生成AIワールド": "202509_生成AIワールド（幕張）",
+  "20260204_バックオフィスWorld": "202602_バックオフィスW",
+  "20251022_StartupJapanSummit（秋）": "202510_StartupJapanSummit（秋）（幕張）",
+  "ODEX2506": "202506_ODEX（ビッグサイト）",
+  "AIW2507": "202507_AIworld（幕張）",
+  "sansan2505": "202505_StartupJAPAN",
+  "RX2504": "202504_StartupJapanSummit（春）",
+  "20251030_ODEX大阪": "202510_ODEX大阪",
+  "20251217_StartupJapanEXPO大阪": "20251217_Startup大阪",
+  "20251126_ビジネスチャンス": "20251126_ビジネスチャンスEXPO（ビッグサイト）",
+  "DXPO": "202508_DXPO（ビッグサイト）",
+};
+export function canonicalExhibition(detail?: string | null): string | null {
+  const d = (detail ?? "").trim();
+  if (!d) return null;
+  return EXHIBITION_CANON[d] ?? d;
+}
+
 /** 製品群 → 案件カテゴリ。 */
 export function productToCategory(prod?: string): string | null {
   const p = (prod ?? "").trim();

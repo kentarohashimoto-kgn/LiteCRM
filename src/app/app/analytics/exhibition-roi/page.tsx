@@ -88,21 +88,21 @@ export default async function ExhibitionRoiPage() {
         </Section>
       )}
 
-      {/* 受注・売上・原価・ROI(展示会/施策別) */}
+      {/* 展示会以外の施策別 受注・ROI(代理店/セミナー/紹介 等。展示会はYYYYMM行に統合済) */}
       <div className="card overflow-x-auto">
         <div className="px-5 pt-4 pb-3 border-b border-black/[0.04] flex items-center justify-between gap-3">
           <div>
-            <h2 className="section-title">受注・売上・原価・ROI（展示会/施策別）</h2>
-            <p className="text-[11px] text-ink/40 mt-0.5">案件の「詳細(展示会/施策)」で集計。原価を入力するとROI＝(売上−原価)/原価 を算出。合計 受注{dealTot.deals}件 / 売上{formatYen(dealTot.revenue)} / 原価{dealTot.cost > 0 ? formatYen(dealTot.cost) : "未入力"}</p>
+            <h2 className="section-title">展示会以外の施策別 受注・ROI（代理店/セミナー/紹介 等）</h2>
+            <p className="text-[11px] text-ink/40 mt-0.5">展示会(YYYYMM)は上の一覧に統合済。ここは案件の「詳細」のうち展示会以外。原価入力でROI＝(売上−原価)/原価。</p>
           </div>
           <DealCostImport />
         </div>
         <table className="w-full text-sm">
           <thead className="border-b border-black/[0.06] text-ink/50">
-            <tr><th className="th">展示会/施策(詳細)</th><th className="th text-right">受注</th><th className="th text-right">受注売上</th><th className="th text-right">商談中</th><th className="th text-right">原価(費用)</th><th className="th text-right">粗利</th><th className="th text-right">ROI</th></tr>
+            <tr><th className="th">施策(詳細)</th><th className="th text-right">受注</th><th className="th text-right">受注売上</th><th className="th text-right">商談中</th><th className="th text-right">原価(費用)</th><th className="th text-right">粗利</th><th className="th text-right">ROI</th></tr>
           </thead>
           <tbody className="divide-y divide-black/[0.04]">
-            {dealRoi.map((r) => {
+            {dealRoi.filter((dr) => !rows.some((er) => er.raw_event === dr.detail)).map((r) => {
               const gross = r.revenue - r.cost;
               const roi = r.cost > 0 ? (r.revenue - r.cost) / r.cost : null;
               return (

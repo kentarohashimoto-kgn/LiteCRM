@@ -7,7 +7,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireCtx } from "@/lib/session";
 import { STAGE_MAP } from "@/lib/constants";
 import { normCompany } from "@/lib/lead-import";
-import { yomiToFields, productToCategory, type DealRow } from "@/lib/deal-import";
+import { yomiToFields, productToCategory, canonicalExhibition, type DealRow } from "@/lib/deal-import";
 import { parsePeriod, parseProbability, parseAmount, parseDateLoose } from "@/lib/revenue-forecast";
 
 function num(v: FormDataEntryValue | null): number | null {
@@ -1709,7 +1709,7 @@ export async function importNotionDealsAction(
           next_action_date: d(r.nextAcDate),
           next_action_text: t(r.nextAcText),
           lost_reason: lost ? t(r.lostReason) : null,
-          source_detail: t(r.detail),
+          source_detail: canonicalExhibition(r.detail),
           primary_product_id: r.product ? prodMap.get(r.product.trim()) ?? null : null,
           lead_source_id: lsId,
           marketing_channel_id: lsId ? chanByLs.get(lsId) ?? null : null,

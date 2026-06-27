@@ -11,6 +11,8 @@ export interface ExhibitionRow {
   appts: number;
   deals: number;
   revenue: number;
+  open_deals: number;
+  open_amount: number;
   important: number;          // 重要リード(ランクS/A・大企業・決裁層)
   important_no_appt: number;  // 重要だが未アポ(掘り起こし最優先)
   nurture: number;            // 未アポ・未失注(ナーチャリング母数)
