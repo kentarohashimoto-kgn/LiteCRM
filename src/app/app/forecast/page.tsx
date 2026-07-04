@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { getWorkspace } from "@/lib/data/workspace";
-import { getSalesTargets, listOpportunities, listBillingSchedules } from "@/lib/data/select";
+import { getWorkspaceLite } from "@/lib/data/workspace";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSalesTargets, listOpportunities } from "@/lib/data/select";
 import { getLeadMetrics } from "@/lib/data/leads";
+import type { BillingSchedule } from "@/lib/types";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { ForecastChart } from "@/components/charts/forecast-chart";
 import { ForecastTabs, type WonRow, type PipelineRow, type InputRow } from "@/components/forecast/forecast-tabs";
@@ -33,7 +35,11 @@ function daysBetween(end?: string | null, start?: string | null): number | null 
 }
 
 export default async function ForecastPage({ searchParams }: { searchParams: { fy?: string } }) {
-  const ws = await getWorkspace();
+  // full(2.1MB, meetings等含む)を回避: lite＋請求スケジュールのみ取得。
+  const ws = await getWorkspaceLite();
+  const sb = getSupabaseServer();
+  const { data: billingRows } = await sb.from("billing_schedules").select("*");
+  const billing = (billingRows ?? []) as BillingSchedule[];
   const cur = currentFiscalStartYear();
   const fy = searchParams.fy ? parseInt(searchParams.fy, 10) : cur;
   const months = fiscalMonths(fy);
@@ -148,7 +154,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
   }));
 
   // ===== 継続売上(サブスク) =====
-  const { monthly: subMonthly, subs } = buildSubscriptionForecast(opps, listBillingSchedules(ws), months);
+  const { monthly: subMonthly, subs } = buildSubscriptionForecast(opps, billing, months);
 
   const monthly = (
     <>
