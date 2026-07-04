@@ -15,7 +15,9 @@ import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/badges";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
 import { MeetingList } from "@/components/meetings/meeting-list";
+import { SouvenirSection } from "@/components/accounts/souvenir-section";
 import { createOpportunityAction, createMeetingAction } from "@/server/actions";
+import { getSolutionPackages, getAccountSouvenirs } from "@/lib/data/souvenirs";
 import { STAGES, FORECAST_CATEGORIES, DEAL_PHASES } from "@/lib/constants";
 import { formatYen, sum } from "@/lib/utils";
 
@@ -34,6 +36,7 @@ export default async function AccountDetailPage({ params, searchParams }: { para
   const sources = getLeadSources(ws);
   const won = opps.filter((o) => o.status === "won");
   const open = opps.filter((o) => o.status === "open");
+  const [packages, souvenirs] = await Promise.all([getSolutionPackages(), getAccountSouvenirs(account.id)]);
 
   return (
     <div>
@@ -136,6 +139,9 @@ export default async function AccountDetailPage({ params, searchParams }: { para
               </form>
             </details>
           </Section>
+
+          {/* お土産提案（アップセル候補） */}
+          <SouvenirSection accountId={account.id} souvenirs={souvenirs} packages={packages} />
 
           {/* 商談 */}
           <Section title={`商談（${meetings.length}回）`} action={<span className="text-xs text-ink/40">案件配下の個別商談</span>}>
