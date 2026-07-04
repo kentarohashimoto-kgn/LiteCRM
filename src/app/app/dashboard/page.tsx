@@ -1,12 +1,9 @@
 import Link from "next/link";
 import { CalendarCheck, AlertTriangle, Clock, Target as TargetIcon } from "lucide-react";
-import { getWorkspaceLite } from "@/lib/data/workspace";
-import { getSalesTargets, listOpportunities, listTasks } from "@/lib/data/select";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import { getDashboardMetrics, miniToOppView } from "@/lib/data/dashboard";
 import { getLeadMetrics } from "@/lib/data/leads";
 import { getSalesAlerts, summarizeAlerts } from "@/lib/data/alerts";
-import { buildForecast } from "@/lib/forecast";
-import { isStale, noNextAction } from "@/lib/risk";
-import { repMetrics, productMetrics } from "@/lib/analytics";
 import { Card, PageHeader, ProgressBar, Section, StatCard } from "@/components/ui/primitives";
 import { ForecastChart, SimpleBar } from "@/components/charts/forecast-chart";
 import { MetricTrendChart, type TrendPoint } from "@/components/charts/trend-chart";
@@ -14,52 +11,62 @@ import { FunnelView } from "@/components/dashboard/funnel-view";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
 import { currentFiscalStartYear, fiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
 import { FyTabs } from "@/components/dashboard/fy-tabs";
-import { actualByMonth } from "@/lib/targets";
-import { formatYen, formatManYen, formatPercent, sameMonth, formatDate, sum, monthKey, startOfMonth, addMonths } from "@/lib/utils";
+import { formatYen, formatPercent, formatDate, sum, monthKey, startOfMonth, addMonths } from "@/lib/utils";
+
+interface TargetRow { target_month: string; target_amount: number; target_deals?: number; target_appointments?: number; target_leads?: number; }
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ fy?: string }> }) {
   const sp = await searchParams;
-  const ws = await getWorkspaceLite();
   const now = new Date();
-  const opps = listOpportunities(ws);
-  const tasks = listTasks(ws);
-  const targets = getSalesTargets(ws);
-  const buckets = buildForecast(opps, targets, 6, now);
-  const thisMonth = buckets[0];
-
-  const openOpps = opps.filter((o) => o.status === "open");
-  const noNext = openOpps.filter(noNextAction);
-  const stale = openOpps.filter((o) => isStale(o, now));
-  const closingThisMonth = openOpps
-    .filter((o) => sameMonth(o.expected_close_date, now))
-    .sort((a, b) => b.amount - a.amount);
-
-  const todayStr = now.toISOString().slice(0, 10);
-  const todayTasks = tasks.filter((t) => t.status === "todo" && t.due_date === todayStr);
-  const overdueTasks = tasks.filter((t) => t.status === "todo" && t.due_date < todayStr);
-
-  const reps = repMetrics(openOpps);
-  const products = productMetrics(openOpps).slice(0, 6);
-  const achieve = thisMonth.target > 0 ? thisMonth.bestCase / thisMonth.target : 0;
-
-  // 独立した2つのRPC(リード集計・アラート)を並列取得してレイテンシを短縮。
-  const [leadMetrics, alerts] = await Promise.all([getLeadMetrics(opps), getSalesAlerts()]);
-  const alertRows = summarizeAlerts(alerts);
-
-  // 年度(決算6月=7月始まり)の目標 vs 実績。?fy= で年度を切替(既定は当年度)。
-  const targetMap = new Map(targets.map((t) => [t.target_month, t]));
-  const actuals = actualByMonth(opps, leadMetrics.byMonth);
-
-  // データが存在する年度を抽出(リード・実績・目標のある月から)。当年度は常に含める。
+  const sb = getSupabaseServer();
   const currentFy = currentFiscalStartYear(now);
+
+  // 目標・タスク(小)＋リード集計・アラート(RPC)を並列取得。案件はサーバー集計RPCへ移行。
+  const [targetsR, tasksR, leadMetrics, alerts] = await Promise.all([
+    sb.from("sales_targets").select("target_month,target_amount,target_deals,target_appointments,target_leads"),
+    sb.from("tasks").select("id,title,due_date,status").eq("status", "todo"),
+    getLeadMetrics(),
+    getSalesAlerts(),
+  ]);
+  const targets = (targetsR.data ?? []) as TargetRow[];
+  const allTasks = (tasksR.data ?? []) as { id: string; title: string; due_date: string; status: string }[];
+  const alertRows = summarizeAlerts(alerts);
+  const targetMap = new Map(targets.map((t) => [t.target_month, t]));
+
+  // 年度候補(リード・目標のある年度＋当年度)。
   const yearSet = new Set<number>([currentFy]);
   for (const k of leadMetrics.byMonth.keys()) yearSet.add(fiscalStartYear(new Date(k)));
-  for (const k of actuals.keys()) yearSet.add(fiscalStartYear(new Date(k)));
   for (const t of targets) if (t.target_month) yearSet.add(fiscalStartYear(new Date(t.target_month)));
   const availableYears = Array.from(yearSet).sort((a, b) => b - a);
-
   const fyParam = parseInt(sp.fy ?? "", 10);
   const fy = Number.isFinite(fyParam) && availableYears.includes(fyParam) ? fyParam : currentFy;
+
+  // 案件集計はサーバー(RPC dashboard_metrics)から取得。
+  const metrics = await getDashboardMetrics(fy);
+
+  // 予測バケット(6ヶ月・現在起点)に目標を付与。
+  const buckets = metrics.forecast6.map((f) => {
+    const target = targetMap.get(f.month_key)?.target_amount ?? 0;
+    return { monthKey: f.month_key, label: f.label, commit: f.commit, bestCase: f.bestcase, pipeline: f.pipeline, weighted: f.weighted, target, gap: f.bestcase - target };
+  });
+  const thisMonth = buckets[0] ?? { monthKey: "", label: "", commit: 0, bestCase: 0, pipeline: 0, weighted: 0, target: 0, gap: 0 };
+  const achieve = thisMonth.target > 0 ? thisMonth.bestCase / thisMonth.target : 0;
+
+  const todayStr = now.toISOString().slice(0, 10);
+  const todayTasks = allTasks.filter((t) => t.due_date === todayStr);
+  const overdueTasks = allTasks.filter((t) => t.due_date < todayStr);
+
+  // 注意リスト(RPC由来をOppView互換へ変換)。
+  const noNext = metrics.no_next.map(miniToOppView);
+  const stale = metrics.stale.map(miniToOppView);
+  const closingThisMonth = metrics.closing.map(miniToOppView);
+
+  // 営業マン別/商品別。
+  const reps = metrics.reps;
+  const products = metrics.products.slice(0, 6).map((p) => ({ name: p.name, openAmount: p.open_amount }));
+
+  // 年度(決算6月=7月始まり)の目標 vs 実績。
+  const fiscalByKey = new Map(metrics.fiscal12.map((r) => [r.month_key, r]));
   const fyMonths = fiscalMonths(fy);
   const fyTarget = {
     amount: sum(fyMonths, (m) => targetMap.get(m.key)?.target_amount ?? 0),
@@ -68,39 +75,30 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     leads: sum(fyMonths, (m) => targetMap.get(m.key)?.target_leads ?? 0),
   };
   const fyActual = {
-    amount: sum(fyMonths, (m) => actuals.get(m.key)?.revenue ?? 0),
-    deals: sum(fyMonths, (m) => actuals.get(m.key)?.deals ?? 0),
-    appts: sum(fyMonths, (m) => actuals.get(m.key)?.appts ?? 0),
-    leads: sum(fyMonths, (m) => actuals.get(m.key)?.leads ?? 0),
+    amount: sum(fyMonths, (m) => fiscalByKey.get(m.key)?.revenue ?? 0),
+    deals: sum(fyMonths, (m) => fiscalByKey.get(m.key)?.deals ?? 0),
+    appts: sum(fyMonths, (m) => fiscalByKey.get(m.key)?.appts ?? 0),
+    leads: sum(fyMonths, (m) => leadMetrics.byMonth.get(m.key) ?? 0),
   };
   const fyRate = (a: number, t: number) => (t > 0 ? a / t : null);
 
-  // 月別 推移(実績 + 予測/目標)。売上見込みは weighted を月次集計。
-  const weightedByMonth = new Map<string, number>();
-  for (const o of opps) {
-    const ref = o.expected_revenue_month || o.expected_close_date;
-    if (!ref) continue;
-    const k = monthKey(startOfMonth(new Date(ref)));
-    const add = o.status === "won" ? o.amount : o.status === "open" ? o.weighted : 0;
-    weightedByMonth.set(k, (weightedByMonth.get(k) ?? 0) + add);
-  }
   const trendData: TrendPoint[] = fyMonths.map((m) => {
-    const a = actuals.get(m.key);
+    const fr = fiscalByKey.get(m.key);
     const t = targetMap.get(m.key);
-    const appts = a?.appts ?? 0;
-    const deals = a?.deals ?? 0;
+    const appts = fr?.appts ?? 0;
+    const deals = fr?.deals ?? 0;
     return {
       label: m.label,
-      leads: a?.leads ?? 0,
+      leads: leadMetrics.byMonth.get(m.key) ?? 0,
       appts,
       deals,
-      revenue: a?.revenue ?? 0,
+      revenue: fr?.revenue ?? 0,
       closeRate: appts > 0 ? Math.round((deals / appts) * 100) : null,
       tLeads: t?.target_leads ?? 0,
       tAppts: t?.target_appointments ?? 0,
       tDeals: t?.target_deals ?? 0,
       tAmount: t?.target_amount ?? 0,
-      wRevenue: weightedByMonth.get(m.key) ?? 0,
+      wRevenue: fr?.wrevenue ?? 0,
     };
   });
 
