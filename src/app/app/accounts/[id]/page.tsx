@@ -16,12 +16,12 @@ import { Tag } from "@/components/ui/badges";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
 import { MeetingList } from "@/components/meetings/meeting-list";
 import { createOpportunityAction, createMeetingAction } from "@/server/actions";
-import { STAGES, FORECAST_CATEGORIES } from "@/lib/constants";
+import { STAGES, FORECAST_CATEGORIES, DEAL_PHASES } from "@/lib/constants";
 import { formatYen, sum } from "@/lib/utils";
 
 const statusLabel: Record<string, string> = { prospect: "見込み", customer: "顧客", inactive: "休眠" };
 
-export default async function AccountDetailPage({ params }: { params: { id: string } }) {
+export default async function AccountDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string } }) {
   const ws = await getWorkspace();
   const account = getAccount(ws, params.id);
   if (!account) notFound();
@@ -40,6 +40,9 @@ export default async function AccountDetailPage({ params }: { params: { id: stri
       <Link href="/app/accounts" className="inline-flex items-center gap-1 text-sm text-ink/50 hover:text-ink mb-3">
         <ChevronLeft size={16} /> 顧客一覧
       </Link>
+      {searchParams.error && (
+        <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-600">{searchParams.error}</div>
+      )}
       <PageHeader
         title={account.name}
         subtitle={`${account.industry ?? ""} ${account.area ? "・" + account.area : ""}`}
@@ -99,12 +102,35 @@ export default async function AccountDetailPage({ params }: { params: { id: stri
                     <input name="amount" type="number" className="input" placeholder="1500000" />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">案件予測 *</label>
+                    <select name="deal_phase" required className="input" defaultValue="">
+                      <option value="" disabled>選択してください</option>
+                      {DEAL_PHASES.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">受注見込み時期 *</label>
+                    <input name="expected_revenue_month" type="month" required className="input" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">次回アクション日 *</label>
+                    <input name="next_action_date" type="date" required className="input" />
+                  </div>
+                  <div>
+                    <label className="label">流入経路</label>
+                    <select name="lead_source_id" className="input" defaultValue="">
+                      <option value="">選択してください</option>
+                      {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                </div>
                 <div>
-                  <label className="label">流入経路</label>
-                  <select name="lead_source_id" className="input" defaultValue="">
-                    <option value="">選択してください</option>
-                    {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  <label className="label">次回アクション内容 *</label>
+                  <input name="next_action_text" required className="input" placeholder="次に誰が何をするか（例：提案書を送付し来週アポ打診）" />
                 </div>
                 <button type="submit" className="btn-accent">案件を登録</button>
               </form>

@@ -130,6 +130,22 @@ export const YOMI_OPTIONS: { key: string; label: string }[] = [
 /** 「アポ(初回商談待ち)」を表すヨミ値 */
 export const YOMI_APPOINTMENT = "4.アポ";
 
+/**
+ * 案件予測(buyer-journeyフェーズ)。初回商談時に営業担当が入力する。
+ * 個人別の案件ファネルの軸にも使う（future=未来客は別枠）。
+ */
+export const DEAL_PHASES: { key: string; label: string }[] = [
+  { key: "info_gathering", label: "情報収集" },
+  { key: "comparison", label: "比較検討" },
+  { key: "detailed_review", label: "詳細検討" },
+  { key: "proposal", label: "提案" },
+  { key: "estimate", label: "見積" },
+  { key: "future", label: "未来客" },
+];
+export const DEAL_PHASE_MAP = Object.fromEntries(DEAL_PHASES.map((p) => [p.key, p.label]));
+/** ファネル順（未来客を除く受注に向かう6→…段階）。 */
+export const DEAL_PHASE_FUNNEL = ["info_gathering", "comparison", "detailed_review", "proposal", "estimate"];
+
 /** 案件の分類マスタ。請求(売上)スタイルの既定も併記。 */
 export const CATEGORIES: {
   key: OpportunityCategory;

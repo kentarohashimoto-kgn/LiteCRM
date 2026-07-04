@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { getWorkspace } from "@/lib/data/workspace";
 import { getLeadSources, getProducts, listAccounts, listMembers } from "@/lib/data/select";
-import { STAGES, FORECAST_CATEGORIES, CATEGORIES } from "@/lib/constants";
+import { STAGES, FORECAST_CATEGORIES, CATEGORIES, DEAL_PHASES } from "@/lib/constants";
 import { PageHeader } from "@/components/ui/primitives";
 import { createOpportunityAction } from "@/server/actions";
 
-export default async function NewOpportunityPage() {
+export default async function NewOpportunityPage({ searchParams }: { searchParams: { error?: string } }) {
   const ws = await getWorkspace();
   const accounts = listAccounts(ws);
   const owners = listMembers(ws).map(({ user }) => user);
@@ -14,7 +14,10 @@ export default async function NewOpportunityPage() {
 
   return (
     <div className="max-w-2xl">
-      <PageHeader title="案件を作成" subtitle="新しい案件を登録します。" />
+      <PageHeader title="案件を作成" subtitle="新しい案件を登録します。初回商談時は案件予測・受注見込み時期・次回アクションが必須です。" />
+      {searchParams.error && (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-600">{searchParams.error}</div>
+      )}
       <form action={createOpportunityAction} className="card card-pad space-y-4">
         <div>
           <label className="label">案件名 *</label>
@@ -76,19 +79,32 @@ export default async function NewOpportunityPage() {
             <input name="amount" type="number" className="input" placeholder="1500000" />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="label">受注予定日</label>
+            <label className="label">案件予測 *</label>
+            <select name="deal_phase" required className="input" defaultValue="">
+              <option value="" disabled>選択してください</option>
+              {DEAL_PHASES.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">受注見込み時期 *</label>
+            <input name="expected_revenue_month" type="month" required className="input" />
+          </div>
+          <div>
+            <label className="label">受注予定日(任意)</label>
             <input name="expected_close_date" type="date" className="input" />
           </div>
-          <div>
-            <label className="label">次アクション日</label>
-            <input name="next_action_date" type="date" className="input" />
-          </div>
         </div>
-        <div>
-          <label className="label">次アクション内容</label>
-          <input name="next_action_text" className="input" placeholder="例：提案書を送付し打合せ日程を調整" />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">次回アクション日 *</label>
+            <input name="next_action_date" type="date" required className="input" />
+          </div>
+          <div>
+            <label className="label">次回アクション内容 *</label>
+            <input name="next_action_text" required className="input" placeholder="例：提案書を送付し打合せ日程を調整" />
+          </div>
         </div>
         <div>
           <label className="label">メモ</label>

@@ -44,6 +44,25 @@ export async function createOpportunityAction(formData: FormData) {
   const sb = getSupabaseServer();
   const stage = (str(formData.get("stage")) ?? "lead_acquired") as keyof typeof STAGE_MAP;
   const close = str(formData.get("expected_close_date"));
+  // 受注見込み時期(年月)。初回商談時の必須。未来客も予測年月を入れる。
+  const revMonthRaw = str(formData.get("expected_revenue_month"));
+  const revMonth = revMonthRaw ? revMonthRaw.slice(0, 7) + "-01" : close ? close.slice(0, 7) + "-01" : null;
+  const dealPhase = str(formData.get("deal_phase"));
+  const nextDate = str(formData.get("next_action_date"));
+  const nextText = str(formData.get("next_action_text"));
+
+  // 初回商談時の必須(案件予測・受注見込み時期・次回アクション)。UIでもrequiredだが安全網。
+  const missing: string[] = [];
+  if (!dealPhase) missing.push("案件予測");
+  if (!revMonth) missing.push("受注見込み時期");
+  if (!nextDate) missing.push("次回アクション日");
+  if (!nextText) missing.push("次回アクション内容");
+  if (missing.length) {
+    const acc = str(formData.get("account_id"));
+    const back = acc ? `/app/accounts/${acc}` : "/app/opportunities/new";
+    redirect(back + "?error=" + encodeURIComponent("未入力の必須項目があります: " + missing.join(" / ")));
+  }
+
   const { data, error } = await sb
     .from("opportunities")
     .insert({
@@ -54,14 +73,15 @@ export async function createOpportunityAction(formData: FormData) {
       primary_product_id: str(formData.get("primary_product_id")),
       lead_source_id: str(formData.get("lead_source_id")),
       category: str(formData.get("category")),
+      deal_phase: dealPhase,
       stage,
       forecast_category: str(formData.get("forecast_category")) ?? "pipeline",
       amount: num(formData.get("amount")) ?? 0,
       probability: STAGE_MAP[stage]?.probability ?? 10,
       expected_close_date: close,
-      expected_revenue_month: close ? close.slice(0, 7) + "-01" : null,
-      next_action_date: str(formData.get("next_action_date")),
-      next_action_text: str(formData.get("next_action_text")),
+      expected_revenue_month: revMonth,
+      next_action_date: nextDate,
+      next_action_text: nextText,
       last_activity_at: new Date().toISOString(),
       notes: str(formData.get("notes")),
       status: "open",
