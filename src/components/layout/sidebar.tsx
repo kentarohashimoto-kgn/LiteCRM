@@ -18,6 +18,7 @@ import {
   ClipboardList,
   Gauge,
   Star,
+  UserCog,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -38,6 +39,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
     heading: "案件",
     items: [
       { href: "/app/opportunities", label: "案件（表・ボード）", icon: Target },
+      { href: "/app/reps", label: "営業ビュー", icon: UserCog },
       { href: "/app/forecast", label: "売上予測", icon: TrendingUp },
       { href: "/app/targets", label: "目標入力", icon: Goal },
     ],

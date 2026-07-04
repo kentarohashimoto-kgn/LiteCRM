@@ -613,6 +613,8 @@ export interface Opportunity {
   expected_close_date?: string;
   expected_revenue_month?: string;
   category?: OpportunityCategory;
+  /** 案件予測(buyer-journeyフェーズ): info_gathering/comparison/detailed_review/proposal/estimate/future */
+  deal_phase?: string;
   primary_product_id?: UUID;
   lead_source_id?: UUID;
   campaign_id?: UUID;
