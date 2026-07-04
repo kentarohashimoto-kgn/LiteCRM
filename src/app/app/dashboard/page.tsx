@@ -42,12 +42,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const products = productMetrics(openOpps).slice(0, 6);
   const achieve = thisMonth.target > 0 ? thisMonth.bestCase / thisMonth.target : 0;
 
-  // 要対応アラート(要件書8章)。放置・入力漏れ・フォロー漏れを検知。
-  const alertRows = summarizeAlerts(await getSalesAlerts());
+  // 独立した2つのRPC(リード集計・アラート)を並列取得してレイテンシを短縮。
+  const [leadMetrics, alerts] = await Promise.all([getLeadMetrics(opps), getSalesAlerts()]);
+  const alertRows = summarizeAlerts(alerts);
 
   // 年度(決算6月=7月始まり)の目標 vs 実績。?fy= で年度を切替(既定は当年度)。
   const targetMap = new Map(targets.map((t) => [t.target_month, t]));
-  const leadMetrics = await getLeadMetrics(opps);
   const actuals = actualByMonth(opps, leadMetrics.byMonth);
 
   // データが存在する年度を抽出(リード・実績・目標のある月から)。当年度は常に含める。
