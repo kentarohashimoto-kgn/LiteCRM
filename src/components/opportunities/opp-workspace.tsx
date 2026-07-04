@@ -7,6 +7,7 @@ import { leanToOppView } from "@/lib/data/opps-page";
 import { fetchAllOppsLeanAction } from "@/server/actions/opportunities";
 import { OppPaginatedTable } from "./opp-paginated-table";
 import { OppViews } from "./opp-views";
+import { AppointmentCalendarPro } from "./appointment-calendar-pro";
 import { cn } from "@/lib/utils";
 
 interface Option { id: string; name: string; }
@@ -67,7 +68,11 @@ export function OppWorkspace({
           campaigns={campaigns}
         />
       ) : allOpps ? (
-        <OppViews opps={allOpps} owners={owners} products={products} sources={sources} campaigns={campaigns} controlledView={view} hideToggle />
+        view === "calendar" ? (
+          <AppointmentCalendarPro opps={allOpps} owners={owners} />
+        ) : (
+          <OppViews opps={allOpps} owners={owners} products={products} sources={sources} campaigns={campaigns} controlledView={view} hideToggle />
+        )
       ) : (
         <div className="card card-pad flex items-center gap-2 text-sm text-ink/40">
           <Loader2 size={15} className="animate-spin" /> 読み込み中…

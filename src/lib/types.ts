@@ -598,8 +598,10 @@ export interface Opportunity {
   forecast_category: ForecastCategory;
   /** Notion原本の「ヨミ」フィールド値(例: 4.アポ / 0.受注)。 */
   yomi?: string;
-  /** 初回商談日(初回営業日)。カレンダーのアポ予定日に使用。 */
+  /** 初回商談日(初回営業日)。カレンダーのアポ予定日(終日)に使用。 */
   first_meeting_date?: string;
+  /** アポの日時(時刻あり)。設定時はカレンダーで時刻表示。 */
+  appointment_at?: string;
   amount: number;
   gross_profit?: number;
   gross_profit_rate?: number;

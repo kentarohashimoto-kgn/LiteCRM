@@ -40,6 +40,15 @@ export async function fetchOppsPageAction(input: {
   return { rows: d.rows ?? [], total: d.total ?? 0, sum_amount: d.sum_amount ?? 0, sum_weighted: d.sum_weighted ?? 0 };
 }
 
+/** アポ日時(appointment_at)をその場更新。ISO文字列 or null。 */
+export async function setAppointmentAtAction(input: { id: string; iso: string | null }): Promise<{ ok: boolean }> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { error } = await sb.from("opportunities").update({ appointment_at: input.iso }).eq("id", input.id);
+  if (!error) revalidatePath("/app/opportunities");
+  return { ok: !error };
+}
+
 /** ボード/カレンダー表示用に全案件(軽量)を取得。これらのビューを開いた時だけ遅延取得する。 */
 export async function fetchAllOppsLeanAction(): Promise<LeanOppRow[]> {
   await requireCtx();

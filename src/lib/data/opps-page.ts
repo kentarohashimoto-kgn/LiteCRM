@@ -26,10 +26,12 @@ export interface LeanOppRow {
   expected_close_date: string | null;
   expected_revenue_month: string | null;
   next_action_date: string | null;
+  next_action_text: string | null;
   notes: string | null;
   last_activity_at: string | null;
   risk_level: string | null;
   first_meeting_date: string | null;
+  appointment_at: string | null;
   created_at: string;
   updated_at: string;
   weighted: number;
@@ -63,10 +65,12 @@ export function leanToOppView(r: LeanOppRow): OppView {
     expected_close_date: r.expected_close_date ?? undefined,
     expected_revenue_month: r.expected_revenue_month ?? undefined,
     next_action_date: r.next_action_date ?? undefined,
+    next_action_text: r.next_action_text ?? undefined,
     notes: r.notes ?? undefined,
     last_activity_at: r.last_activity_at ?? undefined,
     risk_level: (r.risk_level ?? undefined) as OppView["risk_level"],
     first_meeting_date: r.first_meeting_date ?? undefined,
+    appointment_at: r.appointment_at ?? undefined,
     created_at: r.created_at,
     updated_at: r.updated_at,
     account: { name: r.account_name ?? "—" } as OppView["account"],
