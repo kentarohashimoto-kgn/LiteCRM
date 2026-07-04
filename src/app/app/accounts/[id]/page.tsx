@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceForAccount } from "@/lib/data/workspace";
 import {
   getAccount,
   getContactsByAccount,
@@ -25,7 +25,7 @@ import { formatYen, sum } from "@/lib/utils";
 const statusLabel: Record<string, string> = { prospect: "見込み", customer: "顧客", inactive: "休眠" };
 
 export default async function AccountDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string } }) {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceForAccount(params.id);
   const account = getAccount(ws, params.id);
   if (!account) notFound();
 

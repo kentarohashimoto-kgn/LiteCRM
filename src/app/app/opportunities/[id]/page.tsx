@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Sparkles } from "lucide-react";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceForOpportunity } from "@/lib/data/workspace";
 import {
   getActivitiesByOpportunity,
   getContactsByAccount,
@@ -27,7 +27,7 @@ import { addActivityAction, updateOpportunityAction, setOpportunityCampaignActio
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince } from "@/lib/utils";
 
 export default async function OpportunityDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string } }) {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceForOpportunity(params.id);
   const o = getOpportunity(ws, params.id);
   if (!o) notFound();
 

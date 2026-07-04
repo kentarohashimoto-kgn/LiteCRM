@@ -62,6 +62,116 @@ interface ProfileRow {
 }
 
 
+/**
+ * 小さいマスタ群のみ取得（profiles/memberships/lead_sources/campaigns/products）。
+ * 詳細ページ用のスコープ付きワークスペース構築に使う。約150KB（fullの2.1MBに対し軽量）。
+ */
+async function fetchMasters(sb: ReturnType<typeof getSupabaseServer>) {
+  const [profilesR, membershipsR, leadSourcesR, campaignsR, productsR] = await Promise.all([
+    sb.from("profiles").select("id,email,display_name,avatar_color"),
+    sb.from("memberships").select("*"),
+    sb.from("lead_sources").select("*"),
+    sb.from("campaigns").select("*"),
+    sb.from("products").select("*"),
+  ]);
+  const profiles = (profilesR.data ?? []) as ProfileRow[];
+  const memberships = (membershipsR.data ?? []) as Membership[];
+  const leadSources = (leadSourcesR.data ?? []) as LeadSource[];
+  const campaigns = ((campaignsR.data ?? []) as Campaign[]).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  const products = (productsR.data ?? []) as Product[];
+  const users: User[] = profiles.map((p) => ({
+    id: p.id, name: p.display_name ?? p.email ?? "—", email: p.email ?? "", avatarColor: p.avatar_color ?? "#008C8C",
+  }));
+  return {
+    users,
+    usersById: new Map(users.map((u) => [u.id, u])),
+    memberships,
+    leadSources,
+    leadSourcesById: new Map(leadSources.map((l) => [l.id, l])),
+    campaigns,
+    campaignsById: new Map(campaigns.map((c) => [c.id, c])),
+    products,
+    productsById: new Map(products.map((p) => [p.id, p])),
+  };
+}
+
+/** 空配列の共通スロット（スコープ付きワークスペースで未使用の領域）。 */
+const EMPTY_SLOTS = {
+  salesTargets: [] as SalesTarget[],
+  repTargets: [] as RepTarget[],
+  seminarResponses: [] as SeminarResponse[],
+  leadImportBatches: [] as LeadImportBatch[],
+  acquirerAliases: [] as AcquirerAlias[],
+};
+
+/**
+ * 案件詳細ページ用のスコープ付きワークスペース。対象案件1件＋その子(商談/活動/請求/
+ * タスク/履歴)＋所属顧客とその担当者＋マスタのみ取得。full(2.1MB)を回避し数十KBに。
+ */
+export const getWorkspaceForOpportunity = cache(async (id: string): Promise<Workspace> => {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const { data: oppRow } = await sb.from("opportunities").select("*").eq("id", id).maybeSingle();
+  const opp = oppRow as Opportunity | null;
+  const accountId = opp?.account_id;
+
+  const [masters, accountR, meetingsR, activitiesR, billingR, tasksR, stageR, contactsR] = await Promise.all([
+    fetchMasters(sb),
+    accountId ? sb.from("accounts").select("*").eq("id", accountId).maybeSingle() : Promise.resolve({ data: null }),
+    sb.from("meetings").select("*").eq("opportunity_id", id),
+    sb.from("activities").select("*").eq("opportunity_id", id),
+    sb.from("billing_schedules").select("*").eq("opportunity_id", id),
+    sb.from("tasks").select("*").eq("opportunity_id", id),
+    sb.from("stage_histories").select("*").eq("opportunity_id", id),
+    accountId ? sb.from("contacts").select("*").eq("account_id", accountId) : Promise.resolve({ data: [] }),
+  ]);
+  const accounts = (accountR.data ? [accountR.data] : []) as Account[];
+  return {
+    ctx,
+    ...masters,
+    accounts,
+    accountsById: new Map(accounts.map((a) => [a.id, a])),
+    contacts: (contactsR.data ?? []) as Contact[],
+    opportunities: opp ? [opp] : [],
+    meetings: (meetingsR.data ?? []) as Meeting[],
+    billingSchedules: (billingR.data ?? []) as BillingSchedule[],
+    activities: (activitiesR.data ?? []) as Activity[],
+    tasks: (tasksR.data ?? []) as Task[],
+    stageHistories: (stageR.data ?? []) as StageHistory[],
+    ...EMPTY_SLOTS,
+  };
+});
+
+/**
+ * 顧客詳細ページ用のスコープ付きワークスペース。対象顧客1件＋その案件/商談/担当者＋マスタのみ。
+ */
+export const getWorkspaceForAccount = cache(async (id: string): Promise<Workspace> => {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const [masters, accountR, oppsR, meetingsR, contactsR] = await Promise.all([
+    fetchMasters(sb),
+    sb.from("accounts").select("*").eq("id", id).maybeSingle(),
+    sb.from("opportunities").select("*").eq("account_id", id),
+    sb.from("meetings").select("*").eq("account_id", id),
+    sb.from("contacts").select("*").eq("account_id", id),
+  ]);
+  const accounts = (accountR.data ? [accountR.data] : []) as Account[];
+  return {
+    ctx,
+    ...masters,
+    accounts,
+    accountsById: new Map(accounts.map((a) => [a.id, a])),
+    contacts: (contactsR.data ?? []) as Contact[],
+    opportunities: (oppsR.data ?? []) as Opportunity[],
+    meetings: (meetingsR.data ?? []) as Meeting[],
+    billingSchedules: [],
+    activities: [],
+    tasks: [],
+    stageHistories: [],
+    ...EMPTY_SLOTS,
+  };
+});
+
 export const getWorkspace = cache(async (): Promise<Workspace> => {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
