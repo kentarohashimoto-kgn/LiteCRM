@@ -18,6 +18,7 @@ import { MeetingList } from "@/components/meetings/meeting-list";
 import { SouvenirSection } from "@/components/accounts/souvenir-section";
 import { createOpportunityAction, createMeetingAction } from "@/server/actions";
 import { getSolutionPackages, getAccountSouvenirs } from "@/lib/data/souvenirs";
+import { getTransitionsByAccount, TRANSITION_STATUS_LABEL, FOLLOWUP_STATUS_LABEL } from "@/lib/data/transitions";
 import { STAGES, FORECAST_CATEGORIES, DEAL_PHASES } from "@/lib/constants";
 import { formatYen, sum } from "@/lib/utils";
 
@@ -36,7 +37,11 @@ export default async function AccountDetailPage({ params, searchParams }: { para
   const sources = getLeadSources(ws);
   const won = opps.filter((o) => o.status === "won");
   const open = opps.filter((o) => o.status === "open");
-  const [packages, souvenirs] = await Promise.all([getSolutionPackages(), getAccountSouvenirs(account.id)]);
+  const [packages, souvenirs, transitions] = await Promise.all([
+    getSolutionPackages(),
+    getAccountSouvenirs(account.id),
+    getTransitionsByAccount(account.id),
+  ]);
 
   return (
     <div>
@@ -142,6 +147,29 @@ export default async function AccountDetailPage({ params, searchParams }: { para
 
           {/* お土産提案（アップセル候補） */}
           <SouvenirSection accountId={account.id} souvenirs={souvenirs} packages={packages} />
+
+          {/* 研修後トランジション状況 */}
+          {transitions.length > 0 && (
+            <Section title="研修後トランジション" action={<span className="text-[11px] text-ink/40">受注後のアップセル導線</span>}>
+              <ul className="space-y-2">
+                {transitions.map((t) => (
+                  <li key={t.id} className="rounded-xl border border-black/[0.06] p-3 text-sm">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Link href={`/app/opportunities/${t.original_opportunity_id}`} className="text-teal-deep hover:underline text-xs">元案件を見る</Link>
+                      <span className="pill bg-mist-soft text-ink/55 text-[10px]">{t.initial_product === "training" ? "研修" : t.initial_product === "development" ? "開発" : t.initial_product ?? "—"}</span>
+                      <span className="pill bg-teal-light text-teal-deep text-[10px] ml-auto">{TRANSITION_STATUS_LABEL[t.status] ?? t.status}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink/60">
+                      <span>御礼(3営業日): <b>{FOLLOWUP_STATUS_LABEL[t.followup_3days_status]}</b></span>
+                      <span>定着MTG(2週): <b>{FOLLOWUP_STATUS_LABEL[t.followup_2weeks_status]}</b></span>
+                      <span>お土産提案(30日): <b>{FOLLOWUP_STATUS_LABEL[t.proposal_30days_status]}</b></span>
+                    </div>
+                    <p className="text-[11px] text-ink/40 mt-1.5">フォロータスクは案件のタスク一覧に自動生成されています。</p>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
 
           {/* 商談 */}
           <Section title={`商談（${meetings.length}回）`} action={<span className="text-xs text-ink/40">案件配下の個別商談</span>}>

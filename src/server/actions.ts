@@ -9,6 +9,7 @@ import { STAGE_MAP } from "@/lib/constants";
 import { normCompany } from "@/lib/lead-import";
 import { yomiToFields, productToCategory, canonicalExhibition, type DealRow } from "@/lib/deal-import";
 import { parsePeriod, parseProbability, parseAmount, parseDateLoose } from "@/lib/revenue-forecast";
+import { ensureTransitionOnWon } from "@/server/transitions-util";
 
 function num(v: FormDataEntryValue | null): number | null {
   if (v == null || v === "") return null;
@@ -104,7 +105,7 @@ export async function createOpportunityAction(formData: FormData) {
 }
 
 export async function updateOpportunityAction(formData: FormData) {
-  await requireCtx();
+  const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const id = String(formData.get("id"));
   const stage = str(formData.get("stage")) as keyof typeof STAGE_MAP | null;
@@ -132,6 +133,10 @@ export async function updateOpportunityAction(formData: FormData) {
       status,
     })
     .eq("id", id);
+  // 研修/開発案件が受注になったらトランジションを自動作成
+  if (status === "won") {
+    await ensureTransitionOnWon(ctx.tenantId, ctx.userId, id);
+  }
   revalidatePath(`/app/opportunities/${id}`);
   revalidatePath("/app/opportunities");
   redirect(`/app/opportunities/${id}`);

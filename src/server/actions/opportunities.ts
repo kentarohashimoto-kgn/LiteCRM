@@ -5,6 +5,7 @@ import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { yomiToFields } from "@/lib/deal-import";
 import { casUpdate } from "./_helpers";
+import { ensureTransitionOnWon } from "@/server/transitions-util";
 
 export type OppInlineField =
   | "yomi"
@@ -59,7 +60,7 @@ export async function updateOppInlineAction(input: {
   field: OppInlineField;
   value: string | null;
 }): Promise<OppInlineResult> {
-  await requireCtx();
+  const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const patch: Record<string, unknown> = {};
 
@@ -100,6 +101,11 @@ export async function updateOppInlineAction(input: {
 
   const res = await casUpdate("opportunities", input.id, input.updatedAt, patch);
   if (!res.ok) return res;
+
+  // 研修/開発案件が受注になったらトランジションを自動作成
+  if (patch.status === "won") {
+    await ensureTransitionOnWon(ctx.tenantId, ctx.userId, input.id);
+  }
 
   revalidatePath("/app/opportunities");
   revalidatePath("/app/forecast");
