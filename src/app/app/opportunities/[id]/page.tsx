@@ -17,6 +17,8 @@ import {
 import { MeetingList } from "@/components/meetings/meeting-list";
 import { BillingSection } from "@/components/billing/billing-section";
 import { SubscriptionForm } from "@/components/billing/subscription-form";
+import { ScheduleSection } from "@/components/opportunities/schedule-section";
+import { getLatestSchedule, getSalesTemplates, matchTemplates } from "@/lib/data/schedules";
 import { STAGES, FORECAST_CATEGORIES, CATEGORIES, CATEGORY_MAP, STAGE_MAP, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP } from "@/lib/constants";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/ui/badges";
@@ -24,7 +26,7 @@ import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
 import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction } from "@/server/actions";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince } from "@/lib/utils";
 
-export default async function OpportunityDetailPage({ params }: { params: { id: string } }) {
+export default async function OpportunityDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string } }) {
   const ws = await getWorkspace();
   const o = getOpportunity(ws, params.id);
   if (!o) notFound();
@@ -39,6 +41,8 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
   const campaigns = listCampaigns(ws);
   const risk = evaluateRisk(o);
   const since = daysSince(o.last_activity_at);
+  const [schedule, allTemplates] = await Promise.all([getLatestSchedule(o.id), getSalesTemplates()]);
+  const templates = matchTemplates(allTemplates, o.account?.industry, contacts.map((c) => c.title));
 
   return (
     <div>
@@ -82,9 +86,15 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
         </Card>
       )}
 
+      {searchParams.error && (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-600">{searchParams.error}</div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* 左: 編集 + 情報 */}
         <div className="lg:col-span-2 space-y-5">
+          <ScheduleSection oppId={o.id} schedule={schedule} hadFirstMeeting={!!o.first_meeting_date} templates={templates} />
+
           <Section title={`商談（${meetings.length}回）`} action={<span className="text-xs text-ink/40">案件配下の個別商談</span>}>
             <MeetingList meetings={meetings} />
             <details className="mt-3">

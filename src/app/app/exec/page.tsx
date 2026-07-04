@@ -3,6 +3,8 @@ import { AlertTriangle, Clock } from "lucide-react";
 import { getKpiReview, listMtgActions, getExecAlerts, weeksInMonth, parsePeriod, getMarketingReview, listDeliveryReviews, listProjectProfitReviews } from "@/lib/data/exec";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { PeriodSelect } from "@/components/exec/period-select";
+import { ScheduleApprovals } from "@/components/exec/schedule-approvals";
+import { getPendingSchedules } from "@/lib/data/schedules";
 import { EVALUATION_META, KPI_LABEL, DEPARTMENTS, STATUS_LABEL, judgeDelivery, judgeProject, type Evaluation } from "@/lib/exec-review";
 import { formatDateFull } from "@/lib/utils";
 
@@ -16,6 +18,7 @@ export default async function ExecSummaryPage({ searchParams }: { searchParams: 
     getKpiReview(month, week), listMtgActions(), getMarketingReview(month), listDeliveryReviews(), listProjectProfitReviews(),
   ]);
   const alerts = await getExecAlerts(rows, actions);
+  const pendingSchedules = await getPendingSchedules();
   const bad = rows.filter((r) => r.judge.evaluation === "bad");
   const watch = rows.filter((r) => r.judge.evaluation === "watch");
   const good = rows.filter((r) => r.judge.evaluation === "good");
@@ -54,6 +57,9 @@ export default async function ExecSummaryPage({ searchParams }: { searchParams: 
           </Link>
         ))}
       </div>
+
+      {/* 承認待ちの営業スケジュール分類 */}
+      <ScheduleApprovals items={pendingSchedules} />
 
       {/* 部門別 判定 */}
       <Section title="部門別 状態（Good / Watch / Bad）" className="mb-5" action={<Link href="/app/exec/kpi" className="text-xs font-semibold text-teal-primary hover:underline">営業KPI →</Link>}>

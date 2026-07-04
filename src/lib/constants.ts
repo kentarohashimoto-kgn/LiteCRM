@@ -146,6 +146,19 @@ export const DEAL_PHASE_MAP = Object.fromEntries(DEAL_PHASES.map((p) => [p.key, 
 /** ファネル順（未来客を除く受注に向かう6→…段階）。 */
 export const DEAL_PHASE_FUNNEL = ["info_gathering", "comparison", "detailed_review", "proposal", "estimate"];
 
+/** 初回商談後の営業スケジュール分類(要件書4.8)。本部承認の対象。 */
+export const SCHEDULE_TYPES: { key: string; label: string; desc: string; cadence: string }[] = [
+  { key: "A_short_term", label: "A 即提案・短期受注型", desc: "課題明確・予算あり・1〜2ヶ月で受注可能", cadence: "3日以内提案・週1フォロー" },
+  { key: "B_subsidy_budget", label: "B 助成金・予算化型", desc: "助成金/予算確認が必要", cadence: "1週間ごと" },
+  { key: "C_multi_stakeholder", label: "C 部署調整・複数関係者型", desc: "情シス/人事/現場など複数関係者", cadence: "2週間ごと" },
+  { key: "D_long_term", label: "D 情報収集・中長期型", desc: "興味あり・時期未定", cadence: "月1回" },
+  { key: "E_nurturing", label: "E 低優先・ナーチャリング型", desc: "課題弱い・予算なし", cadence: "MA中心" },
+];
+export const SCHEDULE_TYPE_MAP = Object.fromEntries(SCHEDULE_TYPES.map((s) => [s.key, s]));
+export const APPROVAL_STATUS_LABEL: Record<string, string> = {
+  pending: "承認待ち", approved: "承認済", rejected: "却下", needs_revision: "修正依頼",
+};
+
 /** 案件の分類マスタ。請求(売上)スタイルの既定も併記。 */
 export const CATEGORIES: {
   key: OpportunityCategory;
