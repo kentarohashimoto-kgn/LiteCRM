@@ -9,6 +9,7 @@ import { YomiBadge, RiskBadge, StageBadge } from "@/components/ui/badges";
 import { Avatar } from "@/components/ui/primitives";
 import { formatYen, formatDate, daysSince, cn } from "@/lib/utils";
 import { isStale, noNextAction } from "@/lib/risk";
+import { InlineYomi, InlineAmount, InlineNextDate, NextDateReadonly, type OnEdited } from "./opp-inline";
 
 type SortKey = "amount" | "expected_close_date" | "last_activity_at" | "probability";
 
@@ -30,12 +31,14 @@ export function OppTable({
   products,
   sources,
   campaigns = [],
+  onEdited,
 }: {
   opps: OppView[];
   owners: Option[];
   products: Option[];
   sources: Option[];
   campaigns?: Option[];
+  onEdited?: OnEdited;
 }) {
   const [q, setQ] = useState("");
   const [stage, setStage] = useState("");
@@ -178,6 +181,7 @@ export function OppTable({
                   isOpen={isOpen}
                   groupAmount={groupAmount}
                   onToggle={() => toggleGroup(key)}
+                  onEdited={onEdited}
                 />
               );
             })}
@@ -199,12 +203,14 @@ function GroupRows({
   isOpen,
   groupAmount,
   onToggle,
+  onEdited,
 }: {
   groupKey: string;
   list: OppView[];
   isOpen: boolean;
   groupAmount: number;
   onToggle: () => void;
+  onEdited?: OnEdited;
 }) {
   return (
     <>
@@ -229,7 +235,7 @@ function GroupRows({
                   <span className="text-xs text-ink/45 truncate block">{o.name}</span>
                 </Link>
               </td>
-              <td className="td"><YomiBadge yomi={o.yomi} /></td>
+              <td className="td">{onEdited ? <InlineYomi opp={o} onEdited={onEdited} /> : <YomiBadge yomi={o.yomi} />}</td>
               <td className="td"><div className="flex items-center gap-1.5"><Avatar user={o.owner} size={22} /><span className="text-xs">{o.owner?.name}</span></div></td>
               <td className="td text-xs text-ink/70">{o.product?.name ?? "—"}</td>
               <td className="td text-xs max-w-[150px]">
@@ -244,16 +250,12 @@ function GroupRows({
                   <span className="text-ink/30">{o.leadSource?.name ?? "—"}</span>
                 )}
               </td>
-              <td className="td text-right font-semibold tabular-nums">{formatYen(o.amount)}</td>
+              <td className="td text-right font-semibold tabular-nums">{onEdited ? <InlineAmount opp={o} onEdited={onEdited} /> : formatYen(o.amount)}</td>
               <td className="td"><StageBadge stage={o.stage} /></td>
               <td className="td text-right tabular-nums">{o.probability}%</td>
               <td className="td text-xs">{formatDate(o.expected_close_date)}</td>
               <td className="td">
-                {o.next_action_date ? (
-                  <span className="text-xs">{formatDate(o.next_action_date)}</span>
-                ) : (
-                  <span className="pill bg-amber-50 text-accent-orange text-[10px]">未設定</span>
-                )}
+                {onEdited ? <InlineNextDate opp={o} onEdited={onEdited} /> : <NextDateReadonly date={o.next_action_date} />}
               </td>
               <td className="td max-w-[220px]">
                 {o.notes ? (

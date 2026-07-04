@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { List, CalendarDays } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { List, CalendarDays, LayoutGrid } from "lucide-react";
 import type { OppView } from "@/lib/data/select";
 import { OppTable } from "./opp-table";
+import { OppBoard } from "./opp-board";
+import type { OnEdited } from "./opp-inline";
 import { AppointmentCalendar } from "./appointment-calendar";
 import { AppointmentTrendChart } from "@/components/charts/appointment-trend-chart";
 import { StackedTrendChart, type StackSeries } from "@/components/charts/stacked-trend-chart";
@@ -37,13 +39,26 @@ export function OppViews({
   sources: Option[];
   campaigns?: Option[];
 }) {
-  const [view, setView] = useState<"list" | "calendar">("list");
+  const [view, setView] = useState<"list" | "board" | "calendar">("list");
   const [trendTab, setTrendTab] = useState<"total" | "owner" | "exhibition">("total");
   const [trendRange, setTrendRange] = useState<string>("rolling");
 
+  // インライン/ボード編集を即時反映するためのローカルコピー。サーバー再取得時に再同期。
+  const [rows, setRows] = useState<OppView[]>(opps);
+  useEffect(() => setRows(opps), [opps]);
+  const applyEdit: OnEdited = (id, patch, updatedAt) =>
+    setRows((rs) =>
+      rs.map((r) => {
+        if (r.id !== id) return r;
+        const merged = { ...r, ...patch, updated_at: updatedAt } as OppView;
+        merged.weighted = Math.round((merged.amount * merged.probability) / 100);
+        return merged;
+      }),
+    );
+
   const now = new Date();
   // 「アポ」= ヨミが 4.アポ の案件。初回商談日(first_meeting_date)を予定日とする。
-  const apoOpps = useMemo(() => opps.filter((o) => o.yomi === YOMI_APPOINTMENT), [opps]);
+  const apoOpps = useMemo(() => rows.filter((o) => o.yomi === YOMI_APPOINTMENT), [rows]);
 
   // 当月/来月/再来月のアポ件数(ヨミ=アポ × 初回商談日基準)
   const monthSummary = useMemo(() => {
@@ -91,11 +106,11 @@ export function OppViews({
       const isFuture = new Date(c.year, c.month - 1, 1).getTime() > curMonthStart;
       const monthOpps = isFuture
         ? apoOpps.filter((o) => inMonth(o.first_meeting_date, c.year, c.month))
-        : opps.filter((o) => inMonth(o.created_at, c.year, c.month));
+        : rows.filter((o) => inMonth(o.created_at, c.year, c.month));
       return { label: c.label, isFuture, opps: monthOpps };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trendCols, opps, apoOpps]);
+  }, [trendCols, rows, apoOpps]);
 
   const totalTrend = useMemo(
     () => buckets.map((b) => ({ label: b.label, count: b.opps.length, isFuture: b.isFuture })),
@@ -151,11 +166,17 @@ export function OppViews({
       {/* ビュー切替 */}
       <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5">
         <TabBtn active={view === "list"} onClick={() => setView("list")} icon={<List size={15} />} label="一覧" />
+        <TabBtn active={view === "board"} onClick={() => setView("board")} icon={<LayoutGrid size={15} />} label="ボード" />
         <TabBtn active={view === "calendar"} onClick={() => setView("calendar")} icon={<CalendarDays size={15} />} label="カレンダー" />
       </div>
 
       {view === "list" ? (
-        <OppTable opps={opps} owners={owners} products={products} sources={sources} campaigns={campaigns} />
+        <OppTable opps={rows} owners={owners} products={products} sources={sources} campaigns={campaigns} onEdited={applyEdit} />
+      ) : view === "board" ? (
+        <div className="space-y-2">
+          <p className="text-xs text-ink/45">カードをドラッグしてヨミ（確度）を変更できます。確度・ステージ・予測区分は自動連動します。</p>
+          <OppBoard opps={rows} onEdited={applyEdit} />
+        </div>
       ) : (
         <div className="space-y-5">
           {/* 月次アポ件数 vs 目標 */}
