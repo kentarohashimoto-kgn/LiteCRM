@@ -611,6 +611,8 @@ export async function updateLeadAction(formData: FormData) {
   });
   const status = fields.disposition === "appointment" ? "qualified" : fields.disposition === "ng" || fields.disposition === "excluded" ? "disqualified" : "new";
   await sb.from("leads").update({ ...fields, company_name: fields.company_name, priority_score: score, status }).eq("id", id).eq("tenant_id", ctx.tenantId);
+  // リードスコア(要件書4.10)を再計算(ランクは未設定のみ自動補完)
+  await sb.rpc("rescore_leads", { p_lead_id: id });
   revalidatePath("/app/leads");
   redirect("/app/leads/" + id);
 }

@@ -24,6 +24,12 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
   const l = await getLead(params.id);
   if (!l) notFound();
   const ev = l.raw_event ?? "—";
+  // getLeadはselect("*")のためスコア列は取得済み(Lead型に未宣言のためcastで参照)
+  const sc = l as unknown as {
+    lead_score?: number | null;
+    lead_score_detail?: { size?: number; role?: number; issue?: number; timing?: number; fit?: number; auto_rank?: string } | null;
+    first_contact_due_date?: string | null;
+  };
   const converted = !!l.account_id || l.status === "converted";
   const linkedOpp = ws.opportunities.find((o) => o.lead_id === l.id);
   const [eng, touchpoints] = await Promise.all([getPersonEngagement(l.email), getPersonTouchpoints(l.email)]);
@@ -48,6 +54,26 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
           )
         }
       />
+
+      {/* リードスコア(要件書4.10の5軸) */}
+      {sc.lead_score != null && (
+        <Card className="mb-5">
+          <div className="flex items-center gap-3 mb-2 flex-wrap">
+            <span className="text-sm font-semibold text-ink">リードスコア</span>
+            <span className={`pill text-sm font-bold ${ENG_COLOR[sc.lead_score_detail?.auto_rank ?? "D"]}`}>自動ランク {sc.lead_score_detail?.auto_rank ?? "D"}</span>
+            <span className="tabular-nums font-bold text-teal-deep">{sc.lead_score} / 100</span>
+            {sc.first_contact_due_date && <span className="text-xs text-accent-orange">初回接触期限 {formatDateFull(sc.first_contact_due_date)}</span>}
+            <span className="ml-auto text-[11px] text-ink/40">保存で再計算</span>
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink/60">
+            <span>規模 <b className="tabular-nums">{sc.lead_score_detail?.size ?? 0}</b>/20</span>
+            <span>役職 <b className="tabular-nums">{sc.lead_score_detail?.role ?? 0}</b>/20</span>
+            <span>課題 <b className="tabular-nums">{sc.lead_score_detail?.issue ?? 0}</b>/25</span>
+            <span>時期 <b className="tabular-nums">{sc.lead_score_detail?.timing ?? 0}</b>/15</span>
+            <span>相性(予算) <b className="tabular-nums">{sc.lead_score_detail?.fit ?? 0}</b>/20</span>
+          </div>
+        </Card>
+      )}
 
       {/* エンゲージメント(接点の積み上げ) */}
       <Card className="mb-5">
