@@ -514,6 +514,15 @@ export async function setAccountOwnerAction(formData: FormData) {
 }
 
 // ===================== リード =====================
+/** 全リードをスコアリング(要件書4.10)。ランクは未設定のみ自動補完(既存ランクは保持)。 */
+export async function rescoreAllLeadsAction() {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { data } = await sb.rpc("rescore_leads");
+  revalidatePath("/app/leads");
+  redirect("/app/leads?scored=" + encodeURIComponent(String(data ?? 0)));
+}
+
 export async function createLeadAction(formData: FormData) {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();

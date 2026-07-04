@@ -1,4 +1,5 @@
-import { Upload } from "lucide-react";
+import { Upload, Gauge } from "lucide-react";
+import { rescoreAllLeadsAction } from "@/server/actions";
 import {
   queryLeadList,
   queryCallQueue,
@@ -15,7 +16,7 @@ import { LeadsWorkspace, type LeadsTab } from "@/components/leads/leads-workspac
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; page?: string };
+  searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; page?: string; scored?: string };
 }) {
   const tab = (["list", "funnel", "queue", "company", "analysis", "download", "batches"].includes(searchParams.tab ?? "")
     ? searchParams.tab
@@ -55,8 +56,22 @@ export default async function LeadsPage({
       <PageHeader
         title="リード"
         subtitle="展示会・セミナーのリストを優先度付けし、架電→アポ獲得まで管理・分析します。"
-        action={<LinkButton href="/app/leads/import" variant="accent"><Upload size={16} /> 取込</LinkButton>}
+        action={
+          <div className="flex items-center gap-2">
+            <form action={rescoreAllLeadsAction}>
+              <button type="submit" className="btn-ghost inline-flex items-center gap-1.5" title="全リードをスコアリング(要件書4.10)。ランクは未設定のみ自動補完">
+                <Gauge size={16} /> 再スコアリング
+              </button>
+            </form>
+            <LinkButton href="/app/leads/import" variant="accent"><Upload size={16} /> 取込</LinkButton>
+          </div>
+        }
       />
+      {searchParams.scored && (
+        <div className="mb-4 rounded-lg border border-teal-primary/30 bg-teal-light/40 px-4 py-2.5 text-sm text-teal-deep">
+          {searchParams.scored}件のリードをスコアリングしました（ランク未設定分は自動補完）。
+        </div>
+      )}
       <LeadsWorkspace
         tab={tab}
         list={list}
