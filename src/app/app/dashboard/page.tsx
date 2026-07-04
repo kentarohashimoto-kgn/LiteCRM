@@ -3,6 +3,7 @@ import { CalendarCheck, AlertTriangle, Clock, Target as TargetIcon } from "lucid
 import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getSalesTargets, listOpportunities, listTasks } from "@/lib/data/select";
 import { getLeadMetrics } from "@/lib/data/leads";
+import { getSalesAlerts, summarizeAlerts } from "@/lib/data/alerts";
 import { buildForecast } from "@/lib/forecast";
 import { isStale, noNextAction } from "@/lib/risk";
 import { repMetrics, productMetrics } from "@/lib/analytics";
@@ -40,6 +41,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const reps = repMetrics(openOpps);
   const products = productMetrics(openOpps).slice(0, 6);
   const achieve = thisMonth.target > 0 ? thisMonth.bestCase / thisMonth.target : 0;
+
+  // 要対応アラート(要件書8章)。放置・入力漏れ・フォロー漏れを検知。
+  const alertRows = summarizeAlerts(await getSalesAlerts());
 
   // 年度(決算6月=7月始まり)の目標 vs 実績。?fy= で年度を切替(既定は当年度)。
   const targetMap = new Map(targets.map((t) => [t.target_month, t]));
@@ -128,6 +132,35 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         subtitle="今月の着地と打ち手を一目で。未来の売上を作るための起点です。"
         action={<FyTabs years={availableYears} selected={fy} currentFy={currentFy} />}
       />
+
+      {/* 要対応アラート（放置・入力漏れ・フォロー漏れの検知） */}
+      {alertRows.length > 0 && (
+        <div className="card card-pad mb-5">
+          <div className="flex items-center gap-2 mb-2.5">
+            <AlertTriangle size={15} className="text-accent-orange" />
+            <span className="text-sm font-semibold text-ink">要対応アラート</span>
+            <span className="text-xs text-ink/40">放置・入力漏れ・フォロー漏れ</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {alertRows.map((a) => (
+              <Link
+                key={a.kind}
+                href={a.link}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  a.severity === "high"
+                    ? "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                    : a.severity === "mid"
+                      ? "border-amber-200 bg-amber-50 text-accent-orange hover:bg-amber-100"
+                      : "border-black/10 bg-white text-ink/55 hover:bg-mist-soft"
+                }`}
+              >
+                {a.label}
+                <span className="tabular-nums font-bold">{a.count}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 強調指標 */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-5">

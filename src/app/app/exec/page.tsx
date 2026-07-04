@@ -37,6 +37,24 @@ export default async function ExecSummaryPage({ searchParams }: { searchParams: 
         action={<PeriodSelect month={month} week={week} weeks={weeksInMonth(month)} basePath="/app/exec" />}
       />
 
+      {/* 経営レビュー内のページ導線（サイドバーからは1項目に集約） */}
+      <div className="flex flex-wrap gap-1.5 mb-5">
+        {[
+          { href: "/app/exec/kpi", label: "営業KPI振り返り" },
+          { href: "/app/exec/deals", label: "商談・読み管理" },
+          { href: "/app/exec/marketing", label: "マーケ施策管理" },
+          { href: "/app/exec/delivery", label: "デリバリー品質" },
+          { href: "/app/exec/projects", label: "開発・顧問案件" },
+          { href: "/app/exec/actions", label: "アクション管理" },
+          { href: "/app/exec/calc", label: "売上逆算" },
+          { href: "/app/exec/history", label: "振り返り履歴" },
+        ].map((l) => (
+          <Link key={l.href} href={l.href} className="pill border border-black/10 bg-white text-ink/60 hover:border-teal-primary/40 hover:text-teal-deep">
+            {l.label}
+          </Link>
+        ))}
+      </div>
+
       {/* 部門別 判定 */}
       <Section title="部門別 状態（Good / Watch / Bad）" className="mb-5" action={<Link href="/app/exec/kpi" className="text-xs font-semibold text-teal-primary hover:underline">営業KPI →</Link>}>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

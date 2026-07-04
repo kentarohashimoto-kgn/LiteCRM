@@ -14,11 +14,7 @@ import {
   Activity as ActivityIcon,
   TrendingUp,
   Goal,
-  UserCog,
-  Package,
-  Radio,
   Presentation,
-  Coins,
   ClipboardList,
   Gauge,
   Star,
@@ -31,64 +27,45 @@ import { APP_NAME } from "@/lib/constants";
 
 const groups: { heading: string; items: { href: string; label: string; icon: React.ElementType }[] }[] = [
   {
-    heading: "営業",
+    heading: "ホーム",
     items: [
       { href: "/app/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
-      { href: "/app/reviews/weekly", label: "週次レビュー", icon: CalendarCheck },
-      { href: "/app/opportunities", label: "案件", icon: Target },
-      { href: "/app/opportunities/import", label: "商談取込(Notion)", icon: ClipboardList },
-      { href: "/app/forecast", label: "売上予測", icon: TrendingUp },
-      { href: "/app/forecast/pipeline", label: "受注見込み(来期)", icon: Goal },
-      { href: "/app/targets", label: "目標入力", icon: Goal },
-    ],
-  },
-  {
-    heading: "経営レビュー",
-    items: [
-      { href: "/app/exec", label: "週次サマリー", icon: Gauge },
-      { href: "/app/exec/kpi", label: "営業KPI振り返り", icon: Goal },
-      { href: "/app/exec/deals", label: "商談・読み管理", icon: Target },
-      { href: "/app/exec/marketing", label: "マーケ施策管理", icon: Radio },
-      { href: "/app/exec/delivery", label: "デリバリー品質", icon: Presentation },
-      { href: "/app/exec/projects", label: "開発・顧問案件", icon: Package },
-      { href: "/app/exec/actions", label: "アクション管理", icon: CheckSquare },
-      { href: "/app/exec/calc", label: "売上逆算", icon: TrendingUp },
-      { href: "/app/exec/history", label: "振り返り履歴", icon: ClipboardList },
-    ],
-  },
-  {
-    heading: "顧客・活動",
-    items: [
-      { href: "/app/accounts", label: "顧客", icon: Building2 },
-      { href: "/app/srank", label: "Sランク攻略", icon: Star },
-      { href: "/app/nurture", label: "既存顧客深耕", icon: TrendingUp },
-      { href: "/app/contacts", label: "担当者", icon: Users },
-      { href: "/app/leads", label: "リード", icon: Sparkles },
       { href: "/app/tasks", label: "タスク", icon: CheckSquare },
       { href: "/app/activities", label: "活動履歴", icon: ActivityIcon },
     ],
   },
   {
-    heading: "分析",
+    heading: "案件",
     items: [
-      { href: "/app/analytics/revenue", label: "売上・請求分析", icon: Coins },
-      { href: "/app/analytics/roi", label: "施策ROI分析", icon: Gauge },
-      { href: "/app/analytics/matrix", label: "施策×顧客レベル", icon: Goal },
-      { href: "/app/analytics/trends", label: "トレンド分析", icon: TrendingUp },
-      { href: "/app/analytics/channels", label: "流入元分析", icon: Radio },
-      { href: "/app/analytics/exhibitions", label: "└ 展示会分析", icon: Presentation },
-      { href: "/app/analytics/exhibition-roi", label: "└ 展示会(時系列/主催/テーマ)", icon: Presentation },
-      { href: "/app/analytics/exhibition-select", label: "└ 展示会選定", icon: Presentation },
-      { href: "/app/analytics/seminars", label: "└ セミナー分析", icon: ClipboardList },
-      { href: "/app/analytics/seminar-followup", label: "└ セミナー攻略リスト", icon: Star },
-      { href: "/app/analytics/sales-reps", label: "営業マン別", icon: UserCog },
-      { href: "/app/analytics/products", label: "商品別", icon: Package },
-      { href: "/app/analytics/product-roi", label: "プロダクト収益分析", icon: Coins },
+      { href: "/app/opportunities", label: "案件（表・ボード）", icon: Target },
+      { href: "/app/forecast", label: "売上予測", icon: TrendingUp },
+      { href: "/app/targets", label: "目標入力", icon: Goal },
+    ],
+  },
+  {
+    heading: "顧客",
+    items: [
+      { href: "/app/accounts", label: "顧客", icon: Building2 },
+      { href: "/app/contacts", label: "担当者", icon: Users },
+      { href: "/app/leads", label: "リード", icon: Sparkles },
+      { href: "/app/srank", label: "Sランク攻略", icon: Star },
+      { href: "/app/nurture", label: "既存顧客深耕", icon: TrendingUp },
+    ],
+  },
+  {
+    heading: "分析・レビュー",
+    items: [
+      { href: "/app/analytics", label: "分析ハブ", icon: Gauge },
+      { href: "/app/exec", label: "経営レビュー", icon: Presentation },
+      { href: "/app/reviews/weekly", label: "週次レビュー", icon: CalendarCheck },
     ],
   },
   {
     heading: "設定",
-    items: [{ href: "/app/settings", label: "設定", icon: Settings }],
+    items: [
+      { href: "/app/settings", label: "設定", icon: Settings },
+      { href: "/app/opportunities/import", label: "データ取込", icon: ClipboardList },
+    ],
   },
 ];
 
