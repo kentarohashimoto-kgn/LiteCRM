@@ -6,6 +6,53 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { yomiToFields } from "@/lib/deal-import";
 import { casUpdate } from "./_helpers";
 import { ensureTransitionOnWon } from "@/server/transitions-util";
+import type { OppsPage, LeanOppRow } from "@/lib/data/opps-page";
+
+export interface OppPageFilter {
+  q?: string;
+  yomi?: string[];
+  owner?: string;
+  product?: string;
+  source?: string;
+  campaign?: string;
+  only_no_next?: boolean;
+  only_stale?: boolean;
+}
+
+/** 案件一覧のページ取得(サーバーページング)。総件数・合計も返す。 */
+export async function fetchOppsPageAction(input: {
+  filter: OppPageFilter;
+  sort: string;
+  asc: boolean;
+  offset: number;
+  limit?: number;
+}): Promise<OppsPage> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { data } = await sb.rpc("opportunities_page", {
+    p_filter: input.filter,
+    p_sort: input.sort,
+    p_asc: input.asc,
+    p_limit: input.limit ?? 50,
+    p_offset: input.offset,
+  });
+  const d = (data ?? {}) as Partial<OppsPage>;
+  return { rows: d.rows ?? [], total: d.total ?? 0, sum_amount: d.sum_amount ?? 0, sum_weighted: d.sum_weighted ?? 0 };
+}
+
+/** ボード/カレンダー表示用に全案件(軽量)を取得。これらのビューを開いた時だけ遅延取得する。 */
+export async function fetchAllOppsLeanAction(): Promise<LeanOppRow[]> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { data } = await sb.rpc("opportunities_page", {
+    p_filter: {},
+    p_sort: "expected_close_date",
+    p_asc: true,
+    p_limit: 5000,
+    p_offset: 0,
+  });
+  return ((data ?? {}) as Partial<OppsPage>).rows ?? [];
+}
 
 export type OppInlineField =
   | "yomi"

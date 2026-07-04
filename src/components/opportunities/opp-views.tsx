@@ -32,14 +32,19 @@ export function OppViews({
   products,
   sources,
   campaigns = [],
+  controlledView,
+  hideToggle = false,
 }: {
   opps: OppView[];
   owners: Option[];
   products: Option[];
   sources: Option[];
   campaigns?: Option[];
+  controlledView?: "list" | "board" | "calendar";
+  hideToggle?: boolean;
 }) {
-  const [view, setView] = useState<"list" | "board" | "calendar">("list");
+  const [internalView, setView] = useState<"list" | "board" | "calendar">(controlledView ?? "list");
+  const view = controlledView ?? internalView;
   const [trendTab, setTrendTab] = useState<"total" | "owner" | "exhibition">("total");
   const [trendRange, setTrendRange] = useState<string>("rolling");
 
@@ -163,12 +168,14 @@ export function OppViews({
 
   return (
     <div className="space-y-4">
-      {/* ビュー切替 */}
-      <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5">
-        <TabBtn active={view === "list"} onClick={() => setView("list")} icon={<List size={15} />} label="一覧" />
-        <TabBtn active={view === "board"} onClick={() => setView("board")} icon={<LayoutGrid size={15} />} label="ボード" />
-        <TabBtn active={view === "calendar"} onClick={() => setView("calendar")} icon={<CalendarDays size={15} />} label="カレンダー" />
-      </div>
+      {/* ビュー切替(親が制御する場合は非表示) */}
+      {!hideToggle && (
+        <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5">
+          <TabBtn active={view === "list"} onClick={() => setView("list")} icon={<List size={15} />} label="一覧" />
+          <TabBtn active={view === "board"} onClick={() => setView("board")} icon={<LayoutGrid size={15} />} label="ボード" />
+          <TabBtn active={view === "calendar"} onClick={() => setView("calendar")} icon={<CalendarDays size={15} />} label="カレンダー" />
+        </div>
+      )}
 
       {view === "list" ? (
         <OppTable opps={rows} owners={owners} products={products} sources={sources} campaigns={campaigns} onEdited={applyEdit} />
