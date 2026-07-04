@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { getWorkspace } from "@/lib/data/workspace";
 import { getAccount, getUser, listActivities } from "@/lib/data/select";
-import { PageHeader, Avatar } from "@/components/ui/primitives";
+import { PageHeader, Avatar, LinkButton } from "@/components/ui/primitives";
 import { ACTIVITY_TYPE_MAP } from "@/lib/constants";
 import { formatDateFull } from "@/lib/utils";
 
@@ -11,7 +12,15 @@ export default async function ActivitiesPage() {
 
   return (
     <div>
-      <PageHeader title="活動履歴" subtitle="案件・顧客に紐づく活動(商談・電話・メール・DM等)の記録です。" />
+      <PageHeader
+        title="活動履歴"
+        subtitle="案件・顧客に紐づく活動(商談・電話・メール・DM等)の記録です。"
+        action={
+          <LinkButton href="/app/activities/new" variant="accent">
+            <Plus size={16} /> 活動を登録
+          </LinkButton>
+        }
+      />
       <div className="card card-pad">
         {activities.length === 0 ? (
           <p className="text-sm text-ink/40 py-8 text-center">活動履歴がありません</p>
