@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react";
 import { getWorkspaceLite } from "@/lib/data/workspace";
-import { listAccounts, listOpportunities } from "@/lib/data/select";
+import { listAccounts, listOpportunities, listMembers } from "@/lib/data/select";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { AccountsTable, type AccountRow } from "@/components/accounts/accounts-table";
 import { groupBy } from "@/lib/utils";
@@ -10,6 +10,7 @@ export default async function AccountsPage() {
   const accounts = listAccounts(ws);
   const opps = listOpportunities(ws);
   const oppByAcc = groupBy(opps, (o) => o.account_id);
+  const owners = listMembers(ws).map(({ user }) => ({ id: user.id, name: user.name }));
 
   const rows: AccountRow[] = accounts.map((a) => {
     const list = oppByAcc[a.id] ?? [];
@@ -23,6 +24,7 @@ export default async function AccountsPage() {
       status: a.status,
       rank: a.rank,
       focus: a.focus,
+      ownerId: a.owner_user_id ?? undefined,
       lifetimeRevenue: won.reduce((s, o) => s + o.amount, 0),
       openAmount: open.reduce((s, o) => s + o.amount, 0),
       oppCount: list.length,
@@ -34,10 +36,10 @@ export default async function AccountsPage() {
     <div>
       <PageHeader
         title="顧客"
-        subtitle="累積売上の高い順で追客優先度を可視化。ランク・重点フラグで手動の追客管理も。"
+        subtitle="累積売上の高い順で追客優先度を可視化。エリア・業種・担当営業で絞り込めます。"
         action={<LinkButton href="/app/accounts/new" variant="accent"><Plus size={16} /> 顧客を追加</LinkButton>}
       />
-      <AccountsTable rows={rows} />
+      <AccountsTable rows={rows} owners={owners} />
     </div>
   );
 }

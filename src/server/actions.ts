@@ -505,6 +505,14 @@ export async function setAccountFocusAction(formData: FormData) {
   revalidatePath("/app/accounts");
 }
 
+/** 顧客の担当営業(owner_user_id)を割当・変更。 */
+export async function setAccountOwnerAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("accounts").update({ owner_user_id: str(formData.get("owner_user_id")) }).eq("id", String(formData.get("id")));
+  revalidatePath("/app/accounts");
+}
+
 // ===================== リード =====================
 export async function createLeadAction(formData: FormData) {
   const ctx = await requireCtx();

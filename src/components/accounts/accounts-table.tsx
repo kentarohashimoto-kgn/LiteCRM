@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { ACCOUNT_RANKS, ACCOUNT_FOCUS, RANK_ORDER, FOCUS_ORDER } from "@/lib/constants";
-import { setAccountRankAction, setAccountFocusAction } from "@/server/actions";
+import { setAccountRankAction, setAccountFocusAction, setAccountOwnerAction } from "@/server/actions";
 import { formatYen, cn } from "@/lib/utils";
 
 export interface AccountRow {
@@ -15,29 +15,45 @@ export interface AccountRow {
   status: string;
   rank?: string;
   focus?: string;
+  ownerId?: string;
   lifetimeRevenue: number;
   openAmount: number;
   oppCount: number;
   isActive: boolean;
 }
 
+interface Owner {
+  id: string;
+  name: string;
+}
+
 type SortKey = "revenue" | "openAmount" | "oppCount" | "rank" | "focus" | "name";
 
 const statusLabel: Record<string, string> = { prospect: "見込み", customer: "顧客", inactive: "休眠" };
 
-export function AccountsTable({ rows }: { rows: AccountRow[] }) {
+export function AccountsTable({ rows, owners = [] }: { rows: AccountRow[]; owners?: Owner[] }) {
   const [q, setQ] = useState("");
   const [rank, setRank] = useState("");
   const [focus, setFocus] = useState("");
+  const [area, setArea] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [owner, setOwner] = useState("");
   const [active, setActive] = useState("");
   const [sort, setSort] = useState<SortKey>("revenue");
   const [asc, setAsc] = useState(false);
+
+  const ownerName = useMemo(() => new Map(owners.map((o) => [o.id, o.name])), [owners]);
+  const areaOptions = useMemo(() => uniqueSorted(rows.map((r) => r.area)), [rows]);
+  const industryOptions = useMemo(() => uniqueSorted(rows.map((r) => r.industry)), [rows]);
 
   const filtered = useMemo(() => {
     const list = rows.filter((r) => {
       if (q && !r.name.toLowerCase().includes(q.toLowerCase())) return false;
       if (rank && r.rank !== rank) return false;
       if (focus && r.focus !== focus) return false;
+      if (area && r.area !== area) return false;
+      if (industry && r.industry !== industry) return false;
+      if (owner && (owner === "__none" ? r.ownerId : r.ownerId !== owner)) return false;
       if (active === "active" && !r.isActive) return false;
       if (active === "inactive" && r.isActive) return false;
       return true;
@@ -46,7 +62,7 @@ export function AccountsTable({ rows }: { rows: AccountRow[] }) {
       const v = cmp(a, b, sort);
       return asc ? v : -v;
     });
-  }, [rows, q, rank, focus, active, sort, asc]);
+  }, [rows, q, rank, focus, area, industry, owner, active, sort, asc]);
 
   function toggleSort(key: SortKey) {
     if (sort === key) setAsc(!asc);
@@ -68,6 +84,16 @@ export function AccountsTable({ rows }: { rows: AccountRow[] }) {
         </div>
         <FilterSelect value={rank} onChange={setRank} placeholder="ランク" options={ACCOUNT_RANKS.map((r) => ({ id: r.key, name: r.key }))} />
         <FilterSelect value={focus} onChange={setFocus} placeholder="重点" options={ACCOUNT_FOCUS.map((f) => ({ id: f.key, name: f.label }))} />
+        <FilterSelect value={area} onChange={setArea} placeholder="エリア" options={areaOptions.map((a) => ({ id: a, name: a }))} />
+        <FilterSelect value={industry} onChange={setIndustry} placeholder="業種" options={industryOptions.map((i) => ({ id: i, name: i }))} />
+        {owners.length > 0 && (
+          <FilterSelect
+            value={owner}
+            onChange={setOwner}
+            placeholder="担当営業"
+            options={[{ id: "__none", name: "未割当" }, ...owners.map((o) => ({ id: o.id, name: o.name }))]}
+          />
+        )}
         <select value={active} onChange={(e) => setActive(e.target.value)} className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-primary">
           <option value="">状況：すべて</option>
           <option value="active">アクティブのみ</option>
@@ -88,6 +114,7 @@ export function AccountsTable({ rows }: { rows: AccountRow[] }) {
               <SortTh label="会社名" k="name" sort={sort} asc={asc} onClick={toggleSort} />
               <SortTh label="ランク" k="rank" sort={sort} asc={asc} onClick={toggleSort} />
               <SortTh label="重点" k="focus" sort={sort} asc={asc} onClick={toggleSort} />
+              <th className="th">担当営業</th>
               <th className="th">区分</th>
               <th className="th">ステータス</th>
               <SortTh label="案件数" k="oppCount" sort={sort} asc={asc} onClick={toggleSort} align="right" />
@@ -120,6 +147,19 @@ export function AccountsTable({ rows }: { rows: AccountRow[] }) {
                     </select>
                   </form>
                 </td>
+                <td className="td">
+                  {owners.length > 0 ? (
+                    <form action={setAccountOwnerAction}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <select name="owner_user_id" defaultValue={r.ownerId ?? ""} onChange={(e) => e.currentTarget.form?.requestSubmit()} className="rounded-lg border border-black/10 bg-white px-1.5 py-1 text-xs outline-none focus:border-teal-primary max-w-[110px]">
+                        <option value="">未割当</option>
+                        {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                      </select>
+                    </form>
+                  ) : (
+                    <span className="text-xs text-ink/40">{r.ownerId ? ownerName.get(r.ownerId) ?? "—" : "—"}</span>
+                  )}
+                </td>
                 <td className="td"><span className="pill bg-mist-soft text-ink/60 text-[11px]">{statusLabel[r.status] ?? r.status}</span></td>
                 <td className="td">
                   {r.isActive ? (
@@ -135,13 +175,17 @@ export function AccountsTable({ rows }: { rows: AccountRow[] }) {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={9} className="td text-center text-ink/40 py-10">条件に一致する顧客がありません</td></tr>
+              <tr><td colSpan={10} className="td text-center text-ink/40 py-10">条件に一致する顧客がありません</td></tr>
             )}
           </tbody>
         </table>
       </div>
     </div>
   );
+}
+
+function uniqueSorted(vals: (string | undefined)[]): string[] {
+  return Array.from(new Set(vals.filter((v): v is string => !!v && v.trim() !== ""))).sort((a, b) => a.localeCompare(b, "ja"));
 }
 
 function cmp(a: AccountRow, b: AccountRow, key: SortKey): number {
