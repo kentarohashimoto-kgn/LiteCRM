@@ -602,6 +602,8 @@ export interface Opportunity {
   first_meeting_date?: string;
   /** アポの日時(時刻あり)。設定時はカレンダーで時刻表示。 */
   appointment_at?: string;
+  /** 実施済み商談(meetings)の件数。カレンダーで「初回/N回目」表示に使用。 */
+  meeting_count?: number;
   amount: number;
   gross_profit?: number;
   gross_profit_rate?: number;

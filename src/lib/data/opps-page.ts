@@ -32,6 +32,7 @@ export interface LeanOppRow {
   risk_level: string | null;
   first_meeting_date: string | null;
   appointment_at: string | null;
+  meeting_count: number;
   created_at: string;
   updated_at: string;
   weighted: number;
@@ -71,6 +72,7 @@ export function leanToOppView(r: LeanOppRow): OppView {
     risk_level: (r.risk_level ?? undefined) as OppView["risk_level"],
     first_meeting_date: r.first_meeting_date ?? undefined,
     appointment_at: r.appointment_at ?? undefined,
+    meeting_count: r.meeting_count ?? 0,
     created_at: r.created_at,
     updated_at: r.updated_at,
     account: { name: r.account_name ?? "—" } as OppView["account"],
