@@ -1,45 +1,46 @@
 import { Plus } from "lucide-react";
-import { getWorkspaceLite } from "@/lib/data/workspace";
-import { listAccounts, listOpportunities, listMembers } from "@/lib/data/select";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import { requireCtx } from "@/lib/session";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
-import { AccountsTable, type AccountRow } from "@/components/accounts/accounts-table";
-import { groupBy } from "@/lib/utils";
+import { AccountsPaginatedTable } from "@/components/accounts/accounts-paginated-table";
+import type { AccountsPage } from "@/lib/data/accounts-page";
+
+export const dynamic = "force-dynamic";
 
 export default async function AccountsPage() {
-  const ws = await getWorkspaceLite();
-  const accounts = listAccounts(ws);
-  const opps = listOpportunities(ws);
-  const oppByAcc = groupBy(opps, (o) => o.account_id);
-  const owners = listMembers(ws).map(({ user }) => ({ id: user.id, name: user.name }));
-
-  const rows: AccountRow[] = accounts.map((a) => {
-    const list = oppByAcc[a.id] ?? [];
-    const open = list.filter((o) => o.status === "open");
-    const won = list.filter((o) => o.status === "won");
-    return {
-      id: a.id,
-      name: a.name,
-      industry: a.industry,
-      area: a.area,
-      status: a.status,
-      rank: a.rank,
-      focus: a.focus,
-      ownerId: a.owner_user_id ?? undefined,
-      lifetimeRevenue: won.reduce((s, o) => s + o.amount, 0),
-      openAmount: open.reduce((s, o) => s + o.amount, 0),
-      oppCount: list.length,
-      isActive: open.length > 0,
-    };
-  });
+  await requireCtx();
+  const sb = getSupabaseServer();
+  // 初期50件(集計込み)＋フィルタ用の小データのみ取得。全案件1.3MBの取得を回避。
+  const [pageR, ownersR, distinctR] = await Promise.all([
+    sb.rpc("accounts_page", { p_filter: {}, p_sort: "revenue", p_asc: false, p_limit: 50, p_offset: 0 }),
+    sb.from("profiles").select("id,display_name,email"),
+    sb.from("accounts").select("area,industry"),
+  ]);
+  const page = (pageR.data ?? { rows: [], total: 0 }) as AccountsPage;
+  const owners = (ownersR.data ?? []).map((p) => ({ id: p.id as string, name: (p.display_name as string) ?? (p.email as string) ?? "—" }));
+  const areaSet = new Set<string>();
+  const industrySet = new Set<string>();
+  for (const a of distinctR.data ?? []) {
+    if (a.area) areaSet.add(a.area as string);
+    if (a.industry) industrySet.add(a.industry as string);
+  }
+  const areas = Array.from(areaSet).sort((a, b) => a.localeCompare(b, "ja"));
+  const industries = Array.from(industrySet).sort((a, b) => a.localeCompare(b, "ja"));
 
   return (
     <div>
       <PageHeader
         title="顧客"
-        subtitle="累積売上の高い順で追客優先度を可視化。エリア・業種・担当営業で絞り込めます。"
+        subtitle="累積売上の高い順で追客優先度を可視化。スクロールで追加読込。エリア・業種・担当営業で絞り込み。"
         action={<LinkButton href="/app/accounts/new" variant="accent"><Plus size={16} /> 顧客を追加</LinkButton>}
       />
-      <AccountsTable rows={rows} owners={owners} />
+      <AccountsPaginatedTable
+        initialRows={page.rows}
+        initialTotal={page.total}
+        owners={owners}
+        areas={areas}
+        industries={industries}
+      />
     </div>
   );
 }
