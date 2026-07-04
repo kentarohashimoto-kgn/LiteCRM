@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { listOpportunities, listMembers, listAccounts, getSalesTargets, listRepTargets } from "@/lib/data/select";
 import { PageHeader, Section, StatCard, ProgressBar, Avatar } from "@/components/ui/primitives";
 import { YomiBadge } from "@/components/ui/badges";
@@ -11,7 +11,7 @@ import { formatYen, formatDate, startOfMonth, addMonths, monthKey, sum, cn } fro
 export const dynamic = "force-dynamic";
 
 export default async function RepDetailPage({ params }: { params: { id: string } }) {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite();
   const member = listMembers(ws).find(({ user }) => user.id === params.id);
   if (!member) notFound();
   const user = member.user;

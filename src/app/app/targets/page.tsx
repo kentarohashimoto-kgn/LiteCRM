@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getSalesTargets, listOpportunities, listMembers, listRepTargets } from "@/lib/data/select";
 import { getLeadMetrics } from "@/lib/data/leads";
 import { PageHeader, Section } from "@/components/ui/primitives";
@@ -9,7 +9,7 @@ import { actualByMonth } from "@/lib/targets";
 import { monthKey, startOfMonth, formatYen } from "@/lib/utils";
 
 export default async function TargetsPage({ searchParams }: { searchParams: { fy?: string; ok?: string; scope?: string } }) {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite();
   const cur = currentFiscalStartYear();
   const fy = searchParams.fy ? parseInt(searchParams.fy, 10) : cur;
   const months = fiscalMonths(fy);
@@ -65,7 +65,7 @@ export default async function TargetsPage({ searchParams }: { searchParams: { fy
   );
 }
 
-async function AllTargetForm({ ws, fy, months }: { ws: Awaited<ReturnType<typeof getWorkspace>>; fy: number; months: ReturnType<typeof fiscalMonths> }) {
+async function AllTargetForm({ ws, fy, months }: { ws: Awaited<ReturnType<typeof getWorkspaceLite>>; fy: number; months: ReturnType<typeof fiscalMonths> }) {
   const targets = getSalesTargets(ws);
   const targetMap = new Map(targets.map((t) => [t.target_month, t]));
   const opps = listOpportunities(ws);
@@ -122,7 +122,7 @@ async function AllTargetForm({ ws, fy, months }: { ws: Awaited<ReturnType<typeof
   );
 }
 
-function RepTargetForm({ ws, fy, months, userId, userName }: { ws: Awaited<ReturnType<typeof getWorkspace>>; fy: number; months: ReturnType<typeof fiscalMonths>; userId: string; userName: string }) {
+function RepTargetForm({ ws, fy, months, userId, userName }: { ws: Awaited<ReturnType<typeof getWorkspaceLite>>; fy: number; months: ReturnType<typeof fiscalMonths>; userId: string; userName: string }) {
   const repTargetMap = new Map(listRepTargets(ws).filter((t) => t.user_id === userId).map((t) => [t.target_month, t.target_amount]));
   // この営業マンの月別受注実績
   const repRev = new Map<string, number>();

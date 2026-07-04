@@ -1,4 +1,4 @@
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getLeadSources, getProducts, listMembers } from "@/lib/data/select";
 import { PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/badges";
@@ -7,7 +7,7 @@ import { createMemberAction } from "@/server/actions";
 import { formatYen, formatPercent } from "@/lib/utils";
 
 export default async function SettingsPage({ searchParams }: { searchParams: { ok?: string; error?: string } }) {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite();
   const members = listMembers(ws);
   const products = getProducts(ws);
   const sources = getLeadSources(ws);

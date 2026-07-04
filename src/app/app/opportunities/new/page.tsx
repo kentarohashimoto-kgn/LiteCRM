@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getLeadSources, getProducts, listAccounts, listMembers } from "@/lib/data/select";
 import { STAGES, FORECAST_CATEGORIES, CATEGORIES, DEAL_PHASES } from "@/lib/constants";
 import { PageHeader } from "@/components/ui/primitives";
 import { createOpportunityAction } from "@/server/actions";
 
 export default async function NewOpportunityPage({ searchParams }: { searchParams: { error?: string } }) {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite();
   const accounts = listAccounts(ws);
   const owners = listMembers(ws).map(({ user }) => user);
   const products = getProducts(ws);

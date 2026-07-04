@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { listOpportunities, listMembers, listAccounts, listRepTargets } from "@/lib/data/select";
 import { PageHeader } from "@/components/ui/primitives";
 import { formatYen, startOfMonth, addMonths, monthKey } from "@/lib/utils";
@@ -7,7 +7,7 @@ import { formatYen, startOfMonth, addMonths, monthKey } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export default async function RepsPage() {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite();
   const members = listMembers(ws).map(({ user }) => user);
   const opps = listOpportunities(ws);
   const accounts = listAccounts(ws);
