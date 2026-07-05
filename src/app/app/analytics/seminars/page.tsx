@@ -1,6 +1,8 @@
 import { Upload } from "lucide-react";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
+import { getSupabaseServer } from "@/lib/supabase/server";
 import { listSeminarResponses } from "@/lib/data/select";
+import type { SeminarResponse } from "@/lib/types";
 import { PageHeader, Section, StatCard, LinkButton } from "@/components/ui/primitives";
 import { formatDateFull } from "@/lib/utils";
 
@@ -22,7 +24,11 @@ const isHot = (f?: string) => /話を聞いて|もう少し話/.test(f ?? "");
 const isWarm = (f?: string) => /資料がほしい|資料が欲しい/.test(f ?? "");
 
 export default async function SeminarAnalyticsPage() {
-  const ws = await getWorkspace();
+  // E-1軽量化: full(2.1MB)ではなくセミナー回答のみ直接取得
+  const lite = await getWorkspaceLite();
+  const sb = getSupabaseServer();
+  const { data: seminarRows } = await sb.from("seminar_responses").select("*").limit(5000);
+  const ws = { ...lite, seminarResponses: (seminarRows ?? []) as SeminarResponse[] };
   const res = listSeminarResponses(ws);
   const n = res.length;
 

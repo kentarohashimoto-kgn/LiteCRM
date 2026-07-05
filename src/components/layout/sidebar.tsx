@@ -20,6 +20,7 @@ import {
   Star,
   UserCog,
   Settings,
+  Sun,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
     heading: "ホーム",
     items: [
       { href: "/app/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
+      { href: "/app/today", label: "今日のアポ・AC", icon: Sun },
       { href: "/app/tasks", label: "タスク", icon: CheckSquare },
       { href: "/app/activities", label: "活動履歴", icon: ActivityIcon },
     ],

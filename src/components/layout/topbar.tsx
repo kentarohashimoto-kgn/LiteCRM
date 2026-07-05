@@ -2,6 +2,7 @@ import { LogOut } from "lucide-react";
 import { Avatar } from "@/components/ui/primitives";
 import { QuickAdd } from "@/components/layout/quick-add";
 import { GlobalSearch } from "@/components/layout/global-search";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { signOut } from "@/server/actions";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
@@ -10,7 +11,10 @@ import { ROLE_MAP } from "@/lib/constants";
 export async function Topbar() {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
-  const { data } = await sb.from("profiles").select("display_name,email,avatar_color").eq("id", ctx.userId).maybeSingle();
+  const [{ data }, { count: unread }] = await Promise.all([
+    sb.from("profiles").select("display_name,email,avatar_color").eq("id", ctx.userId).maybeSingle(),
+    sb.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null),
+  ]);
   const user = {
     id: ctx.userId,
     name: data?.display_name ?? data?.email ?? "—",
@@ -27,6 +31,7 @@ export async function Topbar() {
       </div>
       <div className="flex items-center gap-4">
         <QuickAdd />
+        <NotificationBell initialUnread={unread ?? 0} />
         <div className="flex items-center gap-2">
           <Avatar user={user} />
           <span className="text-sm font-medium text-ink/80 hidden md:inline">{user.name}</span>

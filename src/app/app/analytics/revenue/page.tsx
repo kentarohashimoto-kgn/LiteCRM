@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import type { BillingSchedule } from "@/lib/types";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { StackedTrendChart } from "@/components/charts/stacked-trend-chart";
 import { CATEGORIES } from "@/lib/constants";
@@ -22,12 +24,16 @@ function CategoryLegend() {
 }
 
 export default async function RevenueAnalyticsPage({ searchParams }: { searchParams: { fy?: string } }) {
-  const ws = await getWorkspace();
+  // E-1軽量化: full(2.1MB)ではなく lite＋請求スケジュールのみ直接取得
+  const ws = await getWorkspaceLite();
+  const sb = getSupabaseServer();
+  const { data: billingRows } = await sb.from("billing_schedules").select("*").limit(10000);
+  const billingSchedules = (billingRows ?? []) as BillingSchedule[];
   const opps = ws.opportunities;
   const catMap = new Map<string, OpportunityCategory | undefined>(opps.map((o) => [o.id, o.category]));
 
   const orderPoints = ordersByMonth(opps);
-  const billingPoints = expandBilling(ws.billingSchedules, (id) => catMap.get(id));
+  const billingPoints = expandBilling(billingSchedules, (id) => catMap.get(id));
 
   const cur = currentFiscalStartYear();
   const fyParam = searchParams.fy ?? "all";

@@ -40,6 +40,7 @@ const GROUPS: { title: string; items: { href: string; label: string; desc: strin
   {
     title: "その他",
     items: [
+      { href: "/app/analytics/compare", label: "期間比較レポート", desc: "前月比・前年同月比を自動集計", icon: Gauge },
       { href: "/app/analytics/trends", label: "トレンド分析", desc: "月次の推移", icon: TrendingUp },
       { href: "/app/analytics/sales-reps", label: "営業マン別", desc: "担当者別の実績", icon: UserCog },
       { href: "/app/analytics/products", label: "商品別", desc: "商品群別の実績", icon: Package },

@@ -1,4 +1,4 @@
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { listOpportunities } from "@/lib/data/select";
 import { productMetrics } from "@/lib/analytics";
 import { PageHeader, Section } from "@/components/ui/primitives";
@@ -13,7 +13,7 @@ const TREND_PALETTE = [
 ];
 
 export default async function ProductAnalyticsPage() {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite(); // E-1軽量化: full(2.1MB)→lite
   const opps = listOpportunities(ws);
   const products = productMetrics(opps);
 

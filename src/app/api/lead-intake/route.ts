@@ -89,7 +89,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "insert failed" }, { status: 500, headers: CORS_HEADERS });
   }
 
-  // Slack通知(A-1連動。未設定なら送らない・失敗しても成功扱い)
+  // アプリ内通知(A-1): owner/admin へ新規リードを知らせる(失敗しても成功扱い)
+  try {
+    const { data: admins } = await admin
+      .from("memberships")
+      .select("user_id")
+      .eq("tenant_id", tenant.id as string)
+      .eq("status", "active")
+      .in("role", ["owner", "admin", "sales_manager"]);
+    if (admins && admins.length > 0) {
+      await admin.from("notifications").insert(
+        admins.map((a) => ({
+          tenant_id: tenant.id as string,
+          user_id: a.user_id as string,
+          kind: "lead",
+          title: `Webフォームから新しいリード（${rawEvent}）`,
+          body: `${company || "(会社名未入力)"}${name ? `｜${name}` : ""}${message ? `\n${message.slice(0, 120)}` : ""}`,
+          href: `/app/leads/${lead.id as string}`,
+        })),
+      );
+    }
+  } catch {
+    /* 通知失敗は無視 */
+  }
+
+  // Slack通知(未設定なら送らない・失敗しても成功扱い)
   const webhook = process.env.SLACK_WEBHOOK_URL;
   if (webhook) {
     try {

@@ -33,9 +33,8 @@ export async function addOppCommentAction(input: {
   });
   if (error) return { ok: false, error: error.message };
 
-  // Slack通知(失敗しても投稿は成立させる)
-  const webhook = process.env.SLACK_WEBHOOK_URL;
-  if (webhook && mentions.length > 0) {
+  // メンション通知: アプリ内ベル(A-1)＋Slack(設定時)。失敗しても投稿は成立させる
+  if (mentions.length > 0) {
     try {
       const [{ data: opp }, { data: profs }] = await Promise.all([
         sb.from("opportunities").select("name, accounts(name)").eq("id", input.opportunityId).maybeSingle(),
@@ -44,14 +43,35 @@ export async function addOppCommentAction(input: {
       const nameOf = new Map((profs ?? []).map((p) => [p.id as string, (p.display_name as string) || (p.email as string) || "—"]));
       const oppRow = opp as { name?: string; accounts?: { name?: string } | null } | null;
       const oppLabel = [oppRow?.accounts?.name, oppRow?.name].filter(Boolean).join("｜") || "案件";
-      const url = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://litecrm.vercel.app"}/app/opportunities/${input.opportunityId}`;
-      const to = mentions.map((m) => nameOf.get(m) ?? "—").join(" ");
-      const text = `:speech_balloon: *${nameOf.get(ctx.userId) ?? ctx.email}* さんが *${to}* さんをメンションしました\n<${url}|${oppLabel}>\n> ${body.slice(0, 300)}`;
-      await fetch(webhook, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
+      const authorName = nameOf.get(ctx.userId) ?? ctx.email;
+      const href = `/app/opportunities/${input.opportunityId}`;
+
+      // アプリ内通知(自分宛は除外)
+      const targets = mentions.filter((m) => m !== ctx.userId);
+      if (targets.length > 0) {
+        await sb.from("notifications").insert(
+          targets.map((userId) => ({
+            tenant_id: ctx.tenantId,
+            user_id: userId,
+            kind: "mention",
+            title: `${authorName}さんがコメントであなたをメンション`,
+            body: `${oppLabel}\n${body.slice(0, 120)}`,
+            href,
+          })),
+        );
+      }
+
+      const webhook = process.env.SLACK_WEBHOOK_URL;
+      if (webhook) {
+        const url = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://litecrm.vercel.app"}${href}`;
+        const to = mentions.map((m) => nameOf.get(m) ?? "—").join(" ");
+        const text = `:speech_balloon: *${authorName}* さんが *${to}* さんをメンションしました\n<${url}|${oppLabel}>\n> ${body.slice(0, 300)}`;
+        await fetch(webhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+      }
     } catch {
       /* 通知失敗は無視 */
     }

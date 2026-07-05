@@ -1,10 +1,10 @@
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { listCampaigns, getLeadSources } from "@/lib/data/select";
 import { PageHeader } from "@/components/ui/primitives";
 import { ImportForm } from "@/components/leads/import-form";
 
 export default async function LeadImportPage() {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite(); // E-1軽量化: full(2.1MB)→lite
   const campaigns = listCampaigns(ws)
     .slice()
     .sort((a, b) => (b.event_date ?? "").localeCompare(a.event_date ?? ""))

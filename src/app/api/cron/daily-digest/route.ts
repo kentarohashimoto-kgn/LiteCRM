@@ -27,10 +27,14 @@ export async function GET(req: Request) {
     purged = "error";
   }
 
-  const webhook = process.env.SLACK_WEBHOOK_URL;
-  if (!webhook) {
-    return NextResponse.json({ ok: true, purged, skipped: "SLACK_WEBHOOK_URL not configured" });
+  // 古いアプリ内通知の掃除(60日超)
+  try {
+    await admin.from("notifications").delete().lt("created_at", new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString());
+  } catch {
+    /* 失敗しても他処理は続行 */
   }
+
+  const webhook = process.env.SLACK_WEBHOOK_URL;
   // JSTの「今日」
   const now = new Date(Date.now() + 9 * 3600 * 1000);
   const today = now.toISOString().slice(0, 10);
@@ -94,11 +98,46 @@ export async function GET(req: Request) {
   if (pending) lines.push(`:bookmark_tabs: 承認待ちのスケジュール分類: *${pending}件*（経営レビューで確認）`);
   lines.push(`<${process.env.NEXT_PUBLIC_APP_URL ?? "https://litecrm.vercel.app"}/app/dashboard|ダッシュボードを開く>`);
 
+  // A-1: 担当者ごとのアプリ内ダイジェスト通知(Slack未設定でも届く)
+  let notified = 0;
+  if (owners.length > 0) {
+    try {
+      const { data: tenant } = await admin.from("tenants").select("id").limit(1).maybeSingle();
+      if (tenant) {
+        const rows = owners
+          .filter(([uid]) => uid)
+          .map(([uid, r]) => {
+            const parts: string[] = [];
+            if (r.appts.length) parts.push(`アポ ${r.appts.length}件（${r.appts.slice(0, 3).join(" / ")}${r.appts.length > 3 ? " 他" : ""}）`);
+            if (r.acs.length) parts.push(`今日のAC ${r.acs.length}件（${r.acs.slice(0, 3).join(" / ")}${r.acs.length > 3 ? " 他" : ""}）`);
+            if (r.overdue) parts.push(`超過AC ${r.overdue}件`);
+            return {
+              tenant_id: tenant.id as string,
+              user_id: uid,
+              kind: "digest",
+              title: `今日の営業ダイジェスト（${label}）`,
+              body: parts.join("\n"),
+              href: "/app/today",
+            };
+          });
+        if (rows.length > 0) {
+          const { error } = await admin.from("notifications").insert(rows);
+          if (!error) notified = rows.length;
+        }
+      }
+    } catch {
+      /* 通知失敗は無視 */
+    }
+  }
+
+  if (!webhook) {
+    return NextResponse.json({ ok: true, owners: owners.length, pending, purged, notified, skipped: "SLACK_WEBHOOK_URL not configured" });
+  }
   const res = await fetch(webhook, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text: lines.join("\n") }),
   });
 
-  return NextResponse.json({ ok: res.ok, owners: owners.length, pending, purged });
+  return NextResponse.json({ ok: res.ok, owners: owners.length, pending, purged, notified });
 }

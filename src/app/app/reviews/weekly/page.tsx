@@ -1,5 +1,7 @@
 import { CalendarCheck, TrendingUp, AlertTriangle, Target, Pause } from "lucide-react";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import type { StageHistory } from "@/lib/types";
 import { getSalesTargets, getStageHistory, listOpportunities } from "@/lib/data/select";
 import { getLeadMetrics } from "@/lib/data/leads";
 import { buildForecast } from "@/lib/forecast";
@@ -13,7 +15,15 @@ import { formatYen, formatPercent, sameMonth, daysSince } from "@/lib/utils";
 const stageOrder = Object.fromEntries(STAGES.map((s, i) => [s.key, i]));
 
 export default async function WeeklyReviewPage() {
-  const ws = await getWorkspace();
+  // E-1軽量化: full(2.1MB)ではなく lite＋直近60日のステージ履歴のみ直接取得
+  const lite = await getWorkspaceLite();
+  const sb = getSupabaseServer();
+  const { data: histRows } = await sb
+    .from("stage_histories")
+    .select("*")
+    .gte("changed_at", new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString())
+    .limit(5000);
+  const ws = { ...lite, stageHistories: (histRows ?? []) as StageHistory[] };
   const now = new Date();
   const opps = listOpportunities(ws);
   const open = opps.filter((o) => o.status === "open");

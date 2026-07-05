@@ -217,3 +217,89 @@ export async function updateOppInlineAction(input: {
   revalidatePath("/app/forecast");
   return { ok: true, updated_at: res.updated_at, patch };
 }
+
+/* ============================================================
+ * A-6 一括操作
+ * ============================================================ */
+
+/**
+ * 選択した案件の担当 or ヨミを一括変更。
+ * ヨミは取込ロジックと同じ規則で stage/status/forecast/probability を連動更新。
+ * ※ 一括では入力チェックができないため「0.受注」「1.ほぼ確」への一括変更はUI側で不可。
+ */
+export async function bulkUpdateOppsAction(input: {
+  ids: string[];
+  field: "owner_user_id" | "yomi";
+  value: string;
+}): Promise<{ ok: boolean; updated: number; error?: string }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const ids = input.ids.slice(0, 200);
+  if (ids.length === 0) return { ok: false, updated: 0, error: "案件が選択されていません" };
+
+  const patch: Record<string, unknown> = {};
+  if (input.field === "owner_user_id") {
+    if (!input.value) return { ok: false, updated: 0, error: "担当を選択してください" };
+    patch.owner_user_id = input.value;
+  } else {
+    const y = input.value.trim();
+    if (y.startsWith("0") || y.startsWith("1")) {
+      return { ok: false, updated: 0, error: "受注/ほぼ確への変更は案件ごとに必須入力があるため、一括では変更できません" };
+    }
+    const f = yomiToFields(y);
+    patch.yomi = y || null;
+    patch.stage = f.stage;
+    patch.status = f.status;
+    patch.forecast_category = f.forecast;
+    patch.probability = f.probability;
+  }
+
+  const { error, count } = await sb
+    .from("opportunities")
+    .update(patch, { count: "exact" })
+    .in("id", ids)
+    .eq("tenant_id", ctx.tenantId);
+  if (error) return { ok: false, updated: 0, error: error.message };
+
+  revalidatePath("/app/opportunities");
+  revalidatePath("/app/forecast");
+  return { ok: true, updated: count ?? 0 };
+}
+
+/** 選択した案件へ一括でタスクを作成(担当=各案件の担当者。展示会後の大量割当て向け)。 */
+export async function bulkCreateTasksAction(input: {
+  ids: string[];
+  title: string;
+  dueDate: string;
+}): Promise<{ ok: boolean; created: number; error?: string }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const ids = input.ids.slice(0, 200);
+  const title = input.title.trim();
+  if (ids.length === 0) return { ok: false, created: 0, error: "案件が選択されていません" };
+  if (!title) return { ok: false, created: 0, error: "タスク名を入力してください" };
+  if (!input.dueDate) return { ok: false, created: 0, error: "期日を入力してください" };
+
+  const { data: opps } = await sb
+    .from("opportunities")
+    .select("id, owner_user_id, account_id")
+    .in("id", ids)
+    .eq("tenant_id", ctx.tenantId);
+  const rows = (opps ?? []).map((o) => ({
+    tenant_id: ctx.tenantId,
+    opportunity_id: o.id as string,
+    account_id: (o.account_id as string) ?? null,
+    assigned_to: (o.owner_user_id as string) ?? ctx.userId,
+    created_by: ctx.userId,
+    title,
+    due_date: input.dueDate,
+    status: "todo",
+    origin: "bulk",
+  }));
+  if (rows.length === 0) return { ok: false, created: 0, error: "対象案件が見つかりません" };
+
+  const { error } = await sb.from("tasks").insert(rows);
+  if (error) return { ok: false, created: 0, error: error.message };
+  revalidatePath("/app/tasks");
+  return { ok: true, created: rows.length };
+}

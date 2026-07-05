@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getWorkspaceLite } from "@/lib/data/workspace";
 import { listOpportunities, listMembers, listRepTargets } from "@/lib/data/select";
 import { repMetrics } from "@/lib/analytics";
 import { PageHeader } from "@/components/ui/primitives";
@@ -12,7 +12,7 @@ function ymOf(s?: string | null): string | null {
 }
 
 export default async function SalesRepAnalyticsPage() {
-  const ws = await getWorkspace();
+  const ws = await getWorkspaceLite(); // E-1軽量化: full(2.1MB)→lite
   const opps = listOpportunities(ws);
   const reps = repMetrics(opps);
 

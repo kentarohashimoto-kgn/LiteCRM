@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Trash2 } from "lucide-react";
-import { getWorkspace } from "@/lib/data/workspace";
+import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { updateLeadAction, deleteLeadAction } from "@/server/actions";
 import { PromoteLeadButton } from "@/components/leads/promote-button";
@@ -21,7 +21,6 @@ const ENG_COLOR: Record<string, string> = {
 };
 
 export default async function LeadEditPage({ params }: { params: { id: string } }) {
-  const ws = await getWorkspace();
   const l = await getLead(params.id);
   if (!l) notFound();
   const ev = l.raw_event ?? "—";
@@ -32,8 +31,14 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
     first_contact_due_date?: string | null;
   };
   const converted = !!l.account_id || l.status === "converted";
-  const linkedOpp = ws.opportunities.find((o) => o.lead_id === l.id);
-  const [eng, touchpoints] = await Promise.all([getPersonEngagement(l.email), getPersonTouchpoints(l.email)]);
+  // E-1軽量化: workspace_full(2.1MB)ではなく、このリードに紐づく案件のみ直接取得
+  const sb = getSupabaseServer();
+  const [{ data: linkedOppRow }, eng, touchpoints] = await Promise.all([
+    sb.from("opportunities").select("id, name").eq("lead_id", l.id).limit(1).maybeSingle(),
+    getPersonEngagement(l.email),
+    getPersonTouchpoints(l.email),
+  ]);
+  const linkedOpp = (linkedOppRow ?? undefined) as { id: string; name: string } | undefined;
 
   return (
     <div className="max-w-3xl">

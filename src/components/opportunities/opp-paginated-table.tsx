@@ -10,6 +10,8 @@ import {
   listOppViewPresetsAction,
   saveOppViewPresetAction,
   deleteOppViewPresetAction,
+  bulkUpdateOppsAction,
+  bulkCreateTasksAction,
   type OppPageFilter,
   type OppViewPreset,
 } from "@/server/actions/opportunities";
@@ -120,6 +122,42 @@ export function OppPaginatedTable({
   const offsetRef = useRef(initialRows.length);
   const hasMore = rows.length < total;
 
+  // A-6 一括操作: 選択行
+  const [selected, setSelected] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const allVisibleSelected = rows.length > 0 && rows.every((r) => selected.includes(r.id));
+  const toggleRow = (id: string) =>
+    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const toggleAll = () => setSelected(allVisibleSelected ? [] : rows.map((r) => r.id));
+
+  async function runBulk(field: "owner_user_id" | "yomi", value: string) {
+    if (!value || bulkBusy) return;
+    const label = field === "owner_user_id" ? "担当" : "ヨミ";
+    if (!window.confirm(`選択中の${selected.length}件の${label}を一括変更します。よろしいですか？`)) return;
+    setBulkBusy(true);
+    const res = await bulkUpdateOppsAction({ ids: selected, field, value });
+    setBulkBusy(false);
+    if (!res.ok) { alert(res.error ?? "一括変更に失敗しました"); return; }
+    setSelected([]);
+    offsetRef.current = 0;
+    await load(0, true);
+  }
+
+  async function runBulkTask() {
+    if (bulkBusy) return;
+    const title = window.prompt(`選択中の${selected.length}件にタスクを作成します。タスク名を入力:`, "フォローアップ");
+    if (!title) return;
+    const defaultDue = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const dueDate = window.prompt("期日(YYYY-MM-DD):", defaultDue);
+    if (!dueDate) return;
+    setBulkBusy(true);
+    const res = await bulkCreateTasksAction({ ids: selected, title, dueDate });
+    setBulkBusy(false);
+    if (!res.ok) { alert(res.error ?? "タスク作成に失敗しました"); return; }
+    alert(`${res.created}件のタスクを作成しました（担当=各案件の担当者）`);
+    setSelected([]);
+  }
+
   const filter: OppPageFilter = useMemo(
     () => ({
       q: q.trim() || undefined,
@@ -224,10 +262,45 @@ export function OppPaginatedTable({
         <span className="text-xs text-ink/35">表示 {rows.length}件</span>
       </div>
 
+      {/* A-6 一括操作バー */}
+      {selected.length > 0 && (
+        <div className="card card-pad flex items-center gap-3 flex-wrap border-teal-primary/30 bg-teal-light/30">
+          <span className="text-sm font-semibold text-teal-deep">{selected.length}件を選択中</span>
+          <select
+            defaultValue=""
+            disabled={bulkBusy}
+            onChange={(e) => { runBulk("owner_user_id", e.target.value); e.target.value = ""; }}
+            className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm"
+          >
+            <option value="">担当を一括変更…</option>
+            {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          <select
+            defaultValue=""
+            disabled={bulkBusy}
+            onChange={(e) => { runBulk("yomi", e.target.value); e.target.value = ""; }}
+            className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm"
+          >
+            <option value="">ヨミを一括変更…</option>
+            {YOMI_OPTIONS.filter((y) => !y.key.startsWith("0") && !y.key.startsWith("1")).map((y) => (
+              <option key={y.key} value={y.key}>{y.label}</option>
+            ))}
+          </select>
+          <button type="button" onClick={runBulkTask} disabled={bulkBusy} className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm hover:bg-black/[0.02]">
+            タスクを一括作成…
+          </button>
+          {bulkBusy && <Loader2 size={15} className="animate-spin text-teal-deep" />}
+          <button type="button" onClick={() => setSelected([])} className="ml-auto text-xs text-ink/45 hover:text-ink">選択解除</button>
+        </div>
+      )}
+
       <div className="card overflow-x-auto">
         <table className="w-full">
           <thead className="border-b border-black/[0.06]">
             <tr>
+              <th className="th w-8">
+                <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} className="accent-teal-primary" aria-label="表示中の案件をすべて選択" />
+              </th>
               <th className="th">顧客 / 案件</th>
               <th className="th">ヨミ</th>
               <th className="th">担当</th>
@@ -246,7 +319,10 @@ export function OppPaginatedTable({
             {rows.map((o) => {
               const since = daysSince(o.last_activity_at);
               return (
-                <tr key={o.id} className="row-hover">
+                <tr key={o.id} className={cn("row-hover", selected.includes(o.id) && "bg-teal-light/20")}>
+                  <td className="td w-8">
+                    <input type="checkbox" checked={selected.includes(o.id)} onChange={() => toggleRow(o.id)} className="accent-teal-primary" aria-label={`${o.name} を選択`} />
+                  </td>
                   <td className="td max-w-[240px]">
                     <Link href={`/app/opportunities/${o.id}`} className="block">
                       <span className="font-medium text-ink hover:text-teal-deep truncate block">{o.account?.name}</span>
@@ -270,7 +346,7 @@ export function OppPaginatedTable({
               );
             })}
             {rows.length === 0 && !loading && (
-              <tr><td colSpan={12} className="td text-center text-ink/40 py-10">条件に一致する案件がありません</td></tr>
+              <tr><td colSpan={13} className="td text-center text-ink/40 py-10">条件に一致する案件がありません</td></tr>
             )}
           </tbody>
         </table>

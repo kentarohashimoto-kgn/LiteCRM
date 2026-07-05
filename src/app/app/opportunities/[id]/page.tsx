@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Sparkles, Trash2 } from "lucide-react";
+import { ChevronLeft, FileText, Sparkles, Trash2 } from "lucide-react";
 import { getWorkspaceForOpportunity } from "@/lib/data/workspace";
 import {
   getActivitiesByOpportunity,
@@ -106,6 +106,12 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
             <StatusBadge status={o.status} />
             <StageBadge stage={o.stage} />
             <ForecastBadge category={o.forecast_category} />
+            <Link
+              href={`/app/opportunities/${o.id}/quote`}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]"
+            >
+              <FileText size={14} /> 見積書
+            </Link>
           </div>
         }
       />

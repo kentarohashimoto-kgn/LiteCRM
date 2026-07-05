@@ -456,6 +456,7 @@ export async function addActivityAction(formData: FormData) {
     revalidatePath(`/app/opportunities/${oppId}`);
   }
   revalidatePath("/app/activities");
+  revalidatePath("/app/today");
 }
 
 // ===================== タスク =====================
