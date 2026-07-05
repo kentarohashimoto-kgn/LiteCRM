@@ -973,6 +973,7 @@ export async function createMemberAction(formData: FormData) {
     tenant_id: ctx.tenantId,
     user_id: data.user.id,
     role,
+    memo: str(formData.get("memo")),
   });
   revalidatePath("/app/settings");
   redirect("/app/settings?ok=" + encodeURIComponent(`${email} を発行しました`));
