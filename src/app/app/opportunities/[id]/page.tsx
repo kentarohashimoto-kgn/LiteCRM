@@ -18,6 +18,7 @@ import { MeetingList } from "@/components/meetings/meeting-list";
 import { BillingSection } from "@/components/billing/billing-section";
 import { SubscriptionForm } from "@/components/billing/subscription-form";
 import { ScheduleSection } from "@/components/opportunities/schedule-section";
+import { RecordRecent } from "@/components/layout/recent-items";
 import { getLatestSchedule, getSalesTemplates, matchTemplates } from "@/lib/data/schedules";
 import { STAGES, FORECAST_CATEGORIES, CATEGORIES, CATEGORY_MAP, STAGE_MAP, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP } from "@/lib/constants";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
@@ -46,6 +47,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
 
   return (
     <div>
+      <RecordRecent href={`/app/opportunities/${o.id}`} label={`${o.account?.name ?? ""} ${o.name}`.trim()} kind="案件" />
       <Link href="/app/opportunities" className="inline-flex items-center gap-1 text-sm text-ink/50 hover:text-ink mb-3">
         <ChevronLeft size={16} /> 案件一覧
       </Link>

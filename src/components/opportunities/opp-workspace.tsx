@@ -4,7 +4,7 @@ import { useState } from "react";
 import { List, LayoutGrid, CalendarDays, Loader2 } from "lucide-react";
 import type { OppView } from "@/lib/data/select";
 import { leanToOppView } from "@/lib/data/opps-page";
-import { fetchAllOppsLeanAction } from "@/server/actions/opportunities";
+import { fetchAllOppsLeanAction, fetchApptOppsLeanAction } from "@/server/actions/opportunities";
 import { OppPaginatedTable } from "./opp-paginated-table";
 import { OppViews } from "./opp-views";
 import { AppointmentCalendarPro, type BookingLink } from "./appointment-calendar-pro";
@@ -35,7 +35,8 @@ export function OppWorkspace({
   bookingLinks?: BookingLink[];
 }) {
   const [view, setView] = useState<View>("list");
-  const [allOpps, setAllOpps] = useState<OppView[] | null>(null);
+  const [allOpps, setAllOpps] = useState<OppView[] | null>(null);      // ボード用(全件)
+  const [apptOpps, setApptOpps] = useState<OppView[] | null>(null);    // カレンダー用(アポのみ)
   const [loadingAll, setLoadingAll] = useState(false);
 
   async function ensureAll() {
@@ -45,9 +46,17 @@ export function OppWorkspace({
     setAllOpps(rows.map(leanToOppView));
     setLoadingAll(false);
   }
+  async function ensureAppts() {
+    if (apptOpps || loadingAll) return;
+    setLoadingAll(true);
+    const rows = await fetchApptOppsLeanAction();
+    setApptOpps(rows.map(leanToOppView));
+    setLoadingAll(false);
+  }
   function switchTo(v: View) {
     setView(v);
-    if (v !== "list") ensureAll();
+    if (v === "board") ensureAll();
+    if (v === "calendar") ensureAppts();
   }
 
   return (
@@ -69,12 +78,14 @@ export function OppWorkspace({
           sources={sources}
           campaigns={campaigns}
         />
-      ) : allOpps ? (
-        view === "calendar" ? (
-          <AppointmentCalendarPro opps={allOpps} owners={owners} bookingLinks={bookingLinks} />
+      ) : view === "calendar" ? (
+        apptOpps ? (
+          <AppointmentCalendarPro opps={apptOpps} owners={owners} bookingLinks={bookingLinks} />
         ) : (
-          <OppViews opps={allOpps} owners={owners} products={products} sources={sources} campaigns={campaigns} controlledView={view} hideToggle />
+          <div className="card card-pad flex items-center gap-2 text-sm text-ink/40"><Loader2 size={15} className="animate-spin" /> 読み込み中…</div>
         )
+      ) : allOpps ? (
+        <OppViews opps={allOpps} owners={owners} products={products} sources={sources} campaigns={campaigns} controlledView={view} hideToggle />
       ) : (
         <div className="card card-pad flex items-center gap-2 text-sm text-ink/40">
           <Loader2 size={15} className="animate-spin" /> 読み込み中…

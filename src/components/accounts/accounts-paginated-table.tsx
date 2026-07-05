@@ -94,6 +94,27 @@ export function AccountsPaginatedTable({
     else { setSort(key); setAsc(key === "name" || key === "rank"); }
   }
 
+  // CSVエクスポート(現在の絞込条件で全件)
+  const [exporting, setExporting] = useState(false);
+  async function exportCsv() {
+    setExporting(true);
+    const res = await fetchAccountsPageAction({ filter, sort, asc, offset: 0, limit: 5000 });
+    const header = ["会社名", "ランク", "重点", "担当営業", "区分", "アクティブ", "案件数", "累積売上", "進行中見込", "エリア", "業種"];
+    const escape = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = res.rows.map((r) => [
+      r.name, r.rank ?? "", r.focus ?? "", r.owner_name ?? "", statusLabel[r.status] ?? r.status,
+      r.is_active ? "アクティブ" : "非アクティブ", r.opp_count, r.lifetime_revenue, r.open_amount, r.area ?? "", r.industry ?? "",
+    ].map(escape).join(","));
+    const csv = "\uFEFF" + header.map(escape).join(",") + "\n" + lines.join("\n"); // BOM付きUTF-8(Excel対応)
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `顧客_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setExporting(false);
+  }
+
   const shownRevenue = rows.reduce((s, r) => s + r.lifetime_revenue, 0);
   const shownOpen = rows.reduce((s, r) => s + r.open_amount, 0);
 
@@ -121,6 +142,9 @@ export function AccountsPaginatedTable({
         <span>累積売上 <b className="stat-accent">{formatYen(shownRevenue)}</b></span>
         <span>進行中見込 <b className="text-teal-deep">{formatYen(shownOpen)}</b></span>
         <span className="text-xs text-ink/35">表示 {rows.length}社</span>
+        <button type="button" onClick={exportCsv} disabled={exporting} className="ml-auto text-xs text-teal-deep hover:underline">
+          {exporting ? "出力中…" : "CSV出力（絞込済 全件）"}
+        </button>
       </div>
 
       <div className="card overflow-x-auto">

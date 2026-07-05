@@ -5,6 +5,7 @@ import { getWorkspace } from "@/lib/data/workspace";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { updateLeadAction, deleteLeadAction } from "@/server/actions";
 import { PromoteLeadButton } from "@/components/leads/promote-button";
+import { RecordRecent } from "@/components/layout/recent-items";
 import { getLead, getPersonEngagement, getPersonTouchpoints } from "@/lib/data/leads";
 import { LEAD_DISPOSITIONS } from "@/lib/constants";
 import { ROLE_LEVELS, NEEDS_OPTS, TIMING_OPTS, AUTHORITY_OPTS, BUDGET_OPTS, REVENUE_OPTS } from "@/lib/lead-import";
@@ -36,6 +37,7 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
 
   return (
     <div className="max-w-3xl">
+      <RecordRecent href={`/app/leads/${l.id}`} label={`${l.company_name ?? ""} ${l.contact_name ?? ""}`.trim() || "リード"} kind="リード" />
       <Link href="/app/leads" className="inline-flex items-center gap-1 text-sm text-ink/50 hover:text-ink mb-3">
         <ChevronLeft size={16} /> リード一覧
       </Link>

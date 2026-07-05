@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import { Avatar } from "@/components/ui/primitives";
+import { QuickAdd } from "@/components/layout/quick-add";
 import { signOut } from "@/server/actions";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
@@ -23,6 +24,7 @@ export async function Topbar() {
         <span className="pill bg-teal-light text-teal-deep">{ROLE_MAP[ctx.role]?.label ?? ctx.role}</span>
       </div>
       <div className="flex items-center gap-4">
+        <QuickAdd />
         <div className="flex items-center gap-2">
           <Avatar user={user} />
           <span className="text-sm font-medium text-ink/80 hidden md:inline">{user.name}</span>

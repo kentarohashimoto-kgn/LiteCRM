@@ -40,6 +40,42 @@ export async function fetchOppsPageAction(input: {
   return { rows: d.rows ?? [], total: d.total ?? 0, sum_amount: d.sum_amount ?? 0, sum_weighted: d.sum_weighted ?? 0 };
 }
 
+// ===================== 保存ビュー(絞込プリセット) =====================
+export interface OppViewPreset {
+  id: string;
+  name: string;
+  params: Record<string, unknown>;
+  is_shared: boolean;
+  owner_user_id: string;
+}
+
+export async function listOppViewPresetsAction(): Promise<OppViewPreset[]> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { data } = await sb.from("opp_view_presets").select("id,name,params,is_shared,owner_user_id").order("created_at");
+  return (data ?? []) as OppViewPreset[];
+}
+
+export async function saveOppViewPresetAction(input: { name: string; params: Record<string, unknown>; isShared: boolean }): Promise<{ ok: boolean; preset?: OppViewPreset; error?: string }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  if (!input.name.trim()) return { ok: false, error: "ビュー名を入力してください" };
+  const { data, error } = await sb
+    .from("opp_view_presets")
+    .insert({ tenant_id: ctx.tenantId, owner_user_id: ctx.userId, name: input.name.trim(), params: input.params, is_shared: input.isShared })
+    .select("id,name,params,is_shared,owner_user_id")
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? "保存に失敗しました" };
+  return { ok: true, preset: data as OppViewPreset };
+}
+
+export async function deleteOppViewPresetAction(input: { id: string }): Promise<{ ok: boolean }> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { error } = await sb.from("opp_view_presets").delete().eq("id", input.id);
+  return { ok: !error };
+}
+
 /** アポ日時(appointment_at)をその場更新。ISO文字列 or null。 */
 export async function setAppointmentAtAction(input: { id: string; iso: string | null }): Promise<{ ok: boolean }> {
   await requireCtx();
@@ -49,7 +85,7 @@ export async function setAppointmentAtAction(input: { id: string; iso: string | 
   return { ok: !error };
 }
 
-/** ボード/カレンダー表示用に全案件(軽量)を取得。これらのビューを開いた時だけ遅延取得する。 */
+/** ボード表示用に全案件(軽量)を取得。ボードを開いた時だけ遅延取得する。 */
 export async function fetchAllOppsLeanAction(): Promise<LeanOppRow[]> {
   await requireCtx();
   const sb = getSupabaseServer();
@@ -58,6 +94,20 @@ export async function fetchAllOppsLeanAction(): Promise<LeanOppRow[]> {
     p_sort: "expected_close_date",
     p_asc: true,
     p_limit: 5000,
+    p_offset: 0,
+  });
+  return ((data ?? {}) as Partial<OppsPage>).rows ?? [];
+}
+
+/** カレンダー表示用にアポ(ヨミ=4.アポ)のみ取得。全件(5000)ではなくアポ数十件で済む。 */
+export async function fetchApptOppsLeanAction(): Promise<LeanOppRow[]> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { data } = await sb.rpc("opportunities_page", {
+    p_filter: { yomi: ["4.アポ"] },
+    p_sort: "expected_close_date",
+    p_asc: true,
+    p_limit: 2000,
     p_offset: 0,
   });
   return ((data ?? {}) as Partial<OppsPage>).rows ?? [];

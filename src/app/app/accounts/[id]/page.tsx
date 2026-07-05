@@ -16,6 +16,7 @@ import { Tag } from "@/components/ui/badges";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
 import { MeetingList } from "@/components/meetings/meeting-list";
 import { SouvenirSection } from "@/components/accounts/souvenir-section";
+import { RecordRecent } from "@/components/layout/recent-items";
 import { createOpportunityAction, createMeetingAction } from "@/server/actions";
 import { getSolutionPackages, getAccountSouvenirs } from "@/lib/data/souvenirs";
 import { getTransitionsByAccount, TRANSITION_STATUS_LABEL, FOLLOWUP_STATUS_LABEL } from "@/lib/data/transitions";
@@ -45,6 +46,7 @@ export default async function AccountDetailPage({ params, searchParams }: { para
 
   return (
     <div>
+      <RecordRecent href={`/app/accounts/${account.id}`} label={account.name} kind="顧客" />
       <Link href="/app/accounts" className="inline-flex items-center gap-1 text-sm text-ink/50 hover:text-ink mb-3">
         <ChevronLeft size={16} /> 顧客一覧
       </Link>

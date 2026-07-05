@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/constants";
+import { RecentList } from "@/components/layout/recent-items";
 
 const groups: { heading: string; items: { href: string; label: string; icon: React.ElementType }[] }[] = [
   {
@@ -164,6 +165,7 @@ export function Sidebar() {
           </div>
         ))}
       </nav>
+      <RecentList collapsed={collapsed} />
     </aside>
   );
 }

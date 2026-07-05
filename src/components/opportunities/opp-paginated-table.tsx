@@ -5,7 +5,14 @@ import Link from "next/link";
 import { Search, ChevronDown, Loader2 } from "lucide-react";
 import type { OppView } from "@/lib/data/select";
 import { leanToOppView } from "@/lib/data/opps-page";
-import { fetchOppsPageAction, type OppPageFilter } from "@/server/actions/opportunities";
+import {
+  fetchOppsPageAction,
+  listOppViewPresetsAction,
+  saveOppViewPresetAction,
+  deleteOppViewPresetAction,
+  type OppPageFilter,
+  type OppViewPreset,
+} from "@/server/actions/opportunities";
 import { YOMI_OPTIONS } from "@/lib/constants";
 import { YomiBadge, StageBadge } from "@/components/ui/badges";
 import { Avatar } from "@/components/ui/primitives";
@@ -45,6 +52,65 @@ export function OppPaginatedTable({
   const [onlyStale, setOnlyStale] = useState(false);
   const [sort, setSort] = useState<SortKey>("expected_close_date");
   const [asc, setAsc] = useState(true);
+
+  // 保存ビュー(絞込プリセット)
+  const [presets, setPresets] = useState<OppViewPreset[]>([]);
+  useEffect(() => { listOppViewPresetsAction().then(setPresets); }, []);
+
+  function applyPreset(p: OppViewPreset) {
+    const v = p.params as Record<string, unknown>;
+    setQ((v.q as string) ?? "");
+    setYomiSel((v.yomi as string[]) ?? []);
+    setOwner((v.owner as string) ?? "");
+    setProduct((v.product as string) ?? "");
+    setSource((v.source as string) ?? "");
+    setCampaign((v.campaign as string) ?? "");
+    setOnlyNoNext(Boolean(v.only_no_next));
+    setOnlyStale(Boolean(v.only_stale));
+    if (v.sort) setSort(v.sort as SortKey);
+    if (typeof v.asc === "boolean") setAsc(v.asc);
+  }
+
+  async function saveCurrentAsPreset() {
+    const name = window.prompt("この絞込条件の名前（例: 自分の今月クロージング）");
+    if (!name) return;
+    const isShared = window.confirm("チーム全員に共有しますか？（キャンセル=自分だけ）");
+    const res = await saveOppViewPresetAction({
+      name,
+      isShared,
+      params: { q, yomi: yomiSel, owner, product, source, campaign, only_no_next: onlyNoNext, only_stale: onlyStale, sort, asc },
+    });
+    if (res.ok && res.preset) setPresets((ps) => [...ps, res.preset!]);
+    else alert(res.error ?? "保存に失敗しました");
+  }
+
+  async function removePreset(id: string) {
+    if (!window.confirm("この保存ビューを削除しますか？")) return;
+    const res = await deleteOppViewPresetAction({ id });
+    if (res.ok) setPresets((ps) => ps.filter((p) => p.id !== id));
+  }
+
+  // CSVエクスポート(現在の絞込条件で全件)
+  const [exporting, setExporting] = useState(false);
+  async function exportCsv() {
+    setExporting(true);
+    const res = await fetchOppsPageAction({ filter, sort, asc, offset: 0, limit: 5000 });
+    const header = ["顧客", "案件名", "ヨミ", "担当", "商材", "展示会/施策", "流入経路", "金額", "確度", "受注予定", "見込月", "次回AC日", "次回AC内容", "ステータス", "メモ"];
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = res.rows.map((r) => [
+      r.account_name, r.name, r.yomi, r.owner_name, r.product_name, r.campaign_name, r.source_name,
+      r.amount, r.probability + "%", r.expected_close_date ?? "", (r.expected_revenue_month ?? "").slice(0, 7),
+      r.next_action_date ?? "", r.next_action_text ?? "", r.status, r.notes ?? "",
+    ].map(esc).join(","));
+    const csv = "\uFEFF" + header.map(esc).join(",") + "\n" + lines.join("\n"); // BOM付きUTF-8(Excel対応)
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `案件_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setExporting(false);
+  }
 
   const [rows, setRows] = useState<OppView[]>(initialRows);
   const [total, setTotal] = useState(initialTotal);
@@ -132,6 +198,22 @@ export function OppPaginatedTable({
           {campaigns.length > 0 && <Sel value={campaign} onChange={setCampaign} placeholder="展示会・施策" options={campaigns} />}
           <Toggle active={onlyNoNext} onClick={() => setOnlyNoNext((v) => !v)} label="次アクション未設定" />
           <Toggle active={onlyStale} onClick={() => setOnlyStale((v) => !v)} label="放置案件" />
+        </div>
+        {/* 保存ビュー */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-black/[0.04]">
+          <span className="text-[11px] text-ink/40">保存ビュー:</span>
+          {presets.map((p) => (
+            <span key={p.id} className="inline-flex items-center rounded-lg border border-black/10 bg-white text-xs">
+              <button type="button" onClick={() => applyPreset(p)} className="px-2 py-1 text-ink/70 hover:text-teal-deep font-medium">
+                {p.name}{p.is_shared && <span className="text-[9px] text-ink/35 ml-1">共有</span>}
+              </button>
+              <button type="button" onClick={() => removePreset(p.id)} className="px-1.5 text-ink/25 hover:text-rose-500" title="削除">×</button>
+            </span>
+          ))}
+          <button type="button" onClick={saveCurrentAsPreset} className="text-xs text-teal-deep hover:underline ml-1">＋現在の条件を保存</button>
+          <button type="button" onClick={exportCsv} disabled={exporting} className="ml-auto text-xs text-teal-deep hover:underline">
+            {exporting ? "出力中…" : "CSV出力（絞込済 全件）"}
+          </button>
         </div>
       </div>
 
