@@ -36,6 +36,7 @@ export function MeetingList({
                   <Avatar user={m.owner} size={18} />
                   <span className="truncate text-sm font-medium text-ink group-hover:text-teal-deep">{m.title}</span>
                   {m.method && <span className="pill bg-mist-soft text-ink/60 text-[10px]">{m.method}</span>}
+                  {m.minutes_detail && <span className="pill bg-teal-light text-teal-deep text-[10px]">議事録</span>}
                   {m.owner && <span className="text-[11px] text-ink/45">{m.owner.name}</span>}
                 </div>
                 {showOpportunity && m.opportunity && <div className="text-[11px] text-ink/45 truncate mt-0.5">案件: {m.opportunity.name}</div>}

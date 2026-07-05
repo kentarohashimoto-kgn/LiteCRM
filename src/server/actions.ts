@@ -170,6 +170,18 @@ export async function setOppForecastAction(formData: FormData): Promise<{ ok: bo
   return { ok: true };
 }
 
+/** 案件の事前リサーチ情報・事前営業戦略を保存(その場更新・再読込なし)。 */
+export async function saveOppResearchAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  await sb
+    .from("opportunities")
+    .update({ pre_research: str(formData.get("pre_research")), sales_strategy: str(formData.get("sales_strategy")) })
+    .eq("id", id);
+  revalidatePath(`/app/opportunities/${id}`);
+}
+
 /** 商談を展示会・施策インスタンスへ紐付け(手動修正)。推定フラグは解除する。 */
 export async function setOpportunityCampaignAction(formData: FormData) {
   await requireCtx();
@@ -210,6 +222,7 @@ export async function createMeetingAction(formData: FormData) {
     meeting_at: meetingAt,
     method: str(formData.get("method")),
     summary: str(formData.get("summary")),
+    minutes_detail: str(formData.get("minutes_detail")),
     next_action_date: nextDate,
     next_action_text: nextText,
     created_by: ctx.userId,
@@ -235,8 +248,10 @@ export async function updateMeetingAction(formData: FormData) {
     .update({
       title: str(formData.get("title")) ?? "商談",
       meeting_date: str(formData.get("meeting_date")),
+      meeting_at: (() => { const md = str(formData.get("meeting_date")); const mt = str(formData.get("meeting_time")); return md && mt ? `${md}T${mt}:00+09:00` : null; })(),
       method: str(formData.get("method")),
       summary: str(formData.get("summary")),
+      minutes_detail: str(formData.get("minutes_detail")),
       next_action_date: str(formData.get("next_action_date")),
       next_action_text: str(formData.get("next_action_text")),
     })

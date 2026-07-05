@@ -23,7 +23,7 @@ import { STAGES, FORECAST_CATEGORIES, CATEGORIES, CATEGORY_MAP, STAGE_MAP, ACTIV
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/ui/badges";
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
-import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction } from "@/server/actions";
+import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction, saveOppResearchAction } from "@/server/actions";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince } from "@/lib/utils";
 
 export default async function OpportunityDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string } }) {
@@ -95,6 +95,21 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
         <div className="lg:col-span-2 space-y-5">
           <ScheduleSection oppId={o.id} schedule={schedule} hadFirstMeeting={!!o.first_meeting_date} templates={templates} />
 
+          <Section title="事前リサーチ・営業戦略" action={<span className="text-[11px] text-ink/40">将来はAIが自動リサーチ・戦略提案</span>}>
+            <form action={saveOppResearchAction} className="space-y-3">
+              <input type="hidden" name="id" value={o.id} />
+              <div>
+                <label className="label">事前リサーチ情報</label>
+                <textarea name="pre_research" rows={4} defaultValue={o.pre_research ?? ""} placeholder="企業概要・業界課題・想定AI活用テーマ・類似事例など（当面は担当営業がリサーチしコピペ）" className="input" />
+              </div>
+              <div>
+                <label className="label">事前営業戦略</label>
+                <textarea name="sales_strategy" rows={3} defaultValue={o.sales_strategy ?? ""} placeholder="リサーチを踏まえた初回トーク方針・聞くべき質問・提案の仮説" className="input" />
+              </div>
+              <button type="submit" className="btn-accent">保存</button>
+            </form>
+          </Section>
+
           <Section title={`商談（${meetings.length}回）`} action={<span className="text-xs text-ink/40">案件配下の個別商談</span>}>
             <MeetingList meetings={meetings} />
             <details className="mt-3">
@@ -138,7 +153,11 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                 </div>
                 <div>
                   <label className="label">議事・要点</label>
-                  <textarea name="summary" rows={2} className="input" placeholder="課題・予算・決裁者・反応・次の打ち手など" />
+                  <textarea name="summary" rows={2} className="input" placeholder="課題・予算・決裁者・反応・次の打ち手など（短い要約）" />
+                </div>
+                <div>
+                  <label className="label">議事録詳細</label>
+                  <textarea name="minutes_detail" rows={4} className="input" placeholder="議事録の全文・文字起こしを貼り付け（今後、要約はAIで自動生成予定）" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>

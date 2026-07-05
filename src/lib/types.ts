@@ -619,6 +619,10 @@ export interface Opportunity {
   category?: OpportunityCategory;
   /** 案件予測(buyer-journeyフェーズ): info_gathering/comparison/detailed_review/proposal/estimate/future */
   deal_phase?: string;
+  /** 事前リサーチ情報(将来AI自動、当初は手入力)。 */
+  pre_research?: string;
+  /** 事前営業戦略(リサーチを踏まえた仮説トーク方針)。 */
+  sales_strategy?: string;
   primary_product_id?: UUID;
   lead_source_id?: UUID;
   campaign_id?: UUID;
@@ -677,7 +681,11 @@ export interface Meeting {
   meeting_date?: string;
   meeting_at?: string;
   method?: string;
+  /** 議事・要点(短い要約)。 */
   summary?: string;
+  /** 議事録詳細(全文・文字起こし。将来AI要約の入力元)。 */
+  minutes_detail?: string;
+  pre_info?: string;
   next_action_date?: string;
   next_action_text?: string;
   created_by?: UUID;
