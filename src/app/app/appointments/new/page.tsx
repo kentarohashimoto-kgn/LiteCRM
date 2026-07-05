@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** インサイドセールス向け: アポ獲得をその場で登録(顧客検索/新規→担当→日時→案件化)。 */
 export default async function NewAppointmentPage() {
-  await requireCtx();
+  const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const [ownersR, productsR, sourcesR, bookingR] = await Promise.all([
     sb.from("profiles").select("id,display_name,email"),
@@ -24,9 +24,9 @@ export default async function NewAppointmentPage() {
     <div>
       <PageHeader
         title="アポ登録"
-        subtitle="架電でアポが取れたらその場で登録。顧客・担当者・案件（ヨミ=4.アポ）が一括作成され、カレンダーと営業担当のビューに即反映されます。"
+        subtitle="リード（展示会リスト）・既存顧客・新規のいずれからでも登録。リード起点は詳細情報が案件に自動コピーされ、リードはアポ決着に更新されます。"
       />
-      <AppointmentRegisterForm owners={owners} products={products} sources={sources} bookingLinks={bookingLinks} />
+      <AppointmentRegisterForm owners={owners} products={products} sources={sources} bookingLinks={bookingLinks} currentUserId={ctx.userId} />
     </div>
   );
 }

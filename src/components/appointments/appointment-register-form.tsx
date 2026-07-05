@@ -2,13 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, ExternalLink } from "lucide-react";
-import { registerAppointmentAction } from "@/server/actions/appointments";
+import { CheckCircle2, ExternalLink, Sparkles } from "lucide-react";
+import {
+  registerAppointmentAction,
+  searchApptLeadsAction,
+  getApptLeadDetailAction,
+  type ApptLeadHit,
+  type ApptLeadDetail,
+} from "@/server/actions/appointments";
 import { searchAccountsAction, type PickOption } from "@/server/actions/activities";
 import { cn } from "@/lib/utils";
 
 interface Option { id: string; name: string; }
 interface BookingLink { id: string; label: string; url: string; }
+type Mode = "lead" | "existing" | "new";
 
 function todayStr(): string {
   const d = new Date();
@@ -20,20 +27,32 @@ export function AppointmentRegisterForm({
   products,
   sources,
   bookingLinks,
+  currentUserId,
 }: {
   owners: Option[];
   products: Option[];
   sources: Option[];
   bookingLinks: BookingLink[];
+  currentUserId: string;
 }) {
-  // 顧客(既存検索 or 新規)
-  const [mode, setMode] = useState<"existing" | "new">("existing");
+  const [mode, setMode] = useState<Mode>("lead");
+
+  // リード検索
+  const [lead, setLead] = useState<ApptLeadDetail | null>(null);
+  const [leadQ, setLeadQ] = useState("");
+  const [leadOpts, setLeadOpts] = useState<ApptLeadHit[]>([]);
+  const [leadOpen, setLeadOpen] = useState(false);
+  const leadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 既存顧客検索
   const [account, setAccount] = useState<PickOption | null>(null);
+  const [accQ, setAccQ] = useState("");
+  const [accOpts, setAccOpts] = useState<PickOption[]>([]);
+  const [accOpen, setAccOpen] = useState(false);
+  const accTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 新規
   const [newCompany, setNewCompany] = useState("");
-  const [q, setQ] = useState("");
-  const [opts, setOpts] = useState<PickOption[]>([]);
-  const [open, setOpen] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 担当者
   const [cName, setCName] = useState("");
@@ -41,26 +60,47 @@ export function AppointmentRegisterForm({
   const [cPhone, setCPhone] = useState("");
   const [cEmail, setCEmail] = useState("");
 
-  // アポ
+  // アポ・獲得情報
   const [owner, setOwner] = useState("");
   const [date, setDate] = useState(todayStr());
   const [time, setTime] = useState("");
   const [product, setProduct] = useState("");
   const [source, setSource] = useState("");
-  const [preInfo, setPreInfo] = useState("");
+  const [memo, setMemo] = useState("");
+  const [acquiredBy, setAcquiredBy] = useState(currentUserId);
+  const [acquiredOn, setAcquiredOn] = useState(todayStr());
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ opportunityId: string; accountName: string } | null>(null);
 
   useEffect(() => {
-    if (!open) return;
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => setOpts(await searchAccountsAction(q)), 200);
-    return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [q, open]);
+    if (!leadOpen) return;
+    if (leadTimer.current) clearTimeout(leadTimer.current);
+    leadTimer.current = setTimeout(async () => setLeadOpts(await searchApptLeadsAction(leadQ)), 200);
+    return () => { if (leadTimer.current) clearTimeout(leadTimer.current); };
+  }, [leadQ, leadOpen]);
 
-  // 選択中の営業担当に一致しそうな予約URL(担当名がラベルに含まれる)を先頭に
+  useEffect(() => {
+    if (!accOpen) return;
+    if (accTimer.current) clearTimeout(accTimer.current);
+    accTimer.current = setTimeout(async () => setAccOpts(await searchAccountsAction(accQ)), 200);
+    return () => { if (accTimer.current) clearTimeout(accTimer.current); };
+  }, [accQ, accOpen]);
+
+  async function pickLead(hit: ApptLeadHit) {
+    setLeadOpen(false);
+    setLeadQ("");
+    const d = await getApptLeadDetailAction(hit.id);
+    if (!d) return;
+    setLead(d);
+    // リード情報を担当者欄にプレフィル(編集可)
+    setCName(d.contact_name ?? "");
+    setCTitle(d.job_title ?? "");
+    setCPhone(d.phone ?? "");
+    setCEmail(d.email ?? "");
+  }
+
   const ownerName = owners.find((o) => o.id === owner)?.name ?? "";
   const sortedLinks = [...bookingLinks].sort((a, b) => {
     const am = ownerName && (a.label.includes(ownerName) || ownerName.includes(a.label)) ? 0 : 1;
@@ -72,6 +112,7 @@ export function AppointmentRegisterForm({
     setSaving(true);
     setError(null);
     const res = await registerAppointmentAction({
+      leadId: mode === "lead" ? (lead?.id ?? null) : null,
       accountId: mode === "existing" ? (account?.id ?? null) : null,
       newCompanyName: mode === "new" ? newCompany : null,
       contactName: cName || null,
@@ -83,7 +124,9 @@ export function AppointmentRegisterForm({
       time: time || null,
       productId: product || null,
       leadSourceId: source || null,
-      preInfo: preInfo || null,
+      memo: memo || null,
+      acquiredById: acquiredBy || null,
+      acquiredOn: acquiredOn || null,
     });
     setSaving(false);
     if (res.ok) setDone({ opportunityId: res.opportunityId, accountName: res.accountName });
@@ -91,10 +134,10 @@ export function AppointmentRegisterForm({
   }
 
   function resetForNext() {
-    setDone(null); setAccount(null); setNewCompany(""); setQ("");
+    setDone(null); setLead(null); setAccount(null); setNewCompany(""); setLeadQ(""); setAccQ("");
     setCName(""); setCTitle(""); setCPhone(""); setCEmail("");
-    setDate(todayStr()); setTime(""); setPreInfo("");
-    // 営業担当・商材・流入経路は連続登録で使い回すことが多いため維持
+    setDate(todayStr()); setTime(""); setMemo("");
+    // 営業担当・商材・流入経路・獲得担当者・獲得日は連続登録のため維持
   }
 
   if (done) {
@@ -104,7 +147,7 @@ export function AppointmentRegisterForm({
         <div>
           <div className="text-lg font-bold text-ink">アポを登録しました</div>
           <div className="text-sm text-ink/60 mt-1">{done.accountName} ／ {date}{time ? ` ${time}` : ""}（担当: {ownerName}）</div>
-          <div className="text-xs text-ink/45 mt-1">案件（ヨミ: 4.アポ）としてカレンダー・案件一覧に反映されました。</div>
+          <div className="text-xs text-ink/45 mt-1">案件（ヨミ: 4.アポ）としてカレンダー・案件一覧に反映。リード起点の場合はリードもアポ決着に更新されました。</div>
         </div>
         <div className="flex items-center justify-center gap-3">
           <button type="button" onClick={resetForNext} className="btn-accent">続けてアポを登録</button>
@@ -117,14 +160,52 @@ export function AppointmentRegisterForm({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
       <div className="lg:col-span-2 space-y-4">
-        {/* 1. 顧客 */}
+        {/* 1. 相手先 */}
         <div className="card card-pad space-y-3">
-          <div className="text-sm font-semibold text-ink">1. 顧客（会社）</div>
+          <div className="text-sm font-semibold text-ink">1. 相手先</div>
           <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5 text-sm">
-            <button type="button" onClick={() => setMode("existing")} className={cn("rounded-lg px-3 py-1.5 font-medium", mode === "existing" ? "bg-teal-primary text-white" : "text-ink/55")}>既存から検索</button>
-            <button type="button" onClick={() => setMode("new")} className={cn("rounded-lg px-3 py-1.5 font-medium", mode === "new" ? "bg-teal-primary text-white" : "text-ink/55")}>新規登録</button>
+            <TabBtn active={mode === "lead"} onClick={() => setMode("lead")} label="リードから検索" />
+            <TabBtn active={mode === "existing"} onClick={() => setMode("existing")} label="既存顧客から検索" />
+            <TabBtn active={mode === "new"} onClick={() => setMode("new")} label="新規登録" />
           </div>
-          {mode === "existing" ? (
+
+          {mode === "lead" && (
+            lead ? (
+              <div className="rounded-xl border border-teal-primary/40 bg-teal-light/20 p-3 text-sm space-y-1">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={14} className="text-teal-deep" />
+                  <span className="font-semibold text-ink">{lead.company_name}</span>
+                  {lead.rank && <span className="pill bg-mist-soft text-ink/60 text-[10px]">ランク {lead.rank}</span>}
+                  <button type="button" onClick={() => { setLead(null); setCName(""); setCTitle(""); setCPhone(""); setCEmail(""); }} className="ml-auto text-xs text-ink/40 hover:text-rose-500">変更</button>
+                </div>
+                <div className="text-xs text-ink/60">
+                  {[lead.contact_name, lead.department, lead.job_title].filter(Boolean).join(" / ") || "担当者情報なし"}
+                </div>
+                <div className="text-[11px] text-ink/50">
+                  {[lead.raw_event && `獲得: ${lead.raw_event}`, lead.industry, lead.employee_size].filter(Boolean).join(" ・ ")}
+                </div>
+                {lead.notes && <div className="text-[11px] text-ink/50 line-clamp-2">メモ: {lead.notes}</div>}
+                <p className="text-[10px] text-teal-deep">↑ この詳細情報は案件の「事前リサーチ」に自動コピーされます</p>
+              </div>
+            ) : (
+              <div className="relative">
+                <input value={leadQ} onFocus={() => setLeadOpen(true)} onChange={(e) => { setLeadQ(e.target.value); setLeadOpen(true); }} placeholder="会社名・担当者名でリードを検索（展示会リスト等）" className="input" />
+                {leadOpen && leadOpts.length > 0 && (
+                  <div className="absolute z-30 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-black/10 bg-white shadow-lg">
+                    {leadOpts.map((h) => (
+                      <button key={h.id} type="button" onClick={() => pickLead(h)} className="block w-full text-left px-3 py-2 text-sm hover:bg-mist-soft">
+                        <span className="font-medium">{h.company}</span>
+                        <span className="text-xs text-ink/45 ml-2">{[h.contact, h.event].filter(Boolean).join(" ・ ")}</span>
+                        {h.rank && <span className="pill bg-mist-soft text-ink/55 text-[10px] ml-2">{h.rank}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          )}
+
+          {mode === "existing" && (
             account ? (
               <div className="flex items-center gap-2 rounded-lg border border-black/10 bg-mist-soft/40 px-3 py-2 text-sm">
                 <span className="flex-1">{account.label}</span>
@@ -132,11 +213,11 @@ export function AppointmentRegisterForm({
               </div>
             ) : (
               <div className="relative">
-                <input value={q} onFocus={() => setOpen(true)} onChange={(e) => { setQ(e.target.value); setOpen(true); }} placeholder="会社名で検索（見つからなければ「新規登録」へ）" className="input" />
-                {open && opts.length > 0 && (
+                <input value={accQ} onFocus={() => setAccOpen(true)} onChange={(e) => { setAccQ(e.target.value); setAccOpen(true); }} placeholder="会社名で既存顧客を検索" className="input" />
+                {accOpen && accOpts.length > 0 && (
                   <div className="absolute z-30 mt-1 w-full max-h-56 overflow-auto rounded-lg border border-black/10 bg-white shadow-lg">
-                    {opts.map((o) => (
-                      <button key={o.id} type="button" onClick={() => { setAccount(o); setOpen(false); setQ(""); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-mist-soft">
+                    {accOpts.map((o) => (
+                      <button key={o.id} type="button" onClick={() => { setAccount(o); setAccOpen(false); setAccQ(""); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-mist-soft">
                         {o.label}{o.sub && <span className="text-ink/40 ml-1 text-xs">{o.sub}</span>}
                       </button>
                     ))}
@@ -144,9 +225,12 @@ export function AppointmentRegisterForm({
                 )}
               </div>
             )
-          ) : (
+          )}
+
+          {mode === "new" && (
             <input value={newCompany} onChange={(e) => setNewCompany(e.target.value)} placeholder="会社名（同名があれば自動で既存に紐づけます）" className="input" />
           )}
+
           <div className="grid grid-cols-2 gap-3">
             <input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="担当者名（任意）" className="input" />
             <input value={cTitle} onChange={(e) => setCTitle(e.target.value)} placeholder="役職（任意）" className="input" />
@@ -184,7 +268,7 @@ export function AppointmentRegisterForm({
               </select>
             </div>
             <div>
-              <label className="label">流入経路（任意）</label>
+              <label className="label">流入経路（任意・リード起点は自動）</label>
               <select value={source} onChange={(e) => setSource(e.target.value)} className="input">
                 <option value="">—</option>
                 {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -192,8 +276,20 @@ export function AppointmentRegisterForm({
             </div>
           </div>
           <div>
-            <label className="label">事前情報（課題・温度感・架電メモ）</label>
-            <textarea value={preInfo} onChange={(e) => setPreInfo(e.target.value)} rows={3} placeholder="架電で把握した課題・関心・注意点。案件の「事前リサーチ」に保存され、営業担当が商談前に確認できます" className="input" />
+            <label className="label">アポ獲得メモ（話した内容）</label>
+            <textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={3} placeholder="架電で話した内容・課題・温度感・注意点。リード詳細と一緒に案件の「事前リサーチ」へ保存され、営業担当が商談前に確認できます" className="input" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">アポ獲得担当者</label>
+              <select value={acquiredBy} onChange={(e) => setAcquiredBy(e.target.value)} className="input">
+                {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">獲得日</label>
+              <input type="date" value={acquiredOn} onChange={(e) => setAcquiredOn(e.target.value)} className="input" />
+            </div>
           </div>
         </div>
 
@@ -203,7 +299,7 @@ export function AppointmentRegisterForm({
         </button>
       </div>
 
-      {/* 予約URL(日程調整しながら開ける) */}
+      {/* 予約URL */}
       <div className="card card-pad space-y-2">
         <div className="text-sm font-semibold text-ink">日程調整（各担当の予約URL）</div>
         <p className="text-[11px] text-ink/45">お客様と通話しながら担当の空き枠を確認できます。営業担当を選ぶと該当URLが先頭に並びます。</p>
@@ -224,5 +320,13 @@ export function AppointmentRegisterForm({
         </ul>
       </div>
     </div>
+  );
+}
+
+function TabBtn({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button type="button" onClick={onClick} className={cn("rounded-lg px-3 py-1.5 font-medium", active ? "bg-teal-primary text-white" : "text-ink/55")}>
+      {label}
+    </button>
   );
 }

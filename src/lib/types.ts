@@ -604,6 +604,10 @@ export interface Opportunity {
   appointment_at?: string;
   /** 実施済み商談(meetings)の件数。カレンダーで「初回/N回目」表示に使用。 */
   meeting_count?: number;
+  /** アポ獲得担当者(インサイドセールス)。 */
+  appt_acquired_by?: UUID;
+  /** アポ獲得日。 */
+  appt_acquired_on?: string;
   amount: number;
   gross_profit?: number;
   gross_profit_rate?: number;

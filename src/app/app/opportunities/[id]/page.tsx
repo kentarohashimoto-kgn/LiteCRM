@@ -317,6 +317,14 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
               <Row label="分類">{o.category ? CATEGORY_MAP[o.category]?.label : "—"}</Row>
               <Row label="初回商談日">{formatDateFull(o.first_meeting_date)}</Row>
               <Row label="担当営業"><span className="flex items-center gap-1.5"><Avatar user={o.owner} size={22} />{o.owner?.name}</span></Row>
+              {(o.appt_acquired_by || o.appt_acquired_on) && (
+                <Row label="アポ獲得">
+                  <span className="text-xs">
+                    {ws.usersById.get(o.appt_acquired_by ?? "")?.name ?? "—"}
+                    {o.appt_acquired_on ? `（${formatDateFull(o.appt_acquired_on)}）` : ""}
+                  </span>
+                </Row>
+              )}
               <Row label="主商材">{o.product?.name ?? "—"}</Row>
               <Row label="流入経路">{o.leadSource?.name ?? "—"}</Row>
               <Row label="最終活動">{since != null ? `${since}日前` : "—"}</Row>
