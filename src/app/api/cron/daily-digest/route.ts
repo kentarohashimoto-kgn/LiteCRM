@@ -138,8 +138,60 @@ export async function GET(req: Request) {
     }
   }
 
+  // BO期日チェック(助成金マイルストーン/展示会タスク): 3日以内・超過を担当者(なければBOメンバー全員)へ通知
+  let boNotified = 0;
+  try {
+    const in3 = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const [{ data: tenant }, msR, taskR, boMembersR] = await Promise.all([
+      admin.from("tenants").select("id").limit(1).maybeSingle(),
+      admin
+        .from("subsidy_milestones")
+        .select("label, due_date, subsidy_cases(account_name, training_name, assignee_user_id, status)")
+        .eq("status", "todo")
+        .lte("due_date", in3),
+      admin
+        .from("expo_tasks")
+        .select("name, due_date, assignee_user_id, expo_projects(name, status)")
+        .in("status", ["todo", "doing"])
+        .lte("due_date", in3),
+      admin.from("memberships").select("user_id").eq("status", "active").in("role", ["back_office", "hr", "owner", "admin"]),
+    ]);
+    const boUsers = (boMembersR.data ?? []).map((m) => m.user_id as string);
+    const byUser = new Map<string, string[]>();
+    const push = (uid: string | null, line: string) => {
+      const targets = uid ? [uid] : boUsers;
+      for (const u of targets) {
+        const arr = byUser.get(u) ?? [];
+        arr.push(line);
+        byUser.set(u, arr);
+      }
+    };
+    for (const m of (msR.data ?? []) as unknown as { label: string; due_date: string; subsidy_cases: { account_name: string; training_name: string; assignee_user_id: string | null; status: string } | null }[]) {
+      if (m.subsidy_cases?.status !== "open") continue;
+      push(m.subsidy_cases?.assignee_user_id ?? null, `助成金: ${m.subsidy_cases?.account_name ?? ""} ${m.label}（期日 ${m.due_date}${m.due_date < today ? " 超過" : ""}）`);
+    }
+    for (const t of (taskR.data ?? []) as unknown as { name: string; due_date: string; assignee_user_id: string | null; expo_projects: { name: string; status: string } | null }[]) {
+      if (t.expo_projects?.status !== "confirmed") continue;
+      push(t.assignee_user_id, `展示会: ${t.expo_projects?.name ?? ""}｜${t.name}（期日 ${t.due_date}${t.due_date < today ? " 超過" : ""}）`);
+    }
+    if (tenant && byUser.size > 0) {
+      const rows = Array.from(byUser.entries()).map(([uid, lines2]) => ({
+        tenant_id: tenant.id as string,
+        user_id: uid,
+        kind: "bo_due",
+        title: `バックオフィスの期日（3日以内/超過 ${lines2.length}件）`,
+        body: lines2.slice(0, 8).join("\n") + (lines2.length > 8 ? `\n他${lines2.length - 8}件` : ""),
+        href: "/app/bo",
+      }));
+      const { error } = await admin.from("notifications").insert(rows);
+      if (!error) boNotified = rows.length;
+    }
+  } catch {
+    /* BO通知失敗は無視 */
+  }
+
   if (!webhook) {
-    return NextResponse.json({ ok: true, owners: owners.length, pending, purged, notified, skipped: "SLACK_WEBHOOK_URL not configured" });
+    return NextResponse.json({ ok: true, owners: owners.length, pending, purged, notified, boNotified, skipped: "SLACK_WEBHOOK_URL not configured" });
   }
   const res = await fetch(webhook, {
     method: "POST",
@@ -147,5 +199,5 @@ export async function GET(req: Request) {
     body: JSON.stringify({ text: lines.join("\n") }),
   });
 
-  return NextResponse.json({ ok: res.ok, owners: owners.length, pending, purged, notified });
+  return NextResponse.json({ ok: res.ok, owners: owners.length, pending, purged, notified, boNotified });
 }

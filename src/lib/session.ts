@@ -49,3 +49,17 @@ export async function requireCtx(): Promise<Ctx> {
   if (!ctx) redirect("/login");
   return ctx;
 }
+
+/** BO領域(事務/人事/管理者)専用ページで使用。権限がなければ営業トップへ。 */
+export async function requireBoCtx(): Promise<Ctx> {
+  const ctx = await requireCtx();
+  if (!["back_office", "hr", "owner", "admin"].includes(ctx.role)) redirect("/app/dashboard");
+  return ctx;
+}
+
+/** 人事領域(人事/管理者)専用ページで使用。権限がなければBOトップへ。 */
+export async function requireHrCtx(): Promise<Ctx> {
+  const ctx = await requireCtx();
+  if (!["hr", "owner", "admin"].includes(ctx.role)) redirect("/app/bo");
+  return ctx;
+}

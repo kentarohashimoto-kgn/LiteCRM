@@ -15,6 +15,8 @@ export type Role =
   | "partner"
   | "delivery"
   | "finance"
+  | "back_office"
+  | "hr"
   | "viewer";
 
 export type OpportunityStage =

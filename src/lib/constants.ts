@@ -74,8 +74,17 @@ export const ROLES: { key: Role; label: string; description: string }[] = [
   { key: "partner", label: "パートナー営業", description: "自分の紹介案件のみ閲覧" },
   { key: "delivery", label: "講師/PM", description: "受注後案件・顧客情報のみ閲覧" },
   { key: "finance", label: "経理", description: "契約・請求関連のみ閲覧" },
+  { key: "back_office", label: "事務(バックオフィス)", description: "BO領域(助成金/展示会/事例/アンケート)のみ。営業データは不可視" },
+  { key: "hr", label: "人事", description: "BO領域＋人材タレント。営業データは不可視" },
   { key: "viewer", label: "閲覧者", description: "閲覧のみ" },
 ];
+
+/** バックオフィス領域(BO)を閲覧できるロール */
+export const BO_ROLES: Role[] = ["back_office", "hr", "owner", "admin"];
+/** 人事領域を閲覧できるロール */
+export const HR_ROLES: Role[] = ["hr", "owner", "admin"];
+/** 営業領域を持たない(BO専任)ロール */
+export const BO_ONLY_ROLES: Role[] = ["back_office", "hr"];
 
 export const ROLE_MAP = Object.fromEntries(ROLES.map((r) => [r.key, r]));
 

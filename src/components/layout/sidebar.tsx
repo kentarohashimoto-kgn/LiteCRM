@@ -21,11 +21,15 @@ import {
   UserCog,
   Settings,
   Sun,
+  BadgeCheck,
+  BookOpen,
+  Briefcase,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/constants";
+import type { Role } from "@/lib/types";
 import { RecentList } from "@/components/layout/recent-items";
 
 const groups: { heading: string; items: { href: string; label: string; icon: React.ElementType }[] }[] = [
@@ -75,10 +79,42 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
   },
 ];
 
+// バックオフィス領域(事務/人事/管理者)のナビ
+const boGroups: typeof groups = [
+  {
+    heading: "バックオフィス",
+    items: [
+      { href: "/app/bo", label: "BOダッシュボード", icon: LayoutDashboard },
+      { href: "/app/bo/subsidies", label: "助成金トラッカー", icon: BadgeCheck },
+      { href: "/app/bo/expos", label: "展示会準備WBS", icon: Presentation },
+      { href: "/app/bo/cases", label: "事例・インタビュー", icon: BookOpen },
+      { href: "/app/bo/surveys", label: "講師アンケート", icon: ClipboardList },
+    ],
+  },
+];
+const hrGroup: (typeof groups)[number] = {
+  heading: "人事",
+  items: [
+    { href: "/app/hr/openings", label: "求人案件", icon: Briefcase },
+    { href: "/app/hr/candidates", label: "候補者", icon: Users },
+    { href: "/app/hr/talents", label: "タレント台帳・評価", icon: Star },
+  ],
+};
+
+/** ロールに応じたナビ(営業⇔BOの相互不可視、管理者は全部)。 */
+function groupsFor(role: Role): typeof groups {
+  if (role === "back_office") return boGroups;
+  if (role === "hr") return [...boGroups, hrGroup];
+  if (role === "owner" || role === "admin") return [...groups, ...boGroups, hrGroup];
+  return groups; // 営業系ロール
+}
+
 const STORAGE_KEY = "catorce.sidebar.collapsed";
 
-export function Sidebar() {
+export function Sidebar({ role }: { role: Role }) {
   const pathname = usePathname();
+  const navGroups = groupsFor(role);
+  const boOnly = role === "back_office" || role === "hr";
   const [collapsed, setCollapsed] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -136,7 +172,7 @@ export function Sidebar() {
         </button>
       </div>
       <nav className={cn("flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-5", collapsed ? "px-2" : "px-3")}>
-        {groups.map((g) => (
+        {navGroups.map((g) => (
           <div key={g.heading}>
             {collapsed ? (
               <div className="mx-2 mb-1.5 border-t border-black/[0.06]" />
@@ -167,7 +203,7 @@ export function Sidebar() {
           </div>
         ))}
       </nav>
-      <RecentList collapsed={collapsed} />
+      {!boOnly && <RecentList collapsed={collapsed} />}
     </aside>
   );
 }
