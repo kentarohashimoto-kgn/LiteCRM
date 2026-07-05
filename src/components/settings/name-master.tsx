@@ -3,19 +3,21 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
-import { saveLeadSourceAction, deleteLeadSourceAction, saveCampaignAction, deleteCampaignAction } from "@/server/actions/masters";
+import { saveLeadSourceAction, deleteLeadSourceAction, saveCampaignAction, deleteCampaignAction, saveBookingLinkAction, deleteBookingLinkAction } from "@/server/actions/masters";
 import { cn } from "@/lib/utils";
 
 export interface NameRow { id: string; name: string; sub: string | null; }
-type Kind = "lead_source" | "campaign";
+type Kind = "lead_source" | "campaign" | "booking";
 
 async function save(kind: Kind, id: string | null, name: string, sub: string | null) {
-  return kind === "lead_source"
-    ? saveLeadSourceAction({ id, name, description: sub, status: "active" })
-    : saveCampaignAction({ id, name, channel: sub, notes: null });
+  if (kind === "lead_source") return saveLeadSourceAction({ id, name, description: sub, status: "active" });
+  if (kind === "booking") return saveBookingLinkAction({ id, label: name, url: sub ?? "" });
+  return saveCampaignAction({ id, name, channel: sub, notes: null });
 }
 async function remove(kind: Kind, id: string) {
-  return kind === "lead_source" ? deleteLeadSourceAction({ id }) : deleteCampaignAction({ id });
+  if (kind === "lead_source") return deleteLeadSourceAction({ id });
+  if (kind === "booking") return deleteBookingLinkAction({ id });
+  return deleteCampaignAction({ id });
 }
 
 export function NameMaster({ kind, rows, subLabel }: { kind: Kind; rows: NameRow[]; subLabel: string }) {

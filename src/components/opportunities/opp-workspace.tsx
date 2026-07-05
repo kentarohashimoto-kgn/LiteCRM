@@ -7,7 +7,7 @@ import { leanToOppView } from "@/lib/data/opps-page";
 import { fetchAllOppsLeanAction } from "@/server/actions/opportunities";
 import { OppPaginatedTable } from "./opp-paginated-table";
 import { OppViews } from "./opp-views";
-import { AppointmentCalendarPro } from "./appointment-calendar-pro";
+import { AppointmentCalendarPro, type BookingLink } from "./appointment-calendar-pro";
 import { cn } from "@/lib/utils";
 
 interface Option { id: string; name: string; }
@@ -22,6 +22,7 @@ export function OppWorkspace({
   products,
   sources,
   campaigns,
+  bookingLinks = [],
 }: {
   initialRows: OppView[];
   initialTotal: number;
@@ -31,6 +32,7 @@ export function OppWorkspace({
   products: Option[];
   sources: Option[];
   campaigns: Option[];
+  bookingLinks?: BookingLink[];
 }) {
   const [view, setView] = useState<View>("list");
   const [allOpps, setAllOpps] = useState<OppView[] | null>(null);
@@ -69,7 +71,7 @@ export function OppWorkspace({
         />
       ) : allOpps ? (
         view === "calendar" ? (
-          <AppointmentCalendarPro opps={allOpps} owners={owners} />
+          <AppointmentCalendarPro opps={allOpps} owners={owners} bookingLinks={bookingLinks} />
         ) : (
           <OppViews opps={allOpps} owners={owners} products={products} sources={sources} campaigns={campaigns} controlledView={view} hideToggle />
         )

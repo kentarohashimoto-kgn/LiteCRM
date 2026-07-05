@@ -20,6 +20,7 @@ export const DEAL_FIELDS: { key: string; label: string; hints: string[]; require
   { key: "wonDate", label: "受注日", hints: ["受注日"] },
   { key: "salesMonth", label: "売上月", hints: ["売上月"] },
   { key: "firstMeeting", label: "初回営業日", hints: ["初回営業日", "初回商談日", "初回"] },
+  { key: "firstMeetingTime", label: "初回商談 時間", hints: ["時間"] },
   { key: "nextAcDate", label: "次回AC日", hints: ["次回AC日", "次回アクション日", "次回ac"] },
   { key: "nextAcText", label: "次回アクション内容", hints: ["次回アクション内容", "次回アクション"] },
   { key: "monthly", label: "月額単価", hints: ["月額単価", "月額"] },
@@ -56,7 +57,7 @@ export interface DealRow {
   rowKey: string; // クライアント生成の一意キー(議事録ひも付け用)
   company?: string; yomi?: string; product?: string; source?: string; detail?: string; owner?: string;
   sales?: string; fsales?: string; expMonth?: string; wonDate?: string; salesMonth?: string;
-  firstMeeting?: string; nextAcDate?: string; nextAcText?: string; monthly?: string; emp?: string; scale?: string;
+  firstMeeting?: string; firstMeetingTime?: string; nextAcDate?: string; nextAcText?: string; monthly?: string; emp?: string; scale?: string;
   lostReason?: string; memo?: string; minutes?: string; proposal?: string;
 }
 

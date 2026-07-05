@@ -1,4 +1,5 @@
 import { getWorkspaceLite } from "@/lib/data/workspace";
+import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/badges";
 import { ROLES, ROLE_MAP, STAGES, YOMI_OPTIONS, FORECAST_CATEGORIES, DEAL_PHASES } from "@/lib/constants";
@@ -31,6 +32,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
   });
   const sources = ws.leadSources.map((s) => ({ id: s.id, name: s.name, sub: (s as { description?: string }).description ?? null }));
   const campaigns = ws.campaigns.map((c) => ({ id: c.id, name: c.name, sub: (c as { channel?: string }).channel ?? null }));
+  const sb = getSupabaseServer();
+  const { data: bookingRows } = await sb.from("booking_links").select("id,label,url,sort_order").order("sort_order");
+  const bookings = (bookingRows ?? []).map((b) => ({ id: b.id as string, name: b.label as string, sub: (b.url as string) ?? null }));
 
   return (
     <div>
@@ -82,6 +86,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
 
         <Section title="展示会・施策マスタ">
           <NameMaster kind="campaign" rows={campaigns} subLabel="チャネル" />
+        </Section>
+
+        <Section title="各担当の予約URL（カレンダー下部に表示）" className="lg:col-span-2">
+          <NameMaster kind="booking" rows={bookings} subLabel="予約URL" />
         </Section>
       </div>
 

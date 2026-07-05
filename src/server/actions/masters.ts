@@ -136,3 +136,27 @@ export async function deleteCampaignAction(input: { id: string }): Promise<Resul
   revalidatePath("/app/settings");
   return { ok: true };
 }
+
+// ===================== 予約URL(booking_links) =====================
+export async function saveBookingLinkAction(input: { id: string | null; label: string; url: string }): Promise<Result> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  if (!input.label.trim() || !input.url.trim()) return { ok: false, error: "担当名とURLを入力してください" };
+  const row = { label: input.label.trim(), url: input.url.trim() };
+  const { error } = input.id
+    ? await sb.from("booking_links").update(row).eq("id", input.id)
+    : await sb.from("booking_links").insert({ ...row, tenant_id: ctx.tenantId });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/app/settings");
+  revalidatePath("/app/opportunities");
+  return { ok: true };
+}
+export async function deleteBookingLinkAction(input: { id: string }): Promise<Result> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { error } = await sb.from("booking_links").delete().eq("id", input.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/app/settings");
+  revalidatePath("/app/opportunities");
+  return { ok: true };
+}

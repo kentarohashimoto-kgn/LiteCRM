@@ -107,9 +107,15 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                     <label className="label">タイトル</label>
                     <input name="title" required className="input" placeholder="例：初回商談 / 2回目 提案" />
                   </div>
-                  <div>
-                    <label className="label">商談日</label>
-                    <input name="meeting_date" type="date" className="input" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="label">商談日</label>
+                      <input name="meeting_date" type="date" className="input" />
+                    </div>
+                    <div>
+                      <label className="label">時間</label>
+                      <input name="meeting_time" type="time" className="input" />
+                    </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">

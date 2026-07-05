@@ -196,6 +196,8 @@ export async function createMeetingAction(formData: FormData) {
     redirect("/app/opportunities?error=" + encodeURIComponent("案件が指定されていません"));
   }
   const meetingDate = str(formData.get("meeting_date"));
+  const meetingTime = str(formData.get("meeting_time"));
+  const meetingAt = meetingDate && meetingTime ? `${meetingDate}T${meetingTime}:00+09:00` : null;
   const nextDate = str(formData.get("next_action_date"));
   const nextText = str(formData.get("next_action_text"));
   await sb.from("meetings").insert({
@@ -205,6 +207,7 @@ export async function createMeetingAction(formData: FormData) {
     owner_user_id: str(formData.get("owner_user_id")) ?? ctx.userId,
     title: str(formData.get("title")) ?? "商談",
     meeting_date: meetingDate,
+    meeting_at: meetingAt,
     method: str(formData.get("method")),
     summary: str(formData.get("summary")),
     next_action_date: nextDate,
@@ -1722,6 +1725,15 @@ export async function importNotionDealsAction(
       const m = (v ?? "").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
       return m ? `${m[1]}-${String(+m[2]).padStart(2, "0")}-${String(+m[3]).padStart(2, "0")}` : null;
     };
+    // 日付＋時間(U列) → アポ日時(JST)。時間例: "10:00" / "14時30分" / "10"。
+    const apptAt = (dateStr: string | null, timeV?: string): string | null => {
+      if (!dateStr) return null;
+      const tm = (timeV ?? "").match(/(\d{1,2})\D*(\d{1,2})?/);
+      if (!tm) return null;
+      const hh = String(Math.min(23, +tm[1])).padStart(2, "0");
+      const mm = String(Math.min(59, +(tm[2] ?? 0))).padStart(2, "0");
+      return `${dateStr}T${hh}:${mm}:00+09:00`;
+    };
 
     // 案件レコード
     const oppRecords = rows.filter((r) => (r.company ?? "").trim()).map((r) => {
@@ -1751,6 +1763,7 @@ export async function importNotionDealsAction(
           expected_close_date: closeDate,
           expected_revenue_month: d(r.salesMonth) ?? d(r.expMonth) ?? d(r.wonDate),
           first_meeting_date: d(r.firstMeeting),
+          appointment_at: apptAt(d(r.firstMeeting), r.firstMeetingTime),
           next_action_date: d(r.nextAcDate),
           next_action_text: t(r.nextAcText),
           lost_reason: lost ? t(r.lostReason) : null,
@@ -1786,6 +1799,7 @@ export async function importNotionDealsAction(
         owner_user_id: ownerOf(r.owner) ?? fallbackOwner,
         title: "商談ログ(Notion移行)",
         meeting_date: d(r.firstMeeting),
+        meeting_at: apptAt(d(r.firstMeeting), r.firstMeetingTime),
         method: "商談",
         pre_info: t(r.memo),
         summary: t(r.minutes),

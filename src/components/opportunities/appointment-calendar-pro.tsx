@@ -46,7 +46,9 @@ function ownerColor(o: OppView): string { return o.owner?.avatarColor ?? "#008C8
 
 interface Appt { o: OppView; at: Date; timed: boolean; }
 
-export function AppointmentCalendarPro({ opps, owners }: { opps: OppView[]; owners: Option[] }) {
+export interface BookingLink { id: string; label: string; url: string; }
+
+export function AppointmentCalendarPro({ opps, owners, bookingLinks = [] }: { opps: OppView[]; owners: Option[]; bookingLinks?: BookingLink[] }) {
   const [items, setItems] = useState<OppView[]>(opps);
   useEffect(() => setItems(opps), [opps]);
   const [view, setView] = useState<View>("week");
@@ -65,6 +67,13 @@ export function AppointmentCalendarPro({ opps, owners }: { opps: OppView[]; owne
     const m = new Map<string, Appt[]>();
     for (const a of appts) { const k = ymd(a.at); if (!m.has(k)) m.set(k, []); m.get(k)!.push(a); }
     return m;
+  }, [appts]);
+
+  // 凡例: 現在表示中のアポに含まれる担当と色。
+  const legend = useMemo(() => {
+    const m = new Map<string, { name: string; color: string }>();
+    for (const a of appts) if (a.o.owner) m.set(a.o.owner.id, { name: a.o.owner.name, color: ownerColor(a.o) });
+    return Array.from(m.values());
   }, [appts]);
 
   async function setTime(o: OppView, localValue: string) {
@@ -109,12 +118,38 @@ export function AppointmentCalendarPro({ opps, owners }: { opps: OppView[]; owne
         <span className="text-xs text-ink/45">アポ {appts.length}件</span>
       </div>
 
+      {/* 凡例(担当↔色) */}
+      {legend.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1">
+          <span className="text-[11px] text-ink/40">担当:</span>
+          {legend.map((l) => (
+            <span key={l.name} className="inline-flex items-center gap-1 text-[11px] text-ink/70">
+              <span className="w-3 h-3 rounded-sm" style={{ background: l.color }} />{l.name}
+            </span>
+          ))}
+        </div>
+      )}
+
       {view === "list" && <ListView byDay={byDay} onSetTime={setTime} />}
       {view === "month" && <MonthView cursor={cursor} byDay={byDay} onPickDay={(d) => { setCursor(d); setView("day"); }} />}
       {view === "week" && <TimeGrid days={Array.from({ length: 7 }, (_, i) => addDays(wkStart, i))} byDay={byDay} onSetTime={setTime} />}
       {view === "day" && <TimeGrid days={[cursor]} byDay={byDay} onSetTime={setTime} wide />}
 
-      <p className="text-[11px] text-ink/40">※ アポ=ヨミ「4.アポ」の案件。時刻を設定した案件は時間軸上に配置、未設定は各日の「終日」帯に表示（全件表示）。バーの左に担当・回数を表示します。</p>
+      <p className="text-[11px] text-ink/40">※ アポ=ヨミ「4.アポ」の案件。時刻を設定した案件は時間軸上に配置、未設定は各日の「終日」帯に表示（全件表示）。バーは担当色で着色（上部の凡例参照）。回数は実施済み商談数から算出。</p>
+
+      {/* 各担当の空き時間(予約URL) */}
+      {bookingLinks.length > 0 && (
+        <div className="card card-pad">
+          <div className="text-xs font-semibold text-ink/60 mb-2">各担当の空き時間（予約）</div>
+          <div className="flex flex-wrap gap-2">
+            {bookingLinks.map((b) => (
+              <a key={b.id} href={b.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-teal-primary/30 bg-teal-light/30 px-2.5 py-1.5 text-xs font-medium text-teal-deep hover:bg-teal-light">
+                {b.label} <span className="text-teal-deep/50">↗</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
