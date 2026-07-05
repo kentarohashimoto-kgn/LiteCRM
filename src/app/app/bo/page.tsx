@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BadgeCheck, BookOpen, ClipboardList, Presentation } from "lucide-react";
+import { BadgeCheck, BookOpen, CalendarCheck, ClipboardList, Presentation } from "lucide-react";
 import { requireBoCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const MODULES = [
   { href: "/app/bo/subsidies", label: "助成金トラッカー", desc: "事前説明会・事前申請・実績報告の納期管理", icon: BadgeCheck },
+  { href: "/app/bo/followups", label: "研修後フォロー", desc: "1・3・6ヶ月後Mtgと活用度・アップセルの追跡", icon: CalendarCheck },
   { href: "/app/bo/expos", label: "展示会準備WBS", desc: "確定でタスク自動生成・人員アサイン・納期リマインド", icon: Presentation },
   { href: "/app/bo/cases", label: "事例・インタビュー", desc: "研修受講会社の事例化パイプライン", icon: BookOpen },
   { href: "/app/bo/surveys", label: "講師アンケート", desc: "講師別・研修種類別・受講者層別の分析", icon: ClipboardList },
@@ -22,7 +23,7 @@ export default async function BoHomePage() {
   const today = new Date().toISOString().slice(0, 10);
   const in14 = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
 
-  const [msR, taskR] = await Promise.all([
+  const [msR, taskR, fuR] = await Promise.all([
     sb
       .from("subsidy_milestones")
       .select("id, label, due_date, subsidy_cases(account_name, training_name)")
@@ -34,6 +35,13 @@ export default async function BoHomePage() {
       .from("expo_tasks")
       .select("id, name, due_date, project_id, expo_projects(name)")
       .in("status", ["todo", "doing"])
+      .lte("due_date", in14)
+      .order("due_date")
+      .limit(20),
+    sb
+      .from("fu_meetings")
+      .select("id, round_months, due_date, schedule_status, fu_cases(account_name, training_name, status)")
+      .in("schedule_status", ["not_scheduled", "scheduled"])
       .lte("due_date", in14)
       .order("due_date")
       .limit(20),
@@ -52,6 +60,14 @@ export default async function BoHomePage() {
       due: t.due_date,
       href: `/app/bo/expos/${t.project_id}`,
     })),
+    ...((fuR.data ?? []) as unknown as { id: string; round_months: number; due_date: string; schedule_status: string; fu_cases: { account_name: string; training_name: string | null; status: string } | null }[])
+      .filter((m) => m.fu_cases?.status === "open")
+      .map((m) => ({
+        label: `研修後FU: ${m.round_months}ヶ月後Mtg${m.schedule_status === "not_scheduled" ? "（未調整）" : ""}`,
+        sub: `${m.fu_cases?.account_name ?? ""}｜${m.fu_cases?.training_name ?? ""}`,
+        due: m.due_date,
+        href: "/app/bo/followups",
+      })),
   ].sort((a, b) => a.due.localeCompare(b.due));
   const overdue = items.filter((i) => i.due < today);
 

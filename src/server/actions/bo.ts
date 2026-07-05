@@ -349,3 +349,72 @@ export async function deleteTrainingSessionAction(formData: FormData): Promise<v
   await sb.from("training_sessions").delete().eq("id", String(formData.get("id")));
   revalidatePath("/app/bo/surveys");
 }
+
+/* ============================================================
+ * BO-6 研修後フォローアップ(1/3/6ヶ月後Mtg)
+ * ============================================================ */
+
+/** FU対象を手動追加(受注案件はDBトリガーで自動追加されるため、案件外の研修など向け)。 */
+export async function createFuCaseAction(formData: FormData): Promise<void> {
+  const ctx = await requireBoCtx();
+  const sb = getSupabaseServer();
+  const accountName = String(formData.get("account_name") || "").trim();
+  const base = String(formData.get("won_date") || "") || new Date().toISOString().slice(0, 10);
+  if (!accountName) return;
+  const { data: c } = await sb
+    .from("fu_cases")
+    .insert({
+      tenant_id: ctx.tenantId,
+      account_name: accountName,
+      training_name: String(formData.get("training_name") || "").trim() || null,
+      won_date: base,
+      assignee_user_id: ctx.userId,
+    })
+    .select("id")
+    .maybeSingle();
+  if (!c) return;
+  await sb.from("fu_meetings").insert(
+    [1, 3, 6].map((m) => ({ tenant_id: ctx.tenantId, case_id: c.id, round_months: m, due_date: addMonths(base, m) })),
+  );
+  revalidatePath("/app/bo/followups");
+  revalidatePath("/app/bo");
+}
+
+/** FUケースの完了/対象外/再開/削除。 */
+export async function updateFuCaseAction(formData: FormData): Promise<void> {
+  await requireBoCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  const op = String(formData.get("op"));
+  if (op === "delete") await sb.from("fu_cases").delete().eq("id", id);
+  else await sb.from("fu_cases").update({ status: op }).eq("id", id);
+  revalidatePath("/app/bo/followups");
+  revalidatePath("/app/bo");
+}
+
+/** FU Mtg(1/3/6ヶ月後)の日程・実施・AI活用度・課題・提案・アップセルを保存。 */
+export async function updateFuMeetingAction(formData: FormData): Promise<void> {
+  await requireBoCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const scoreRaw = String(formData.get("ai_score") || "");
+  const score = scoreRaw ? Math.max(0, Math.min(100, Number(scoreRaw))) : null;
+  const heldOn = String(formData.get("held_on") || "") || null;
+  const due = String(formData.get("due_date") || "");
+  await sb
+    .from("fu_meetings")
+    .update({
+      ...(due ? { due_date: due } : {}),
+      schedule_status: String(formData.get("schedule_status") || "not_scheduled"),
+      held_on: heldOn,
+      ai_score: Number.isFinite(score as number) ? score : null,
+      issues: String(formData.get("issues") || "").trim() || null,
+      proposal_done: formData.get("proposal_done") === "on",
+      upsell_status: String(formData.get("upsell_status") || "none"),
+      notes: String(formData.get("notes") || "").trim() || null,
+    })
+    .eq("id", id);
+  revalidatePath("/app/bo/followups");
+  revalidatePath("/app/bo");
+}

@@ -142,7 +142,7 @@ export async function GET(req: Request) {
   let boNotified = 0;
   try {
     const in3 = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-    const [{ data: tenant }, msR, taskR, boMembersR] = await Promise.all([
+    const [{ data: tenant }, msR, taskR, fuR, boMembersR] = await Promise.all([
       admin.from("tenants").select("id").limit(1).maybeSingle(),
       admin
         .from("subsidy_milestones")
@@ -153,6 +153,11 @@ export async function GET(req: Request) {
         .from("expo_tasks")
         .select("name, due_date, assignee_user_id, expo_projects(name, status)")
         .in("status", ["todo", "doing"])
+        .lte("due_date", in3),
+      admin
+        .from("fu_meetings")
+        .select("round_months, due_date, schedule_status, fu_cases(account_name, assignee_user_id, status)")
+        .in("schedule_status", ["not_scheduled", "scheduled"])
         .lte("due_date", in3),
       admin.from("memberships").select("user_id").eq("status", "active").in("role", ["back_office", "hr", "owner", "admin"]),
     ]);
@@ -173,6 +178,10 @@ export async function GET(req: Request) {
     for (const t of (taskR.data ?? []) as unknown as { name: string; due_date: string; assignee_user_id: string | null; expo_projects: { name: string; status: string } | null }[]) {
       if (t.expo_projects?.status !== "confirmed") continue;
       push(t.assignee_user_id, `展示会: ${t.expo_projects?.name ?? ""}｜${t.name}（期日 ${t.due_date}${t.due_date < today ? " 超過" : ""}）`);
+    }
+    for (const f of (fuR.data ?? []) as unknown as { round_months: number; due_date: string; schedule_status: string; fu_cases: { account_name: string; assignee_user_id: string | null; status: string } | null }[]) {
+      if (f.fu_cases?.status !== "open") continue;
+      push(f.fu_cases?.assignee_user_id ?? null, `研修後FU: ${f.fu_cases?.account_name ?? ""} ${f.round_months}ヶ月後Mtg${f.schedule_status === "not_scheduled" ? "・未調整" : ""}（期日 ${f.due_date}${f.due_date < today ? " 超過" : ""}）`);
     }
     if (tenant && byUser.size > 0) {
       const rows = Array.from(byUser.entries()).map(([uid, lines2]) => ({
