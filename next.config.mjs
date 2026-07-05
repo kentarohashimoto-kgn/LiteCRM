@@ -12,6 +12,10 @@ const nextConfig = {
     },
     // instrumentation.ts (Sentry初期化) を有効化
     instrumentationHook: true,
+    // C-3 ファイル添付: Server Action経由のアップロード上限(既定1MB)を引き上げ
+    serverActions: {
+      bodySizeLimit: "12mb",
+    },
   },
 };
 

@@ -691,8 +691,11 @@ export interface Meeting {
   method?: string;
   /** 議事・要点(短い要約)。 */
   summary?: string;
-  /** 議事録詳細(全文・文字起こし。将来AI要約の入力元)。 */
+  /** 議事録詳細(全文・文字起こし。AI要約の入力元)。 */
   minutes_detail?: string;
+  /** minutes_detail からAI生成した要約(D-4)。 */
+  ai_summary?: string;
+  ai_summary_at?: string;
   pre_info?: string;
   next_action_date?: string;
   next_action_text?: string;

@@ -27,6 +27,7 @@ import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
 import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction, saveOppResearchAction } from "@/server/actions";
 import { deleteOpportunityAction } from "@/server/actions/trash";
 import { ChangeHistory } from "@/components/history/change-history";
+import { AttachmentSection } from "@/components/attachments/attachment-section";
 import { UnifiedTimeline, type TimelineEvent } from "@/components/history/unified-timeline";
 import { CommentThread, type CommentView } from "@/components/opportunities/comment-thread";
 import { getSupabaseServer } from "@/lib/supabase/server";
@@ -456,6 +457,8 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
               </ul>
             )}
           </Section>
+
+          <AttachmentSection targetType="opportunity" targetId={o.id} revalidatePath={`/app/opportunities/${o.id}`} />
 
           <ChangeHistory table="opportunities" recordId={o.id} />
         </div>

@@ -5,6 +5,7 @@ import { getWorkspaceForOpportunity } from "@/lib/data/workspace";
 import { getMeeting, getOpportunity } from "@/lib/data/select";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { updateMeetingAction } from "@/server/actions";
+import { AiSummaryButton } from "@/components/meetings/ai-summary-button";
 import { formatDateFull } from "@/lib/utils";
 
 function hm(iso?: string): string {
@@ -39,8 +40,27 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
           <p className="text-sm text-ink/80 whitespace-pre-wrap">{meeting.summary}</p>
         </Section>
       )}
+
+      {/* D-4: AI要約 */}
+      <Section
+        title="AI要約"
+        className="mb-5"
+        action={<AiSummaryButton meetingId={meeting.id} opportunityId={params.id} hasMinutes={Boolean(meeting.minutes_detail && meeting.minutes_detail.trim().length >= 30)} />}
+      >
+        {meeting.ai_summary ? (
+          <div>
+            <p className="text-sm text-ink/80 whitespace-pre-wrap">{meeting.ai_summary}</p>
+            {meeting.ai_summary_at && <p className="text-[11px] text-ink/35 mt-2">生成: {formatDateFull(meeting.ai_summary_at)}</p>}
+          </div>
+        ) : (
+          <p className="text-sm text-ink/40 py-2">
+            議事録詳細を保存して「AIで要約」を押すと、要点・決定事項・次アクションを自動生成します。
+          </p>
+        )}
+      </Section>
+
       {meeting.minutes_detail && (
-        <Section title="議事録詳細" className="mb-5" action={<span className="text-[11px] text-ink/40">全文・文字起こし（今後AI要約）</span>}>
+        <Section title="議事録詳細" className="mb-5" action={<span className="text-[11px] text-ink/40">全文・文字起こし（AI要約の入力元）</span>}>
           <p className="text-sm text-ink/75 whitespace-pre-wrap">{meeting.minutes_detail}</p>
         </Section>
       )}

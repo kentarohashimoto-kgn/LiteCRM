@@ -20,6 +20,7 @@ import { RecordRecent } from "@/components/layout/recent-items";
 import { createOpportunityAction, createMeetingAction } from "@/server/actions";
 import { deleteAccountAction } from "@/server/actions/trash";
 import { ChangeHistory } from "@/components/history/change-history";
+import { AttachmentSection } from "@/components/attachments/attachment-section";
 import { UnifiedTimeline, type TimelineEvent } from "@/components/history/unified-timeline";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { ACTIVITY_TYPE_MAP } from "@/lib/constants";
@@ -286,6 +287,8 @@ export default async function AccountDetailPage({ params, searchParams }: { para
               </ul>
             )}
           </Section>
+
+          <AttachmentSection targetType="account" targetId={account.id} revalidatePath={`/app/accounts/${account.id}`} />
 
           <ChangeHistory table="accounts" recordId={account.id} />
         </div>
