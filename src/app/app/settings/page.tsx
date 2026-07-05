@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Trash2 } from "lucide-react";
+import { GitMerge, Trash2 } from "lucide-react";
 import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Avatar } from "@/components/ui/primitives";
@@ -44,9 +44,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
         title="設定"
         subtitle="メンバー・商材・流入経路・展示会/施策をマスタとして管理します。ステージ・ヨミはシステム定義（下部参照）。"
         action={
-          <Link href="/app/settings/trash" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
-            <Trash2 size={15} /> ゴミ箱
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/app/settings/duplicates" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
+              <GitMerge size={15} /> 重複マージ
+            </Link>
+            <Link href="/app/settings/trash" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
+              <Trash2 size={15} /> ゴミ箱
+            </Link>
+          </div>
         }
       />
 

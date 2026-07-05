@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {
-  Coins, Gauge, Goal, TrendingUp, Radio, Presentation, ClipboardList, Star, UserCog, Package,
+  Coins, Gauge, Goal, TrendingUp, Radio, Presentation, ClipboardList, Star, UserCog, Package, ThumbsDown, Hourglass,
 } from "lucide-react";
 import { PageHeader, Section } from "@/components/ui/primitives";
 
@@ -28,6 +28,13 @@ const GROUPS: { title: string; items: { href: string; label: string; desc: strin
     items: [
       { href: "/app/analytics/seminar-followup", label: "セミナー攻略リスト", desc: "過去接点クロスの追客優先度", icon: Star },
       { href: "/app/analytics/seminars", label: "セミナー分析", desc: "参加者・反応の集計", icon: ClipboardList },
+    ],
+  },
+  {
+    title: "パイプライン・失注",
+    items: [
+      { href: "/app/analytics/lost", label: "失注分析", desc: "理由別・競合別・月別に「なぜ負けたか」", icon: ThumbsDown },
+      { href: "/app/analytics/stage-flow", label: "ステージ滞留分析", desc: "滞留日数・リードタイム・放置案件", icon: Hourglass },
     ],
   },
   {

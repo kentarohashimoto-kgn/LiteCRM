@@ -129,6 +129,8 @@ export async function updateOpportunityAction(formData: FormData) {
       next_action_text: str(formData.get("next_action_text")),
       risk_level: str(formData.get("risk_level")),
       lost_reason: str(formData.get("lost_reason")),
+      lost_reason_code: str(formData.get("lost_reason_code")),
+      lost_competitor: str(formData.get("lost_competitor")),
       notes: str(formData.get("notes")),
       status,
     })

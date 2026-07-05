@@ -146,6 +146,19 @@ export const DEAL_PHASE_MAP = Object.fromEntries(DEAL_PHASES.map((p) => [p.key, 
 /** ファネル順（未来客を除く受注に向かう6→…段階）。 */
 export const DEAL_PHASE_FUNNEL = ["info_gathering", "comparison", "detailed_review", "proposal", "estimate"];
 
+/** 失注理由コード(C-4)。選択式＋自由記述(lost_reason)の併用。 */
+export const LOST_REASONS: { key: string; label: string }[] = [
+  { key: "price", label: "価格" },
+  { key: "timing", label: "時期尚早" },
+  { key: "competitor", label: "競合に敗北" },
+  { key: "needs_mismatch", label: "ニーズ不一致" },
+  { key: "budget_freeze", label: "予算凍結・消滅" },
+  { key: "no_response", label: "音信不通" },
+  { key: "internal", label: "自社都合" },
+  { key: "other", label: "その他" },
+];
+export const LOST_REASON_MAP = Object.fromEntries(LOST_REASONS.map((r) => [r.key, r.label]));
+
 /** 初回商談後の営業スケジュール分類(要件書4.8)。本部承認の対象。 */
 export const SCHEDULE_TYPES: { key: string; label: string; desc: string; cadence: string }[] = [
   { key: "A_short_term", label: "A 即提案・短期受注型", desc: "課題明確・予算あり・1〜2ヶ月で受注可能", cadence: "3日以内提案・週1フォロー" },

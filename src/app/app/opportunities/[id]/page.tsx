@@ -27,6 +27,10 @@ import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
 import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction, saveOppResearchAction } from "@/server/actions";
 import { deleteOpportunityAction } from "@/server/actions/trash";
 import { ChangeHistory } from "@/components/history/change-history";
+import { UnifiedTimeline, type TimelineEvent } from "@/components/history/unified-timeline";
+import { CommentThread, type CommentView } from "@/components/opportunities/comment-thread";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import { LOST_REASONS } from "@/lib/constants";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince } from "@/lib/utils";
 
 export default async function OpportunityDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string } }) {
@@ -44,8 +48,48 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
   const campaigns = listCampaigns(ws);
   const risk = evaluateRisk(o);
   const since = daysSince(o.last_activity_at);
-  const [schedule, allTemplates] = await Promise.all([getLatestSchedule(o.id), getSalesTemplates()]);
+  const sb = getSupabaseServer();
+  const [schedule, allTemplates, commentsR] = await Promise.all([
+    getLatestSchedule(o.id),
+    getSalesTemplates(),
+    sb.from("opportunity_comments").select("id, author_user_id, body, mentions, created_at").eq("opportunity_id", o.id).order("created_at", { ascending: true }).limit(100),
+  ]);
   const templates = matchTemplates(allTemplates, o.account?.industry, contacts.map((c) => c.title));
+  const comments: CommentView[] = ((commentsR.data ?? []) as { id: string; author_user_id: string; body: string; mentions: string[]; created_at: string }[]).map((c) => ({
+    ...c,
+    mentions: c.mentions ?? [],
+    authorName: getUser(ws, c.author_user_id)?.name ?? "—",
+  }));
+
+  // C-1 統合タイムライン: 活動・商談・タスク・ステージ変更・コメントを時系列1本に
+  const timeline: TimelineEvent[] = [
+    ...activities.map((a): TimelineEvent => ({
+      id: a.id, at: a.activity_at, kind: "activity",
+      label: ACTIVITY_TYPE_MAP[a.activity_type]?.label ?? a.activity_type,
+      title: a.title, body: a.body, who: getUser(ws, a.owner_user_id)?.name,
+    })),
+    ...meetings.map((m): TimelineEvent => ({
+      id: m.id, at: m.meeting_at ?? m.meeting_date ?? m.created_at, kind: "meeting",
+      label: "商談", title: m.title, body: m.summary,
+      who: m.owner_user_id ? getUser(ws, m.owner_user_id)?.name : undefined,
+      href: `/app/opportunities/${o.id}/meetings/${m.id}`,
+    })),
+    ...tasks.map((t): TimelineEvent => ({
+      id: t.id, at: t.due_date, kind: "task",
+      label: t.status === "done" ? "タスク完了" : "タスク",
+      title: t.title, who: getUser(ws, t.assigned_to)?.name,
+    })),
+    ...history.map((h): TimelineEvent => ({
+      id: h.id, at: h.changed_at, kind: "stage",
+      label: "ステージ",
+      title: `${h.from_stage ? (STAGE_MAP[h.from_stage]?.label ?? h.from_stage) + " → " : ""}${STAGE_MAP[h.to_stage]?.label ?? h.to_stage}`,
+      body: h.reason, who: h.changed_by ? getUser(ws, h.changed_by)?.name : undefined,
+    })),
+    ...comments.map((c): TimelineEvent => ({
+      id: c.id, at: c.created_at, kind: "comment",
+      label: "コメント", title: c.body.length > 60 ? c.body.slice(0, 60) + "…" : c.body, who: c.authorName,
+    })),
+  ];
 
   return (
     <div>
@@ -239,9 +283,22 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                 <label className="label">次アクション内容</label>
                 <input name="next_action_text" defaultValue={o.next_action_text ?? ""} className="input" placeholder="open案件は次アクションを必ず設定しましょう" />
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">失注理由（失注時のみ）</label>
+                  <select name="lost_reason_code" defaultValue={o.lost_reason_code ?? ""} className="input">
+                    <option value="">選択してください</option>
+                    {LOST_REASONS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">負けた競合（競合起因のとき）</label>
+                  <input name="lost_competitor" defaultValue={o.lost_competitor ?? ""} className="input" placeholder="例：○○社" />
+                </div>
+              </div>
               <div>
-                <label className="label">失注理由（失注時のみ）</label>
-                <input name="lost_reason" defaultValue={o.lost_reason ?? ""} className="input" />
+                <label className="label">失注の詳細（自由記述）</label>
+                <input name="lost_reason" defaultValue={o.lost_reason ?? ""} className="input" placeholder="経緯・条件差など" />
               </div>
               <button type="submit" className="btn-primary">保存する</button>
             </form>
@@ -286,29 +343,18 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
             </form>
           </Section>
 
-          <Section title="活動タイムライン">
-            {activities.length === 0 ? (
-              <p className="text-sm text-ink/40 py-4 text-center">活動履歴はまだありません</p>
-            ) : (
-              <ul className="space-y-3">
-                {activities.map((a) => (
-                  <li key={a.id} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <span className="h-2 w-2 rounded-full bg-teal-primary mt-1.5" />
-                      <span className="flex-1 w-px bg-black/[0.06]" />
-                    </div>
-                    <div className="pb-2 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="pill bg-teal-light text-teal-deep">{ACTIVITY_TYPE_MAP[a.activity_type]?.label}</span>
-                        <span className="text-sm font-medium text-ink">{a.title}</span>
-                      </div>
-                      {a.body && <p className="text-sm text-ink/60 mt-1">{a.body}</p>}
-                      <div className="text-xs text-ink/40 mt-1">{formatDateFull(a.activity_at)} ・ {getUser(ws, a.owner_user_id)?.name}</div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <Section title="コメント（社内スレッド）" action={<span className="text-[11px] text-ink/40">本部指示・引継ぎをここに集約</span>}>
+            <CommentThread
+              opportunityId={o.id}
+              comments={comments}
+              members={members.map((u) => ({ id: u.id, name: u.name }))}
+              currentUserId={ws.ctx.userId}
+              isAdmin={["owner", "admin"].includes(ws.ctx.role)}
+            />
+          </Section>
+
+          <Section title="統合タイムライン" action={<span className="text-[11px] text-ink/40">活動・商談・タスク・ステージ・コメントを時系列で</span>}>
+            <UnifiedTimeline events={timeline} />
           </Section>
         </div>
 

@@ -20,6 +20,9 @@ import { RecordRecent } from "@/components/layout/recent-items";
 import { createOpportunityAction, createMeetingAction } from "@/server/actions";
 import { deleteAccountAction } from "@/server/actions/trash";
 import { ChangeHistory } from "@/components/history/change-history";
+import { UnifiedTimeline, type TimelineEvent } from "@/components/history/unified-timeline";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import { ACTIVITY_TYPE_MAP } from "@/lib/constants";
 import { getSolutionPackages, getAccountSouvenirs } from "@/lib/data/souvenirs";
 import { getTransitionsByAccount, TRANSITION_STATUS_LABEL, FOLLOWUP_STATUS_LABEL } from "@/lib/data/transitions";
 import { STAGES, FORECAST_CATEGORIES, DEAL_PHASES } from "@/lib/constants";
@@ -40,11 +43,55 @@ export default async function AccountDetailPage({ params, searchParams }: { para
   const sources = getLeadSources(ws);
   const won = opps.filter((o) => o.status === "won");
   const open = opps.filter((o) => o.status === "open");
-  const [packages, souvenirs, transitions] = await Promise.all([
+  const sb = getSupabaseServer();
+  const oppIds = opps.map((o) => o.id);
+  const orFilter = oppIds.length > 0
+    ? `account_id.eq.${account.id},opportunity_id.in.(${oppIds.join(",")})`
+    : `account_id.eq.${account.id}`;
+  const [packages, souvenirs, transitions, activitiesR, tasksR] = await Promise.all([
     getSolutionPackages(),
     getAccountSouvenirs(account.id),
     getTransitionsByAccount(account.id),
+    sb.from("activities").select("id,activity_type,title,body,activity_at,owner_user_id").or(orFilter).order("activity_at", { ascending: false }).limit(60),
+    sb.from("tasks").select("id,title,due_date,status,assigned_to").or(orFilter).order("due_date", { ascending: false }).limit(30),
   ]);
+
+  // C-1 統合タイムライン: 活動・商談・タスク・案件の節目を時系列1本に
+  const usersById = ws.usersById;
+  const timeline: TimelineEvent[] = [
+    ...((activitiesR.data ?? []) as { id: string; activity_type: string; title: string; body: string | null; activity_at: string; owner_user_id: string }[]).map(
+      (a): TimelineEvent => ({
+        id: a.id, at: a.activity_at, kind: "activity",
+        label: ACTIVITY_TYPE_MAP[a.activity_type]?.label ?? a.activity_type,
+        title: a.title, body: a.body, who: usersById.get(a.owner_user_id)?.name,
+      }),
+    ),
+    ...meetings.map((m): TimelineEvent => ({
+      id: m.id, at: m.meeting_at ?? m.meeting_date ?? m.created_at, kind: "meeting",
+      label: "商談", title: m.title, body: m.summary,
+      who: m.owner_user_id ? usersById.get(m.owner_user_id)?.name : undefined,
+      href: `/app/opportunities/${m.opportunity_id}/meetings/${m.id}`,
+    })),
+    ...((tasksR.data ?? []) as { id: string; title: string; due_date: string; status: string; assigned_to: string }[]).map(
+      (t): TimelineEvent => ({
+        id: t.id, at: t.due_date, kind: "task",
+        label: t.status === "done" ? "タスク完了" : "タスク",
+        title: t.title, who: usersById.get(t.assigned_to)?.name,
+      }),
+    ),
+    ...opps.map((o): TimelineEvent => ({
+      id: o.id, at: o.created_at, kind: "milestone",
+      label: "案件作成", title: o.name, href: `/app/opportunities/${o.id}`,
+      who: usersById.get(o.owner_user_id ?? "")?.name,
+    })),
+    ...opps
+      .filter((o) => o.status === "won" || o.status === "lost")
+      .map((o): TimelineEvent => ({
+        id: `${o.id}-close`, at: o.expected_close_date ?? o.updated_at, kind: "milestone",
+        label: o.status === "won" ? "受注" : "失注",
+        title: `${o.name}（${formatYen(o.amount)}）`, href: `/app/opportunities/${o.id}`,
+      })),
+  ];
 
   return (
     <div>
@@ -217,6 +264,10 @@ export default async function AccountDetailPage({ params, searchParams }: { para
             ) : (
               <p className="text-xs text-ink/40 mt-2">商談を登録するには、先に案件を作成してください。</p>
             )}
+          </Section>
+
+          <Section title="統合タイムライン" action={<span className="text-[11px] text-ink/40">この顧客と何があったかを時系列で</span>}>
+            <UnifiedTimeline events={timeline} />
           </Section>
         </div>
 

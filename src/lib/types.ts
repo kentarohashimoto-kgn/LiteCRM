@@ -636,6 +636,10 @@ export interface Opportunity {
   last_activity_at?: string;
   status: OpportunityStatus;
   lost_reason?: string;
+  /** 失注理由コード(C-4: price/timing/competitor/needs_mismatch/budget_freeze/no_response/internal/other) */
+  lost_reason_code?: string;
+  /** 負けた競合名(競合起因のとき) */
+  lost_competitor?: string;
   win_reason?: string;
   risk_level?: RiskLevel;
   notes?: string;
