@@ -145,3 +145,46 @@ export async function logActivityAction(input: LogActivityInput): Promise<LogAct
   revalidatePath("/app/tasks");
   return { ok: true, id: inserted.id as string };
 }
+
+/* ============================================================
+ * E-1 活動履歴のサーバーページング
+ * ============================================================ */
+
+export interface ActivityPageFilter {
+  q?: string;
+  owner?: string;
+  type?: string;
+}
+
+export interface ActivityPageRow {
+  id: string;
+  activity_type: string;
+  title: string;
+  body: string | null;
+  activity_at: string;
+  owner_user_id: string | null;
+  owner_name: string;
+  owner_color: string | null;
+  opportunity_id: string | null;
+  opportunity_name: string | null;
+  account_id: string | null;
+  account_name: string | null;
+}
+
+/** 活動履歴をページ取得(RPC)。従来の全件ロードを置き換える。 */
+export async function fetchActivitiesPageAction(input: {
+  filter: ActivityPageFilter;
+  offset: number;
+  limit: number;
+}): Promise<{ rows: ActivityPageRow[]; total: number }> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { data, error } = await sb.rpc("activities_page", {
+    p_filter: input.filter,
+    p_limit: input.limit,
+    p_offset: input.offset,
+  });
+  if (error || !data) return { rows: [], total: 0 };
+  const d = data as { rows: ActivityPageRow[]; total: number };
+  return { rows: d.rows ?? [], total: d.total ?? 0 };
+}

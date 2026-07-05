@@ -1,14 +1,20 @@
-import Link from "next/link";
 import { Plus } from "lucide-react";
-import { getWorkspace } from "@/lib/data/workspace";
-import { getAccount, getUser, listActivities } from "@/lib/data/select";
-import { PageHeader, Avatar, LinkButton } from "@/components/ui/primitives";
-import { ACTIVITY_TYPE_MAP } from "@/lib/constants";
-import { formatDateFull } from "@/lib/utils";
+import { getWorkspaceLite } from "@/lib/data/workspace";
+import { listMembers } from "@/lib/data/select";
+import { PageHeader, LinkButton } from "@/components/ui/primitives";
+import { ActivitiesPaginatedList } from "@/components/activities/activities-paginated-list";
+import { fetchActivitiesPageAction } from "@/server/actions/activities";
 
+export const dynamic = "force-dynamic";
+
+/**
+ * 活動履歴(E-1軽量化済み): 従来の workspace_full(2.1MB)全件ロードをやめ、
+ * サーバーページング(activities_page RPC)＋無限スクロールに変更。
+ */
 export default async function ActivitiesPage() {
-  const ws = await getWorkspace();
-  const activities = listActivities(ws);
+  const ws = await getWorkspaceLite();
+  const members = listMembers(ws).map(({ user }) => ({ id: user.id, name: user.name }));
+  const first = await fetchActivitiesPageAction({ filter: {}, offset: 0, limit: 50 });
 
   return (
     <div>
@@ -21,33 +27,7 @@ export default async function ActivitiesPage() {
           </LinkButton>
         }
       />
-      <div className="card card-pad">
-        {activities.length === 0 ? (
-          <p className="text-sm text-ink/40 py-8 text-center">活動履歴がありません</p>
-        ) : (
-          <ul className="space-y-4">
-            {activities.slice(0, 80).map((a) => (
-              <li key={a.id} className="flex gap-3">
-                <Avatar user={getUser(ws, a.owner_user_id)} size={28} />
-                <div className="min-w-0 flex-1 border-b border-black/[0.04] pb-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="pill bg-teal-light text-teal-deep">{ACTIVITY_TYPE_MAP[a.activity_type]?.label}</span>
-                    <span className="text-sm font-medium text-ink">{a.title}</span>
-                    {a.opportunity_id && (
-                      <Link href={`/app/opportunities/${a.opportunity_id}`} className="text-xs text-teal-deep hover:underline">案件を見る</Link>
-                    )}
-                  </div>
-                  {a.body && <p className="text-sm text-ink/60 mt-1">{a.body}</p>}
-                  <div className="text-xs text-ink/40 mt-1">
-                    {formatDateFull(a.activity_at)} ・ {getUser(ws, a.owner_user_id)?.name}
-                    {a.account_id && ` ・ ${getAccount(ws, a.account_id)?.name ?? ""}`}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <ActivitiesPaginatedList initialRows={first.rows} initialTotal={first.total} owners={members} />
     </div>
   );
 }

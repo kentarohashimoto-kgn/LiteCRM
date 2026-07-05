@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Trash2 } from "lucide-react";
 import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Avatar } from "@/components/ui/primitives";
@@ -38,7 +40,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
 
   return (
     <div>
-      <PageHeader title="設定" subtitle="メンバー・商材・流入経路・展示会/施策をマスタとして管理します。ステージ・ヨミはシステム定義（下部参照）。" />
+      <PageHeader
+        title="設定"
+        subtitle="メンバー・商材・流入経路・展示会/施策をマスタとして管理します。ステージ・ヨミはシステム定義（下部参照）。"
+        action={
+          <Link href="/app/settings/trash" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
+            <Trash2 size={15} /> ゴミ箱
+          </Link>
+        }
+      />
 
       {/* メンバー管理 */}
       <Section title="メンバー / ロール" className="mb-5">

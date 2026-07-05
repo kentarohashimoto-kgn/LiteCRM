@@ -1,7 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
+
 /** ルートレイアウト自体が失敗した場合の最終フォールバック(html/bodyを自前で描画)。 */
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useEffect(() => {
+    Sentry.captureException(error); // DSN未設定時はno-op
+  }, [error]);
   return (
     <html lang="ja">
       <body style={{ fontFamily: "sans-serif", display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "#f5f7f7" }}>

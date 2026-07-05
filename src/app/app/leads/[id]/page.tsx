@@ -157,7 +157,7 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
             <button type="submit" className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 px-3 py-1.5 text-sm hover:bg-rose-100">
               <Trash2 size={15} /> このリードを削除する
             </button>
-            <span className="text-xs text-ink/40">削除は元に戻せません。取込のやり直しは「取込履歴」からの一括取り消しが安全です。</span>
+            <span className="text-xs text-ink/40">削除後30日間は「設定 → ゴミ箱」から復元できます。取込のやり直しは「取込履歴」からの一括取り消しが安全です。</span>
           </form>
         </details>
       </Card>

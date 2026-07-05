@@ -1,9 +1,14 @@
 "use client";
 
+import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 
 /** /app 配下の実行時エラー画面。白画面ではなく再試行の導線を出す。 */
 export default function AppError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useEffect(() => {
+    Sentry.captureException(error); // E-4: DSN未設定時はno-op
+  }, [error]);
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-6">
       <div className="card card-pad max-w-md text-center space-y-4">

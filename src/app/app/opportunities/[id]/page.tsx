@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Sparkles } from "lucide-react";
+import { ChevronLeft, Sparkles, Trash2 } from "lucide-react";
 import { getWorkspaceForOpportunity } from "@/lib/data/workspace";
 import {
   getActivitiesByOpportunity,
@@ -25,6 +25,8 @@ import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/ui/badges";
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
 import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction, saveOppResearchAction } from "@/server/actions";
+import { deleteOpportunityAction } from "@/server/actions/trash";
+import { ChangeHistory } from "@/components/history/change-history";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince } from "@/lib/utils";
 
 export default async function OpportunityDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string } }) {
@@ -408,8 +410,24 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
               </ul>
             )}
           </Section>
+
+          <ChangeHistory table="opportunities" recordId={o.id} />
         </div>
       </div>
+
+      {/* 削除(控えめ・確認つき) */}
+      <Card className="mt-8 border-l-4 border-l-rose-300">
+        <details>
+          <summary className="cursor-pointer text-sm text-ink/50">危険な操作（この案件を削除）</summary>
+          <form action={deleteOpportunityAction} className="mt-3 flex items-center gap-3 flex-wrap">
+            <input type="hidden" name="id" value={o.id} />
+            <button type="submit" className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 px-3 py-1.5 text-sm hover:bg-rose-100">
+              <Trash2 size={15} /> この案件を削除する
+            </button>
+            <span className="text-xs text-ink/40">削除後30日間は「設定 → ゴミ箱」から復元できます。商談・活動・請求などの配下データも一緒に非表示になり、復元時に戻ります。</span>
+          </form>
+        </details>
+      </Card>
     </div>
   );
 }

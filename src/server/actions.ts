@@ -635,11 +635,15 @@ export async function updateLeadAction(formData: FormData) {
   redirect("/app/leads/" + id);
 }
 
-/** リード1件を削除。 */
+/** リード1件を削除(論理削除・30日間は設定のゴミ箱から復元可能)。 */
 export async function deleteLeadAction(formData: FormData) {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
-  await sb.from("leads").delete().eq("id", String(formData.get("id"))).eq("tenant_id", ctx.tenantId);
+  await sb
+    .from("leads")
+    .update({ deleted_at: new Date().toISOString(), deleted_by: ctx.userId })
+    .eq("id", String(formData.get("id")))
+    .eq("tenant_id", ctx.tenantId);
   revalidatePath("/app/leads");
   redirect("/app/leads");
 }

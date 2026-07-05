@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 /**
  * 毎朝のSlackダイジェスト(Vercel Cronから起動)。
  * 担当別に「今日のアポ／今日の次回AC／期限超過」を集計してSlack Webhookへ送信。
- * 必要な環境変数: CRON_SECRET(認可), SLACK_WEBHOOK_URL(送信先)。未設定なら何もしない。
+ * あわせてゴミ箱の30日超過レコードを自動パージする(B-2)。
+ * 必要な環境変数: CRON_SECRET(認可), SLACK_WEBHOOK_URL(送信先)。未設定なら送信はしない。
  */
 export async function GET(req: Request) {
   // Vercel Cron は Authorization: Bearer <CRON_SECRET> を付与する
@@ -14,12 +15,22 @@ export async function GET(req: Request) {
   if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
-  const webhook = process.env.SLACK_WEBHOOK_URL;
-  if (!webhook) {
-    return NextResponse.json({ ok: true, skipped: "SLACK_WEBHOOK_URL not configured" });
-  }
 
   const admin = getSupabaseAdmin();
+
+  // ゴミ箱: 削除から30日を過ぎたレコードを完全削除(失敗しても他処理は続行)
+  let purged: unknown = null;
+  try {
+    const { data } = await admin.rpc("trash_purge_expired");
+    purged = data;
+  } catch {
+    purged = "error";
+  }
+
+  const webhook = process.env.SLACK_WEBHOOK_URL;
+  if (!webhook) {
+    return NextResponse.json({ ok: true, purged, skipped: "SLACK_WEBHOOK_URL not configured" });
+  }
   // JSTの「今日」
   const now = new Date(Date.now() + 9 * 3600 * 1000);
   const today = now.toISOString().slice(0, 10);
@@ -30,7 +41,8 @@ export async function GET(req: Request) {
     admin
       .from("opportunities")
       .select("owner_user_id,account_id,name,yomi,status,next_action_date,next_action_text,first_meeting_date,appointment_at")
-      .eq("status", "open"),
+      .eq("status", "open")
+      .is("deleted_at", null), // service roleはRLSを通らないため明示的に除外
     admin.from("sales_schedules").select("id,approval_status").in("approval_status", ["pending", "needs_revision"]),
   ]);
 
@@ -88,5 +100,5 @@ export async function GET(req: Request) {
     body: JSON.stringify({ text: lines.join("\n") }),
   });
 
-  return NextResponse.json({ ok: res.ok, owners: owners.length, pending });
+  return NextResponse.json({ ok: res.ok, owners: owners.length, pending, purged });
 }

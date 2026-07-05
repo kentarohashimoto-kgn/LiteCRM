@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Trash2 } from "lucide-react";
 import { getWorkspaceForAccount } from "@/lib/data/workspace";
 import {
   getAccount,
@@ -18,6 +18,8 @@ import { MeetingList } from "@/components/meetings/meeting-list";
 import { SouvenirSection } from "@/components/accounts/souvenir-section";
 import { RecordRecent } from "@/components/layout/recent-items";
 import { createOpportunityAction, createMeetingAction } from "@/server/actions";
+import { deleteAccountAction } from "@/server/actions/trash";
+import { ChangeHistory } from "@/components/history/change-history";
 import { getSolutionPackages, getAccountSouvenirs } from "@/lib/data/souvenirs";
 import { getTransitionsByAccount, TRANSITION_STATUS_LABEL, FOLLOWUP_STATUS_LABEL } from "@/lib/data/transitions";
 import { STAGES, FORECAST_CATEGORIES, DEAL_PHASES } from "@/lib/constants";
@@ -218,21 +220,39 @@ export default async function AccountDetailPage({ params, searchParams }: { para
           </Section>
         </div>
 
-        <Section title="担当者">
-          {contacts.length === 0 ? (
-            <p className="text-sm text-ink/40 py-2">担当者がいません</p>
-          ) : (
-            <ul className="space-y-3">
-              {contacts.map((c) => (
-                <li key={c.id} className="text-sm">
-                  <div className="font-medium">{c.name} <span className="text-xs text-ink/50">{c.title}</span></div>
-                  <div className="text-xs text-ink/50">{c.department} ・ {c.email}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Section>
+        <div className="space-y-5">
+          <Section title="担当者">
+            {contacts.length === 0 ? (
+              <p className="text-sm text-ink/40 py-2">担当者がいません</p>
+            ) : (
+              <ul className="space-y-3">
+                {contacts.map((c) => (
+                  <li key={c.id} className="text-sm">
+                    <div className="font-medium">{c.name} <span className="text-xs text-ink/50">{c.title}</span></div>
+                    <div className="text-xs text-ink/50">{c.department} ・ {c.email}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+
+          <ChangeHistory table="accounts" recordId={account.id} />
+        </div>
       </div>
+
+      {/* 削除(控えめ・確認つき) */}
+      <Card className="mt-8 border-l-4 border-l-rose-300">
+        <details>
+          <summary className="cursor-pointer text-sm text-ink/50">危険な操作（この顧客を削除）</summary>
+          <form action={deleteAccountAction} className="mt-3 flex items-center gap-3 flex-wrap">
+            <input type="hidden" name="id" value={account.id} />
+            <button type="submit" className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 px-3 py-1.5 text-sm hover:bg-rose-100">
+              <Trash2 size={15} /> この顧客を削除する
+            </button>
+            <span className="text-xs text-ink/40">案件が紐づいている場合は削除できません。削除後30日間は「設定 → ゴミ箱」から復元できます。</span>
+          </form>
+        </details>
+      </Card>
     </div>
   );
 }
