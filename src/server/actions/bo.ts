@@ -380,13 +380,15 @@ export async function createFuCaseAction(formData: FormData): Promise<void> {
   revalidatePath("/app/bo");
 }
 
-/** FUケースの完了/対象外/再開/削除。 */
+/** FUケースの完了/対象外/再開/削除/担当者変更。 */
 export async function updateFuCaseAction(formData: FormData): Promise<void> {
   await requireBoCtx();
   const sb = getSupabaseServer();
   const id = String(formData.get("id"));
   const op = String(formData.get("op"));
   if (op === "delete") await sb.from("fu_cases").delete().eq("id", id);
+  else if (op === "assign")
+    await sb.from("fu_cases").update({ assignee_user_id: String(formData.get("assignee_user_id") || "") || null }).eq("id", id);
   else await sb.from("fu_cases").update({ status: op }).eq("id", id);
   revalidatePath("/app/bo/followups");
   revalidatePath("/app/bo");
