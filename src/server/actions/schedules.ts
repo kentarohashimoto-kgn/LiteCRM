@@ -64,14 +64,32 @@ export async function saveScheduleAction(formData: FormData) {
     redirect(`/app/opportunities/${oppId}?error=` + encodeURIComponent("分類理由を入力してください"));
   }
 
+  // 予想値: 成約時期(年月)・受注確度・受注金額
+  const monthRaw = String(formData.get("expected_month") ?? "").trim();
+  const expectedMonth = monthRaw ? monthRaw.slice(0, 7) + "-01" : null;
+  const probRaw = String(formData.get("win_probability") ?? "").trim();
+  const winProbability = probRaw === "" ? null : Math.max(0, Math.min(100, parseInt(probRaw, 10) || 0));
+  const amountRaw = String(formData.get("expected_amount") ?? "").replace(/[^\d.-]/g, "");
+  const expectedAmount = amountRaw === "" ? null : Number(amountRaw);
+
   await sb.from("sales_schedules").insert({
     tenant_id: ctx.tenantId,
     opportunity_id: oppId,
     schedule_type: scheduleType,
     reason,
+    expected_month: expectedMonth,
+    win_probability: winProbability,
+    expected_amount: Number.isNaN(expectedAmount as number) ? null : expectedAmount,
     proposed_by: ctx.userId,
     approval_status: "pending",
   });
+
+  // 案件の予測にも反映(売上予測・カレンダーと整合)。入力があった項目のみ更新。
+  const oppPatch: Record<string, unknown> = {};
+  if (expectedMonth) oppPatch.expected_revenue_month = expectedMonth;
+  if (winProbability != null) oppPatch.rep_probability = winProbability;
+  if (expectedAmount != null && !Number.isNaN(expectedAmount)) oppPatch.amount = expectedAmount;
+  if (Object.keys(oppPatch).length) await sb.from("opportunities").update(oppPatch).eq("id", oppId);
 
   // 未完了の分類由来タスクを削除して再生成
   await sb.from("tasks").delete().eq("opportunity_id", oppId).eq("origin", "schedule").neq("status", "done");

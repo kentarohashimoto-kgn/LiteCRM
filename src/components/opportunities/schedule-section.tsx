@@ -2,6 +2,7 @@ import { Section } from "@/components/ui/primitives";
 import { SCHEDULE_TYPES, SCHEDULE_TYPE_MAP, APPROVAL_STATUS_LABEL } from "@/lib/constants";
 import type { SalesSchedule, SalesTemplate } from "@/lib/data/schedules";
 import { saveScheduleAction } from "@/server/actions/schedules";
+import { formatYen } from "@/lib/utils";
 
 const APPROVAL_STYLE: Record<string, string> = {
   pending: "bg-amber-50 text-accent-orange",
@@ -40,6 +41,13 @@ export function ScheduleSection({
           <div className="font-medium text-sm text-ink">{meta.label}</div>
           <div className="text-xs text-ink/50 mt-0.5">{meta.desc}・フォロー: {meta.cadence}</div>
           <div className="text-xs text-ink/70 mt-1.5 whitespace-pre-wrap">理由: {schedule.reason}</div>
+          {(schedule.expected_month || schedule.win_probability != null || schedule.expected_amount != null) && (
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink/70">
+              {schedule.expected_month && <span>成約時期(予想): <b>{schedule.expected_month.slice(0, 7)}</b></span>}
+              {schedule.win_probability != null && <span>受注確度(予想): <b>{schedule.win_probability}%</b></span>}
+              {schedule.expected_amount != null && <span>受注金額(予測): <b className="text-teal-deep">{formatYen(schedule.expected_amount)}</b></span>}
+            </div>
+          )}
           {schedule.approval_comment && (
             <div className="mt-2 rounded-lg bg-mist-soft/60 px-2.5 py-1.5 text-xs text-ink/70">本部コメント: {schedule.approval_comment}</div>
           )}
@@ -75,7 +83,24 @@ export function ScheduleSection({
             <label className="label">分類理由 *</label>
             <textarea name="reason" required rows={2} defaultValue={schedule?.reason ?? ""} placeholder="なぜこの分類か（課題・予算・関係者・時期）" className="input" />
           </div>
-          <p className="text-[11px] text-ink/45">登録すると分類に応じたフォロータスクが自動作成されます（再分類時は未完了分を差し替え）。</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="label">成約時期(予想)</label>
+              <input name="expected_month" type="month" defaultValue={schedule?.expected_month?.slice(0, 7) ?? ""} className="input" />
+            </div>
+            <div>
+              <label className="label">受注確度(予想)</label>
+              <select name="win_probability" defaultValue={schedule?.win_probability != null ? String(schedule.win_probability) : ""} className="input">
+                <option value="">—</option>
+                {[100, 80, 60, 40, 20, 0].map((p) => <option key={p} value={p}>{p}%</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">受注金額(予測)</label>
+              <input name="expected_amount" type="number" defaultValue={schedule?.expected_amount ?? ""} placeholder="1500000" className="input" />
+            </div>
+          </div>
+          <p className="text-[11px] text-ink/45">登録すると分類に応じたフォロータスクが自動作成され、案件の売上予測（受注時期・確度・金額）にも反映されます。</p>
           <button type="submit" className="btn-accent">分類を登録</button>
         </form>
       </details>

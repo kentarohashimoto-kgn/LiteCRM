@@ -8,6 +8,9 @@ export interface SalesSchedule {
   reason: string;
   approval_status: string;
   approval_comment: string | null;
+  expected_month: string | null;
+  win_probability: number | null;
+  expected_amount: number | null;
   created_at: string;
 }
 
@@ -28,7 +31,7 @@ export async function getLatestSchedule(oppId: string): Promise<SalesSchedule | 
   const sb = getSupabaseServer();
   const { data } = await sb
     .from("sales_schedules")
-    .select("id,opportunity_id,schedule_type,reason,approval_status,approval_comment,created_at")
+    .select("id,opportunity_id,schedule_type,reason,approval_status,approval_comment,expected_month,win_probability,expected_amount,created_at")
     .eq("opportunity_id", oppId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -41,7 +44,7 @@ export async function getPendingSchedules(): Promise<PendingSchedule[]> {
   const sb = getSupabaseServer();
   const { data } = await sb
     .from("sales_schedules")
-    .select("id,opportunity_id,schedule_type,reason,approval_status,approval_comment,created_at,opportunities(name,accounts(name))")
+    .select("id,opportunity_id,schedule_type,reason,approval_status,approval_comment,expected_month,win_probability,expected_amount,created_at,opportunities(name,accounts(name))")
     .order("created_at", { ascending: false });
   const seen = new Set<string>();
   const out: PendingSchedule[] = [];
@@ -57,6 +60,9 @@ export async function getPendingSchedules(): Promise<PendingSchedule[]> {
       reason: r.reason as string,
       approval_status: r.approval_status as string,
       approval_comment: (r.approval_comment as string) ?? null,
+      expected_month: (r.expected_month as string) ?? null,
+      win_probability: (r.win_probability as number) ?? null,
+      expected_amount: (r.expected_amount as number) ?? null,
       created_at: r.created_at as string,
       opportunity_name: opp?.name ?? "—",
       account_name: opp?.accounts?.name ?? "—",
