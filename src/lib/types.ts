@@ -635,6 +635,12 @@ export interface Opportunity {
   next_action_text?: string;
   last_activity_at?: string;
   status: OpportunityStatus;
+  /** 提案書が必要な案件か(既定false=提案書なしで成約を狙う) */
+  proposal_required?: boolean;
+  /** 提案書の進捗(not_started/drafting/submitted/revising) */
+  proposal_status?: string;
+  /** 提案書の提出期限 */
+  proposal_due_date?: string;
   lost_reason?: string;
   /** 失注理由コード(C-4: price/timing/competitor/needs_mismatch/budget_freeze/no_response/internal/other) */
   lost_reason_code?: string;

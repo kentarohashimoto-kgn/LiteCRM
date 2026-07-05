@@ -44,7 +44,7 @@ export async function GET(req: Request) {
     admin.from("profiles").select("id,display_name,email"),
     admin
       .from("opportunities")
-      .select("owner_user_id,account_id,name,yomi,status,next_action_date,next_action_text,first_meeting_date,appointment_at")
+      .select("owner_user_id,account_id,name,yomi,status,next_action_date,next_action_text,first_meeting_date,appointment_at,proposal_required,proposal_status,proposal_due_date")
       .eq("status", "open")
       .is("deleted_at", null), // service roleはRLSを通らないため明示的に除外
     admin.from("sales_schedules").select("id,approval_status").in("approval_status", ["pending", "needs_revision"]),
@@ -58,11 +58,11 @@ export async function GET(req: Request) {
     for (const a of accs ?? []) accNames.set(a.id as string, a.name as string);
   }
 
-  interface Row { appts: string[]; acs: string[]; overdue: number; }
+  interface Row { appts: string[]; acs: string[]; overdue: number; proposals: string[]; }
   const byOwner = new Map<string, Row>();
   const ensure = (uid: string) => {
     let r = byOwner.get(uid);
-    if (!r) { r = { appts: [], acs: [], overdue: 0 }; byOwner.set(uid, r); }
+    if (!r) { r = { appts: [], acs: [], overdue: 0, proposals: [] }; byOwner.set(uid, r); }
     return r;
   };
 
@@ -79,10 +79,16 @@ export async function GET(req: Request) {
     const ac = o.next_action_date as string | null;
     if (ac === today) ensure(uid).acs.push(acc);
     else if (ac && ac < today) ensure(uid).overdue += 1;
+    // 提案書の提出期限(未提出のみ): 期日3日以内 or 超過
+    const pd = o.proposal_due_date as string | null;
+    if (o.proposal_required && o.proposal_status !== "submitted" && pd) {
+      const in3days = new Date(new Date(today).getTime() + 3 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      if (pd <= in3days) ensure(uid).proposals.push(`${acc}(${pd}${pd < today ? "超過" : ""})`);
+    }
   }
 
   const lines: string[] = [`:sunny: *CATORCE 今日の営業ダイジェスト（${label}）*`];
-  const owners = Array.from(byOwner.entries()).filter(([, r]) => r.appts.length || r.acs.length || r.overdue);
+  const owners = Array.from(byOwner.entries()).filter(([, r]) => r.appts.length || r.acs.length || r.overdue || r.proposals.length);
   if (owners.length === 0) {
     lines.push("今日のアポ・次回ACはありません。");
   } else {
@@ -91,6 +97,7 @@ export async function GET(req: Request) {
       if (r.appts.length) parts.push(`アポ ${r.appts.length}件（${r.appts.slice(0, 3).join(" / ")}${r.appts.length > 3 ? " 他" : ""}）`);
       if (r.acs.length) parts.push(`今日のAC ${r.acs.length}件`);
       if (r.overdue) parts.push(`:warning: 超過AC ${r.overdue}件`);
+      if (r.proposals.length) parts.push(`:memo: 提案書の期日 ${r.proposals.length}件（${r.proposals.slice(0, 2).join(" / ")}${r.proposals.length > 2 ? " 他" : ""}）`);
       lines.push(`• *${nameOf.get(uid) ?? "未割当"}*: ${parts.join(" ・ ")}`);
     }
   }
@@ -111,6 +118,7 @@ export async function GET(req: Request) {
             if (r.appts.length) parts.push(`アポ ${r.appts.length}件（${r.appts.slice(0, 3).join(" / ")}${r.appts.length > 3 ? " 他" : ""}）`);
             if (r.acs.length) parts.push(`今日のAC ${r.acs.length}件（${r.acs.slice(0, 3).join(" / ")}${r.acs.length > 3 ? " 他" : ""}）`);
             if (r.overdue) parts.push(`超過AC ${r.overdue}件`);
+            if (r.proposals.length) parts.push(`提案書の期日 ${r.proposals.length}件（${r.proposals.slice(0, 2).join(" / ")}${r.proposals.length > 2 ? " 他" : ""}）`);
             return {
               tenant_id: tenant.id as string,
               user_id: uid,

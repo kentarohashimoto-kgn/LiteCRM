@@ -43,6 +43,9 @@ const FIELD_LABELS: Record<string, string> = {
   budget_status: "予算状況",
   proposal_doc_url: "提案書URL",
   proposed_solution: "提案ソリューション",
+  proposal_required: "提案書の要否",
+  proposal_status: "提案の進捗",
+  proposal_due_date: "提案提出期限",
   primary_product_id: "商材",
   campaign_id: "施策",
   lead_source_id: "流入経路",
@@ -80,6 +83,7 @@ const VALUE_MAPS: Record<string, Record<string, string>> = {
   forecast_category: Object.fromEntries(Object.entries(FORECAST_MAP).map(([k, v]) => [k, (v as { label: string }).label])),
   deal_phase: DEAL_PHASE_MAP as Record<string, string>,
   status: { open: "商談中", won: "受注", lost: "失注", prospect: "見込み", customer: "顧客", inactive: "休眠", new: "新規", qualified: "有効", disqualified: "対象外" },
+  proposal_status: { not_started: "未着手", drafting: "作成中", submitted: "提出済み", revising: "改訂中" },
 };
 
 export function fieldLabel(key: string): string {

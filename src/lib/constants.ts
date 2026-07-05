@@ -159,6 +159,15 @@ export const LOST_REASONS: { key: string; label: string }[] = [
 ];
 export const LOST_REASON_MAP = Object.fromEntries(LOST_REASONS.map((r) => [r.key, r.label]));
 
+/** 提案書の進捗(提案書管理)。既定は「提案書なしで成約」を狙うためフラグOFF。 */
+export const PROPOSAL_STATUSES: { key: string; label: string; color: string }[] = [
+  { key: "not_started", label: "未着手", color: "bg-rose-50 text-rose-600" },
+  { key: "drafting", label: "作成中", color: "bg-amber-50 text-amber-700" },
+  { key: "submitted", label: "提出済み", color: "bg-teal-light text-teal-deep" },
+  { key: "revising", label: "改訂中", color: "bg-indigo-50 text-indigo-600" },
+];
+export const PROPOSAL_STATUS_MAP = Object.fromEntries(PROPOSAL_STATUSES.map((s) => [s.key, s]));
+
 /** 初回商談後の営業スケジュール分類(要件書4.8)。本部承認の対象。 */
 export const SCHEDULE_TYPES: { key: string; label: string; desc: string; cadence: string }[] = [
   { key: "A_short_term", label: "A 即提案・短期受注型", desc: "課題明確・予算あり・1〜2ヶ月で受注可能", cadence: "3日以内提案・週1フォロー" },

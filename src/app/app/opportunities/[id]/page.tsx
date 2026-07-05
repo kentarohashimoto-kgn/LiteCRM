@@ -28,6 +28,7 @@ import { addActivityAction, updateOpportunityAction, setOpportunityCampaignActio
 import { deleteOpportunityAction } from "@/server/actions/trash";
 import { ChangeHistory } from "@/components/history/change-history";
 import { AttachmentSection } from "@/components/attachments/attachment-section";
+import { ProposalSection } from "@/components/opportunities/proposal-section";
 import { UnifiedTimeline, type TimelineEvent } from "@/components/history/unified-timeline";
 import { CommentThread, type CommentView } from "@/components/opportunities/comment-thread";
 import { getSupabaseServer } from "@/lib/supabase/server";
@@ -349,6 +350,13 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
               <button type="submit" className="btn-accent">活動を追加</button>
             </form>
           </Section>
+
+          <ProposalSection
+            opportunityId={o.id}
+            proposalRequired={Boolean(o.proposal_required)}
+            proposalStatus={o.proposal_status ?? null}
+            proposalDueDate={o.proposal_due_date ?? null}
+          />
 
           <Section title="コメント（社内スレッド）" action={<span className="text-[11px] text-ink/40">本部指示・引継ぎをここに集約</span>}>
             <CommentThread

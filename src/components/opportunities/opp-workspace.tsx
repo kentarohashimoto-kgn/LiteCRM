@@ -1,17 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { List, LayoutGrid, CalendarDays, Loader2 } from "lucide-react";
+import { List, LayoutGrid, CalendarDays, FileText, Loader2 } from "lucide-react";
 import type { OppView } from "@/lib/data/select";
 import { leanToOppView } from "@/lib/data/opps-page";
 import { fetchAllOppsLeanAction, fetchApptOppsLeanAction } from "@/server/actions/opportunities";
+import { fetchProposalOppsAction, type ProposalOppRow } from "@/server/actions/proposals";
 import { OppPaginatedTable } from "./opp-paginated-table";
 import { OppViews } from "./opp-views";
+import { ProposalBoard } from "./proposal-board";
 import { AppointmentCalendarPro, type BookingLink } from "./appointment-calendar-pro";
 import { cn } from "@/lib/utils";
 
 interface Option { id: string; name: string; }
-type View = "list" | "board" | "calendar";
+type View = "list" | "board" | "calendar" | "proposal";
 
 export function OppWorkspace({
   initialRows,
@@ -37,6 +39,7 @@ export function OppWorkspace({
   const [view, setView] = useState<View>("list");
   const [allOpps, setAllOpps] = useState<OppView[] | null>(null);      // ボード用(全件)
   const [apptOpps, setApptOpps] = useState<OppView[] | null>(null);    // カレンダー用(アポのみ)
+  const [proposalRows, setProposalRows] = useState<ProposalOppRow[] | null>(null); // 提案タブ用
   const [loadingAll, setLoadingAll] = useState(false);
 
   async function ensureAll() {
@@ -53,10 +56,17 @@ export function OppWorkspace({
     setApptOpps(rows.map(leanToOppView));
     setLoadingAll(false);
   }
+  async function ensureProposals() {
+    if (proposalRows || loadingAll) return;
+    setLoadingAll(true);
+    setProposalRows(await fetchProposalOppsAction());
+    setLoadingAll(false);
+  }
   function switchTo(v: View) {
     setView(v);
     if (v === "board") ensureAll();
     if (v === "calendar") ensureAppts();
+    if (v === "proposal") ensureProposals();
   }
 
   return (
@@ -65,9 +75,16 @@ export function OppWorkspace({
         <Tab active={view === "list"} onClick={() => switchTo("list")} icon={<List size={15} />} label="一覧" />
         <Tab active={view === "board"} onClick={() => switchTo("board")} icon={<LayoutGrid size={15} />} label="ボード" />
         <Tab active={view === "calendar"} onClick={() => switchTo("calendar")} icon={<CalendarDays size={15} />} label="カレンダー" />
+        <Tab active={view === "proposal"} onClick={() => switchTo("proposal")} icon={<FileText size={15} />} label="提案" />
       </div>
 
-      {view === "list" ? (
+      {view === "proposal" ? (
+        proposalRows ? (
+          <ProposalBoard rows={proposalRows} />
+        ) : (
+          <div className="card card-pad flex items-center gap-2 text-sm text-ink/40"><Loader2 size={15} className="animate-spin" /> 読み込み中…</div>
+        )
+      ) : view === "list" ? (
         <OppPaginatedTable
           initialRows={initialRows}
           initialTotal={initialTotal}
