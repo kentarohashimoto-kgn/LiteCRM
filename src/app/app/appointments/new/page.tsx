@@ -1,0 +1,32 @@
+import { getSupabaseServer } from "@/lib/supabase/server";
+import { requireCtx } from "@/lib/session";
+import { PageHeader } from "@/components/ui/primitives";
+import { AppointmentRegisterForm } from "@/components/appointments/appointment-register-form";
+
+export const dynamic = "force-dynamic";
+
+/** インサイドセールス向け: アポ獲得をその場で登録(顧客検索/新規→担当→日時→案件化)。 */
+export default async function NewAppointmentPage() {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const [ownersR, productsR, sourcesR, bookingR] = await Promise.all([
+    sb.from("profiles").select("id,display_name,email"),
+    sb.from("products").select("id,name").eq("status", "active"),
+    sb.from("lead_sources").select("id,name"),
+    sb.from("booking_links").select("id,label,url,sort_order").order("sort_order"),
+  ]);
+  const owners = (ownersR.data ?? []).map((p) => ({ id: p.id as string, name: (p.display_name as string) ?? (p.email as string) ?? "—" }));
+  const products = (productsR.data ?? []).map((p) => ({ id: p.id as string, name: (p.name as string) ?? "—" }));
+  const sources = (sourcesR.data ?? []).map((s) => ({ id: s.id as string, name: (s.name as string) ?? "—" }));
+  const bookingLinks = (bookingR.data ?? []).map((b) => ({ id: b.id as string, label: b.label as string, url: b.url as string }));
+
+  return (
+    <div>
+      <PageHeader
+        title="アポ登録"
+        subtitle="架電でアポが取れたらその場で登録。顧客・担当者・案件（ヨミ=4.アポ）が一括作成され、カレンダーと営業担当のビューに即反映されます。"
+      />
+      <AppointmentRegisterForm owners={owners} products={products} sources={sources} bookingLinks={bookingLinks} />
+    </div>
+  );
+}

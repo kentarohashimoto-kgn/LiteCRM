@@ -38,6 +38,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
   {
     heading: "案件",
     items: [
+      { href: "/app/appointments/new", label: "アポ登録", icon: CalendarCheck },
       { href: "/app/opportunities", label: "案件（表・ボード）", icon: Target },
       { href: "/app/reps", label: "営業ビュー", icon: UserCog },
       { href: "/app/forecast", label: "売上予測", icon: TrendingUp },
