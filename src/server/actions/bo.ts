@@ -248,3 +248,104 @@ export async function updateExpoTemplateAction(formData: FormData): Promise<void
   }
   revalidatePath("/app/bo/expos/templates");
 }
+
+/* ============================================================
+ * BO-2 事例・インタビュー
+ * ============================================================ */
+
+export async function createCaseStudyAction(formData: FormData): Promise<void> {
+  const ctx = await requireBoCtx();
+  const sb = getSupabaseServer();
+  const accountName = String(formData.get("account_name") || "").trim();
+  if (!accountName) return;
+  await sb.from("case_studies").insert({
+    tenant_id: ctx.tenantId,
+    opportunity_id: String(formData.get("opportunity_id") || "") || null,
+    account_name: accountName,
+    training_name: String(formData.get("training_name") || "").trim() || null,
+    assignee_user_id: ctx.userId,
+  });
+  revalidatePath("/app/bo/cases");
+}
+
+export async function updateCaseStudyAction(formData: FormData): Promise<void> {
+  await requireBoCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  const op = String(formData.get("op"));
+  if (op === "delete") {
+    await sb.from("case_studies").delete().eq("id", id);
+  } else {
+    await sb.from("case_studies").update({
+      status: String(formData.get("status") || "not_approached"),
+      published_url: String(formData.get("published_url") || "").trim() || null,
+      next_action_date: String(formData.get("next_action_date") || "") || null,
+      notes: String(formData.get("notes") || "").trim() || null,
+    }).eq("id", id);
+  }
+  revalidatePath("/app/bo/cases");
+}
+
+/* ============================================================
+ * BO-3 講師アンケート
+ * ============================================================ */
+
+export async function createTrainingSessionAction(formData: FormData): Promise<void> {
+  const ctx = await requireBoCtx();
+  const sb = getSupabaseServer();
+  const course = String(formData.get("course") || "").trim();
+  const instructor = String(formData.get("instructor") || "").trim();
+  const heldOn = String(formData.get("held_on") || "");
+  if (!course || !instructor || !heldOn) return;
+  await sb.from("training_sessions").insert({
+    tenant_id: ctx.tenantId,
+    course,
+    instructor,
+    held_on: heldOn,
+    account_name: String(formData.get("account_name") || "").trim() || null,
+    attendee_count: Number(formData.get("attendee_count") || 0) || null,
+  });
+  revalidatePath("/app/bo/surveys");
+}
+
+/**
+ * アンケート回答の貼り付け取込。1行=1回答、タブ/カンマ区切り:
+ * 役職層(経営/管理職/一般), 職種, 年代, 満足度(1-5), 理解度(1-5), 講師評価(1-5), NPS(0-10), 自由記述
+ */
+export async function importSurveyResponsesAction(formData: FormData): Promise<void> {
+  const ctx = await requireBoCtx();
+  const sb = getSupabaseServer();
+  const sessionId = String(formData.get("session_id"));
+  const raw = String(formData.get("rows") || "").trim();
+  if (!sessionId || !raw) return;
+  const roleMap: Record<string, string> = { "経営": "exec", "経営層": "exec", "管理職": "manager", "一般": "staff", "一般社員": "staff" };
+  const toInt = (s: string, min: number, max: number) => {
+    const n = Number(s);
+    return Number.isFinite(n) && n >= min && n <= max ? Math.round(n) : null;
+  };
+  const rows = raw.split(/\r?\n/).map((line) => {
+    const c = line.split(/\t|,/).map((x) => x.trim());
+    if (c.length < 4) return null;
+    return {
+      tenant_id: ctx.tenantId,
+      session_id: sessionId,
+      role_level: roleMap[c[0]] ?? (["exec", "manager", "staff"].includes(c[0]) ? c[0] : null),
+      job_category: c[1] || null,
+      age_band: c[2] || null,
+      satisfaction: toInt(c[3] ?? "", 1, 5),
+      understanding: toInt(c[4] ?? "", 1, 5),
+      instructor_score: toInt(c[5] ?? "", 1, 5),
+      nps: toInt(c[6] ?? "", 0, 10),
+      comment: (c[7] ?? "").slice(0, 2000) || null,
+    };
+  }).filter(Boolean);
+  if (rows.length > 0) await sb.from("training_survey_responses").insert(rows as never[]);
+  revalidatePath("/app/bo/surveys");
+}
+
+export async function deleteTrainingSessionAction(formData: FormData): Promise<void> {
+  await requireBoCtx();
+  const sb = getSupabaseServer();
+  await sb.from("training_sessions").delete().eq("id", String(formData.get("id")));
+  revalidatePath("/app/bo/surveys");
+}
