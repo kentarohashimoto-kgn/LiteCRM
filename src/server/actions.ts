@@ -141,7 +141,7 @@ export async function updateOpportunityAction(formData: FormData) {
   }
   revalidatePath(`/app/opportunities/${id}`);
   revalidatePath("/app/opportunities");
-  redirect(`/app/opportunities/${id}`);
+  redirect(`/app/opportunities/${id}?saved=1`);
 }
 
 /**
@@ -182,6 +182,7 @@ export async function saveOppResearchAction(formData: FormData) {
     .update({ pre_research: str(formData.get("pre_research")), sales_strategy: str(formData.get("sales_strategy")) })
     .eq("id", id);
   revalidatePath(`/app/opportunities/${id}`);
+  redirect(`/app/opportunities/${id}?saved=1`);
 }
 
 /**
@@ -201,6 +202,7 @@ export async function updateOpportunityBasicsAction(formData: FormData) {
     yomi: str(formData.get("yomi")),
     primary_product_id: str(formData.get("primary_product_id")),
     lead_source_id: str(formData.get("lead_source_id")),
+    source_detail: str(formData.get("source_detail")),
     first_meeting_date: str(formData.get("first_meeting_date")),
     appt_acquired_by: str(formData.get("appt_acquired_by")),
     appt_acquired_on: str(formData.get("appt_acquired_on")),
@@ -211,7 +213,7 @@ export async function updateOpportunityBasicsAction(formData: FormData) {
   await sb.from("opportunities").update(patch).eq("id", id);
   revalidatePath(`/app/opportunities/${id}`);
   revalidatePath("/app/opportunities");
-  redirect(`/app/opportunities/${id}`);
+  redirect(`/app/opportunities/${id}?saved=1`);
 }
 
 /** 商談を展示会・施策インスタンスへ紐付け(手動修正)。推定フラグは解除する。 */
@@ -827,6 +829,29 @@ export async function setAcquirerAliasAction(raw: string, displayName: string): 
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/** リードの各メモ欄(展示会でのやりとり・架電メモ等)とBANTを、案件へ引き継ぐ1本のテキストに整形。 */
+function buildLeadHandoff(lead: any): string {
+  const lines: string[] = [];
+  if (lead.raw_event) lines.push(`【流入イベント】${lead.raw_event}`);
+  if (lead.notes) lines.push(`【リードメモ】${lead.notes}`);
+  // 取込元CSV由来の追加メモ(extra jsonb)も取りこぼさない
+  if (lead.extra && typeof lead.extra === "object") {
+    for (const [k, v] of Object.entries(lead.extra as Record<string, unknown>)) {
+      const val = v == null ? "" : String(v).trim();
+      if (val && /memo|note|詳細|議事|やりとり|メモ/i.test(k)) lines.push(`【${k}】${val}`);
+    }
+  }
+  const bant = [
+    lead.needs ? `ニーズ:${lead.needs}` : null,
+    lead.timing ? `時期:${lead.timing}` : null,
+    lead.authority ? `決裁:${lead.authority}` : null,
+    lead.budget_band ? `予算:${lead.budget_band}` : null,
+  ].filter(Boolean);
+  if (bant.length) lines.push(`【BANT】${bant.join(" / ")}`);
+  if (lead.disposition) lines.push(`【リード決着】${lead.disposition}`);
+  return lines.join("\n");
+}
+
 /**
  * リードを案件化(opportunity に昇格)。連結ファネルの中核。
  *  - 会社名で既存 account を名寄せ(無ければ作成)
@@ -896,10 +921,14 @@ async function promoteLeadCore(
     contactId = nc?.id ?? null;
   }
 
+  // リードの引継ぎメモを案件の「事前リサーチ情報」に集約。
+  // 展示会での名刺交換時のやりとり・架電メモ・BANTなどを営業が案件側で追えるようにする。
+  const handoff = buildLeadHandoff(lead);
+
   // 既存のオープン案件があれば紐付け、無ければ新規作成(二重計上防止)
   const { data: openOpps } = await sb
     .from("opportunities")
-    .select("id,lead_id")
+    .select("id,lead_id,pre_research")
     .eq("tenant_id", tenantId)
     .eq("account_id", accountId)
     .eq("status", "open")
@@ -908,7 +937,11 @@ async function promoteLeadCore(
   let opportunityId: string | null = openOpps?.[0]?.id ?? null;
 
   if (opportunityId) {
-    if (!openOpps[0].lead_id) await sb.from("opportunities").update({ lead_id: leadId }).eq("id", opportunityId);
+    const patch: Record<string, unknown> = {};
+    if (!openOpps[0].lead_id) patch.lead_id = leadId;
+    // 既存案件の事前リサーチが空なら引継ぎメモを埋める(既存記述は上書きしない)
+    if (handoff && !str(openOpps[0].pre_research)) patch.pre_research = handoff;
+    if (Object.keys(patch).length) await sb.from("opportunities").update(patch).eq("id", opportunityId);
   } else {
     const today = new Date().toISOString().slice(0, 10);
     const { data: opp } = await sb
@@ -927,6 +960,7 @@ async function promoteLeadCore(
         first_meeting_date: today,
         lead_source_id: lead.lead_source_id ?? null,
         campaign_id: lead.campaign_id ?? null,
+        pre_research: handoff || null,
         status: "open",
         last_activity_at: new Date().toISOString(),
       })

@@ -5,8 +5,10 @@ import { formatDate } from "@/lib/utils";
 
 function hm(iso?: string): string | null {
   if (!iso) return null;
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  // サーバのローカルTZ(本番はUTC)に依存せず、常にJSTで時刻を表示する。
+  // 例: 2026-07-06T13:00+09:00 は getHours() だと 04 になってしまうため +9h して整形。
+  const d = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
+  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 
 /** 案件配下の商談リスト。商談日・時間・概要を把握しやすく表示。 */

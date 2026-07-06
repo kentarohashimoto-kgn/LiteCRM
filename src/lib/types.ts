@@ -631,6 +631,8 @@ export interface Opportunity {
   sales_strategy?: string;
   primary_product_id?: UUID;
   lead_source_id?: UUID;
+  /** 流入の詳細(どの展示会・セミナー・施策から入ったか)。取込時のアポソース詳細を保持。 */
+  source_detail?: string;
   campaign_id?: UUID;
   campaign_estimated?: boolean;
   next_action_date?: string;

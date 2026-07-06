@@ -420,3 +420,78 @@ export async function updateFuMeetingAction(formData: FormData): Promise<void> {
   revalidatePath("/app/bo/followups");
   revalidatePath("/app/bo");
 }
+
+/* ============================================================
+ * BO-7 AI講師スケジュール(講師マスタ＋研修カレンダー)
+ * ============================================================ */
+
+/** 講師を登録(日程調整URLも保持)。 */
+export async function createInstructorAction(formData: FormData): Promise<void> {
+  const ctx = await requireBoCtx();
+  const sb = getSupabaseServer();
+  const name = String(formData.get("name") || "").trim();
+  if (!name) return;
+  await sb.from("instructors").upsert(
+    {
+      tenant_id: ctx.tenantId,
+      name,
+      schedule_url: String(formData.get("schedule_url") || "").trim() || null,
+      email: String(formData.get("email") || "").trim() || null,
+      color: String(formData.get("color") || "").trim() || null,
+      notes: String(formData.get("notes") || "").trim() || null,
+    },
+    { onConflict: "tenant_id,name" },
+  );
+  revalidatePath("/app/bo/instructors");
+}
+
+/** 講師の日程URL・メモ・稼働可否の更新／削除。 */
+export async function updateInstructorAction(formData: FormData): Promise<void> {
+  await requireBoCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  const op = String(formData.get("op") || "save");
+  if (op === "delete") await sb.from("instructors").delete().eq("id", id);
+  else if (op === "toggle") await sb.from("instructors").update({ active: formData.get("active") === "1" }).eq("id", id);
+  else
+    await sb
+      .from("instructors")
+      .update({
+        schedule_url: String(formData.get("schedule_url") || "").trim() || null,
+        email: String(formData.get("email") || "").trim() || null,
+        color: String(formData.get("color") || "").trim() || null,
+        notes: String(formData.get("notes") || "").trim() || null,
+      })
+      .eq("id", id);
+  revalidatePath("/app/bo/instructors");
+}
+
+/** 研修実施予定を登録(講師・日時・企業・会場)。カレンダー母体の training_sessions に入れる。 */
+export async function scheduleTrainingSessionAction(formData: FormData): Promise<void> {
+  const ctx = await requireBoCtx();
+  const sb = getSupabaseServer();
+  const heldOn = String(formData.get("held_on") || "");
+  const instructorId = String(formData.get("instructor_id") || "") || null;
+  const course = String(formData.get("course") || "").trim();
+  if (!heldOn || !course) return;
+  // 互換のため instructor テキストにも講師名を入れる
+  let instructorName = String(formData.get("instructor") || "").trim();
+  if (!instructorName && instructorId) {
+    const { data: ins } = await sb.from("instructors").select("name").eq("id", instructorId).maybeSingle();
+    instructorName = (ins?.name as string) ?? "";
+  }
+  await sb.from("training_sessions").insert({
+    tenant_id: ctx.tenantId,
+    held_on: heldOn,
+    start_time: String(formData.get("start_time") || "") || null,
+    end_time: String(formData.get("end_time") || "") || null,
+    course,
+    instructor: instructorName || "(未定)",
+    instructor_id: instructorId,
+    account_name: String(formData.get("account_name") || "").trim() || null,
+    venue: String(formData.get("venue") || "").trim() || null,
+    attendee_count: Number(formData.get("attendee_count") || 0) || null,
+  });
+  revalidatePath("/app/bo/instructors");
+  revalidatePath("/app/bo/surveys");
+}

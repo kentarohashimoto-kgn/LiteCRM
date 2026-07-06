@@ -32,13 +32,14 @@ import { deleteOpportunityAction } from "@/server/actions/trash";
 import { ChangeHistory } from "@/components/history/change-history";
 import { AttachmentSection } from "@/components/attachments/attachment-section";
 import { ProposalSection } from "@/components/opportunities/proposal-section";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { UnifiedTimeline, type TimelineEvent } from "@/components/history/unified-timeline";
 import { CommentThread, type CommentView } from "@/components/opportunities/comment-thread";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { LOST_REASONS } from "@/lib/constants";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince } from "@/lib/utils";
 
-export default async function OpportunityDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string } }) {
+export default async function OpportunityDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string; saved?: string } }) {
   const ws = await getWorkspaceForOpportunity(params.id);
   const o = getOpportunity(ws, params.id);
   if (!o) notFound();
@@ -150,6 +151,9 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
       {searchParams.error && (
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-600">{searchParams.error}</div>
       )}
+      {searchParams.saved && (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">✓ 保存しました</div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* 左: 編集 + 情報 */}
@@ -167,7 +171,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                 <label className="label">事前営業戦略</label>
                 <textarea name="sales_strategy" rows={3} defaultValue={o.sales_strategy ?? ""} placeholder="リサーチを踏まえた初回トーク方針・聞くべき質問・提案の仮説" className="input" />
               </div>
-              <button type="submit" className="btn-accent">保存</button>
+              <SubmitButton className="btn-accent" pendingLabel="保存中…">保存</SubmitButton>
             </form>
           </Section>
 
@@ -287,15 +291,11 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                   <label className="label">更新確度(%)（サブスク）</label>
                   <input name="renewal_probability" type="number" min={0} max={100} defaultValue={o.renewal_probability ?? ""} className="input" placeholder="継続すると見込む確度" />
                 </div>
-                <div>
-                  <label className="label">次アクション日</label>
-                  <input name="next_action_date" type="date" defaultValue={o.next_action_date ?? ""} className="input" />
-                </div>
               </div>
-              <div>
-                <label className="label">次アクション内容</label>
-                <input name="next_action_text" defaultValue={o.next_action_text ?? ""} className="input" placeholder="open案件は次アクションを必ず設定しましょう" />
-              </div>
+              {/* 次アクションは「活動を記録」に一本化(以前はここと2箇所にあった)。
+                  ステージ等の更新時に既存の次アクションを消さないよう hidden で保持する。 */}
+              <input type="hidden" name="next_action_date" value={o.next_action_date ?? ""} />
+              <input type="hidden" name="next_action_text" value={o.next_action_text ?? ""} />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">失注理由（失注時のみ）</label>
@@ -313,7 +313,8 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                 <label className="label">失注の詳細（自由記述）</label>
                 <input name="lost_reason" defaultValue={o.lost_reason ?? ""} className="input" placeholder="経緯・条件差など" />
               </div>
-              <button type="submit" className="btn-primary">保存する</button>
+              <p className="text-[11px] text-ink/40">※ 次アクション日・内容は下の「活動を記録」で設定します（重複を避けるためここでは表示していません）。</p>
+              <SubmitButton className="btn-primary" pendingLabel="保存中…">保存する</SubmitButton>
             </form>
           </Section>
 
@@ -397,6 +398,9 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
               )}
               <Row label="主商材">{o.product?.name ?? "—"}</Row>
               <Row label="流入経路">{o.leadSource?.name ?? "—"}</Row>
+              <Row label="流入詳細（どの展示会・施策）">
+                {o.source_detail || o.campaign?.name || "—"}
+              </Row>
               <Row label="最終活動">{since != null ? `${since}日前` : "—"}</Row>
               <Row label="作成日">{formatDateFull(o.created_at)}</Row>
             </dl>
@@ -438,6 +442,10 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                   </select>
                 </div>
                 <div>
+                  <label className="label">流入詳細（どの展示会・施策）</label>
+                  <input name="source_detail" defaultValue={o.source_detail ?? ""} className="input" placeholder="例: 202606_AIEXPO幕張" />
+                </div>
+                <div>
                   <label className="label">初回商談日</label>
                   <input name="first_meeting_date" type="date" defaultValue={o.first_meeting_date ?? ""} className="input" />
                 </div>
@@ -454,7 +462,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                     <input name="appt_acquired_on" type="date" defaultValue={o.appt_acquired_on ?? ""} className="input" />
                   </div>
                 </div>
-                <button type="submit" className="btn-primary">基本情報を保存</button>
+                <SubmitButton className="btn-primary" pendingLabel="保存中…">基本情報を保存</SubmitButton>
               </form>
             </details>
 

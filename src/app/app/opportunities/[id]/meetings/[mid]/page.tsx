@@ -10,8 +10,8 @@ import { formatDateFull } from "@/lib/utils";
 
 function hm(iso?: string): string {
   if (!iso) return "";
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  // サーバ(UTC)描画でも常にJST表示にする
+  return new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(11, 16);
 }
 
 export default async function MeetingDetailPage({ params }: { params: { id: string; mid: string } }) {

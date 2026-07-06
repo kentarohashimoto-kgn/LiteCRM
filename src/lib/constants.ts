@@ -53,10 +53,10 @@ export const FORECAST_CATEGORIES: {
   label: string;
   description: string;
 }[] = [
-  { key: "commit", label: "Commit", description: "ほぼ受注。売上計画に入れてよい" },
-  { key: "best_case", label: "Best Case", description: "条件が整えば受注見込み" },
-  { key: "pipeline", label: "Pipeline", description: "まだ不確実だが追うべき案件" },
-  { key: "upside", label: "Upside", description: "将来化ける可能性がある案件" },
+  { key: "commit", label: "コミット", description: "ほぼ受注。売上計画に入れてよい" },
+  { key: "best_case", label: "ベストケース", description: "条件が整えば受注見込み" },
+  { key: "pipeline", label: "パイプライン", description: "まだ不確実だが追うべき案件" },
+  { key: "upside", label: "アップサイド", description: "将来化ける可能性がある案件" },
   { key: "omitted", label: "除外", description: "予測から除外" },
 ];
 

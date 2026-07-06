@@ -88,6 +88,7 @@ const boGroups: typeof groups = [
       { href: "/app/bo/subsidies", label: "助成金トラッカー", icon: BadgeCheck },
       { href: "/app/bo/followups", label: "研修後フォロー", icon: CalendarCheck },
       { href: "/app/bo/expos", label: "展示会準備WBS", icon: Presentation },
+      { href: "/app/bo/instructors", label: "AI講師スケジュール", icon: CalendarCheck },
       { href: "/app/bo/cases", label: "事例・インタビュー", icon: BookOpen },
       { href: "/app/bo/surveys", label: "講師アンケート", icon: ClipboardList },
     ],

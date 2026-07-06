@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BadgeCheck, BookOpen, CalendarCheck, ClipboardList, Presentation } from "lucide-react";
+import { BadgeCheck, BookOpen, CalendarCheck, ClipboardList, GraduationCap, Presentation } from "lucide-react";
 import { requireBoCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
@@ -10,6 +10,7 @@ const MODULES = [
   { href: "/app/bo/subsidies", label: "助成金トラッカー", desc: "事前説明会・事前申請・実績報告の納期管理", icon: BadgeCheck },
   { href: "/app/bo/followups", label: "研修後フォロー", desc: "1・3・6ヶ月後Mtgと活用度・アップセルの追跡", icon: CalendarCheck },
   { href: "/app/bo/expos", label: "展示会準備WBS", desc: "確定でタスク自動生成・人員アサイン・納期リマインド", icon: Presentation },
+  { href: "/app/bo/instructors", label: "AI講師スケジュール", desc: "講師の日程URL登録・研修カレンダー", icon: GraduationCap },
   { href: "/app/bo/cases", label: "事例・インタビュー", desc: "研修受講会社の事例化パイプライン", icon: BookOpen },
   { href: "/app/bo/surveys", label: "講師アンケート", desc: "講師別・研修種類別・受講者層別の分析", icon: ClipboardList },
 ];
