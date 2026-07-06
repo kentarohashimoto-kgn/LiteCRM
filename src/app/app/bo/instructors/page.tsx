@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireBoCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
-import { createInstructorAction, updateInstructorAction, scheduleTrainingSessionAction } from "@/server/actions/bo";
+import { createInstructorAction, updateInstructorAction } from "@/server/actions/bo";
+import { ScheduleSessionForm } from "@/components/bo/schedule-session-form";
 
 export const dynamic = "force-dynamic";
 
@@ -31,13 +32,15 @@ export default async function InstructorsPage({ searchParams }: { searchParams: 
   const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const month = /^\d{4}-\d{2}$/.test(searchParams.month ?? "") ? (searchParams.month as string) : today.slice(0, 7);
 
-  const [insR, sessR] = await Promise.all([
+  const [insR, sessR, dealsR] = await Promise.all([
     sb.from("instructors").select("id, name, schedule_url, email, color, active, notes").order("name").limit(200),
     sb.from("training_sessions").select("id, held_on, start_time, end_time, course, instructor, instructor_id, account_name, venue")
       .gte("held_on", `${monthAdd(month, -1)}-01`).lte("held_on", `${monthAdd(month, 2)}-01`).order("held_on").limit(500),
+    sb.rpc("bo_training_deals"),
   ]);
   const instructors = (insR.data ?? []) as Instructor[];
   const sessions = (sessR.data ?? []) as Sess[];
+  const deals = ((dealsR.data ?? []) as { account_name: string | null; name: string }[]);
 
   // 講師→色
   const colorOf = new Map<string, string>();
@@ -117,26 +120,7 @@ export default async function InstructorsPage({ searchParams }: { searchParams: 
           </Section>
 
           <Section title="研修予定を登録">
-            <form action={scheduleTrainingSessionAction} className="space-y-2.5">
-              <div><label className="label">実施日 *</label><input name="held_on" type="date" required className="input" /></div>
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className="label">開始</label><input name="start_time" type="time" className="input" /></div>
-                <div><label className="label">終了</label><input name="end_time" type="time" className="input" /></div>
-              </div>
-              <div><label className="label">講師</label>
-                <select name="instructor_id" className="input" defaultValue="">
-                  <option value="">（未定）</option>
-                  {instructors.filter((i) => i.active).map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-                </select>
-              </div>
-              <div><label className="label">研修種類 *</label><input name="course" required className="input" placeholder="例: 生成AI基礎" /></div>
-              <div><label className="label">受講企業</label><input name="account_name" className="input" /></div>
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className="label">会場</label><input name="venue" className="input" placeholder="訪問/オンライン等" /></div>
-                <div><label className="label">受講者数</label><input name="attendee_count" type="number" min={0} className="input" /></div>
-              </div>
-              <button type="submit" className="btn-accent">予定を追加</button>
-            </form>
+            <ScheduleSessionForm instructors={instructors.filter((i) => i.active).map((i) => ({ id: i.id, name: i.name }))} deals={deals} />
           </Section>
         </div>
 

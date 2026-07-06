@@ -466,32 +466,49 @@ export async function updateInstructorAction(formData: FormData): Promise<void> 
   revalidatePath("/app/bo/instructors");
 }
 
-/** 研修実施予定を登録(講師・日時・企業・会場)。カレンダー母体の training_sessions に入れる。 */
+/**
+ * 研修実施予定を登録。1つの研修(企業・講師・研修種類・会場・受講者数)に対し、
+ * 実施日(＋開始/終了時刻)を複数まとめて登録できる。各実施日が training_sessions の1行になる。
+ */
 export async function scheduleTrainingSessionAction(formData: FormData): Promise<void> {
   const ctx = await requireBoCtx();
   const sb = getSupabaseServer();
-  const heldOn = String(formData.get("held_on") || "");
-  const instructorId = String(formData.get("instructor_id") || "") || null;
   const course = String(formData.get("course") || "").trim();
-  if (!heldOn || !course) return;
+  const instructorId = String(formData.get("instructor_id") || "") || null;
+  const accountName = String(formData.get("account_name") || "").trim() || null;
+  const venue = String(formData.get("venue") || "").trim() || null;
+  const attendee = Number(formData.get("attendee_count") || 0) || null;
+  if (!course) return;
+
   // 互換のため instructor テキストにも講師名を入れる
-  let instructorName = String(formData.get("instructor") || "").trim();
-  if (!instructorName && instructorId) {
+  let instructorName = "";
+  if (instructorId) {
     const { data: ins } = await sb.from("instructors").select("name").eq("id", instructorId).maybeSingle();
     instructorName = (ins?.name as string) ?? "";
   }
-  await sb.from("training_sessions").insert({
-    tenant_id: ctx.tenantId,
-    held_on: heldOn,
-    start_time: String(formData.get("start_time") || "") || null,
-    end_time: String(formData.get("end_time") || "") || null,
-    course,
-    instructor: instructorName || "(未定)",
-    instructor_id: instructorId,
-    account_name: String(formData.get("account_name") || "").trim() || null,
-    venue: String(formData.get("venue") || "").trim() || null,
-    attendee_count: Number(formData.get("attendee_count") || 0) || null,
-  });
+
+  // 複数日程(held_on[]/start_time[]/end_time[])を対応する行に展開
+  const dates = formData.getAll("held_on").map((v) => String(v));
+  const starts = formData.getAll("start_time").map((v) => String(v));
+  const ends = formData.getAll("end_time").map((v) => String(v));
+  const rows = dates
+    .map((d, i) => ({ d, s: starts[i] ?? "", e: ends[i] ?? "" }))
+    .filter((r) => r.d)
+    .map((r) => ({
+      tenant_id: ctx.tenantId,
+      held_on: r.d,
+      start_time: r.s || null,
+      end_time: r.e || null,
+      course,
+      instructor: instructorName || "(未定)",
+      instructor_id: instructorId,
+      account_name: accountName,
+      venue,
+      attendee_count: attendee,
+    }));
+  if (rows.length === 0) return;
+
+  await sb.from("training_sessions").insert(rows);
   revalidatePath("/app/bo/instructors");
   revalidatePath("/app/bo/surveys");
 }
