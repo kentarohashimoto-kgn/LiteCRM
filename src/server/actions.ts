@@ -184,6 +184,36 @@ export async function saveOppResearchAction(formData: FormData) {
   revalidatePath(`/app/opportunities/${id}`);
 }
 
+/**
+ * 案件の基本情報を編集(案件名・担当営業の割振り/変更・ヨミ・主商材・流入経路・
+ * 初回商談日・アポ獲得者)。担当営業の再割当てはここから行う。
+ * name / owner_user_id は NOT NULL のため、空送信時は既存値を保持する。
+ */
+export async function updateOpportunityBasicsAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  if (!id) redirect("/app/opportunities");
+
+  const name = str(formData.get("name"));
+  const owner = str(formData.get("owner_user_id"));
+  const patch: Record<string, unknown> = {
+    yomi: str(formData.get("yomi")),
+    primary_product_id: str(formData.get("primary_product_id")),
+    lead_source_id: str(formData.get("lead_source_id")),
+    first_meeting_date: str(formData.get("first_meeting_date")),
+    appt_acquired_by: str(formData.get("appt_acquired_by")),
+    appt_acquired_on: str(formData.get("appt_acquired_on")),
+  };
+  if (name) patch.name = name;         // NOT NULL: 空なら維持
+  if (owner) patch.owner_user_id = owner; // NOT NULL: 空なら維持
+
+  await sb.from("opportunities").update(patch).eq("id", id);
+  revalidatePath(`/app/opportunities/${id}`);
+  revalidatePath("/app/opportunities");
+  redirect(`/app/opportunities/${id}`);
+}
+
 /** 商談を展示会・施策インスタンスへ紐付け(手動修正)。推定フラグは解除する。 */
 export async function setOpportunityCampaignAction(formData: FormData) {
   await requireCtx();

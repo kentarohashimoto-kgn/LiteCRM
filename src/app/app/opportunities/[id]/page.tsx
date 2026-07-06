@@ -13,6 +13,8 @@ import {
   getUser,
   listMembers,
   listCampaigns,
+  getProducts,
+  getLeadSources,
 } from "@/lib/data/select";
 import { MeetingList } from "@/components/meetings/meeting-list";
 import { BillingSection } from "@/components/billing/billing-section";
@@ -24,7 +26,8 @@ import { STAGES, FORECAST_CATEGORIES, CATEGORIES, CATEGORY_MAP, STAGE_MAP, ACTIV
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/ui/badges";
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
-import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction, saveOppResearchAction } from "@/server/actions";
+import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction, saveOppResearchAction, updateOpportunityBasicsAction } from "@/server/actions";
+import { YOMI_OPTIONS } from "@/lib/constants";
 import { deleteOpportunityAction } from "@/server/actions/trash";
 import { ChangeHistory } from "@/components/history/change-history";
 import { AttachmentSection } from "@/components/attachments/attachment-section";
@@ -48,6 +51,8 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
   const history = getStageHistory(ws, o.id);
   const contacts = o.account ? getContactsByAccount(ws, o.account.id) : [];
   const campaigns = listCampaigns(ws);
+  const products = getProducts(ws);
+  const leadSources = getLeadSources(ws);
   const risk = evaluateRisk(o);
   const since = daysSince(o.last_activity_at);
   const sb = getSupabaseServer();
@@ -395,6 +400,64 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
               <Row label="最終活動">{since != null ? `${since}日前` : "—"}</Row>
               <Row label="作成日">{formatDateFull(o.created_at)}</Row>
             </dl>
+
+            {/* 基本情報の編集(案件名・担当営業の割振り/変更ほか) */}
+            <details className="mt-4 pt-3 border-t border-black/[0.05]">
+              <summary className="cursor-pointer text-sm font-medium text-teal-deep">基本情報を編集（担当営業の割振り・変更）</summary>
+              <form action={updateOpportunityBasicsAction} className="mt-3 space-y-3">
+                <input type="hidden" name="id" value={o.id} />
+                <div>
+                  <label className="label">案件名</label>
+                  <input name="name" defaultValue={o.name} required className="input" />
+                </div>
+                <div>
+                  <label className="label">担当営業</label>
+                  <select name="owner_user_id" defaultValue={o.owner_user_id} className="input">
+                    {members.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">ヨミ</label>
+                  <select name="yomi" defaultValue={o.yomi ?? ""} className="input">
+                    <option value="">—</option>
+                    {YOMI_OPTIONS.map((y) => <option key={y.key} value={y.key}>{y.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">主商材</label>
+                  <select name="primary_product_id" defaultValue={o.primary_product_id ?? ""} className="input">
+                    <option value="">—</option>
+                    {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">流入経路</label>
+                  <select name="lead_source_id" defaultValue={o.lead_source_id ?? ""} className="input">
+                    <option value="">—</option>
+                    {leadSources.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">初回商談日</label>
+                  <input name="first_meeting_date" type="date" defaultValue={o.first_meeting_date ?? ""} className="input" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="label">アポ獲得者</label>
+                    <select name="appt_acquired_by" defaultValue={o.appt_acquired_by ?? ""} className="input">
+                      <option value="">—</option>
+                      {members.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">アポ獲得日</label>
+                    <input name="appt_acquired_on" type="date" defaultValue={o.appt_acquired_on ?? ""} className="input" />
+                  </div>
+                </div>
+                <button type="submit" className="btn-primary">基本情報を保存</button>
+              </form>
+            </details>
+
             {/* 展示会・施策の紐付け(修正可) */}
             <form action={setOpportunityCampaignAction} className="mt-4 pt-3 border-t border-black/[0.05]">
               <input type="hidden" name="id" value={o.id} />
