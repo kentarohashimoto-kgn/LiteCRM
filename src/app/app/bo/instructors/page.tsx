@@ -4,6 +4,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { createInstructorAction, updateInstructorAction } from "@/server/actions/bo";
 import { ScheduleSessionForm } from "@/components/bo/schedule-session-form";
+import { InstructorHoursBar, InstructorHoursTrend } from "@/components/bo/instructor-hours-charts";
 
 export const dynamic = "force-dynamic";
 
@@ -13,17 +14,35 @@ interface Sess {
   course: string; instructor: string; instructor_id: string | null; account_name: string | null; venue: string | null;
 }
 
-// 講師ごとの色(登録色が無ければ順番で自動割当)
+// 講師ごとの色(登録色が無ければ順番で自動割当)。カレンダーとグラフで同じ色を使う。
 const PALETTE = [
   "bg-teal-500 text-white", "bg-indigo-500 text-white", "bg-rose-500 text-white", "bg-amber-500 text-white",
   "bg-emerald-500 text-white", "bg-sky-500 text-white", "bg-fuchsia-500 text-white", "bg-lime-600 text-white",
 ];
+// PALETTE と同じ並びの16進(recharts用)
+const HEX = ["#14b8a6", "#6366f1", "#f43f5e", "#f59e0b", "#10b981", "#0ea5e9", "#d946ef", "#65a30d"];
+// 登録色クラス→16進の対応
+const CLASS_HEX: Record<string, string> = {
+  "bg-teal-500 text-white": "#14b8a6", "bg-indigo-500 text-white": "#6366f1", "bg-rose-500 text-white": "#f43f5e",
+  "bg-amber-500 text-white": "#f59e0b", "bg-emerald-500 text-white": "#10b981", "bg-sky-500 text-white": "#0ea5e9",
+};
 
 function monthAdd(ym: string, diff: number): string {
   const [y, m] = ym.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1 + diff, 1)).toISOString().slice(0, 7);
 }
 const hhmm = (t: string | null) => (t ? t.slice(0, 5) : "");
+
+/** 開始/終了(HH:MM[:SS])から稼働時間(h)。両方揃っているものだけ計上。 */
+function durationHours(start: string | null, end: string | null): number {
+  if (!start || !end) return 0;
+  const toMin = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+  const d = toMin(end) - toMin(start);
+  return d > 0 ? Math.round((d / 60) * 100) / 100 : 0;
+}
 
 /** BO-7 AI講師スケジュール: 講師の日程URLを登録し、研修予定をカレンダーで俯瞰。 */
 export default async function InstructorsPage({ searchParams }: { searchParams: { month?: string } }) {
@@ -32,20 +51,63 @@ export default async function InstructorsPage({ searchParams }: { searchParams: 
   const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const month = /^\d{4}-\d{2}$/.test(searchParams.month ?? "") ? (searchParams.month as string) : today.slice(0, 7);
 
-  const [insR, sessR, dealsR] = await Promise.all([
+  // グラフ用: 直近6ヶ月(選択月を最終月)の稼働時間を集計
+  const TREND_MONTHS = 6;
+  const trendStart = monthAdd(month, -(TREND_MONTHS - 1));
+
+  const [insR, sessR, dealsR, hoursR] = await Promise.all([
     sb.from("instructors").select("id, name, schedule_url, email, color, active, notes").order("name").limit(200),
     sb.from("training_sessions").select("id, held_on, start_time, end_time, course, instructor, instructor_id, account_name, venue")
       .gte("held_on", `${monthAdd(month, -1)}-01`).lte("held_on", `${monthAdd(month, 2)}-01`).order("held_on").limit(500),
     sb.rpc("bo_training_deals"),
+    sb.from("training_sessions").select("held_on, start_time, end_time, instructor_id")
+      .gte("held_on", `${trendStart}-01`).lte("held_on", `${monthAdd(month, 1)}-01`).limit(5000),
   ]);
   const instructors = (insR.data ?? []) as Instructor[];
   const sessions = (sessR.data ?? []) as Sess[];
   const deals = ((dealsR.data ?? []) as { account_name: string | null; name: string }[]);
+  const hoursRows = (hoursR.data ?? []) as { held_on: string; start_time: string | null; end_time: string | null; instructor_id: string | null }[];
 
-  // 講師→色
+  // 講師→色(class/hex)
   const colorOf = new Map<string, string>();
-  instructors.forEach((ins, i) => colorOf.set(ins.id, ins.color || PALETTE[i % PALETTE.length]));
+  const hexOf = new Map<string, string>();
+  instructors.forEach((ins, i) => {
+    colorOf.set(ins.id, ins.color || PALETTE[i % PALETTE.length]);
+    hexOf.set(ins.id, (ins.color && CLASS_HEX[ins.color]) || HEX[i % HEX.length]);
+  });
+  const nameOf = new Map(instructors.map((ins) => [ins.id, ins.name]));
   const toneFor = (s: Sess) => (s.instructor_id && colorOf.get(s.instructor_id)) || "bg-ink/60 text-white";
+
+  // 月リスト(古い→新しい)
+  const trendMonthList = Array.from({ length: TREND_MONTHS }, (_, i) => monthAdd(trendStart, i));
+  // 講師×月の稼働時間
+  const hoursByInsMonth = new Map<string, Map<string, number>>(); // insId -> ym -> hours
+  for (const r of hoursRows) {
+    if (!r.instructor_id) continue;
+    const ym = r.held_on.slice(0, 7);
+    const h = durationHours(r.start_time, r.end_time);
+    if (h <= 0) continue;
+    const m = hoursByInsMonth.get(r.instructor_id) ?? new Map<string, number>();
+    m.set(ym, (m.get(ym) ?? 0) + h);
+    hoursByInsMonth.set(r.instructor_id, m);
+  }
+  // 期間内に稼働のある講師のみグラフ対象
+  const chartInstructors = instructors.filter((ins) => {
+    const m = hoursByInsMonth.get(ins.id);
+    return m && Array.from(m.values()).some((v) => v > 0);
+  });
+  const chartSeries = chartInstructors.map((ins) => ({ key: ins.id, name: ins.name, color: hexOf.get(ins.id) ?? "#008C8C" }));
+  // 棒(選択月): 講師別の稼働時間
+  const barData = chartInstructors
+    .map((ins) => ({ name: ins.name, hours: hoursByInsMonth.get(ins.id)?.get(month) ?? 0, color: hexOf.get(ins.id) ?? "#008C8C" }))
+    .filter((d) => d.hours > 0)
+    .sort((a, b) => b.hours - a.hours);
+  // 折れ線(6ヶ月): 月ごとに講師別の稼働時間
+  const trendData = trendMonthList.map((ym) => {
+    const row: Record<string, string | number> = { label: `${Number(ym.slice(5, 7))}月` };
+    for (const ins of chartInstructors) row[ins.id] = hoursByInsMonth.get(ins.id)?.get(ym) ?? 0;
+    return row;
+  });
 
   // カレンダー(月)
   const [cy, cm] = month.split("-").map(Number);
@@ -171,6 +233,17 @@ export default async function InstructorsPage({ searchParams }: { searchParams: 
             </div>
             <p className="text-xs text-ink/40 mt-2">※ 色は講師別。バーにカーソルを当てると 時刻・講師・企業・研修・会場 が出ます。</p>
           </Section>
+
+          {/* 講師の稼働時間グラフ(カレンダーの下) */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mt-5">
+            <Section title={`講師別の稼働時間（${cy}年${cm}月）`} action={<span className="text-[11px] text-ink/40">担当者間のばらつきを見る</span>}>
+              <InstructorHoursBar data={barData} monthLabel={`${cy}年${cm}月`} />
+            </Section>
+            <Section title={`稼働時間の推移（直近${trendMonthList.length}ヶ月・講師別）`} action={<span className="text-[11px] text-ink/40">増減トレンドで差配</span>}>
+              <InstructorHoursTrend data={trendData} series={chartSeries} />
+            </Section>
+          </div>
+          <p className="text-xs text-ink/40 mt-2">※ 稼働時間は各研修の「開始・終了時刻」から算出します。時刻未設定の回は集計に含まれません。</p>
         </div>
       </div>
     </div>
