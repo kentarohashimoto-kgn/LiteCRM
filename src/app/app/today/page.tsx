@@ -33,7 +33,7 @@ function jstTime(iso: string): string {
  * A-7 モバイル入力動線: 「今日のアポ → 終わったらその場で活動登録」のスマホ特化ビュー。
  * 自分担当のオープン案件のうち、今日のアポ / 今日の次回AC / 期限超過を1画面に。
  */
-export default async function TodayPage({ searchParams }: { searchParams: { all?: string } }) {
+export default async function TodayPage({ searchParams }: { searchParams: { all?: string; saved?: string } }) {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const showAll = searchParams.all === "1";
@@ -100,6 +100,9 @@ export default async function TodayPage({ searchParams }: { searchParams: { all?
           </Link>
         }
       />
+      {searchParams.saved === "activity" && (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">✓ 活動を記録しました</div>
+      )}
 
       <div className="grid grid-cols-3 gap-3 mb-5">
         <Card><div className="text-xs text-ink/50">今日のアポ</div><div className="stat-value mt-1">{appts.length}</div></Card>

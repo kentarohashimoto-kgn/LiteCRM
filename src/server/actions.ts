@@ -479,34 +479,94 @@ export async function addActivityAction(formData: FormData) {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const oppId = str(formData.get("opportunity_id"));
+  const accId = str(formData.get("account_id"));
   const nextDate = str(formData.get("next_action_date"));
   const nextText = str(formData.get("next_action_text"));
+  const title = str(formData.get("title"));
+  const body = str(formData.get("body"));
+  const redirectTo = str(formData.get("redirect_to"));
   const activityAt = new Date().toISOString();
 
-  await sb.from("activities").insert({
-    tenant_id: ctx.tenantId,
-    opportunity_id: oppId,
-    account_id: str(formData.get("account_id")),
-    owner_user_id: ctx.userId,
-    activity_type: str(formData.get("activity_type")) ?? "note",
-    title: str(formData.get("title")),
-    body: str(formData.get("body")),
-    activity_at: activityAt,
-    next_action_date: nextDate,
-    next_action_text: nextText,
-  });
-
-  if (oppId) {
-    const patch: Record<string, unknown> = { last_activity_at: activityAt };
-    if (nextDate) {
-      patch.next_action_date = nextDate;
-      patch.next_action_text = nextText;
-    }
-    await sb.from("opportunities").update(patch).eq("id", oppId);
-    revalidatePath(`/app/opportunities/${oppId}`);
+  // 二重登録ガード: 直近60秒に「同じ案件/顧客・同じタイトル・同じ本文」の記録があればスキップ。
+  // (保存されたか分からず連打された場合でも重複を作らない)
+  let duplicated = false;
+  if (title) {
+    const since = new Date(Date.now() - 60 * 1000).toISOString();
+    let q = sb
+      .from("activities")
+      .select("id, body")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("owner_user_id", ctx.userId)
+      .eq("title", title)
+      .gte("created_at", since)
+      .limit(5);
+    q = oppId ? q.eq("opportunity_id", oppId) : accId ? q.eq("account_id", accId) : q;
+    const { data: recent } = await q;
+    duplicated = (recent ?? []).some((r) => (str((r as { body?: string }).body ?? null) ?? null) === (body ?? null));
   }
+
+  if (!duplicated) {
+    await sb.from("activities").insert({
+      tenant_id: ctx.tenantId,
+      opportunity_id: oppId,
+      account_id: accId,
+      owner_user_id: ctx.userId,
+      activity_type: str(formData.get("activity_type")) ?? "note",
+      title,
+      body,
+      activity_at: activityAt,
+      next_action_date: nextDate,
+      next_action_text: nextText,
+    });
+
+    if (oppId) {
+      const patch: Record<string, unknown> = { last_activity_at: activityAt };
+      if (nextDate) {
+        patch.next_action_date = nextDate;
+        patch.next_action_text = nextText;
+      }
+      await sb.from("opportunities").update(patch).eq("id", oppId);
+    }
+  }
+
+  if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
   revalidatePath("/app/activities");
   revalidatePath("/app/today");
+  // 送信後は元画面へ戻し、フォームを空に戻す＋「記録しました」バナーを表示
+  if (redirectTo) redirect(`${redirectTo}?saved=activity`);
+}
+
+/** 活動履歴の編集(タイトル・種別・本文・次アクション)。 */
+export async function updateActivityAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  const oppId = str(formData.get("opportunity_id"));
+  if (!id) return;
+  await sb
+    .from("activities")
+    .update({
+      activity_type: str(formData.get("activity_type")) ?? "note",
+      title: str(formData.get("title")),
+      body: str(formData.get("body")),
+      next_action_date: str(formData.get("next_action_date")),
+      next_action_text: str(formData.get("next_action_text")),
+    })
+    .eq("id", id);
+  if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
+  revalidatePath("/app/activities");
+}
+
+/** 活動履歴の削除(誤登録の取り消し)。RLSで本人/管理者のみ。 */
+export async function deleteActivityAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const id = str(formData.get("id"));
+  const oppId = str(formData.get("opportunity_id"));
+  if (!id) return;
+  await sb.from("activities").delete().eq("id", id);
+  if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
+  revalidatePath("/app/activities");
 }
 
 // ===================== タスク =====================

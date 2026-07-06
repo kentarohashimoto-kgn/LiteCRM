@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PencilLine } from "lucide-react";
 import { ACTIVITY_TYPES } from "@/lib/constants";
 import { addActivityAction } from "@/server/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 /**
  * A-7: その場で活動登録する折りたたみフォーム(スマホ親指操作を想定)。
@@ -28,6 +29,7 @@ export function QuickLogForm({ opportunityId, accountId }: { opportunityId: stri
     <form action={addActivityAction} className="mt-3 space-y-2.5 rounded-xl bg-black/[0.02] p-3">
       <input type="hidden" name="opportunity_id" value={opportunityId} />
       {accountId && <input type="hidden" name="account_id" value={accountId} />}
+      <input type="hidden" name="redirect_to" value="/app/today" />
       <div className="grid grid-cols-2 gap-2.5">
         <select name="activity_type" defaultValue="meeting" className="input">
           {ACTIVITY_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
@@ -40,7 +42,7 @@ export function QuickLogForm({ opportunityId, accountId }: { opportunityId: stri
         <input name="next_action_text" className="input" placeholder="次アクション内容" />
       </div>
       <div className="flex gap-2">
-        <button type="submit" className="btn-accent flex-1">記録する</button>
+        <SubmitButton className="btn-accent flex-1" pendingLabel="記録中…">記録する</SubmitButton>
         <button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-black/10 px-4 text-sm text-ink/60">閉じる</button>
       </div>
     </form>

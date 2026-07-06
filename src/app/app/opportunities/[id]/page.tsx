@@ -35,11 +35,14 @@ import { ProposalSection } from "@/components/opportunities/proposal-section";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { SourceSelect, type SourceDetailOption } from "@/components/opportunities/source-select";
 import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
+import { OpportunityActivityList } from "@/components/activities/opportunity-activity-list";
 import { UnifiedTimeline, type TimelineEvent } from "@/components/history/unified-timeline";
 import { CommentThread, type CommentView } from "@/components/opportunities/comment-thread";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { LOST_REASONS } from "@/lib/constants";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince } from "@/lib/utils";
+
+const SAVED_MSG: Record<string, string> = { "1": "保存しました", activity: "活動を記録しました" };
 
 export default async function OpportunityDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string; saved?: string } }) {
   const ws = await getWorkspaceForOpportunity(params.id);
@@ -164,7 +167,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-600">{searchParams.error}</div>
       )}
       {searchParams.saved && (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">✓ 保存しました</div>
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">✓ {SAVED_MSG[searchParams.saved] ?? "保存しました"}</div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -339,6 +342,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
             <form action={addActivityAction} className="space-y-3">
               <input type="hidden" name="opportunity_id" value={o.id} />
               <input type="hidden" name="account_id" value={o.account_id} />
+              <input type="hidden" name="redirect_to" value={`/app/opportunities/${o.id}`} />
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-1">
                   <label className="label">種別</label>
@@ -365,8 +369,21 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                   <input name="next_action_text" className="input" />
                 </div>
               </div>
-              <button type="submit" className="btn-accent">活動を追加</button>
+              <SubmitButton className="btn-accent" pendingLabel="記録中…">活動を追加</SubmitButton>
             </form>
+
+            {/* 記録済みの活動: 編集・削除できる(誤登録の取り消し) */}
+            <div className="mt-4 pt-4 border-t border-black/[0.05]">
+              <div className="text-xs font-semibold text-ink/50 mb-2">この案件の活動履歴（{activities.length}）<span className="font-normal text-ink/35 ml-1">— 誤りは各行の鉛筆/ゴミ箱で編集・削除できます</span></div>
+              <OpportunityActivityList
+                opportunityId={o.id}
+                activities={activities.map((a) => ({
+                  id: a.id, activity_type: a.activity_type, title: a.title, body: a.body ?? null,
+                  activity_at: a.activity_at, next_action_date: a.next_action_date ?? null, next_action_text: a.next_action_text ?? null,
+                  who: getUser(ws, a.owner_user_id)?.name ?? null,
+                }))}
+              />
+            </div>
           </Section>
 
           <ProposalSection
