@@ -170,7 +170,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">✓ {SAVED_MSG[searchParams.saved] ?? "保存しました"}</div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         {/* 左: 編集 + 情報 */}
         <div className="lg:col-span-2 space-y-5">
           <ScheduleSection oppId={o.id} schedule={schedule} hadFirstMeeting={!!o.first_meeting_date} templates={templates} />
@@ -408,8 +408,8 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
           </Section>
         </div>
 
-        {/* 右: 情報 + タスク + 履歴 */}
-        <div className="space-y-5">
+        {/* 右: 情報 + タスク + 履歴(スクロール追従: 左で編集中も基本情報・顧客を常に参照できる) */}
+        <div className="space-y-5 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1">
           <Section title="基本情報" className={entityBorder("opportunity")} action={<EditTarget level="opportunity" />}>
             <dl className="space-y-2.5 text-sm">
               <Row label="ヨミ"><YomiBadge yomi={o.yomi} /></Row>

@@ -310,7 +310,7 @@ export async function updateMeetingAction(formData: FormData) {
     .eq("id", id);
   revalidatePath(`/app/opportunities/${oppId}/meetings/${id}`);
   if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
-  redirect(`/app/opportunities/${oppId}/meetings/${id}`);
+  redirect(`/app/opportunities/${oppId}/meetings/${id}?saved=1`);
 }
 
 // ===================== 目標(月別) =====================
