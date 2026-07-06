@@ -10,6 +10,7 @@ import { getLead, getPersonEngagement, getPersonTouchpoints } from "@/lib/data/l
 import { LEAD_DISPOSITIONS } from "@/lib/constants";
 import { ROLE_LEVELS, NEEDS_OPTS, TIMING_OPTS, AUTHORITY_OPTS, BUDGET_OPTS, REVENUE_OPTS } from "@/lib/lead-import";
 import { formatDateFull } from "@/lib/utils";
+import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
 
 const TP_LABEL: Record<string, string> = {
   exhibition: "展示会で名刺交換", call: "架電ログ", seminar: "セミナー参加", survey: "アンケート回答",
@@ -46,6 +47,14 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
       <Link href="/app/leads" className="inline-flex items-center gap-1 text-sm text-ink/50 hover:text-ink mb-3">
         <ChevronLeft size={16} /> リード一覧
       </Link>
+      {/* データ階層: リード(いまここ) > 顧客 > 案件(案件化済みの場合) */}
+      <DataPath
+        items={[
+          { level: "lead", name: l.company_name ?? undefined, current: true },
+          ...(l.account_id ? [{ level: "account" as const, href: `/app/accounts/${l.account_id}` }] : []),
+          ...(linkedOpp ? [{ level: "opportunity" as const, name: linkedOpp.name, href: `/app/opportunities/${linkedOpp.id}` }] : []),
+        ]}
+      />
       <PageHeader
         title={l.company_name ?? "リード"}
         subtitle={`${l.contact_name ?? ""}｜流入: ${ev}｜優先度 ${l.priority_score ?? 0}`}
@@ -113,7 +122,7 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
         <input type="hidden" name="id" value={l.id} />
         <input type="hidden" name="priority_base" value={l.priority_base ?? 20} />
 
-        <Section title="基本情報">
+        <Section title="基本情報" className={entityBorder("lead")} action={<EditTarget level="lead" />}>
           <div className="grid grid-cols-2 gap-4">
             <F label="会社名"><input name="company_name" defaultValue={l.company_name ?? ""} className="input" /></F>
             <F label="氏名"><input name="contact_name" defaultValue={l.contact_name ?? ""} className="input" /></F>

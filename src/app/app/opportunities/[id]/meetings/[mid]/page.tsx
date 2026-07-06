@@ -6,6 +6,7 @@ import { getMeeting, getOpportunity } from "@/lib/data/select";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { updateMeetingAction } from "@/server/actions";
 import { AiSummaryButton } from "@/components/meetings/ai-summary-button";
+import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
 import { formatDateFull } from "@/lib/utils";
 
 function hm(iso?: string): string {
@@ -26,6 +27,14 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
       <Link href={`/app/opportunities/${params.id}`} className="inline-flex items-center gap-1 text-sm text-ink/50 hover:text-ink mb-3">
         <ChevronLeft size={16} /> 案件へ戻る
       </Link>
+      {/* データ階層: 顧客 > 案件 > 商談(いまここ) */}
+      <DataPath
+        items={[
+          ...(meeting.account ? [{ level: "account" as const, name: meeting.account.name, href: `/app/accounts/${meeting.account.id}` }] : []),
+          { level: "opportunity", name: opp?.name, href: `/app/opportunities/${params.id}` },
+          { level: "meeting", name: meeting.title, current: true },
+        ]}
+      />
       <PageHeader title={meeting.title} subtitle={`${meeting.account?.name ?? ""}｜案件: ${opp?.name ?? "—"}`} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
@@ -65,7 +74,7 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
         </Section>
       )}
 
-      <Section title="商談を編集">
+      <Section title="商談を編集" className={entityBorder("meeting")} action={<EditTarget level="meeting" />}>
         <form action={updateMeetingAction} className="space-y-4">
           <input type="hidden" name="id" value={meeting.id} />
           <input type="hidden" name="opportunity_id" value={meeting.opportunity_id} />

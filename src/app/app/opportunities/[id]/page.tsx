@@ -33,6 +33,8 @@ import { ChangeHistory } from "@/components/history/change-history";
 import { AttachmentSection } from "@/components/attachments/attachment-section";
 import { ProposalSection } from "@/components/opportunities/proposal-section";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { SourceSelect, type SourceDetailOption } from "@/components/opportunities/source-select";
+import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
 import { UnifiedTimeline, type TimelineEvent } from "@/components/history/unified-timeline";
 import { CommentThread, type CommentView } from "@/components/opportunities/comment-thread";
 import { getSupabaseServer } from "@/lib/supabase/server";
@@ -57,11 +59,13 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
   const risk = evaluateRisk(o);
   const since = daysSince(o.last_activity_at);
   const sb = getSupabaseServer();
-  const [schedule, allTemplates, commentsR] = await Promise.all([
+  const [schedule, allTemplates, commentsR, detailsR] = await Promise.all([
     getLatestSchedule(o.id),
     getSalesTemplates(),
     sb.from("opportunity_comments").select("id, author_user_id, body, mentions, created_at").eq("opportunity_id", o.id).order("created_at", { ascending: true }).limit(100),
+    sb.from("lead_source_details").select("id, lead_source_id, name").eq("status", "active").order("sort_order").order("name"),
   ]);
+  const sourceDetails = (detailsR.data ?? []) as SourceDetailOption[];
   const templates = matchTemplates(allTemplates, o.account?.industry, contacts.map((c) => c.title));
   const comments: CommentView[] = ((commentsR.data ?? []) as { id: string; author_user_id: string; body: string; mentions: string[]; created_at: string }[]).map((c) => ({
     ...c,
@@ -105,6 +109,14 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
       <Link href="/app/opportunities" className="inline-flex items-center gap-1 text-sm text-ink/50 hover:text-ink mb-3">
         <ChevronLeft size={16} /> 案件一覧
       </Link>
+      {/* データ階層: いまどのデータを開いているか */}
+      <DataPath
+        items={[
+          ...(o.lead_id ? [{ level: "lead" as const, href: `/app/leads/${o.lead_id}` }] : []),
+          ...(o.account ? [{ level: "account" as const, name: o.account.name, href: `/app/accounts/${o.account.id}` }] : []),
+          { level: "opportunity", name: o.name, current: true },
+        ]}
+      />
       <PageHeader
         title={o.account?.name ?? "案件"}
         subtitle={o.name}
@@ -160,7 +172,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
         <div className="lg:col-span-2 space-y-5">
           <ScheduleSection oppId={o.id} schedule={schedule} hadFirstMeeting={!!o.first_meeting_date} templates={templates} />
 
-          <Section title="事前リサーチ・営業戦略" action={<span className="text-[11px] text-ink/40">将来はAIが自動リサーチ・戦略提案</span>}>
+          <Section title="事前リサーチ・営業戦略" className={entityBorder("opportunity")} action={<EditTarget level="opportunity" />}>
             <form action={saveOppResearchAction} className="space-y-3">
               <input type="hidden" name="id" value={o.id} />
               <div>
@@ -175,7 +187,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
             </form>
           </Section>
 
-          <Section title={`商談（${meetings.length}回）`} action={<span className="text-xs text-ink/40">案件配下の個別商談</span>}>
+          <Section title={`商談（${meetings.length}回）`} className={entityBorder("meeting")} action={<EditTarget level="meeting" />}>
             <MeetingList meetings={meetings} />
             <details className="mt-3">
               <summary className="cursor-pointer text-sm font-medium text-teal-deep">＋ 商談を登録</summary>
@@ -239,7 +251,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
             </details>
           </Section>
 
-          <Section title="案件を更新">
+          <Section title="案件を更新" className={entityBorder("opportunity")} action={<EditTarget level="opportunity" />}>
             <form action={updateOpportunityAction} className="space-y-4">
               <input type="hidden" name="id" value={o.id} />
               <div className="grid grid-cols-2 gap-4">
@@ -323,7 +335,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
             <SubscriptionForm opportunityId={o.id} accountId={o.account_id} />
           </Section>
 
-          <Section title="活動を記録">
+          <Section title="活動を記録" className={entityBorder("activity")} action={<EditTarget level="activity" />}>
             <form action={addActivityAction} className="space-y-3">
               <input type="hidden" name="opportunity_id" value={o.id} />
               <input type="hidden" name="account_id" value={o.account_id} />
@@ -381,7 +393,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
 
         {/* 右: 情報 + タスク + 履歴 */}
         <div className="space-y-5">
-          <Section title="基本情報">
+          <Section title="基本情報" className={entityBorder("opportunity")} action={<EditTarget level="opportunity" />}>
             <dl className="space-y-2.5 text-sm">
               <Row label="ヨミ"><YomiBadge yomi={o.yomi} /></Row>
               <Row label="担当者予測確率">{o.rep_probability != null ? `${o.rep_probability}%（${formatYen(Math.round((o.amount * o.rep_probability) / 100))}）` : "—"}</Row>
@@ -434,17 +446,12 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                     {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="label">流入経路</label>
-                  <select name="lead_source_id" defaultValue={o.lead_source_id ?? ""} className="input">
-                    <option value="">—</option>
-                    {leadSources.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">流入詳細（どの展示会・施策）</label>
-                  <input name="source_detail" defaultValue={o.source_detail ?? ""} className="input" placeholder="例: 202606_AIEXPO幕張" />
-                </div>
+                <SourceSelect
+                  sources={leadSources.map((l) => ({ id: l.id, name: l.name }))}
+                  details={sourceDetails}
+                  defaultSourceId={o.lead_source_id ?? ""}
+                  defaultDetail={o.source_detail ?? ""}
+                />
                 <div>
                   <label className="label">初回商談日</label>
                   <input name="first_meeting_date" type="date" defaultValue={o.first_meeting_date ?? ""} className="input" />

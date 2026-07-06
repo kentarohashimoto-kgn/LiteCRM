@@ -40,6 +40,18 @@ export async function signOut() {
 }
 
 // ===================== 商談 =====================
+/** 流入詳細をマスタ(lead_source_details)へ自動登録(直接入力された新しい値の取りこぼし防止)。 */
+async function ensureSourceDetailMaster(tenantId: string, leadSourceId: string | null, sourceDetail: string | null): Promise<void> {
+  if (!leadSourceId || !sourceDetail) return;
+  const sb = getSupabaseServer();
+  await sb
+    .from("lead_source_details")
+    .upsert(
+      { tenant_id: tenantId, lead_source_id: leadSourceId, name: sourceDetail },
+      { onConflict: "tenant_id,lead_source_id,name", ignoreDuplicates: true },
+    );
+}
+
 export async function createOpportunityAction(formData: FormData) {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
@@ -64,6 +76,10 @@ export async function createOpportunityAction(formData: FormData) {
     redirect(back + "?error=" + encodeURIComponent("未入力の必須項目があります: " + missing.join(" / ")));
   }
 
+  const leadSourceId = str(formData.get("lead_source_id"));
+  const sourceDetail = str(formData.get("source_detail"));
+  await ensureSourceDetailMaster(ctx.tenantId, leadSourceId, sourceDetail);
+
   const { data, error } = await sb
     .from("opportunities")
     .insert({
@@ -72,7 +88,8 @@ export async function createOpportunityAction(formData: FormData) {
       account_id: str(formData.get("account_id")),
       owner_user_id: str(formData.get("owner_user_id")) ?? ctx.userId,
       primary_product_id: str(formData.get("primary_product_id")),
-      lead_source_id: str(formData.get("lead_source_id")),
+      lead_source_id: leadSourceId,
+      source_detail: sourceDetail,
       category: str(formData.get("category")),
       deal_phase: dealPhase,
       stage,
@@ -191,13 +208,14 @@ export async function saveOppResearchAction(formData: FormData) {
  * name / owner_user_id は NOT NULL のため、空送信時は既存値を保持する。
  */
 export async function updateOpportunityBasicsAction(formData: FormData) {
-  await requireCtx();
+  const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const id = String(formData.get("id"));
   if (!id) redirect("/app/opportunities");
 
   const name = str(formData.get("name"));
   const owner = str(formData.get("owner_user_id"));
+  await ensureSourceDetailMaster(ctx.tenantId, str(formData.get("lead_source_id")), str(formData.get("source_detail")));
   const patch: Record<string, unknown> = {
     yomi: str(formData.get("yomi")),
     primary_product_id: str(formData.get("primary_product_id")),

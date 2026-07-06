@@ -4,6 +4,8 @@ import { getLeadSources, getProducts, listAccounts, listMembers } from "@/lib/da
 import { STAGES, FORECAST_CATEGORIES, CATEGORIES, DEAL_PHASES } from "@/lib/constants";
 import { PageHeader } from "@/components/ui/primitives";
 import { createOpportunityAction } from "@/server/actions";
+import { SourceSelect, type SourceDetailOption } from "@/components/opportunities/source-select";
+import { getSupabaseServer } from "@/lib/supabase/server";
 
 export default async function NewOpportunityPage({ searchParams }: { searchParams: { error?: string } }) {
   const ws = await getWorkspaceLite();
@@ -11,6 +13,13 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
   const owners = listMembers(ws).map(({ user }) => user);
   const products = getProducts(ws);
   const sources = getLeadSources(ws);
+  const { data: detailRows } = await getSupabaseServer()
+    .from("lead_source_details")
+    .select("id, lead_source_id, name")
+    .eq("status", "active")
+    .order("sort_order")
+    .order("name");
+  const sourceDetails = (detailRows ?? []) as SourceDetailOption[];
 
   return (
     <div className="max-w-2xl">
@@ -46,13 +55,7 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
               {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
-          <div>
-            <label className="label">流入経路</label>
-            <select name="lead_source_id" className="input">
-              <option value="">選択してください</option>
-              {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
+          <SourceSelect sources={sources.map((s) => ({ id: s.id, name: s.name }))} details={sourceDetails} />
           <div>
             <label className="label">分類</label>
             <select name="category" className="input" defaultValue="">

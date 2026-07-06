@@ -115,6 +115,29 @@ export async function deleteLeadSourceAction(input: { id: string }): Promise<Res
   return { ok: true };
 }
 
+// ===================== 流入詳細(lead_source_details) =====================
+/** 流入経路ごとの詳細選択肢(各展示会・各パートナー等)を追加。 */
+export async function addLeadSourceDetailAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const leadSourceId = String(formData.get("lead_source_id") || "");
+  const name = String(formData.get("name") || "").trim();
+  if (!leadSourceId || !name) return;
+  await sb.from("lead_source_details").upsert(
+    { tenant_id: ctx.tenantId, lead_source_id: leadSourceId, name },
+    { onConflict: "tenant_id,lead_source_id,name", ignoreDuplicates: true },
+  );
+  revalidatePath("/app/settings");
+}
+
+/** 流入詳細の削除(選択肢から外すだけ。既存案件の記録は消えない)。 */
+export async function deleteLeadSourceDetailAction(formData: FormData): Promise<void> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("lead_source_details").delete().eq("id", String(formData.get("id")));
+  revalidatePath("/app/settings");
+}
+
 // ===================== 展示会・施策(campaigns) =====================
 export async function saveCampaignAction(input: { id: string | null; name: string; channel: string | null; notes: string | null }): Promise<Result> {
   const ctx = await requireCtx();

@@ -12,6 +12,7 @@ import {
   getLeadSources,
 } from "@/lib/data/select";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
+import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
 import { Tag } from "@/components/ui/badges";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
 import { MeetingList } from "@/components/meetings/meeting-list";
@@ -100,6 +101,8 @@ export default async function AccountDetailPage({ params, searchParams }: { para
       <Link href="/app/accounts" className="inline-flex items-center gap-1 text-sm text-ink/50 hover:text-ink mb-3">
         <ChevronLeft size={16} /> 顧客一覧
       </Link>
+      {/* データ階層: 顧客(いまここ)。配下の案件・商談は下のセクションに色分けで表示 */}
+      <DataPath items={[{ level: "account", name: account.name, current: true }]} />
       {searchParams.error && (
         <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-600">{searchParams.error}</div>
       )}
@@ -119,7 +122,7 @@ export default async function AccountDetailPage({ params, searchParams }: { para
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 space-y-5">
           {/* 案件 */}
-          <Section title={`案件（${opps.length}）`}>
+          <Section title={`案件（${opps.length}）`} className={entityBorder("opportunity")} action={<EditTarget level="opportunity" />}>
             <OppMiniList opps={opps} emptyMessage="案件はありません" />
             <details className="mt-3">
               <summary className="cursor-pointer text-sm font-medium text-teal-deep">＋ 案件を登録</summary>
@@ -224,7 +227,7 @@ export default async function AccountDetailPage({ params, searchParams }: { para
           )}
 
           {/* 商談 */}
-          <Section title={`商談（${meetings.length}回）`} action={<span className="text-xs text-ink/40">案件配下の個別商談</span>}>
+          <Section title={`商談（${meetings.length}回）`} className={entityBorder("meeting")} action={<EditTarget level="meeting" />}>
             <MeetingList meetings={meetings} showOpportunity emptyMessage="商談はまだありません" />
             {opps.length > 0 ? (
               <details className="mt-3">

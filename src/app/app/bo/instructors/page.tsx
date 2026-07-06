@@ -15,15 +15,16 @@ interface Sess {
 }
 
 // 講師ごとの色(登録色が無ければ順番で自動割当)。カレンダーとグラフで同じ色を使う。
+// ※ tailwind.configでtealは独自定義(primary/deep/light)のため teal-500 は使わない
 const PALETTE = [
-  "bg-teal-500 text-white", "bg-indigo-500 text-white", "bg-rose-500 text-white", "bg-amber-500 text-white",
+  "bg-teal-primary text-white", "bg-indigo-500 text-white", "bg-rose-500 text-white", "bg-amber-500 text-white",
   "bg-emerald-500 text-white", "bg-sky-500 text-white", "bg-fuchsia-500 text-white", "bg-lime-600 text-white",
 ];
 // PALETTE と同じ並びの16進(recharts用)
-const HEX = ["#14b8a6", "#6366f1", "#f43f5e", "#f59e0b", "#10b981", "#0ea5e9", "#d946ef", "#65a30d"];
+const HEX = ["#008C8C", "#6366f1", "#f43f5e", "#f59e0b", "#10b981", "#0ea5e9", "#d946ef", "#65a30d"];
 // 登録色クラス→16進の対応
 const CLASS_HEX: Record<string, string> = {
-  "bg-teal-500 text-white": "#14b8a6", "bg-indigo-500 text-white": "#6366f1", "bg-rose-500 text-white": "#f43f5e",
+  "bg-teal-primary text-white": "#008C8C", "bg-indigo-500 text-white": "#6366f1", "bg-rose-500 text-white": "#f43f5e",
   "bg-amber-500 text-white": "#f59e0b", "bg-emerald-500 text-white": "#10b981", "bg-sky-500 text-white": "#0ea5e9",
 };
 
@@ -142,7 +143,7 @@ export default async function InstructorsPage({ searchParams }: { searchParams: 
                 <div><label className="label">色</label>
                   <select name="color" className="input" defaultValue="">
                     <option value="">自動</option>
-                    <option value="bg-teal-500 text-white">ティール</option>
+                    <option value="bg-teal-primary text-white">ティール</option>
                     <option value="bg-indigo-500 text-white">インディゴ</option>
                     <option value="bg-rose-500 text-white">ローズ</option>
                     <option value="bg-amber-500 text-white">アンバー</option>

@@ -6,6 +6,7 @@ import { PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/badges";
 import { ROLES, ROLE_MAP, STAGES, YOMI_OPTIONS, FORECAST_CATEGORIES, DEAL_PHASES } from "@/lib/constants";
 import { createMemberAction } from "@/server/actions";
+import { addLeadSourceDetailAction, deleteLeadSourceDetailAction } from "@/server/actions/masters";
 import { MemberManager } from "@/components/settings/member-manager";
 import { ProductMaster, type ProductRow } from "@/components/settings/product-master";
 import { NameMaster } from "@/components/settings/name-master";
@@ -35,8 +36,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
   const sources = ws.leadSources.map((s) => ({ id: s.id, name: s.name, sub: (s as { description?: string }).description ?? null }));
   const campaigns = ws.campaigns.map((c) => ({ id: c.id, name: c.name, sub: (c as { channel?: string }).channel ?? null }));
   const sb = getSupabaseServer();
-  const { data: bookingRows } = await sb.from("booking_links").select("id,label,url,sort_order").order("sort_order");
+  const [{ data: bookingRows }, { data: detailRows }] = await Promise.all([
+    sb.from("booking_links").select("id,label,url,sort_order").order("sort_order"),
+    sb.from("lead_source_details").select("id, lead_source_id, name").eq("status", "active").order("name"),
+  ]);
   const bookings = (bookingRows ?? []).map((b) => ({ id: b.id as string, name: b.label as string, sub: (b.url as string) ?? null }));
+  const sourceDetails = (detailRows ?? []) as { id: string; lead_source_id: string; name: string }[];
 
   return (
     <div>
@@ -101,6 +106,45 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
 
         <Section title="展示会・施策マスタ">
           <NameMaster kind="campaign" rows={campaigns} subLabel="チャネル" />
+        </Section>
+
+        {/* 流入詳細マスタ: 経路ごとの選択肢(各展示会・各パートナー等) */}
+        <Section title="流入詳細マスタ（経路ごとの選択肢）" className="lg:col-span-2">
+          <p className="text-xs text-ink/50 mb-3">
+            流入経路を選んだときに出る「流入詳細」の選択肢です（展示会→各展示会、パートナー→各パートナー など）。
+            案件の作成・編集で直接入力された新しい値も、自動でここに追加されます。
+          </p>
+          <form action={addLeadSourceDetailAction} className="flex items-end gap-2.5 flex-wrap mb-4">
+            <div>
+              <label className="label">流入経路</label>
+              <select name="lead_source_id" required className="input w-auto">
+                <option value="">選択してください</option>
+                {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="min-w-[220px]"><label className="label">詳細の名称</label><input name="name" required className="input" placeholder="例: 202609_AIWorld / 株式会社○○(パートナー名)" /></div>
+            <button type="submit" className="btn-accent">追加</button>
+          </form>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {sources
+              .filter((s) => sourceDetails.some((d) => d.lead_source_id === s.id))
+              .map((s) => (
+                <div key={s.id} className="rounded-xl border border-black/[0.05] p-3">
+                  <div className="text-xs font-bold text-ink/60 mb-2">{s.name}（{sourceDetails.filter((d) => d.lead_source_id === s.id).length}）</div>
+                  <ul className="space-y-1 max-h-48 overflow-y-auto">
+                    {sourceDetails.filter((d) => d.lead_source_id === s.id).map((d) => (
+                      <li key={d.id} className="flex items-center gap-2 text-sm">
+                        <span className="truncate">{d.name}</span>
+                        <form action={deleteLeadSourceDetailAction} className="ml-auto shrink-0">
+                          <input type="hidden" name="id" value={d.id} />
+                          <button type="submit" className="text-xs text-rose-500 hover:underline">削除</button>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+          </div>
         </Section>
 
         <Section title="各担当の予約URL（カレンダー下部に表示）" className="lg:col-span-2">
