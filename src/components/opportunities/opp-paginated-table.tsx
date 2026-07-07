@@ -22,7 +22,21 @@ import { formatYen, formatDate, daysSince, cn } from "@/lib/utils";
 import { InlineYomi, InlineAmount, InlineNextDate, type OnEdited } from "./opp-inline";
 
 interface Option { id: string; name: string; }
-type SortKey = "expected_close_date" | "amount" | "probability" | "last_activity_at";
+type SortKey =
+  | "name"
+  | "yomi"
+  | "owner"
+  | "product"
+  | "source_detail"
+  | "stage"
+  | "amount"
+  | "probability"
+  | "expected_close_date"
+  | "next_action_date"
+  | "last_activity_at";
+
+// 昇順が自然な列(文字列・段階・日付)。金額/確度/最終活動は降順から。
+const ASC_FIRST: SortKey[] = ["name", "yomi", "owner", "product", "source_detail", "stage", "expected_close_date", "next_action_date"];
 const PAGE = 50;
 
 export function OppPaginatedTable({
@@ -217,7 +231,7 @@ export function OppPaginatedTable({
 
   function toggleSort(key: SortKey) {
     if (sort === key) setAsc((a) => !a);
-    else { setSort(key); setAsc(key === "expected_close_date"); }
+    else { setSort(key); setAsc(ASC_FIRST.includes(key)); }
   }
 
   return (
@@ -301,16 +315,16 @@ export function OppPaginatedTable({
               <th className="th w-8">
                 <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} className="accent-teal-primary" aria-label="表示中の案件をすべて選択" />
               </th>
-              <th className="th">顧客 / 案件</th>
-              <th className="th">ヨミ</th>
-              <th className="th">担当</th>
-              <th className="th">商材</th>
-              <th className="th">展示会 / 施策</th>
+              <SortTh label="顧客 / 案件" onClick={() => toggleSort("name")} active={sort === "name"} asc={asc} />
+              <SortTh label="ヨミ" onClick={() => toggleSort("yomi")} active={sort === "yomi"} asc={asc} />
+              <SortTh label="担当" onClick={() => toggleSort("owner")} active={sort === "owner"} asc={asc} />
+              <SortTh label="商材" onClick={() => toggleSort("product")} active={sort === "product"} asc={asc} />
+              <SortTh label="展示会 / 施策" onClick={() => toggleSort("source_detail")} active={sort === "source_detail"} asc={asc} />
               <SortTh label="金額" onClick={() => toggleSort("amount")} active={sort === "amount"} asc={asc} align="right" />
-              <th className="th">ステージ</th>
+              <SortTh label="ステージ" onClick={() => toggleSort("stage")} active={sort === "stage"} asc={asc} />
               <SortTh label="確度" onClick={() => toggleSort("probability")} active={sort === "probability"} asc={asc} align="right" />
               <SortTh label="受注予定" onClick={() => toggleSort("expected_close_date")} active={sort === "expected_close_date"} asc={asc} />
-              <th className="th">次アクション</th>
+              <SortTh label="次アクション" onClick={() => toggleSort("next_action_date")} active={sort === "next_action_date"} asc={asc} />
               <th className="th">メモ</th>
               <SortTh label="最終活動" onClick={() => toggleSort("last_activity_at")} active={sort === "last_activity_at"} asc={asc} />
             </tr>
