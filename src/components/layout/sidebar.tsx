@@ -26,6 +26,7 @@ import {
   Briefcase,
   PanelLeftClose,
   PanelLeftOpen,
+  ScanLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/constants";
@@ -65,6 +66,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
   {
     heading: "分析・レビュー",
     items: [
+      { href: "/app/analytics/xray", label: "営業レントゲン", icon: ScanLine },
       { href: "/app/analytics", label: "分析ハブ", icon: Gauge },
       { href: "/app/exec", label: "経営レビュー", icon: Presentation },
       { href: "/app/reviews/weekly", label: "週次レビュー", icon: CalendarCheck },
@@ -116,6 +118,11 @@ const STORAGE_KEY = "catorce.sidebar.collapsed";
 export function Sidebar({ role }: { role: Role }) {
   const pathname = usePathname();
   const navGroups = groupsFor(role);
+  // ネストしたパス(例: /app/analytics/xray)では最長一致の項目だけをアクティブにする
+  const bestMatch = navGroups
+    .flatMap((g) => g.items.map((i) => i.href))
+    .filter((h) => pathname === h || pathname.startsWith(h + "/"))
+    .sort((a, b) => b.length - a.length)[0];
   const boOnly = role === "back_office" || role === "hr";
   const [collapsed, setCollapsed] = useState(false);
   const [ready, setReady] = useState(false);
@@ -185,7 +192,7 @@ export function Sidebar({ role }: { role: Role }) {
             )}
             <div className="space-y-0.5">
               {g.items.map((item) => {
-                const active = pathname === item.href || pathname.startsWith(item.href + "/");
+                const active = item.href === bestMatch;
                 const Icon = item.icon;
                 // 入れ子表示(└)はラベルから除去してアイコンのみ整列。
                 const cleanLabel = item.label.replace(/^└\s*/, "");
