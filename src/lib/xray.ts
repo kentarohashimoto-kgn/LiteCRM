@@ -18,10 +18,27 @@ export interface XrayPeriod {
   won_booked: number;       // 計上ベース受注件数(期間内に受注)
   revenue_booked: number;   // 計上ベース売上
   revenue_exist: number;    // うち既存顧客(2回目以降の受注)
+  revenue_stock: number;    // うちストック型(顧問/月額/保守等のサブスク的商材 or recurring請求)
   fu_due: number;           // 研修後FU: 期間内に期日を迎えた面談
   fu_held: number;
   fu_proposals: number;
   fu_upsell: number;
+}
+
+/** 期間に依存しない構造指標(既存顧客エンジン・サブスクの現在地)。 */
+export interface XrayBase {
+  won_accounts: number;       // 受注済み顧客数(母数)
+  repeat_accounts: number;    // 2回以上受注した顧客数
+  avg_won_price: number;      // 全期間の平均受注単価
+  fu_cases_total: number;     // 研修後FU対象(既存エンジンの母数)
+  fu_meets_total: number;     // FU面談の総数(1/3/6ヶ月)
+  fu_held_total: number;
+  fu_prop_total: number;
+  fu_upsell_total: number;
+  revenue_all: number;        // 全期間の受注売上
+  revenue_stock_all: number;  // うちストック型
+  mrr: number;                // recurring請求の月額合計
+  recurring_contracts: number;
 }
 
 export interface XrayTargets { amount: number; leads: number; appointments: number; deals: number; months: number; }
@@ -31,11 +48,48 @@ export interface XrayDim { name: string; leads?: number; appts?: number; meets?:
 export interface XrayData {
   cur: XrayPeriod;
   cmp: XrayPeriod;
+  base: XrayBase;
   targets: XrayTargets | null;
   monthly: XrayMonthly[];
   exhibitions: XrayDim[];
   reps: XrayDim[];
   products: XrayDim[];
+}
+
+/** RPC(xray_metrics)のjsonbレスポンスを型安全なXrayDataへ変換(数値化・欠損補完)。 */
+export function parseXrayPayload(data: unknown): XrayData | null {
+  const d = data as Record<string, unknown> | null;
+  if (!d || !d.cur) return null;
+  const emptyPeriod: XrayPeriod = {
+    leads: 0, appts: 0, meets: 0, won: 0, revenue: 0,
+    st_resched: 0, st_cancel: 0, st_pending: 0, st_appt: 0,
+    won_booked: 0, revenue_booked: 0, revenue_exist: 0, revenue_stock: 0,
+    fu_due: 0, fu_held: 0, fu_proposals: 0, fu_upsell: 0,
+  };
+  const emptyBase: XrayBase = {
+    won_accounts: 0, repeat_accounts: 0, avg_won_price: 0,
+    fu_cases_total: 0, fu_meets_total: 0, fu_held_total: 0, fu_prop_total: 0, fu_upsell_total: 0,
+    revenue_all: 0, revenue_stock_all: 0, mrr: 0, recurring_contracts: 0,
+  };
+  function nums<T extends object>(template: T, src: unknown): T {
+    const out: Record<string, number> = {};
+    const s = (src ?? {}) as Record<string, unknown>;
+    for (const k of Object.keys(template)) out[k] = Number(s[k] ?? 0);
+    return out as T;
+  }
+  const targets = d.targets as XrayTargets | null;
+  return {
+    cur: nums(emptyPeriod, d.cur),
+    cmp: nums(emptyPeriod, d.cmp),
+    base: nums(emptyBase, d.base),
+    targets: targets && Number(targets.months) > 0
+      ? { amount: Number(targets.amount), leads: Number(targets.leads), appointments: Number(targets.appointments), deals: Number(targets.deals), months: Number(targets.months) }
+      : null,
+    monthly: (d.monthly as XrayMonthly[]) ?? [],
+    exhibitions: (d.exhibitions as XrayDim[]) ?? [],
+    reps: (d.reps as XrayDim[]) ?? [],
+    products: (d.products as XrayDim[]) ?? [],
+  };
 }
 
 export type Health = "good" | "warn" | "bad" | "na";
@@ -229,4 +283,117 @@ export function prescriptions(nodes: NodeDiag[], cur: XrayPeriod): Prescription[
   }
 
   return out.slice(0, 3);
+}
+
+/* ============================================================
+ * 既存顧客エンジン(リピート・横展開)の「あるべき数式」
+ * データが無くても型と参考値を提示し、ポテンシャルとのギャップを見せる。
+ * ============================================================ */
+
+/**
+ * 参考値(一般的なBtoB研修・コンサル事業の目安)。
+ * 実測が貯まったら自社実績に置き換える前提の初期ベンチマーク。
+ */
+export const EXIST_REF = {
+  fuHeldRate: 0.8,     // FU面談実施率: 期日を迎えた面談の8割は実施できるはず
+  proposalRate: 0.4,   // 面談→追加提案率: 4割で次の課題・提案が生まれる
+  closeRate: 0.25,     // 提案→成約率: 既存顧客は信頼があるため新規より高い
+  upsellPriceRatio: 0.6, // アップセル単価は初回受注単価の6割程度から
+  cyclesPerYear: 3,    // 1顧客あたり年間のFU接点(1・3・6ヶ月)
+} as const;
+
+export interface ExistStep {
+  key: string;
+  label: string;
+  cur: number | null;   // 現在の率(計測不能ならnull)
+  ref: number;          // 参考値
+  measurable: boolean;  // 分母が存在するか
+}
+
+export interface ExistEngine {
+  steps: ExistStep[];
+  baseCount: number;          // 母数(FU対象顧客)
+  actualUpsells: number;      // 実績アップセル数(全期間)
+  potentialDealsYear: number; // 参考値達成時の年間アップセル件数
+  potentialRevenueYear: number; // 同・年間売上
+}
+
+/** 既存顧客エンジンの現在地とポテンシャル。母数×参考値で「本来あるべき数字」を算出。 */
+export function existingEngine(base: XrayBase): ExistEngine {
+  const heldRate = safeRate(base.fu_held_total, base.fu_meets_total);
+  const propRate = safeRate(base.fu_prop_total, base.fu_held_total);
+  const closeRate = safeRate(base.fu_upsell_total, base.fu_prop_total);
+  const price = base.avg_won_price * EXIST_REF.upsellPriceRatio;
+  const potentialDealsYear =
+    base.fu_cases_total * EXIST_REF.cyclesPerYear * EXIST_REF.fuHeldRate * EXIST_REF.proposalRate * EXIST_REF.closeRate;
+  return {
+    steps: [
+      { key: "held", label: "FU面談 実施率", cur: heldRate, ref: EXIST_REF.fuHeldRate, measurable: base.fu_meets_total > 0 },
+      { key: "propose", label: "面談 → 追加提案率", cur: propRate, ref: EXIST_REF.proposalRate, measurable: base.fu_held_total > 0 },
+      { key: "close", label: "提案 → 成約率", cur: closeRate, ref: EXIST_REF.closeRate, measurable: base.fu_prop_total > 0 },
+    ],
+    baseCount: base.fu_cases_total,
+    actualUpsells: base.fu_upsell_total,
+    potentialDealsYear,
+    potentialRevenueYear: Math.round(potentialDealsYear * price),
+  };
+}
+
+/* ============================================================
+ * サブスク・ストック売上比率の診断
+ * ============================================================ */
+
+/** ストック売上比率の目標帯(サービス業の安定経営の目安: 30〜50%)。 */
+export const STOCK_TARGET = { min: 0.3, max: 0.5 } as const;
+
+export interface StockDiag {
+  share: number | null;        // 期間のストック比率
+  shareAll: number | null;     // 全期間のストック比率
+  targetMin: number;
+  targetMax: number;
+  gapYenToMin: number;         // 目標下限に届くのに必要なストック売上の不足額(期間)
+  mrr: number;
+  mrrTargetMonthly: number;    // 全期間売上の月割×目標下限 = 目指すべき月額ストック
+  recurringContracts: number;
+  advices: { title: string; body: string }[];
+}
+
+/**
+ * ストック比率の診断とアドバイス生成。
+ * 月間の売上規模(revenueBookedMonthly)から「目標帯に入るためのMRR」を逆算する。
+ */
+export function stockDiagnosis(cur: XrayPeriod, base: XrayBase, periodMonths: number): StockDiag {
+  const share = cur.revenue_booked > 0 ? cur.revenue_stock / cur.revenue_booked : null;
+  const shareAll = base.revenue_all > 0 ? base.revenue_stock_all / base.revenue_all : null;
+  const gapYenToMin = Math.max(0, Math.round(cur.revenue_booked * STOCK_TARGET.min - cur.revenue_stock));
+  const monthlyRevenue = periodMonths > 0 ? cur.revenue_booked / periodMonths : 0;
+  const mrrTargetMonthly = Math.round(monthlyRevenue * STOCK_TARGET.min);
+
+  const advices: { title: string; body: string }[] = [];
+  const shareNow = shareAll ?? share ?? 0;
+  if (shareNow < STOCK_TARGET.min) {
+    advices.push({
+      title: "研修に月額サポートを標準添付する",
+      body: `研修受注時に「AI活用伴走サポート(月額)」をオプション提案。研修${base.fu_cases_total}社×添付率20%×月額15万円ならMRR+¥${(base.fu_cases_total * 0.2 * 150000).toLocaleString("ja-JP")}。研修効果の定着支援なので顧客価値とも一致します。`,
+    });
+    advices.push({
+      title: "AI顧問を複数年・自動更新契約に",
+      body: "単発の顧問契約を12ヶ月自動更新に切り替え、更新率を管理する。既に顧問実績があるため、契約形態の変更だけでストック化できます。",
+    });
+  }
+  if (base.recurring_contracts <= 3) {
+    advices.push({
+      title: "継続契約を請求スケジュールに登録して計測可能に",
+      body: `recurring登録は現在${base.recurring_contracts}件のみ。顧問・保守など実態が継続課金の案件を案件詳細の請求スケジュールに登録すると、MRR・解約率・更新率が計測できるようになります(計測できないものは改善できません)。`,
+    });
+  }
+  return {
+    share, shareAll,
+    targetMin: STOCK_TARGET.min, targetMax: STOCK_TARGET.max,
+    gapYenToMin,
+    mrr: base.mrr,
+    mrrTargetMonthly,
+    recurringContracts: base.recurring_contracts,
+    advices: advices.slice(0, 3),
+  };
 }

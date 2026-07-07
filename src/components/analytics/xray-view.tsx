@@ -7,7 +7,10 @@ import {
   diagnose,
   prescriptions,
   chainRates,
+  existingEngine,
+  stockDiagnosis,
   MIN_DENOM,
+  EXIST_REF,
   type XrayData,
   type Health,
   type NodeKey,
@@ -231,8 +234,13 @@ export function XrayView({ initialData, initialRange }: { initialData: XrayData 
     const rx = prescriptions(nodes, data.cur);
     const worst = nodes.filter((n) => n.health === "bad" && n.impact > 0).sort((a, b) => b.impact - a.impact)[0]?.key ?? null;
     const rc = chainRates(data.cur);
-    return { nodes, byKey, rx, worst, rc };
-  }, [data]);
+    const engine = existingEngine(data.base);
+    const periodMonths = Math.max(1, Math.round(
+      (new Date(range.end + "T00:00:00").getTime() - new Date(range.start + "T00:00:00").getTime()) / (86400000 * 30.4),
+    ));
+    const stock = stockDiagnosis(data.cur, data.base, periodMonths);
+    return { nodes, byKey, rx, worst, rc, engine, stock };
+  }, [data, range]);
 
   if (!data || !view) {
     return <div className="card card-pad text-sm text-ink/50">データを取得できませんでした。再読み込みしてください。</div>;
@@ -417,6 +425,132 @@ export function XrayView({ initialData, initialRange }: { initialData: XrayData 
           <span className="rounded-lg border border-black/10 bg-white px-3 py-1.5">アップセル <b className="tabular-nums">{cur.fu_upsell}</b>件</span>
           <span className="text-ink/30">＝</span>
           <span className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-violet-700 font-semibold">既存売上 {formatYen(cur.revenue_exist)}</span>
+        </div>
+      </div>
+
+      {/* ④ 既存顧客エンジン: あるべき数式と現在地(データが無くても型と参考値を提示) */}
+      <div className="card card-pad border-violet-200">
+        <div className="flex items-baseline justify-between flex-wrap gap-1 mb-3">
+          <div className="text-xs font-bold text-violet-700">④ 既存顧客エンジン — 本来あるべき数式と現在地（リピート・横展開の強化ポイント）</div>
+          <div className="text-[10px] text-ink/35">既存売上 = FU対象顧客 × 年{EXIST_REF.cyclesPerYear}接点 × FU実施率 × 提案率 × 成約率 × 単価</div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* 左: 各因数の現在値 vs 参考値 */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 font-bold text-violet-700 tabular-nums">母数 {view.engine.baseCount}社</span>
+              <span className="text-[11px] text-ink/45">研修実施済み＝フォロー対象。ここは既に資産としてあります</span>
+            </div>
+            {view.engine.steps.map((s) => (
+              <div key={s.key}>
+                <div className="flex items-baseline justify-between text-xs">
+                  <span className="font-semibold text-ink/70">{s.label}</span>
+                  <span className="tabular-nums">
+                    <b className={cn(s.measurable && s.cur != null && s.cur >= s.ref * 0.8 ? "text-teal-deep" : "text-rose-500")}>
+                      {s.measurable && s.cur != null ? `${(s.cur * 100).toFixed(0)}%` : "実績なし(0%)"}
+                    </b>
+                    <span className="text-ink/40"> ／ 参考値 {(s.ref * 100).toFixed(0)}%</span>
+                  </span>
+                </div>
+                <div className="relative h-2.5 rounded-full bg-mist-soft overflow-hidden mt-1">
+                  <div className={cn("h-full rounded-full", s.cur != null && s.cur >= s.ref * 0.8 ? "bg-teal-primary" : "bg-rose-400")}
+                    style={{ width: `${Math.min(100, (s.cur ?? 0) * 100)}%` }} />
+                  {/* 参考値マーカー */}
+                  <div className="absolute top-0 bottom-0 w-0.5 bg-violet-500" style={{ left: `${s.ref * 100}%` }} title={`参考値 ${(s.ref * 100).toFixed(0)}%`} />
+                </div>
+              </div>
+            ))}
+            <p className="text-[10.5px] text-ink/40 leading-relaxed">
+              参考値は一般的なBtoB研修・コンサル事業の目安。紫の線が「あるべき水準」。実測が貯まったら自社基準に更新します。
+            </p>
+          </div>
+          {/* 右: ポテンシャルとのギャップ */}
+          <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4 flex flex-col justify-center gap-2.5">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-[11px] text-ink/50">現在の実績(アップセル)</div>
+                <div className="text-2xl font-bold text-rose-500 tabular-nums">{view.engine.actualUpsells}<span className="text-sm font-normal">件</span></div>
+              </div>
+              <div>
+                <div className="text-[11px] text-ink/50">参考値で回した場合(年間)</div>
+                <div className="text-2xl font-bold text-violet-700 tabular-nums">
+                  約{view.engine.potentialDealsYear.toFixed(1)}<span className="text-sm font-normal">件</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] text-ink/50">年間ポテンシャル売上(単価は初回受注の{Math.round(EXIST_REF.upsellPriceRatio * 100)}%と仮定)</div>
+              <div className="text-2xl font-bold text-violet-700">{formatYen(view.engine.potentialRevenueYear)}</div>
+            </div>
+            <div className="rounded-lg bg-white border border-violet-200 px-3 py-2 text-[11.5px] text-ink/70 leading-relaxed">
+              <b className="text-violet-700">ここが強化ポイントです。</b>
+              新規獲得に比べ、既存{view.engine.baseCount}社へのフォローは獲得コストゼロで売上を生みます。
+              まずは<b>FU面談の日程設定</b>から。エンジンが回り始めると、この欄が実測値に置き換わっていきます。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ⑤ サブスク・ストック売上比率 */}
+      <div className="card card-pad border-indigo-200">
+        <div className="flex items-baseline justify-between flex-wrap gap-1 mb-3">
+          <div className="text-xs font-bold text-indigo-700">⑤ サブスク・ストック売上 — 全体比率のあるべき姿（目標帯 {Math.round(view.stock.targetMin * 100)}〜{Math.round(view.stock.targetMax * 100)}%）</div>
+          <div className="text-[10px] text-ink/35">ストック＝顧問・月額・保守等の継続課金型。景気変動に強い売上基盤</div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* 左: 比率バー(選択期間/全期間) + 目標帯 */}
+          <div className="space-y-4">
+            {([["選択期間", view.stock.share, cur.revenue_stock, cur.revenue_booked], ["全期間", view.stock.shareAll, data.base.revenue_stock_all, data.base.revenue_all]] as [string, number | null, number, number][]).map(([label, share, stockYen, totalYen]) => (
+              <div key={label}>
+                <div className="flex items-baseline justify-between text-xs mb-1">
+                  <span className="font-semibold text-ink/70">{label}</span>
+                  <span className="tabular-nums">
+                    <b className={cn(share != null && share >= view.stock.targetMin ? "text-teal-deep" : "text-rose-500")}>
+                      ストック {share == null ? "—" : `${(share * 100).toFixed(1)}%`}
+                    </b>
+                    <span className="text-ink/40"> ({formatYen(stockYen)} / {formatYen(totalYen)})</span>
+                  </span>
+                </div>
+                <div className="relative h-4 rounded-full bg-teal-light/50 overflow-hidden">
+                  <div className="h-full bg-indigo-500 rounded-l-full" style={{ width: `${Math.min(100, (share ?? 0) * 100)}%` }} />
+                  {/* 目標帯 30-50% */}
+                  <div className="absolute top-0 bottom-0 border-x-2 border-indigo-700/50 bg-indigo-700/10"
+                    style={{ left: `${view.stock.targetMin * 100}%`, width: `${(view.stock.targetMax - view.stock.targetMin) * 100}%` }}
+                    title={`目標帯 ${Math.round(view.stock.targetMin * 100)}〜${Math.round(view.stock.targetMax * 100)}%`} />
+                </div>
+              </div>
+            ))}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg border border-black/10 bg-white px-2 py-2">
+                <div className="text-[10px] text-ink/45">現在のMRR</div>
+                <div className="text-sm font-bold tabular-nums">{formatYen(view.stock.mrr)}</div>
+                <div className="text-[9px] text-ink/35">継続契約 {view.stock.recurringContracts}件</div>
+              </div>
+              <div className="rounded-lg border border-black/10 bg-white px-2 py-2">
+                <div className="text-[10px] text-ink/45">目指す月額ストック</div>
+                <div className="text-sm font-bold tabular-nums text-indigo-700">{formatYen(view.stock.mrrTargetMonthly)}</div>
+                <div className="text-[9px] text-ink/35">月商×{Math.round(view.stock.targetMin * 100)}%</div>
+              </div>
+              <div className="rounded-lg border border-black/10 bg-white px-2 py-2">
+                <div className="text-[10px] text-ink/45">期間の不足額</div>
+                <div className="text-sm font-bold tabular-nums text-rose-500">{view.stock.gapYenToMin > 0 ? formatYen(view.stock.gapYenToMin) : "達成"}</div>
+                <div className="text-[9px] text-ink/35">目標下限まで</div>
+              </div>
+            </div>
+          </div>
+          {/* 右: アドバイス */}
+          <div className="space-y-2">
+            {view.stock.advices.length === 0 ? (
+              <div className="rounded-xl border border-teal-primary/40 bg-teal-light/20 p-3 text-sm text-teal-deep font-semibold">
+                ストック比率は目標帯に到達しています。解約率・更新率の管理に軸足を移しましょう。
+              </div>
+            ) : view.stock.advices.map((a, i) => (
+              <div key={i} className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">
+                <div className="text-[12px] font-bold text-indigo-700 mb-0.5">💡 {a.title}</div>
+                <p className="text-[11.5px] text-ink/65 leading-relaxed">{a.body}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
