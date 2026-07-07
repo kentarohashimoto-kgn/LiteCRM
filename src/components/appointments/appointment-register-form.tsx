@@ -7,6 +7,7 @@ import {
   registerAppointmentAction,
   searchApptLeadsAction,
   getApptLeadDetailAction,
+  getAccountSourceAction,
   type ApptLeadHit,
   type ApptLeadDetail,
 } from "@/server/actions/appointments";
@@ -14,8 +15,10 @@ import { searchAccountsAction, type PickOption } from "@/server/actions/activiti
 import { cn } from "@/lib/utils";
 
 interface Option { id: string; name: string; }
+interface DetailOption { id: string; lead_source_id: string; name: string; }
 interface BookingLink { id: string; label: string; url: string; }
 type Mode = "lead" | "existing" | "new";
+const DETAIL_FREE = "__free__";
 
 function todayStr(): string {
   const d = new Date();
@@ -26,12 +29,14 @@ export function AppointmentRegisterForm({
   owners,
   products,
   sources,
+  details,
   bookingLinks,
   currentUserId,
 }: {
   owners: Option[];
   products: Option[];
   sources: Option[];
+  details: DetailOption[];
   bookingLinks: BookingLink[];
   currentUserId: string;
 }) {
@@ -66,6 +71,8 @@ export function AppointmentRegisterForm({
   const [time, setTime] = useState("");
   const [product, setProduct] = useState("");
   const [source, setSource] = useState("");
+  const [sourceDetail, setSourceDetail] = useState("");   // 流入詳細(テキスト値)
+  const [detailFree, setDetailFree] = useState(false);    // 「その他(直接入力)」中か
   const [memo, setMemo] = useState("");
   const [acquiredBy, setAcquiredBy] = useState(currentUserId);
   const [acquiredOn, setAcquiredOn] = useState(todayStr());
@@ -88,6 +95,16 @@ export function AppointmentRegisterForm({
     return () => { if (accTimer.current) clearTimeout(accTimer.current); };
   }, [accQ, accOpen]);
 
+  /** 流入経路＋詳細をプレフィル。詳細がマスタに無ければ「直接入力」欄に載せる。 */
+  function applySource(srcId: string | null, detailText: string | null) {
+    const sid = srcId ?? "";
+    setSource(sid);
+    const dt = detailText ?? "";
+    setSourceDetail(dt);
+    const inMaster = !!dt && details.some((d) => d.lead_source_id === sid && d.name === dt);
+    setDetailFree(!!dt && !inMaster);
+  }
+
   async function pickLead(hit: ApptLeadHit) {
     setLeadOpen(false);
     setLeadQ("");
@@ -99,6 +116,15 @@ export function AppointmentRegisterForm({
     setCTitle(d.job_title ?? "");
     setCPhone(d.phone ?? "");
     setCEmail(d.email ?? "");
+    // 流入経路・詳細もDBの保持情報から引き出す(raw_event=展示会名等)
+    applySource(d.lead_source_id, d.raw_event);
+  }
+
+  async function pickAccount(o: PickOption) {
+    setAccount(o); setAccOpen(false); setAccQ("");
+    // 既存顧客は直近案件の流入経路/詳細をDBから引き出してプレフィル
+    const s = await getAccountSourceAction(o.id);
+    applySource(s.lead_source_id, s.source_detail);
   }
 
   const ownerName = owners.find((o) => o.id === owner)?.name ?? "";
@@ -124,6 +150,7 @@ export function AppointmentRegisterForm({
       time: time || null,
       productId: product || null,
       leadSourceId: source || null,
+      sourceDetail: sourceDetail.trim() || null,
       memo: memo || null,
       acquiredById: acquiredBy || null,
       acquiredOn: acquiredOn || null,
@@ -137,6 +164,7 @@ export function AppointmentRegisterForm({
     setDone(null); setLead(null); setAccount(null); setNewCompany(""); setLeadQ(""); setAccQ("");
     setCName(""); setCTitle(""); setCPhone(""); setCEmail("");
     setDate(todayStr()); setTime(""); setMemo("");
+    setSourceDetail(""); setDetailFree(false); // 流入詳細は相手先ごとに異なるためクリア
     // 営業担当・商材・流入経路・獲得担当者・獲得日は連続登録のため維持
   }
 
@@ -217,7 +245,7 @@ export function AppointmentRegisterForm({
                 {accOpen && accOpts.length > 0 && (
                   <div className="absolute z-30 mt-1 w-full max-h-56 overflow-auto rounded-lg border border-black/10 bg-white shadow-lg">
                     {accOpts.map((o) => (
-                      <button key={o.id} type="button" onClick={() => { setAccount(o); setAccOpen(false); setAccQ(""); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-mist-soft">
+                      <button key={o.id} type="button" onClick={() => pickAccount(o)} className="block w-full text-left px-3 py-2 text-sm hover:bg-mist-soft">
                         {o.label}{o.sub && <span className="text-ink/40 ml-1 text-xs">{o.sub}</span>}
                       </button>
                     ))}
@@ -268,13 +296,49 @@ export function AppointmentRegisterForm({
               </select>
             </div>
             <div>
-              <label className="label">流入経路（任意・リード起点は自動）</label>
-              <select value={source} onChange={(e) => setSource(e.target.value)} className="input">
+              <label className="label">流入経路（任意・リード/既存顧客は自動）</label>
+              <select
+                value={source}
+                onChange={(e) => { setSource(e.target.value); setSourceDetail(""); setDetailFree(false); }}
+                className="input"
+              >
                 <option value="">—</option>
                 {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
           </div>
+          {source && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">流入詳細（どの展示会・どのパートナー等）</label>
+                <select
+                  value={detailFree ? DETAIL_FREE : sourceDetail}
+                  onChange={(e) => {
+                    if (e.target.value === DETAIL_FREE) { setDetailFree(true); setSourceDetail(""); }
+                    else { setDetailFree(false); setSourceDetail(e.target.value); }
+                  }}
+                  className="input"
+                >
+                  <option value="">—</option>
+                  {details.filter((d) => d.lead_source_id === source).map((d) => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                  <option value={DETAIL_FREE}>その他（直接入力）</option>
+                </select>
+              </div>
+              {detailFree && (
+                <div>
+                  <label className="label">詳細を入力</label>
+                  <input
+                    value={sourceDetail}
+                    onChange={(e) => setSourceDetail(e.target.value)}
+                    placeholder="例：〇〇展示会 / △△パートナー"
+                    className="input"
+                  />
+                </div>
+              )}
+            </div>
+          )}
           <div>
             <label className="label">アポ獲得メモ（話した内容）</label>
             <textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={3} placeholder="架電で話した内容・課題・温度感・注意点。リード詳細と一緒に案件の「事前リサーチ」へ保存され、営業担当が商談前に確認できます" className="input" />

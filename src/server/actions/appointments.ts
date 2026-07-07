@@ -88,6 +88,22 @@ export async function getApptLeadDetailAction(leadId: string): Promise<ApptLeadD
   };
 }
 
+/** 既存顧客の流入情報(直近案件から)を取得。アポ登録で流入経路/詳細をプレフィルするのに使う。 */
+export async function getAccountSourceAction(accountId: string): Promise<{ lead_source_id: string | null; source_detail: string | null }> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { data } = await sb
+    .from("opportunities")
+    .select("lead_source_id, source_detail")
+    .eq("account_id", accountId)
+    .is("deleted_at", null)
+    .or("lead_source_id.not.is.null,source_detail.not.is.null")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return { lead_source_id: (data?.lead_source_id as string) ?? null, source_detail: (data?.source_detail as string) ?? null };
+}
+
 // ===================== アポ登録 =====================
 export interface RegisterAppointmentInput {
   leadId: string | null;         // リードから(主動線)
@@ -102,6 +118,7 @@ export interface RegisterAppointmentInput {
   time: string | null;
   productId: string | null;
   leadSourceId: string | null;
+  sourceDetail: string | null;   // 流入詳細(どの展示会・どのパートナー等)
   memo: string | null;           // アポ獲得メモ(話した内容)
   acquiredById: string | null;   // アポ獲得担当者(インサイドセールス)
   acquiredOn: string | null;     // 獲得日
@@ -212,7 +229,7 @@ export async function registerAppointmentAction(input: RegisterAppointmentInput)
       lead_source_id: input.leadSourceId || lead?.lead_source_id || null,
       campaign_id: lead?.campaign_id ?? null,
       marketing_channel_id: lead?.marketing_channel_id ?? null,
-      source_detail: lead?.raw_event ?? null,
+      source_detail: input.sourceDetail?.trim() || lead?.raw_event || null,
       yomi: "4.アポ",
       stage: yf.stage,
       status: yf.status,
@@ -232,6 +249,16 @@ export async function registerAppointmentAction(input: RegisterAppointmentInput)
     .select("id")
     .single();
   if (oppErr || !opp) return { ok: false, error: "案件の作成に失敗しました: " + (oppErr?.message ?? "") };
+
+  // 4.5) 直接入力された流入詳細はマスタ(lead_source_details)へ自動登録(選択肢を育てる)
+  const savedSourceId = input.leadSourceId || lead?.lead_source_id || null;
+  const savedDetail = input.sourceDetail?.trim() || lead?.raw_event || null;
+  if (savedSourceId && savedDetail) {
+    await sb.from("lead_source_details").upsert(
+      { tenant_id: ctx.tenantId, lead_source_id: savedSourceId, name: savedDetail },
+      { onConflict: "tenant_id,lead_source_id,name", ignoreDuplicates: true },
+    );
+  }
 
   // 5) リードをアポ決着に更新(重複アプローチ防止・ファネル集計に反映)
   if (lead) {
