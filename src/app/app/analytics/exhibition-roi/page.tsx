@@ -186,7 +186,8 @@ export default async function ExhibitionRoiPage() {
       </div>
 
       <p className="text-xs text-ink/40 leading-relaxed">
-        ※ リード・アポは展示会別リード(raw_event=YYYYMM_展示会名)の実データ、受注・売上は紐付く案件の受注実績(CRM)。
+        ※ リードは展示会別リード(raw_event=YYYYMM_展示会名)の実データ。
+        <b>アポは案件基準</b>（その展示会由来の案件件数＝アポ獲得数。リードのアポ決着数の方が多い場合はそちらを採用）。受注・売上は紐付く案件の受注実績(CRM)。
         傾向は古い→新しい順の伸び(線形回帰)で判定。主催会社・テーマは各展示会にタグ付けすると比較(ばらつき分析)できます。費用入力でCPL・ROIが算出されます。
       </p>
     </div>
