@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Loader2, ScanLine, AlertTriangle, CheckCircle2, Stethoscope } from "lucide-react";
-import { fetchXrayAction } from "@/server/actions/xray";
+import Link from "next/link";
+import { Loader2, AlertTriangle, CheckCircle2, Stethoscope, Camera, History } from "lucide-react";
+import { fetchXrayAction, saveXraySnapshotAction } from "@/server/actions/xray";
 import {
   diagnose,
   prescriptions,
@@ -192,7 +193,20 @@ function MonthlyBars({ series, pick, format, color = "bg-teal-primary" }: {
 
 /* ============ メイン ============ */
 
-export function XrayView({ initialData, initialRange }: { initialData: XrayData | null; initialRange: XrayRange }) {
+export interface XraySnapshotMeta {
+  label: string | null;
+  kind: string;
+  takenAt: string;
+  periodLabel: string;
+  cmpLabel: string;
+}
+
+export function XrayView({ initialData, initialRange, readOnly = false, snapshotMeta }: {
+  initialData: XrayData | null;
+  initialRange: XrayRange;
+  readOnly?: boolean;
+  snapshotMeta?: XraySnapshotMeta;
+}) {
   const [presetKey, setPresetKey] = useState("3m");
   const [range, setRange] = useState<XrayRange>(initialRange);
   const [cmpMode, setCmpMode] = useState<CmpMode>("prev");
@@ -201,6 +215,26 @@ export function XrayView({ initialData, initialRange }: { initialData: XrayData 
   const [data, setData] = useState<XrayData | null>(initialData);
   const [selected, setSelected] = useState<NodeKey | null>(null);
   const [pending, startTransition] = useTransition();
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  async function saveSnapshot() {
+    if (saving) return;
+    const label = window.prompt(
+      "この分析結果に名前を付けて保存します（履歴からいつでも参照できます）",
+      `${fmtRangeJp(range)} の診断`,
+    );
+    if (label == null) return;
+    setSaving(true);
+    const c = cmpRangeOf(range, cmpMode);
+    const res = await saveXraySnapshotAction({
+      start: range.start, end: range.end, cmpStart: c.start, cmpEnd: c.end,
+      label: label.trim() || null,
+    });
+    setSaving(false);
+    setSaveMsg(res.ok ? "✓ 保存しました（履歴から参照できます）" : (res.error ?? "保存に失敗しました"));
+    setTimeout(() => setSaveMsg(null), 5000);
+  }
 
   function reload(r: XrayRange, mode: CmpMode) {
     const c = cmpRangeOf(r, mode);
@@ -254,7 +288,29 @@ export function XrayView({ initialData, initialRange }: { initialData: XrayData 
   return (
     <div className="space-y-4">
 
-      {/* 期間セレクタ */}
+      {/* 期間セレクタ(通常) / スナップショットバナー(履歴閲覧) */}
+      {readOnly && snapshotMeta ? (
+        <div className="card card-pad border-indigo-300 bg-indigo-50/40">
+          <div className="flex flex-wrap items-center gap-2">
+            <History size={16} className="text-indigo-600 shrink-0" />
+            <span className="text-sm font-bold text-indigo-700">保存済みスナップショット</span>
+            <span className={cn("pill text-[10px]", snapshotMeta.kind === "monthly" ? "bg-indigo-100 text-indigo-700" : "bg-teal-light text-teal-deep")}>
+              {snapshotMeta.kind === "monthly" ? "月次自動" : "手動保存"}
+            </span>
+            <span className="text-sm font-semibold text-ink">{snapshotMeta.label ?? "(名前なし)"}</span>
+            <span className="ml-auto flex items-center gap-3 text-[11px] text-ink/50 tabular-nums">
+              <span>保存: {new Date(snapshotMeta.takenAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</span>
+              <span>対象: {snapshotMeta.periodLabel}</span>
+              <span>比較: {snapshotMeta.cmpLabel}</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-3 mt-2 pt-2 border-t border-indigo-200/50 text-xs">
+            <Link href="/app/analytics/xray/history" className="text-indigo-700 hover:underline font-medium">← 履歴一覧へ戻る</Link>
+            <Link href="/app/analytics/xray" className="text-teal-deep hover:underline font-medium">最新のレントゲンを開く</Link>
+            <span className="ml-auto text-[10.5px] text-ink/40">保存時点のデータです（現在のDBの状態は反映されません）</span>
+          </div>
+        </div>
+      ) : (
       <div className="card card-pad space-y-2.5">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs font-semibold text-ink/50 mr-1">分析期間</span>
@@ -281,11 +337,22 @@ export function XrayView({ initialData, initialRange }: { initialData: XrayData 
               {label}
             </button>
           ))}
+          <span className="mx-1 text-ink/20">|</span>
+          <button type="button" onClick={saveSnapshot} disabled={saving || pending}
+            className={cn("inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium border border-indigo-300 text-indigo-700 hover:bg-indigo-50", (saving || pending) && "opacity-50")}>
+            <Camera size={12} /> {saving ? "保存中…" : "この分析を保存"}
+          </button>
+          <Link href="/app/analytics/xray/history"
+            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium border border-black/10 text-ink/60 hover:bg-mist-soft">
+            <History size={12} /> 履歴
+          </Link>
+          {saveMsg && <span className={cn("text-[11px] font-semibold", saveMsg.startsWith("✓") ? "text-teal-deep" : "text-rose-500")}>{saveMsg}</span>}
           <span className="ml-auto text-[11px] text-ink/45 tabular-nums">
             対象: {fmtRangeJp(range)}{cmpOn && ` ／ 比較: ${fmtRangeJp(cmpRangeOf(range, cmpMode))}`}
           </span>
         </div>
       </div>
+      )}
 
       {/* 処方箋 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
