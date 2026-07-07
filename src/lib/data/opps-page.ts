@@ -17,6 +17,7 @@ export interface LeanOppRow {
   campaign_estimated: boolean | null;
   lead_source_id: string | null;
   source_name: string | null;
+  source_detail: string | null;
   amount: number;
   stage: string;
   probability: number;
@@ -61,6 +62,7 @@ export function leanToOppView(r: LeanOppRow): OppView {
     deal_phase: r.deal_phase ?? undefined,
     primary_product_id: r.primary_product_id ?? undefined,
     lead_source_id: r.lead_source_id ?? undefined,
+    source_detail: r.source_detail ?? undefined,
     campaign_id: r.campaign_id ?? undefined,
     campaign_estimated: r.campaign_estimated ?? undefined,
     expected_close_date: r.expected_close_date ?? undefined,

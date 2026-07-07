@@ -16,7 +16,8 @@ export default async function OpportunitiesPage() {
     sb.from("profiles").select("id,display_name,email"),
     sb.from("products").select("id,name"),
     sb.from("lead_sources").select("id,name"),
-    sb.from("campaigns").select("id,name,sort_order").order("sort_order"),
+    // 展示会・施策フィルタの選択肢は案件の source_detail(YYYYMM_展示会名)実データから生成
+    sb.rpc("opp_source_details"),
     sb.from("booking_links").select("id,label,url,sort_order").order("sort_order"),
   ]);
   const page = (pageR.data ?? { rows: [], total: 0, sum_amount: 0, sum_weighted: 0 }) as OppsPage;
@@ -24,7 +25,8 @@ export default async function OpportunitiesPage() {
   const owners = (ownersR.data ?? []).map((p) => ({ id: p.id as string, name: (p.display_name as string) ?? (p.email as string) ?? "—" }));
   const products = (productsR.data ?? []).map((p) => ({ id: p.id as string, name: (p.name as string) ?? "—" }));
   const sources = (sourcesR.data ?? []).map((s) => ({ id: s.id as string, name: (s.name as string) ?? "—" }));
-  const campaigns = (campaignsR.data ?? []).map((c) => ({ id: c.id as string, name: (c.name as string) ?? "—" }));
+  const campaigns = ((campaignsR.data ?? []) as { source_detail: string }[])
+    .map((c) => ({ id: c.source_detail, name: c.source_detail }));
   const bookingLinks = (bookingR.data ?? []).map((b) => ({ id: b.id as string, label: b.label as string, url: b.url as string }));
 
   return (

@@ -61,7 +61,7 @@ export function OppTable({
       if (owner && o.owner_user_id !== owner) return false;
       if (product && o.primary_product_id !== product) return false;
       if (source && o.lead_source_id !== source) return false;
-      if (campaign && o.campaign_id !== campaign) return false;
+      if (campaign && (o.source_detail ?? "") !== campaign) return false;
       if (onlyStale && !isStale(o)) return false;
       if (onlyNoNext && !noNextAction(o)) return false;
       return true;
@@ -239,7 +239,9 @@ function GroupRows({
               <td className="td"><div className="flex items-center gap-1.5"><Avatar user={o.owner} size={22} /><span className="text-xs">{o.owner?.name}</span></div></td>
               <td className="td text-xs text-ink/70">{o.product?.name ?? "—"}</td>
               <td className="td text-xs max-w-[150px]">
-                {o.campaign ? (
+                {o.source_detail ? (
+                  <span className="truncate text-ink/70 block" title={o.source_detail}>{o.source_detail}</span>
+                ) : o.campaign ? (
                   <span className="inline-flex items-center gap-1">
                     <span className="truncate text-ink/70">{o.campaign.name}</span>
                     {o.campaign_estimated && (

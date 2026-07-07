@@ -100,7 +100,7 @@ export function OppPaginatedTable({
     const header = ["顧客", "案件名", "ヨミ", "担当", "商材", "展示会/施策", "流入経路", "金額", "確度", "受注予定", "見込月", "次回AC日", "次回AC内容", "ステータス", "メモ"];
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const lines = res.rows.map((r) => [
-      r.account_name, r.name, r.yomi, r.owner_name, r.product_name, r.campaign_name, r.source_name,
+      r.account_name, r.name, r.yomi, r.owner_name, r.product_name, r.source_detail ?? r.campaign_name, r.source_name,
       r.amount, r.probability + "%", r.expected_close_date ?? "", (r.expected_revenue_month ?? "").slice(0, 7),
       r.next_action_date ?? "", r.next_action_text ?? "", r.status, r.notes ?? "",
     ].map(esc).join(","));
@@ -333,7 +333,11 @@ export function OppPaginatedTable({
                   <td className="td"><div className="flex items-center gap-1.5"><Avatar user={o.owner} size={22} /><span className="text-xs">{o.owner?.name}</span></div></td>
                   <td className="td text-xs text-ink/70">{o.product?.name ?? "—"}</td>
                   <td className="td text-xs max-w-[150px]">
-                    {o.campaign ? <span className="truncate text-ink/70 block">{o.campaign.name}</span> : <span className="text-ink/30">{o.leadSource?.name ?? "—"}</span>}
+                    {o.source_detail
+                      ? <span className="truncate text-ink/70 block" title={o.source_detail}>{o.source_detail}</span>
+                      : o.campaign
+                        ? <span className="truncate text-ink/70 block">{o.campaign.name}</span>
+                        : <span className="text-ink/30">{o.leadSource?.name ?? "—"}</span>}
                   </td>
                   <td className="td text-right font-semibold tabular-nums"><InlineAmount opp={o} onEdited={applyEdit} /></td>
                   <td className="td"><StageBadge stage={o.stage} /></td>
