@@ -416,13 +416,27 @@ export async function updateMeetingAction(formData: FormData) {
   const meetingOwner = str(formData.get("owner_user_id"));
   if (meetingOwner && canReassignOwner(ctx.role)) patch.owner_user_id = meetingOwner;
   await sb.from("meetings").update(patch).eq("id", id);
-  // 商談の次アクションを親案件へ同期(案件と商談で二重更新しなくて済むように)。
+  // 商談の入力を親案件へ同期(案件と商談で二重更新しなくて済むように)。
+  //  - 次アクション日/内容
+  //  - ヨミ(選択時): ステージ・予測区分・確度・ステータスを自動導出
   if (oppId) {
     const oppPatch: Record<string, unknown> = { last_activity_at: new Date().toISOString() };
     const nd = str(formData.get("next_action_date"));
     const nt = str(formData.get("next_action_text"));
     if (nd || nt) { oppPatch.next_action_date = nd; oppPatch.next_action_text = nt; }
+    const yomi = str(formData.get("yomi"));
+    if (yomi) {
+      const yf = yomiToFields(yomi);
+      oppPatch.yomi = yomi;
+      oppPatch.stage = yf.stage;
+      oppPatch.forecast_category = yf.forecast;
+      oppPatch.probability = yf.probability;
+      oppPatch.status = yf.status;
+    }
     await sb.from("opportunities").update(oppPatch).eq("id", oppId);
+    if (yomi && yomiToFields(yomi).status === "won") {
+      await ensureTransitionOnWon(ctx.tenantId, ctx.userId, oppId);
+    }
   }
   revalidatePath(`/app/opportunities/${oppId}/meetings/${id}`);
   if (oppId) revalidatePath(`/app/opportunities/${oppId}`);

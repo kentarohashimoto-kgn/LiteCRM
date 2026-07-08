@@ -9,7 +9,7 @@ import { updateMeetingAction } from "@/server/actions";
 import { AiSummaryButton } from "@/components/meetings/ai-summary-button";
 import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { ACTIVITY_TYPE_MAP, canReassignOwner } from "@/lib/constants";
+import { ACTIVITY_TYPE_MAP, canReassignOwner, YOMI_OPTIONS } from "@/lib/constants";
 import { formatDateFull, formatYen } from "@/lib/utils";
 
 function hm(iso?: string): string {
@@ -81,7 +81,7 @@ export default async function MeetingDetailPage({ params, searchParams }: { para
                   <input name="meeting_time" type="time" defaultValue={time} className="input" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="label">形式</label>
                   <select name="method" defaultValue={meeting.method ?? ""} className="input">
@@ -93,7 +93,14 @@ export default async function MeetingDetailPage({ params, searchParams }: { para
                   </select>
                 </div>
                 <div>
-                  <label className="label">担当{!canReassign && <span className="text-[10px] text-ink/40 ml-1">（変更は代表・管理者・Sales Opsのみ）</span>}</label>
+                  <label className="label">ヨミ（案件に反映）</label>
+                  <select name="yomi" defaultValue={opp?.yomi ?? ""} className="input">
+                    <option value="">— 変更なし</option>
+                    {YOMI_OPTIONS.map((y) => <option key={y.key} value={y.key}>{y.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">担当{!canReassign && <span className="text-[10px] text-ink/40 ml-1">（代表・管理者・SalesOpsのみ）</span>}</label>
                   {canReassign ? (
                     <select name="owner_user_id" defaultValue={meeting.owner_user_id ?? ""} className="input">
                       <option value="">—</option>
