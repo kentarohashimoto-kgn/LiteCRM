@@ -606,6 +606,8 @@ export interface Opportunity {
   appointment_at?: string;
   /** 実施済み商談(meetings)の件数。カレンダーで「初回/N回目」表示に使用。 */
   meeting_count?: number;
+  /** 直近の商談日(meetingsの最大日付)。案件一覧のソート・表示に使用。 */
+  last_meeting_date?: string;
   /** アポ獲得担当者(インサイドセールス)。 */
   appt_acquired_by?: UUID;
   /** アポ獲得日。 */

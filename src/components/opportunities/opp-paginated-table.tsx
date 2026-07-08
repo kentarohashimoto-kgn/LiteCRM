@@ -33,9 +33,11 @@ type SortKey =
   | "probability"
   | "expected_close_date"
   | "next_action_date"
-  | "last_activity_at";
+  | "last_activity_at"
+  | "meeting_count"
+  | "last_meeting_date";
 
-// 昇順が自然な列(文字列・段階・日付)。金額/確度/最終活動は降順から。
+// 昇順が自然な列(文字列・段階・日付)。金額/確度/最終活動/商談回数/直近商談は降順から。
 const ASC_FIRST: SortKey[] = ["name", "yomi", "owner", "product", "source_detail", "stage", "expected_close_date", "next_action_date"];
 const PAGE = 50;
 
@@ -113,11 +115,11 @@ export function OppPaginatedTable({
   async function exportCsv() {
     setExporting(true);
     const res = await fetchOppsPageAction({ filter, sort, asc, offset: 0, limit: 5000 });
-    const header = ["顧客", "案件名", "ヨミ", "担当", "商材", "展示会/施策", "流入経路", "金額", "確度", "受注予定", "見込月", "次回AC日", "次回AC内容", "ステータス", "メモ"];
+    const header = ["顧客", "案件名", "ヨミ", "担当", "商材", "展示会/施策", "流入経路", "金額", "確度", "商談回数", "直近商談日", "受注予定", "見込月", "次回AC日", "次回AC内容", "ステータス", "メモ"];
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const lines = res.rows.map((r) => [
       r.account_name, r.name, r.yomi, r.owner_name, r.product_name, r.source_detail ?? r.campaign_name, r.source_name,
-      r.amount, r.probability + "%", r.expected_close_date ?? "", (r.expected_revenue_month ?? "").slice(0, 7),
+      r.amount, r.probability + "%", r.meeting_count ?? 0, r.last_meeting_date ?? "", r.expected_close_date ?? "", (r.expected_revenue_month ?? "").slice(0, 7),
       r.next_action_date ?? "", r.next_action_text ?? "", r.status, r.notes ?? "",
     ].map(esc).join(","));
     const csv = "\uFEFF" + header.map(esc).join(",") + "\n" + lines.join("\n"); // BOM付きUTF-8(Excel対応)
@@ -327,6 +329,8 @@ export function OppPaginatedTable({
               <SortTh label="金額" onClick={() => toggleSort("amount")} active={sort === "amount"} asc={asc} align="right" />
               <SortTh label="ステージ" onClick={() => toggleSort("stage")} active={sort === "stage"} asc={asc} />
               <SortTh label="確度" onClick={() => toggleSort("probability")} active={sort === "probability"} asc={asc} align="right" />
+              <SortTh label="商談回数" onClick={() => toggleSort("meeting_count")} active={sort === "meeting_count"} asc={asc} align="right" />
+              <SortTh label="直近商談" onClick={() => toggleSort("last_meeting_date")} active={sort === "last_meeting_date"} asc={asc} />
               <SortTh label="受注予定" onClick={() => toggleSort("expected_close_date")} active={sort === "expected_close_date"} asc={asc} />
               <SortTh label="次アクション" onClick={() => toggleSort("next_action_date")} active={sort === "next_action_date"} asc={asc} />
               <th className="th">メモ</th>
@@ -360,6 +364,12 @@ export function OppPaginatedTable({
                   <td className="td text-right font-semibold tabular-nums"><InlineAmount opp={o} onEdited={applyEdit} /></td>
                   <td className="td"><StageBadge stage={o.stage} /></td>
                   <td className="td text-right tabular-nums">{o.probability}%</td>
+                  <td className="td text-right tabular-nums">
+                    {o.meeting_count && o.meeting_count > 0
+                      ? <span className={cn("pill text-[10px]", o.meeting_count >= 2 ? "bg-teal-light text-teal-deep font-semibold" : "bg-mist-soft text-ink/55")}>{o.meeting_count}回</span>
+                      : <span className="text-ink/25 text-xs">0</span>}
+                  </td>
+                  <td className="td text-xs whitespace-nowrap">{o.last_meeting_date ? formatDate(o.last_meeting_date) : <span className="text-ink/25">—</span>}</td>
                   <td className="td text-xs">{formatDate(o.expected_close_date)}</td>
                   <td className="td"><InlineNextDate opp={o} onEdited={applyEdit} /></td>
                   <td className="td max-w-[220px]">{o.notes ? <span className="block truncate text-xs text-ink/55" title={o.notes}>{o.notes}</span> : <span className="text-ink/25 text-xs">—</span>}</td>
@@ -368,7 +378,7 @@ export function OppPaginatedTable({
               );
             })}
             {rows.length === 0 && !loading && (
-              <tr><td colSpan={13} className="td text-center text-ink/40 py-10">条件に一致する案件がありません</td></tr>
+              <tr><td colSpan={15} className="td text-center text-ink/40 py-10">条件に一致する案件がありません</td></tr>
             )}
           </tbody>
         </table>

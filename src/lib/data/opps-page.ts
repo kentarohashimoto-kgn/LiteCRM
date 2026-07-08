@@ -34,6 +34,7 @@ export interface LeanOppRow {
   first_meeting_date: string | null;
   appointment_at: string | null;
   meeting_count: number;
+  last_meeting_date: string | null;
   created_at: string;
   updated_at: string;
   weighted: number;
@@ -75,6 +76,7 @@ export function leanToOppView(r: LeanOppRow): OppView {
     first_meeting_date: r.first_meeting_date ?? undefined,
     appointment_at: r.appointment_at ?? undefined,
     meeting_count: r.meeting_count ?? 0,
+    last_meeting_date: r.last_meeting_date ?? undefined,
     created_at: r.created_at,
     updated_at: r.updated_at,
     account: { name: r.account_name ?? "—" } as OppView["account"],
