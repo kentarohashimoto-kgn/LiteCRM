@@ -123,7 +123,7 @@ export default async function AccountDetailPage({ params, searchParams }: { para
         <div className="lg:col-span-2 space-y-5">
           {/* 案件 */}
           <Section title={`案件（${opps.length}）`} className={entityBorder("opportunity")} action={<EditTarget level="opportunity" />}>
-            <OppMiniList opps={opps} emptyMessage="案件はありません" />
+            <OppMiniList opps={opps} emptyMessage="案件はありません" showAccount={false} />
             <details className="mt-3">
               <summary className="cursor-pointer text-sm font-medium text-teal-deep">＋ 案件を登録</summary>
               <form action={createOpportunityAction} className="mt-3 space-y-3 border-t border-black/[0.05] pt-3">

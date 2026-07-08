@@ -5,16 +5,31 @@ import { Avatar, EmptyState } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge } from "@/components/ui/badges";
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
 
+/** 顧客名が既知の文脈(顧客詳細)では、案件名から冗長な「顧客名＋区切り」プレフィックスを除く。 */
+function oppLabel(o: OppView, showAccount: boolean): string {
+  const name = o.name ?? "";
+  if (showAccount) return o.account?.name ?? name;
+  const acc = o.account?.name ?? "";
+  if (acc) {
+    const re = new RegExp("^" + acc.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*[_/：:・\\-]*\\s*");
+    const stripped = name.replace(re, "").trim();
+    if (stripped) return stripped;
+  }
+  return name || acc;
+}
+
 export function OppMiniList({
   opps,
   showRisk = false,
   emptyMessage = "該当する案件はありません",
   limit,
+  showAccount = true,
 }: {
   opps: OppView[];
   showRisk?: boolean;
   emptyMessage?: string;
   limit?: number;
+  showAccount?: boolean;
 }) {
   const list = limit ? opps.slice(0, limit) : opps;
   if (list.length === 0) return <EmptyState message={emptyMessage} />;
@@ -28,8 +43,8 @@ export function OppMiniList({
               <Avatar user={o.owner} size={26} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium text-ink group-hover:text-teal-deep">
-                    {o.account?.name}
+                  <span className="truncate text-sm font-medium text-ink group-hover:text-teal-deep" title={o.name ?? undefined}>
+                    {oppLabel(o, showAccount)}
                   </span>
                   <ForecastBadge category={o.forecast_category} />
                 </div>
