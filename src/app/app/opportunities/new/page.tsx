@@ -1,15 +1,15 @@
 import Link from "next/link";
 import { getWorkspaceLite } from "@/lib/data/workspace";
-import { getLeadSources, getProducts, listAccounts, listMembers } from "@/lib/data/select";
+import { getLeadSources, getProducts, listMembers } from "@/lib/data/select";
 import { STAGES, FORECAST_CATEGORIES, CATEGORIES, DEAL_PHASES } from "@/lib/constants";
 import { PageHeader } from "@/components/ui/primitives";
 import { createOpportunityAction } from "@/server/actions";
 import { SourceSelect, type SourceDetailOption } from "@/components/opportunities/source-select";
+import { OppCustomerSection } from "@/components/opportunities/opp-customer-section";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 export default async function NewOpportunityPage({ searchParams }: { searchParams: { error?: string } }) {
   const ws = await getWorkspaceLite();
-  const accounts = listAccounts(ws);
   const owners = listMembers(ws).map(({ user }) => user);
   const products = getProducts(ws);
   const sources = getLeadSources(ws);
@@ -23,29 +23,17 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
 
   return (
     <div className="max-w-2xl">
-      <PageHeader title="案件を作成" subtitle="新しい案件を登録します。初回商談時は案件予測・受注見込み時期・次回アクションが必須です。" />
+      <PageHeader title="案件を作成" subtitle="顧客を選ぶか、その場で新規登録して案件を作成します。リードからの起票なら顧客・担当者・流入情報を引き継ぎます。" />
       {searchParams.error && (
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-600">{searchParams.error}</div>
       )}
       <form action={createOpportunityAction} className="card card-pad space-y-4">
+        <OppCustomerSection />
         <div>
-          <label className="label">案件名 *</label>
-          <input name="name" required className="input" placeholder="例：株式会社○○ / 生成AI企業研修" />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="label">顧客 *</label>
-            <select name="account_id" required className="input">
-              <option value="">選択してください</option>
-              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">担当営業 *</label>
-            <select name="owner_user_id" required defaultValue={ws.ctx.userId} className="input">
-              {owners.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-          </div>
+          <label className="label">担当営業 *</label>
+          <select name="owner_user_id" required defaultValue={ws.ctx.userId} className="input">
+            {owners.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>

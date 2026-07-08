@@ -52,6 +52,13 @@ async function ensureSourceDetailMaster(tenantId: string, leadSourceId: string |
     );
 }
 
+interface LeadForOpp {
+  id: string; company_name: string | null; contact_name: string | null; job_title: string | null;
+  department: string | null; phone: string | null; email: string | null; industry: string | null;
+  employee_size: string | null; prefecture: string | null; raw_event: string | null;
+  lead_source_id: string | null; account_id: string | null; notes: string | null;
+}
+
 export async function createOpportunityAction(formData: FormData) {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
@@ -76,17 +83,101 @@ export async function createOpportunityAction(formData: FormData) {
     redirect(back + "?error=" + encodeURIComponent("未入力の必須項目があります: " + missing.join(" / ")));
   }
 
-  const leadSourceId = str(formData.get("lead_source_id"));
-  const sourceDetail = str(formData.get("source_detail"));
+  const ownerUserId = str(formData.get("owner_user_id")) ?? ctx.userId;
+
+  // ---- 顧客の解決(既存選択 / リード起点 / 新規作成をシームレスに) ----
+  const leadId = str(formData.get("lead_id"));
+  let lead: LeadForOpp | null = null;
+  if (leadId) {
+    const { data: l } = await sb
+      .from("leads")
+      .select("id,company_name,contact_name,job_title,department,phone,mobile_phone,email,industry,employee_size,prefecture,raw_event,lead_source_id,account_id,notes")
+      .eq("id", leadId)
+      .maybeSingle();
+    if (l) {
+      const r = l as Record<string, unknown>;
+      lead = {
+        id: r.id as string,
+        company_name: (r.company_name as string) ?? null,
+        contact_name: (r.contact_name as string) ?? null,
+        job_title: (r.job_title as string) ?? null,
+        department: (r.department as string) ?? null,
+        phone: ((r.phone as string) || (r.mobile_phone as string)) ?? null,
+        email: (r.email as string) ?? null,
+        industry: (r.industry as string) ?? null,
+        employee_size: (r.employee_size as string) ?? null,
+        prefecture: (r.prefecture as string) ?? null,
+        raw_event: (r.raw_event as string) ?? null,
+        lead_source_id: (r.lead_source_id as string) ?? null,
+        account_id: (r.account_id as string) ?? null,
+        notes: (r.notes as string) ?? null,
+      };
+    }
+  }
+
+  const companyName = (str(formData.get("new_company_name")) ?? lead?.company_name?.trim()) || null;
+  let accountId = str(formData.get("account_id")) ?? lead?.account_id ?? null;
+  let accountName = "";
+  if (!accountId && companyName) {
+    const norm = normCompany(companyName);
+    const { data: existing } = await sb.from("accounts").select("id,name").limit(1000);
+    const hit = (existing ?? []).find((a) => normCompany((a.name as string) ?? "") === norm);
+    if (hit) {
+      accountId = hit.id as string;
+      accountName = hit.name as string;
+    } else {
+      const { data: created, error: accErr } = await sb
+        .from("accounts")
+        .insert({
+          tenant_id: ctx.tenantId, owner_user_id: ownerUserId, name: companyName,
+          industry: lead?.industry ?? null, employee_size: lead?.employee_size ?? null,
+          area: lead?.prefecture ?? null, status: "prospect",
+        })
+        .select("id,name")
+        .single();
+      if (accErr || !created) {
+        redirect("/app/opportunities/new?error=" + encodeURIComponent("顧客の作成に失敗しました: " + (accErr?.message ?? "")));
+      }
+      accountId = created!.id as string;
+      accountName = created!.name as string;
+    }
+  }
+  if (!accountId) {
+    redirect("/app/opportunities/new?error=" + encodeURIComponent("顧客を選択するか、新規顧客名を入力してください"));
+  }
+  if (!accountName) {
+    const { data: acc } = await sb.from("accounts").select("name").eq("id", accountId).maybeSingle();
+    accountName = (acc?.name as string) ?? "";
+  }
+
+  // 顧客担当者(任意・入力 or リードから)。顧客の下＝個人情報として登録。
+  const contactName = str(formData.get("contact_name")) ?? lead?.contact_name ?? null;
+  if (contactName) {
+    await sb.from("contacts").insert({
+      tenant_id: ctx.tenantId, account_id: accountId, name: contactName,
+      title: str(formData.get("contact_title")) ?? lead?.job_title ?? null,
+      department: lead?.department ?? null,
+      phone: str(formData.get("contact_phone")) ?? lead?.phone ?? null,
+      email: str(formData.get("contact_email")) ?? lead?.email ?? null,
+    });
+  }
+
+  // 流入経路・詳細: 明示指定 > リード
+  const leadSourceId = str(formData.get("lead_source_id")) ?? lead?.lead_source_id ?? null;
+  const sourceDetail = str(formData.get("source_detail")) ?? lead?.raw_event ?? null;
   await ensureSourceDetailMaster(ctx.tenantId, leadSourceId, sourceDetail);
+
+  // 案件名: 未入力なら会社名で補完
+  const oppName = (str(formData.get("name")) ?? companyName ?? accountName) || "案件";
 
   const { data, error } = await sb
     .from("opportunities")
     .insert({
       tenant_id: ctx.tenantId,
-      name: str(formData.get("name")),
-      account_id: str(formData.get("account_id")),
-      owner_user_id: str(formData.get("owner_user_id")) ?? ctx.userId,
+      name: oppName,
+      account_id: accountId,
+      lead_id: lead?.id ?? null,
+      owner_user_id: ownerUserId,
       primary_product_id: str(formData.get("primary_product_id")),
       lead_source_id: leadSourceId,
       source_detail: sourceDetail,
@@ -101,7 +192,7 @@ export async function createOpportunityAction(formData: FormData) {
       next_action_date: nextDate,
       next_action_text: nextText,
       last_activity_at: new Date().toISOString(),
-      notes: str(formData.get("notes")),
+      notes: str(formData.get("notes")) ?? (lead?.notes ? `リードメモ: ${lead.notes}` : undefined),
       status: "open",
     })
     .select("id")
@@ -109,6 +200,15 @@ export async function createOpportunityAction(formData: FormData) {
 
   if (error || !data) {
     redirect("/app/opportunities?error=" + encodeURIComponent("作成に失敗しました: " + (error?.message ?? "")));
+  }
+
+  // リード起点なら決着に更新(重複アプローチ防止・顧客へ紐付け)
+  if (lead) {
+    await sb
+      .from("leads")
+      .update({ status: "qualified", account_id: accountId, converted_opportunity_id: data.id, converted_at: new Date().toISOString() })
+      .eq("id", lead.id);
+    revalidatePath("/app/leads");
   }
   await sb.from("stage_histories").insert({
     tenant_id: ctx.tenantId,
