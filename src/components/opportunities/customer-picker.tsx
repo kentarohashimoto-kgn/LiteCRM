@@ -23,7 +23,10 @@ type Mode = "existing" | "lead" | "new";
  *   contact_phone / contact_email
  * 顧客の解決(既存紐付け/リード起点/新規作成)と担当者作成はサーバ側で行う。
  */
-export function CustomerPicker({ onCompanyResolved }: { onCompanyResolved?: (name: string) => void }) {
+export function CustomerPicker({ onCompanyResolved, onSourceResolved }: {
+  onCompanyResolved?: (name: string) => void;
+  onSourceResolved?: (leadSourceId: string | null, detail: string | null) => void;
+}) {
   const [mode, setMode] = useState<Mode>("existing");
 
   // 既存顧客
@@ -78,6 +81,8 @@ export function CustomerPicker({ onCompanyResolved }: { onCompanyResolved?: (nam
     setCPhone(d.phone ?? "");
     setCEmail(d.email ?? "");
     if (d.company_name) onCompanyResolved?.(d.company_name);
+    // リードの流入経路・詳細(展示会名等)をフォームの流入経路欄へ反映
+    onSourceResolved?.(d.lead_source_id, d.raw_event);
   }
 
   function switchMode(m: Mode) {

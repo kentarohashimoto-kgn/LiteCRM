@@ -62,7 +62,10 @@ interface LeadForOpp {
 export async function createOpportunityAction(formData: FormData) {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
-  const stage = (str(formData.get("stage")) ?? "lead_acquired") as keyof typeof STAGE_MAP;
+  // ヨミを単一の入力とし、ステージ・予測区分・確度・ステータスはここから自動導出する。
+  const yomiVal = str(formData.get("yomi")) ?? "4.アポ";
+  const yf = yomiToFields(yomiVal);
+  const stage = yf.stage as keyof typeof STAGE_MAP;
   const close = str(formData.get("expected_close_date"));
   // 受注見込み時期(年月)。初回商談時の必須。未来客も予測年月を入れる。
   const revMonthRaw = str(formData.get("expected_revenue_month"));
@@ -178,24 +181,23 @@ export async function createOpportunityAction(formData: FormData) {
       account_id: accountId,
       lead_id: lead?.id ?? null,
       owner_user_id: ownerUserId,
-      // ヨミ未設定を防ぐ(カレンダー等の抜け防止)。新規案件は既定でアポ段階。
-      yomi: str(formData.get("yomi")) ?? "4.アポ",
+      yomi: yomiVal,
       primary_product_id: str(formData.get("primary_product_id")),
       lead_source_id: leadSourceId,
       source_detail: sourceDetail,
       category: str(formData.get("category")),
       deal_phase: dealPhase,
       stage,
-      forecast_category: str(formData.get("forecast_category")) ?? "pipeline",
+      forecast_category: yf.forecast,
       amount: num(formData.get("amount")) ?? 0,
-      probability: STAGE_MAP[stage]?.probability ?? 10,
+      probability: yf.probability,
       expected_close_date: close,
       expected_revenue_month: revMonth,
       next_action_date: nextDate,
       next_action_text: nextText,
       last_activity_at: new Date().toISOString(),
       notes: str(formData.get("notes")) ?? (lead?.notes ? `リードメモ: ${lead.notes}` : undefined),
-      status: "open",
+      status: yf.status,
     })
     .select("id")
     .single();
@@ -227,18 +229,20 @@ export async function updateOpportunityAction(formData: FormData) {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const id = String(formData.get("id"));
-  const stage = str(formData.get("stage")) as keyof typeof STAGE_MAP | null;
+  // ヨミを単一の入力とし、ステージ・予測区分・確度・ステータスはヨミから自動導出。
+  const yomi = str(formData.get("yomi"));
+  const f = yomiToFields(yomi ?? "");
   const close = str(formData.get("expected_close_date"));
-  const status =
-    stage === "won" ? "won" : stage === "lost" ? "lost" : stage === "on_hold" ? "on_hold" : "open";
+  const status = f.status;
   await sb
     .from("opportunities")
     .update({
-      stage,
-      forecast_category: str(formData.get("forecast_category")),
+      yomi,
+      stage: f.stage,
+      forecast_category: f.forecast,
       category: str(formData.get("category")),
       amount: num(formData.get("amount")) ?? 0,
-      probability: stage ? STAGE_MAP[stage]?.probability ?? 10 : undefined,
+      probability: f.probability,
       rep_probability: num(formData.get("rep_probability")) ?? null,
       renewal_until_month: (() => { const m = str(formData.get("renewal_until_month")); return m ? m.slice(0, 7) + "-01" : null; })(),
       renewal_probability: num(formData.get("renewal_probability")) ?? null,
@@ -318,8 +322,8 @@ export async function updateOpportunityBasicsAction(formData: FormData) {
   const name = str(formData.get("name"));
   const owner = str(formData.get("owner_user_id"));
   await ensureSourceDetailMaster(ctx.tenantId, str(formData.get("lead_source_id")), str(formData.get("source_detail")));
+  // ヨミは「案件を更新」に一本化(基本情報からは編集しない)。
   const patch: Record<string, unknown> = {
-    yomi: str(formData.get("yomi")),
     primary_product_id: str(formData.get("primary_product_id")),
     lead_source_id: str(formData.get("lead_source_id")),
     source_detail: str(formData.get("source_detail")),
@@ -412,6 +416,14 @@ export async function updateMeetingAction(formData: FormData) {
   const meetingOwner = str(formData.get("owner_user_id"));
   if (meetingOwner && canReassignOwner(ctx.role)) patch.owner_user_id = meetingOwner;
   await sb.from("meetings").update(patch).eq("id", id);
+  // 商談の次アクションを親案件へ同期(案件と商談で二重更新しなくて済むように)。
+  if (oppId) {
+    const oppPatch: Record<string, unknown> = { last_activity_at: new Date().toISOString() };
+    const nd = str(formData.get("next_action_date"));
+    const nt = str(formData.get("next_action_text"));
+    if (nd || nt) { oppPatch.next_action_date = nd; oppPatch.next_action_text = nt; }
+    await sb.from("opportunities").update(oppPatch).eq("id", oppId);
+  }
   revalidatePath(`/app/opportunities/${oppId}/meetings/${id}`);
   if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
   redirect(`/app/opportunities/${oppId}/meetings/${id}?saved=1`);

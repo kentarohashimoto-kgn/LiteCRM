@@ -22,7 +22,7 @@ import { SubscriptionForm } from "@/components/billing/subscription-form";
 import { ScheduleSection } from "@/components/opportunities/schedule-section";
 import { RecordRecent } from "@/components/layout/recent-items";
 import { getLatestSchedule, getSalesTemplates, matchTemplates } from "@/lib/data/schedules";
-import { STAGES, FORECAST_CATEGORIES, CATEGORIES, CATEGORY_MAP, STAGE_MAP, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP } from "@/lib/constants";
+import { CATEGORIES, CATEGORY_MAP, STAGE_MAP, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP } from "@/lib/constants";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/ui/badges";
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
@@ -260,16 +260,12 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
               <input type="hidden" name="id" value={o.id} />
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">ステージ</label>
-                  <select name="stage" defaultValue={o.stage} className="input">
-                    {STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}（{s.probability}%）</option>)}
+                  <label className="label">ヨミ</label>
+                  <select name="yomi" defaultValue={o.yomi ?? ""} className="input">
+                    <option value="">—</option>
+                    {YOMI_OPTIONS.map((y) => <option key={y.key} value={y.key}>{y.label}</option>)}
                   </select>
-                </div>
-                <div>
-                  <label className="label">予測区分（forecast）</label>
-                  <select name="forecast_category" defaultValue={o.forecast_category} className="input">
-                    {FORECAST_CATEGORIES.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-                  </select>
+                  <p className="text-[10px] text-ink/40 mt-1">ステージ・予測区分・確度はヨミから自動設定</p>
                 </div>
                 <div>
                   <label className="label">分類</label>
@@ -453,13 +449,6 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                   ) : (
                     <div className="input bg-mist-soft/40 text-ink/60 flex items-center">{o.owner?.name ?? "—"}</div>
                   )}
-                </div>
-                <div>
-                  <label className="label">ヨミ</label>
-                  <select name="yomi" defaultValue={o.yomi ?? ""} className="input">
-                    <option value="">—</option>
-                    {YOMI_OPTIONS.map((y) => <option key={y.key} value={y.key}>{y.label}</option>)}
-                  </select>
                 </div>
                 <div>
                   <label className="label">主商材</label>

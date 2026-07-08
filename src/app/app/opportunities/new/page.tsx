@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getLeadSources, getProducts, listMembers } from "@/lib/data/select";
-import { STAGES, FORECAST_CATEGORIES, CATEGORIES, DEAL_PHASES } from "@/lib/constants";
+import { CATEGORIES, DEAL_PHASES, YOMI_OPTIONS } from "@/lib/constants";
 import { PageHeader } from "@/components/ui/primitives";
 import { createOpportunityAction } from "@/server/actions";
-import { SourceSelect, type SourceDetailOption } from "@/components/opportunities/source-select";
+import { type SourceDetailOption } from "@/components/opportunities/source-select";
 import { OppCustomerSection } from "@/components/opportunities/opp-customer-section";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
@@ -28,14 +28,22 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-600">{searchParams.error}</div>
       )}
       <form action={createOpportunityAction} className="card card-pad space-y-4">
-        <OppCustomerSection />
+        <OppCustomerSection sources={sources.map((s) => ({ id: s.id, name: s.name }))} details={sourceDetails} />
         <div>
           <label className="label">担当営業 *</label>
           <select name="owner_user_id" required defaultValue={ws.ctx.userId} className="input">
             {owners.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="label">ヨミ</label>
+            <select name="yomi" defaultValue="4.アポ" className="input">
+              {YOMI_OPTIONS.filter((y) => !y.key.startsWith("0") && !y.key.startsWith("7") && !y.key.startsWith("8")).map((y) => (
+                <option key={y.key} value={y.key}>{y.label}</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="label">主商材</label>
             <select name="primary_product_id" className="input">
@@ -43,7 +51,6 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
               {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
-          <SourceSelect sources={sources.map((s) => ({ id: s.id, name: s.name }))} details={sourceDetails} />
           <div>
             <label className="label">分類</label>
             <select name="category" className="input" defaultValue="">
@@ -51,25 +58,12 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
               {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
           </div>
-        </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="label">ステージ</label>
-            <select name="stage" defaultValue="lead_acquired" className="input">
-              {STAGES.filter((s) => s.group === "open").map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">ヨミ</label>
-            <select name="forecast_category" defaultValue="pipeline" className="input">
-              {FORECAST_CATEGORIES.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-            </select>
-          </div>
           <div>
             <label className="label">見込み金額(円)</label>
             <input name="amount" type="number" className="input" placeholder="1500000" />
           </div>
         </div>
+        <p className="text-[11px] text-ink/40">※ ステージ・予測区分はヨミから自動設定されます。</p>
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="label">案件予測 *</label>
