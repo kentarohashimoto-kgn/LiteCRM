@@ -8,6 +8,7 @@ import { canReassignOwner } from "@/lib/constants";
 import { casUpdate } from "./_helpers";
 import { ensureTransitionOnWon } from "@/server/transitions-util";
 import type { OppsPage, LeanOppRow } from "@/lib/data/opps-page";
+import type { CalItem } from "@/lib/data/calendar";
 
 export interface OppPageFilter {
   q?: string;
@@ -112,6 +113,14 @@ export async function fetchApptOppsLeanAction(): Promise<LeanOppRow[]> {
     p_offset: 0,
   });
   return ((data ?? {}) as Partial<OppsPage>).rows ?? [];
+}
+
+/** アポカレンダー用イベント: アポ(予定) と アポ済(商談実施) を統合して取得。 */
+export async function fetchCalendarItemsAction(): Promise<CalItem[]> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { data } = await sb.rpc("appointment_calendar_events");
+  return (data ?? []) as CalItem[];
 }
 
 export type OppInlineField =

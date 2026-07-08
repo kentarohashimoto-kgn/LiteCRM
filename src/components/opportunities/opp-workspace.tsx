@@ -4,7 +4,8 @@ import { useState } from "react";
 import { List, LayoutGrid, CalendarDays, FileText, Loader2 } from "lucide-react";
 import type { OppView } from "@/lib/data/select";
 import { leanToOppView } from "@/lib/data/opps-page";
-import { fetchAllOppsLeanAction, fetchApptOppsLeanAction } from "@/server/actions/opportunities";
+import { fetchAllOppsLeanAction, fetchCalendarItemsAction } from "@/server/actions/opportunities";
+import type { CalItem } from "@/lib/data/calendar";
 import { fetchProposalOppsAction, type ProposalOppRow } from "@/server/actions/proposals";
 import { OppPaginatedTable } from "./opp-paginated-table";
 import { OppViews } from "./opp-views";
@@ -40,7 +41,7 @@ export function OppWorkspace({
 }) {
   const [view, setView] = useState<View>("list");
   const [allOpps, setAllOpps] = useState<OppView[] | null>(null);      // ボード用(全件)
-  const [apptOpps, setApptOpps] = useState<OppView[] | null>(null);    // カレンダー用(アポのみ)
+  const [calItems, setCalItems] = useState<CalItem[] | null>(null);    // カレンダー用(アポ＋アポ済)
   const [proposalRows, setProposalRows] = useState<ProposalOppRow[] | null>(null); // 提案タブ用
   const [loadingAll, setLoadingAll] = useState(false);
 
@@ -52,10 +53,9 @@ export function OppWorkspace({
     setLoadingAll(false);
   }
   async function ensureAppts() {
-    if (apptOpps || loadingAll) return;
+    if (calItems || loadingAll) return;
     setLoadingAll(true);
-    const rows = await fetchApptOppsLeanAction();
-    setApptOpps(rows.map(leanToOppView));
+    setCalItems(await fetchCalendarItemsAction());
     setLoadingAll(false);
   }
   async function ensureProposals() {
@@ -99,8 +99,8 @@ export function OppWorkspace({
           canReassign={canReassign}
         />
       ) : view === "calendar" ? (
-        apptOpps ? (
-          <AppointmentCalendarPro opps={apptOpps} owners={owners} bookingLinks={bookingLinks} />
+        calItems ? (
+          <AppointmentCalendarPro items={calItems} owners={owners} bookingLinks={bookingLinks} />
         ) : (
           <div className="card card-pad flex items-center gap-2 text-sm text-ink/40"><Loader2 size={15} className="animate-spin" /> 読み込み中…</div>
         )
