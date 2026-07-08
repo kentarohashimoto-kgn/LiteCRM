@@ -178,6 +178,8 @@ export async function createOpportunityAction(formData: FormData) {
       account_id: accountId,
       lead_id: lead?.id ?? null,
       owner_user_id: ownerUserId,
+      // ヨミ未設定を防ぐ(カレンダー等の抜け防止)。新規案件は既定でアポ段階。
+      yomi: str(formData.get("yomi")) ?? "4.アポ",
       primary_product_id: str(formData.get("primary_product_id")),
       lead_source_id: leadSourceId,
       source_detail: sourceDetail,

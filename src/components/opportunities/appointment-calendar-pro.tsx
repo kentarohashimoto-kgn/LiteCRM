@@ -45,6 +45,31 @@ function oppHref(it: CalItem): string {
 
 interface Appt { item: CalItem; at: Date; timed: boolean; key: string; }
 
+/** 重なり合う時刻イベントを列に振り分ける(Googleカレンダー風の横並び)。仮の所要時間60分で判定。 */
+function layoutColumns(items: Appt[]): Map<string, { col: number; cols: number }> {
+  const DUR = 60 * 60000;
+  const evs = items.map((a) => ({ key: a.key, s: +a.at, e: +a.at + DUR })).sort((x, y) => x.s - y.s);
+  const res = new Map<string, { col: number; cols: number }>();
+  let i = 0;
+  while (i < evs.length) {
+    let clusterEnd = evs[i].e;
+    let j = i + 1;
+    const cluster = [evs[i]];
+    while (j < evs.length && evs[j].s < clusterEnd) { cluster.push(evs[j]); clusterEnd = Math.max(clusterEnd, evs[j].e); j++; }
+    const colEnds: number[] = [];
+    for (const ev of cluster) {
+      let placed = -1;
+      for (let c = 0; c < colEnds.length; c++) { if (colEnds[c] <= ev.s) { colEnds[c] = ev.e; placed = c; break; } }
+      if (placed < 0) { colEnds.push(ev.e); placed = colEnds.length - 1; }
+      res.set(ev.key, { col: placed, cols: 0 });
+    }
+    const cols = colEnds.length;
+    for (const ev of cluster) res.get(ev.key)!.cols = cols;
+    i = j;
+  }
+  return res;
+}
+
 export interface BookingLink { id: string; label: string; url: string; }
 
 export function AppointmentCalendarPro({ items, owners, bookingLinks = [] }: { items: CalItem[]; owners: Option[]; bookingLinks?: BookingLink[] }) {
@@ -204,6 +229,7 @@ function TimeGrid({ days, byDay, onSetTime }: { days: Date[]; byDay: Map<string,
         </div>
         {days.map((d) => {
           const timed = (byDay.get(ymd(d)) ?? []).filter((a) => a.timed);
+          const lay = layoutColumns(timed);
           return (
             <div key={ymd(d)} className="flex-1 relative border-l border-black/[0.05]" style={{ height: gridH }}>
               {HOURS.map((h, i) => <div key={h} className="absolute left-0 right-0 border-t border-black/[0.04]" style={{ top: i * PX_PER_HOUR }} />)}
@@ -211,18 +237,21 @@ function TimeGrid({ days, byDay, onSetTime }: { days: Date[]; byDay: Map<string,
                 const minutes = (a.at.getHours() - DAY_START) * 60 + a.at.getMinutes();
                 const top = Math.max(0, (minutes / 60) * PX_PER_HOUR);
                 const done = a.item.kind === "done";
+                const pos = lay.get(a.key) ?? { col: 0, cols: 1 };
+                const wPct = 100 / pos.cols;
+                const base = { top, minHeight: PX_PER_HOUR - 4, left: `calc(${pos.col * wPct}% + 1px)`, width: `calc(${wPct}% - 2px)` };
                 return (
                   <Link
                     key={a.key}
                     href={oppHref(a.item)}
-                    className={cn("absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 overflow-hidden shadow-sm", done ? "text-ink border border-dashed" : "text-white")}
+                    className={cn("absolute rounded-md px-1 py-0.5 overflow-hidden shadow-sm", done ? "text-ink border border-dashed" : "text-white")}
                     style={done
-                      ? { top, minHeight: PX_PER_HOUR - 4, background: ownerColor(a.item) + "22", borderColor: ownerColor(a.item) }
-                      : { top, minHeight: PX_PER_HOUR - 4, background: ownerColor(a.item) }}
+                      ? { ...base, background: ownerColor(a.item) + "22", borderColor: ownerColor(a.item) }
+                      : { ...base, background: ownerColor(a.item) }}
                     title={`${fmtHM(a.at)} ${a.item.account_name} / ${a.item.owner_name ?? ""} / ${a.item.title}`}
                   >
                     <div className={cn("text-[10px] font-semibold tabular-nums leading-tight flex items-center gap-0.5", done && "text-ink/70")}>
-                      {done && <Check size={9} />}{fmtHM(a.at)} <span className="opacity-90">{a.item.title}</span>
+                      {done && <Check size={9} className="shrink-0" />}<span className="truncate">{fmtHM(a.at)} {a.item.title}</span>
                     </div>
                     <div className="text-[11px] font-medium truncate leading-tight">{a.item.account_name}</div>
                     <div className={cn("text-[9px] truncate", done ? "text-ink/45" : "opacity-90")}>{a.item.owner_name}</div>
