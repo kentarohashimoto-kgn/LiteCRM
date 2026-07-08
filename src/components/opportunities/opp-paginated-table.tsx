@@ -48,6 +48,7 @@ export function OppPaginatedTable({
   products,
   sources,
   campaigns = [],
+  canReassign = false,
 }: {
   initialRows: OppView[];
   initialTotal: number;
@@ -57,6 +58,7 @@ export function OppPaginatedTable({
   products: Option[];
   sources: Option[];
   campaigns?: Option[];
+  canReassign?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [yomiSel, setYomiSel] = useState<string[]>([]);
@@ -280,15 +282,17 @@ export function OppPaginatedTable({
       {selected.length > 0 && (
         <div className="card card-pad flex items-center gap-3 flex-wrap border-teal-primary/30 bg-teal-light/30">
           <span className="text-sm font-semibold text-teal-deep">{selected.length}件を選択中</span>
-          <select
-            defaultValue=""
-            disabled={bulkBusy}
-            onChange={(e) => { runBulk("owner_user_id", e.target.value); e.target.value = ""; }}
-            className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm"
-          >
-            <option value="">担当を一括変更…</option>
-            {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
+          {canReassign && (
+            <select
+              defaultValue=""
+              disabled={bulkBusy}
+              onChange={(e) => { runBulk("owner_user_id", e.target.value); e.target.value = ""; }}
+              className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm"
+            >
+              <option value="">担当を一括変更…</option>
+              {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          )}
           <select
             defaultValue=""
             disabled={bulkBusy}

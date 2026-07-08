@@ -2,14 +2,14 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { getWorkspaceForOpportunity } from "@/lib/data/workspace";
-import { getMeeting, getOpportunity, getContactsByAccount, getActivitiesByOpportunity, getUser } from "@/lib/data/select";
+import { getMeeting, getOpportunity, getContactsByAccount, getActivitiesByOpportunity, getUser, listMembers } from "@/lib/data/select";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { YomiBadge } from "@/components/ui/badges";
 import { updateMeetingAction } from "@/server/actions";
 import { AiSummaryButton } from "@/components/meetings/ai-summary-button";
 import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { ACTIVITY_TYPE_MAP } from "@/lib/constants";
+import { ACTIVITY_TYPE_MAP, canReassignOwner } from "@/lib/constants";
 import { formatDateFull, formatYen } from "@/lib/utils";
 
 function hm(iso?: string): string {
@@ -31,6 +31,8 @@ export default async function MeetingDetailPage({ params, searchParams }: { para
   const time = hm(meeting.meeting_at);
   const contacts = opp?.account ? getContactsByAccount(ws, opp.account.id) : [];
   const recentActivities = opp ? getActivitiesByOpportunity(ws, opp.id).slice(0, 3) : [];
+  const members = listMembers(ws).map(({ user }) => user);
+  const canReassign = canReassignOwner(ws.ctx.role);
 
   return (
     <div>
@@ -79,15 +81,28 @@ export default async function MeetingDetailPage({ params, searchParams }: { para
                   <input name="meeting_time" type="time" defaultValue={time} className="input" />
                 </div>
               </div>
-              <div>
-                <label className="label">形式</label>
-                <select name="method" defaultValue={meeting.method ?? ""} className="input">
-                  <option value="">—</option>
-                  <option value="訪問">訪問</option>
-                  <option value="オンライン">オンライン</option>
-                  <option value="電話">電話</option>
-                  <option value="その他">その他</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">形式</label>
+                  <select name="method" defaultValue={meeting.method ?? ""} className="input">
+                    <option value="">—</option>
+                    <option value="訪問">訪問</option>
+                    <option value="オンライン">オンライン</option>
+                    <option value="電話">電話</option>
+                    <option value="その他">その他</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">担当{!canReassign && <span className="text-[10px] text-ink/40 ml-1">（変更は代表・管理者・Sales Opsのみ）</span>}</label>
+                  {canReassign ? (
+                    <select name="owner_user_id" defaultValue={meeting.owner_user_id ?? ""} className="input">
+                      <option value="">—</option>
+                      {members.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  ) : (
+                    <div className="input bg-mist-soft/40 text-ink/60 flex items-center">{meeting.owner?.name ?? "—"}</div>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="label">議事・要点（短い要約）</label>

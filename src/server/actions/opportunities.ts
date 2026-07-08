@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { yomiToFields } from "@/lib/deal-import";
+import { canReassignOwner } from "@/lib/constants";
 import { casUpdate } from "./_helpers";
 import { ensureTransitionOnWon } from "@/server/transitions-util";
 import type { OppsPage, LeanOppRow } from "@/lib/data/opps-page";
@@ -200,6 +201,7 @@ export async function updateOppInlineAction(input: {
   } else if (input.field === "next_action_text") {
     patch.next_action_text = input.value || null;
   } else if (input.field === "owner_user_id") {
+    if (!canReassignOwner(ctx.role)) return { ok: false, error: "担当者の変更は代表・管理者・Sales Opsのみ実行できます" };
     patch.owner_user_id = input.value || null;
   } else {
     return { ok: false, error: "不正なフィールドです" };
@@ -239,6 +241,7 @@ export async function bulkUpdateOppsAction(input: {
 
   const patch: Record<string, unknown> = {};
   if (input.field === "owner_user_id") {
+    if (!canReassignOwner(ctx.role)) return { ok: false, updated: 0, error: "担当者の一括変更は代表・管理者・Sales Opsのみ実行できます" };
     if (!input.value) return { ok: false, updated: 0, error: "担当を選択してください" };
     patch.owner_user_id = input.value;
   } else {

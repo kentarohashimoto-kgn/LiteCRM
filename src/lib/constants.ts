@@ -88,6 +88,13 @@ export const BO_ONLY_ROLES: Role[] = ["back_office", "hr"];
 
 export const ROLE_MAP = Object.fromEntries(ROLES.map((r) => [r.key, r]));
 
+/** 案件・商談の担当者(owner)を再割当てできるロール(代表・管理者・Sales Ops) */
+export const REASSIGN_ROLES: Role[] = ["owner", "admin", "sales_manager"];
+/** 現在のロールが担当者を再割当てできるか。 */
+export function canReassignOwner(role: Role): boolean {
+  return REASSIGN_ROLES.includes(role);
+}
+
 /** tenant全体を閲覧できるロール(MVPの簡易RLS方針 14.2) */
 export const FULL_VIEW_ROLES: Role[] = ["owner", "admin", "sales_manager", "viewer"];
 /** 自分担当のみ参照のロール */

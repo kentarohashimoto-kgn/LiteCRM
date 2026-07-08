@@ -25,6 +25,7 @@ export function OppWorkspace({
   sources,
   campaigns,
   bookingLinks = [],
+  canReassign = false,
 }: {
   initialRows: OppView[];
   initialTotal: number;
@@ -35,6 +36,7 @@ export function OppWorkspace({
   sources: Option[];
   campaigns: Option[];
   bookingLinks?: BookingLink[];
+  canReassign?: boolean;
 }) {
   const [view, setView] = useState<View>("list");
   const [allOpps, setAllOpps] = useState<OppView[] | null>(null);      // ボード用(全件)
@@ -94,6 +96,7 @@ export function OppWorkspace({
           products={products}
           sources={sources}
           campaigns={campaigns}
+          canReassign={canReassign}
         />
       ) : view === "calendar" ? (
         apptOpps ? (

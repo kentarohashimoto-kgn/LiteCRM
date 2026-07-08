@@ -27,7 +27,7 @@ import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/ui/badges";
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
 import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction, saveOppResearchAction, updateOpportunityBasicsAction } from "@/server/actions";
-import { YOMI_OPTIONS } from "@/lib/constants";
+import { YOMI_OPTIONS, canReassignOwner } from "@/lib/constants";
 import { deleteOpportunityAction } from "@/server/actions/trash";
 import { ChangeHistory } from "@/components/history/change-history";
 import { AttachmentSection } from "@/components/attachments/attachment-section";
@@ -53,6 +53,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
   const meetings = getMeetingsByOpportunity(ws, o.id);
   const billing = getBillingByOpportunity(ws, o.id);
   const members = listMembers(ws).map(({ user }) => user);
+  const canReassign = canReassignOwner(ws.ctx.role);
   const tasks = getTasksByOpportunity(ws, o.id);
   const history = getStageHistory(ws, o.id);
   const contacts = o.account ? getContactsByAccount(ws, o.account.id) : [];
@@ -444,10 +445,14 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                   <input name="name" defaultValue={o.name} required className="input" />
                 </div>
                 <div>
-                  <label className="label">担当営業</label>
-                  <select name="owner_user_id" defaultValue={o.owner_user_id} className="input">
-                    {members.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                  </select>
+                  <label className="label">担当営業{!canReassign && <span className="text-[10px] text-ink/40 ml-1">（変更は代表・管理者・Sales Opsのみ）</span>}</label>
+                  {canReassign ? (
+                    <select name="owner_user_id" defaultValue={o.owner_user_id} className="input">
+                      {members.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  ) : (
+                    <div className="input bg-mist-soft/40 text-ink/60 flex items-center">{o.owner?.name ?? "—"}</div>
+                  )}
                 </div>
                 <div>
                   <label className="label">ヨミ</label>

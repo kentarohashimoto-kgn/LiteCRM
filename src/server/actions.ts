@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { requireCtx } from "@/lib/session";
-import { STAGE_MAP } from "@/lib/constants";
+import { STAGE_MAP, canReassignOwner } from "@/lib/constants";
 import { normCompany } from "@/lib/lead-import";
 import { yomiToFields, productToCategory, canonicalExhibition, type DealRow } from "@/lib/deal-import";
 import { parsePeriod, parseProbability, parseAmount, parseDateLoose } from "@/lib/revenue-forecast";
@@ -226,7 +226,8 @@ export async function updateOpportunityBasicsAction(formData: FormData) {
     appt_acquired_on: str(formData.get("appt_acquired_on")),
   };
   if (name) patch.name = name;         // NOT NULL: 空なら維持
-  if (owner) patch.owner_user_id = owner; // NOT NULL: 空なら維持
+  // 担当者の再割当ては代表・管理者・Sales Opsのみ(非管理職の送信は無視して既存を維持)
+  if (owner && canReassignOwner(ctx.role)) patch.owner_user_id = owner;
 
   await sb.from("opportunities").update(patch).eq("id", id);
   revalidatePath(`/app/opportunities/${id}`);
@@ -291,23 +292,24 @@ export async function createMeetingAction(formData: FormData) {
 }
 
 export async function updateMeetingAction(formData: FormData) {
-  await requireCtx();
+  const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const id = String(formData.get("id"));
   const oppId = str(formData.get("opportunity_id"));
-  await sb
-    .from("meetings")
-    .update({
-      title: str(formData.get("title")) ?? "商談",
-      meeting_date: str(formData.get("meeting_date")),
-      meeting_at: (() => { const md = str(formData.get("meeting_date")); const mt = str(formData.get("meeting_time")); return md && mt ? `${md}T${mt}:00+09:00` : null; })(),
-      method: str(formData.get("method")),
-      summary: str(formData.get("summary")),
-      minutes_detail: str(formData.get("minutes_detail")),
-      next_action_date: str(formData.get("next_action_date")),
-      next_action_text: str(formData.get("next_action_text")),
-    })
-    .eq("id", id);
+  const patch: Record<string, unknown> = {
+    title: str(formData.get("title")) ?? "商談",
+    meeting_date: str(formData.get("meeting_date")),
+    meeting_at: (() => { const md = str(formData.get("meeting_date")); const mt = str(formData.get("meeting_time")); return md && mt ? `${md}T${mt}:00+09:00` : null; })(),
+    method: str(formData.get("method")),
+    summary: str(formData.get("summary")),
+    minutes_detail: str(formData.get("minutes_detail")),
+    next_action_date: str(formData.get("next_action_date")),
+    next_action_text: str(formData.get("next_action_text")),
+  };
+  // 商談担当の変更は代表・管理者・Sales Opsのみ(非管理職の送信は無視)
+  const meetingOwner = str(formData.get("owner_user_id"));
+  if (meetingOwner && canReassignOwner(ctx.role)) patch.owner_user_id = meetingOwner;
+  await sb.from("meetings").update(patch).eq("id", id);
   revalidatePath(`/app/opportunities/${oppId}/meetings/${id}`);
   if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
   redirect(`/app/opportunities/${oppId}/meetings/${id}?saved=1`);

@@ -4,11 +4,12 @@ import { requireCtx } from "@/lib/session";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { OppWorkspace } from "@/components/opportunities/opp-workspace";
 import { leanToOppView, type OppsPage } from "@/lib/data/opps-page";
+import { canReassignOwner } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
 export default async function OpportunitiesPage() {
-  await requireCtx();
+  const ctx = await requireCtx();
   const sb = getSupabaseServer();
   // 初期ページ(50件)＋フィルタ用の小マスタのみ取得。全案件1.3MBの取得を回避。
   const [pageR, ownersR, productsR, sourcesR, campaignsR, bookingR] = await Promise.all([
@@ -50,6 +51,7 @@ export default async function OpportunitiesPage() {
         sources={sources}
         campaigns={campaigns}
         bookingLinks={bookingLinks}
+        canReassign={canReassignOwner(ctx.role)}
       />
     </div>
   );
