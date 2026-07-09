@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, RotateCcw, Plus, MessagesSquare } from "lucide-react";
+import { Check, RotateCcw, Plus, ListChecks, CalendarClock } from "lucide-react";
 import { getWorkspaceLite, type Workspace } from "@/lib/data/workspace";
 import { getAccount, getUser, listMembers, listTasks } from "@/lib/data/select";
 import { getSupabaseServer } from "@/lib/supabase/server";
@@ -7,48 +7,42 @@ import { PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/badges";
 import { setTaskStatusAction, createTaskAction } from "@/server/actions";
 import { AssigneeFilter } from "@/components/tasks/assignee-filter";
-import { formatDateFull } from "@/lib/utils";
-import type { Task, Opportunity } from "@/lib/types";
+import { formatDateFull, formatTimeJst, toJstDate } from "@/lib/utils";
+import type { Task, Opportunity, User } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 interface MeetingRow {
   id: string; title: string | null; summary: string | null;
   meeting_date: string | null; meeting_at: string | null;
+  owner_user_id: string | null;
   opportunity_id: string | null; account_id: string | null;
 }
 
-export default async function TasksPage({ searchParams }: { searchParams: { assignee?: string } }) {
+type View = "tasks" | "meetings";
+
+export default async function TasksPage({ searchParams }: { searchParams: { assignee?: string; view?: string } }) {
   const ws = await getWorkspaceLite();
   const allTasks = listTasks(ws);
   const owners = listMembers(ws).map(({ user }) => user);
   const today = new Date().toISOString().slice(0, 10);
+  const todayJst = toJstDate(new Date().toISOString()) ?? today;
 
-  // 担当別フィルタ(?assignee=)。メンバーに存在するIDのみ有効。
-  const assignee = owners.some((o) => o.id === searchParams.assignee) ? (searchParams.assignee as string) : "";
-  const matchAssignee = (t: Task) => !assignee || t.assigned_to === assignee;
-  const tasks = allTasks.filter(matchAssignee);
+  const view: View = searchParams.view === "meetings" ? "meetings" : "tasks";
 
-  const open = tasks.filter((t) => t.status === "todo");
-  const overdue = open.filter((t) => t.due_date < today).sort((a, b) => a.due_date.localeCompare(b.due_date));
-  const todayTasks = open.filter((t) => t.due_date === today);
-  const upcoming = open.filter((t) => t.due_date > today).sort((a, b) => a.due_date.localeCompare(b.due_date));
-  const done = tasks.filter((t) => t.status === "done");
-
-  // 直近の商談(RLS準拠・最近発生順)。案件・顧客はワークスペースから解決。
-  const sb = getSupabaseServer();
-  const { data: meetingRows } = await sb
-    .from("meetings")
-    .select("id, title, summary, meeting_date, meeting_at, opportunity_id, account_id")
-    .order("meeting_date", { ascending: false, nullsFirst: false })
-    .limit(20);
-  const meetings = (meetingRows ?? []) as MeetingRow[];
+  // 担当別フィルタ(?assignee=)。商談ビューの既定はログイン中の担当者、タスクビューは全件。
+  const raw = searchParams.assignee;
+  const validId = owners.some((o) => o.id === raw) ? (raw as string) : undefined;
+  const effAssignee = validId ?? (raw === "all" ? "all" : view === "meetings" ? ws.ctx.userId : "all");
+  const filterId = effAssignee === "all" ? "" : effAssignee;
+  const matchUser = (uid?: string | null) => !filterId || uid === filterId;
 
   const oppById = new Map<string, Opportunity>(ws.opportunities.map((o) => [o.id, o]));
+
   // 案件ごとの未完了タスク(担当フィルタ適用)
   const tasksByOpp = new Map<string, Task[]>();
   for (const t of allTasks) {
-    if (t.status !== "todo" || !t.opportunity_id || !matchAssignee(t)) continue;
+    if (t.status !== "todo" || !t.opportunity_id || !matchUser(t.assigned_to)) continue;
     (tasksByOpp.get(t.opportunity_id) ?? tasksByOpp.set(t.opportunity_id, []).get(t.opportunity_id)!).push(t);
   }
   for (const arr of tasksByOpp.values()) arr.sort((a, b) => a.due_date.localeCompare(b.due_date));
@@ -57,118 +51,222 @@ export default async function TasksPage({ searchParams }: { searchParams: { assi
     <div>
       <PageHeader title="タスク / 次アクション" subtitle="営業活動の漏れを防ぐため、次アクションをタスクで管理します。担当で絞り込み・直近商談のフォロー漏れ確認ができます。" />
 
+      {/* ビュー切替タブ */}
+      <div className="flex items-center gap-1 border-b border-black/[0.06] mb-4">
+        <TabLink href="/app/tasks" active={view === "tasks"} icon={<ListChecks size={15} />}>タスク一覧</TabLink>
+        <TabLink href="/app/tasks?view=meetings" active={view === "meetings"} icon={<CalendarClock size={15} />}>私の商談とタスク一覧</TabLink>
+      </div>
+
       <div className="flex items-center gap-2 mb-4">
         <span className="text-xs font-semibold text-ink/50">絞り込み</span>
-        <AssigneeFilter owners={owners.map((o) => ({ id: o.id, name: o.name }))} value={assignee} />
-        {assignee && <span className="text-xs text-ink/45">{getUser(ws, assignee)?.name} のタスクを表示中</span>}
+        <AssigneeFilter owners={owners.map((o) => ({ id: o.id, name: o.name }))} value={effAssignee} />
+        {filterId && <span className="text-xs text-ink/45">{getUser(ws, filterId)?.name} を表示中</span>}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 space-y-5">
-          <TaskGroup ws={ws} title="期限切れ" tone="rose" tasks={overdue} empty="期限切れはありません" />
-          <TaskGroup ws={ws} title="今日" tone="orange" tasks={todayTasks} empty="今日のタスクはありません" />
-          <TaskGroup ws={ws} title="今後の予定" tone="teal" tasks={upcoming} empty="予定タスクはありません" />
-          {done.length > 0 && <TaskGroup ws={ws} title="完了" tone="gray" tasks={done} empty="" done />}
+      {view === "tasks"
+        ? <TasksView ws={ws} tasks={allTasks.filter((t) => matchUser(t.assigned_to))} owners={owners} today={today} defaultAssignee={filterId || ws.ctx.userId} />
+        : <MeetingsView ws={ws} oppById={oppById} tasksByOpp={tasksByOpp} owners={owners} today={today} todayJst={todayJst} matchUser={matchUser} />}
+    </div>
+  );
+}
+
+function TabLink({ href, active, icon, children }: { href: string; active: boolean; icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+        active ? "border-teal-primary text-teal-deep" : "border-transparent text-ink/45 hover:text-ink/70"
+      }`}
+    >
+      {icon}{children}
+    </Link>
+  );
+}
+
+/* ---------- タスク一覧ビュー ---------- */
+function TasksView({ ws, tasks, owners, today, defaultAssignee }: { ws: Workspace; tasks: Task[]; owners: User[]; today: string; defaultAssignee: string }) {
+  const open = tasks.filter((t) => t.status === "todo");
+  const overdue = open.filter((t) => t.due_date < today).sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const todayTasks = open.filter((t) => t.due_date === today);
+  const upcoming = open.filter((t) => t.due_date > today).sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const done = tasks.filter((t) => t.status === "done");
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="lg:col-span-2 space-y-5">
+        <TaskGroup ws={ws} title="期限切れ" tone="rose" tasks={overdue} empty="期限切れはありません" />
+        <TaskGroup ws={ws} title="今日" tone="orange" tasks={todayTasks} empty="今日のタスクはありません" />
+        <TaskGroup ws={ws} title="今後の予定" tone="teal" tasks={upcoming} empty="予定タスクはありません" />
+        {done.length > 0 && <TaskGroup ws={ws} title="完了" tone="gray" tasks={done} empty="" done />}
+      </div>
+
+      <Section title="タスクを追加">
+        <form action={createTaskAction} className="space-y-3">
+          <div><label className="label">タスク名 *</label><input name="title" required className="input" /></div>
+          <div><label className="label">期限 *</label><input name="due_date" type="date" required className="input" defaultValue={today} /></div>
+          <div><label className="label">担当</label>
+            <select name="assigned_to" defaultValue={defaultAssignee} className="input">{owners.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
+          </div>
+          <div><label className="label">優先度</label>
+            <select name="priority" defaultValue="middle" className="input"><option value="high">高</option><option value="middle">中</option><option value="low">低</option></select>
+          </div>
+          <button type="submit" className="btn-primary w-full">追加する</button>
+        </form>
+      </Section>
+    </div>
+  );
+}
+
+/* ---------- 私の商談とタスク一覧ビュー ---------- */
+interface MeetRow { m: MeetingRow; opp?: Opportunity; accName: string; accId?: string; effDate: string; tasks: Task[] }
+
+async function MeetingsView({ ws, oppById, tasksByOpp, owners, today, todayJst, matchUser }: {
+  ws: Workspace; oppById: Map<string, Opportunity>; tasksByOpp: Map<string, Task[]>;
+  owners: User[]; today: string; todayJst: string; matchUser: (uid?: string | null) => boolean;
+}) {
+  // 直近の商談(RLS準拠)。担当フィルタはメモリ側で適用。
+  const sb = getSupabaseServer();
+  const { data: meetingRows } = await sb
+    .from("meetings")
+    .select("id, title, summary, meeting_date, meeting_at, owner_user_id, opportunity_id, account_id")
+    .order("meeting_date", { ascending: false, nullsFirst: false })
+    .limit(200);
+  const meetings = (meetingRows ?? []) as MeetingRow[];
+
+  const rows: MeetRow[] = meetings
+    .map((m): MeetRow => {
+      const opp = m.opportunity_id ? oppById.get(m.opportunity_id) : undefined;
+      const acc = m.account_id ? getAccount(ws, m.account_id) : opp?.account_id ? getAccount(ws, opp.account_id) : undefined;
+      const effDate = m.meeting_date ?? toJstDate(m.meeting_at) ?? "";
+      return { m, opp, accName: acc?.name ?? "—", accId: acc?.id ?? opp?.account_id, effDate, tasks: m.opportunity_id ? tasksByOpp.get(m.opportunity_id) ?? [] : [] };
+    })
+    // 担当: 商談の担当 or 案件の担当 が一致するもの
+    .filter((r) => matchUser(r.m.owner_user_id) || matchUser(r.opp?.owner_user_id));
+
+  const cmp = (a: MeetRow, b: MeetRow) => b.effDate.localeCompare(a.effDate); // 新しい順
+  const future = rows.filter((r) => r.effDate && r.effDate >= todayJst).sort(cmp);
+  const past = rows.filter((r) => !r.effDate || r.effDate < todayJst).sort(cmp);
+
+  if (rows.length === 0) {
+    return <p className="text-sm text-ink/40 py-10 text-center">対象の商談がありません（担当フィルタを「すべて」にすると全件表示できます）。</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[11px] text-ink/40">商談後の作業漏れ・ネクストアクションのフォロー状況を確認できます。行の「＋追加」からその商談にタスクを追加できます。</p>
+      <MeetingGroup label="未来分（これからの商談）" tone="teal" rows={future} ws={ws} owners={owners} today={today} defaultOpen />
+      <MeetingGroup label="過去分（実施済みの商談）" tone="gray" rows={past} ws={ws} owners={owners} today={today} defaultOpen />
+    </div>
+  );
+}
+
+function MeetingGroup({ label, tone, rows, ws, owners, today, defaultOpen }: {
+  label: string; tone: "teal" | "gray"; rows: MeetRow[]; ws: Workspace;
+  owners: User[]; today: string; defaultOpen: boolean;
+}) {
+  const dot = tone === "teal" ? "bg-teal-primary" : "bg-ink/30";
+  return (
+    <details open={defaultOpen} className="rounded-2xl border border-black/[0.06] bg-white overflow-hidden">
+      <summary className="cursor-pointer list-none select-none flex items-center gap-2 px-4 py-3 hover:bg-mist-soft/40">
+        <span className={`h-2 w-2 rounded-full ${dot}`} />
+        <span className="text-sm font-bold text-ink">{label}</span>
+        <span className="pill bg-mist-soft text-ink/50">{rows.length}</span>
+        <span className="ml-auto text-[11px] text-ink/35">クリックで開閉</span>
+      </summary>
+      {rows.length === 0 ? (
+        <p className="text-sm text-ink/35 px-4 py-6">該当する商談はありません</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-t border-black/[0.06]">
+            <thead className="text-ink/40 text-xs bg-mist-soft/30">
+              <tr>
+                <th className="th">日付</th>
+                <th className="th">時刻</th>
+                <th className="th">顧客名</th>
+                <th className="th">案件名</th>
+                <th className="th">商談名</th>
+                <th className="th min-w-[200px]">商談概要</th>
+                <th className="th min-w-[220px]">タスク</th>
+                <th className="th">追加</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black/[0.04]">
+              {rows.map((r) => <MeetingTableRow key={r.m.id} r={r} ws={ws} owners={owners} today={today} />)}
+            </tbody>
+          </table>
         </div>
+      )}
+    </details>
+  );
+}
 
-        <Section title="タスクを追加">
-          <form action={createTaskAction} className="space-y-3">
-            <div><label className="label">タスク名 *</label><input name="title" required className="input" /></div>
-            <div><label className="label">期限 *</label><input name="due_date" type="date" required className="input" defaultValue={today} /></div>
-            <div><label className="label">担当</label>
-              <select name="assigned_to" defaultValue={assignee || ws.ctx.userId} className="input">{owners.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
-            </div>
-            <div><label className="label">優先度</label>
-              <select name="priority" defaultValue="middle" className="input"><option value="high">高</option><option value="middle">中</option><option value="low">低</option></select>
-            </div>
-            <button type="submit" className="btn-primary w-full">追加する</button>
-          </form>
-        </Section>
-      </div>
-
-      {/* 直近の商談とフォロータスク */}
-      <Section title="直近の商談とフォロータスク" className="mt-5" action={<span className="text-[11px] text-ink/40">商談後の作業漏れ・ネクストアクションを確認</span>}>
-        {meetings.length === 0 ? (
-          <p className="text-sm text-ink/40 py-6 text-center">商談の記録がまだありません</p>
+function MeetingTableRow({ r, ws, owners, today }: { r: MeetRow; ws: Workspace; owners: User[]; today: string }) {
+  const { m, opp, accName, accId, tasks } = r;
+  const time = formatTimeJst(m.meeting_at);
+  const defaultOwner = (opp?.owner_user_id as string) || m.owner_user_id || ws.ctx.userId;
+  return (
+    <tr className="align-top row-hover">
+      <td className="td tabular-nums text-ink/70">{formatDateFull(r.effDate || m.meeting_at)}</td>
+      <td className="td tabular-nums text-ink/70">{time || "—"}</td>
+      <td className="td font-medium max-w-[160px] truncate" title={accName}>{accName}</td>
+      <td className="td max-w-[160px] truncate">
+        {opp ? <Link href={`/app/opportunities/${opp.id}`} className="text-teal-deep hover:underline" title={opp.name}>{opp.name}</Link> : "—"}
+      </td>
+      <td className="td max-w-[150px] truncate">
+        {m.title
+          ? (m.opportunity_id ? <Link href={`/app/opportunities/${m.opportunity_id}/meetings/${m.id}`} className="hover:underline text-ink/80" title={m.title}>{m.title}</Link> : <span title={m.title}>{m.title}</span>)
+          : <span className="text-ink/30">—</span>}
+      </td>
+      <td className="td whitespace-normal text-[12.5px] text-ink/60"><span className="line-clamp-2">{m.summary || <span className="text-ink/25">—</span>}</span></td>
+      <td className="td whitespace-normal">
+        {tasks.length === 0 ? (
+          <span className="text-[11px] text-rose-500/80">ネクストアクション未登録</span>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {meetings.map((m) => {
-              const opp = m.opportunity_id ? oppById.get(m.opportunity_id) : undefined;
-              const acc = m.account_id ? getAccount(ws, m.account_id) : (opp?.account_id ? getAccount(ws, opp.account_id) : undefined);
-              const followTasks = m.opportunity_id ? (tasksByOpp.get(m.opportunity_id) ?? []) : [];
-              const defaultOwner = (opp?.owner_user_id as string) || ws.ctx.userId;
+          <div className="space-y-1">
+            {tasks.map((t) => {
+              const od = t.due_date < today;
               return (
-                <div key={m.id} className="rounded-xl border border-black/[0.06] p-3">
-                  <div className="flex items-start gap-2">
-                    <MessagesSquare size={15} className="text-amber-500 shrink-0 mt-0.5" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-ink truncate">{acc?.name ?? "—"}</span>
-                        <span className="text-[11px] text-ink/40 tabular-nums shrink-0">{formatDateFull(m.meeting_date ?? m.meeting_at)}</span>
-                      </div>
-                      <div className="text-xs text-ink/55">
-                        {opp && <Link href={`/app/opportunities/${opp.id}`} className="text-teal-deep hover:underline">{opp.name}</Link>}
-                        {opp && m.title && <span className="text-ink/30"> ／ </span>}
-                        {m.title && (m.opportunity_id ? <Link href={`/app/opportunities/${m.opportunity_id}/meetings/${m.id}`} className="hover:underline">{m.title}</Link> : m.title)}
-                      </div>
-                      {m.summary && <p className="text-[11.5px] text-ink/60 mt-1 line-clamp-2">{m.summary}</p>}
-                    </div>
-                  </div>
-
-                  {/* フォロータスク */}
-                  <div className="mt-2.5 pl-1 space-y-1">
-                    {followTasks.length === 0 ? (
-                      <p className="text-[11px] text-rose-500/80">ネクストアクションのタスク未登録 — 追加を推奨</p>
-                    ) : (
-                      followTasks.map((t) => {
-                        const overdueFlag = t.due_date < today;
-                        return (
-                          <div key={t.id} className="flex items-center gap-2">
-                            <form action={setTaskStatusAction}>
-                              <input type="hidden" name="id" value={t.id} />
-                              <input type="hidden" name="status" value="done" />
-                              <button className="text-teal-primary hover:text-teal-deep" title="完了にする">
-                                <span className="inline-flex h-4 w-4 items-center justify-center rounded border-2 border-teal-primary hover:bg-teal-light"><Check size={10} /></span>
-                              </button>
-                            </form>
-                            <span className="text-xs text-ink truncate flex-1">{t.title}</span>
-                            {t.priority === "high" && <Tag tone="orange">高</Tag>}
-                            <span className={`text-[11px] tabular-nums shrink-0 ${overdueFlag ? "text-rose-500 font-medium" : "text-ink/40"}`}>{formatDateFull(t.due_date)}</span>
-                            <Avatar user={getUser(ws, t.assigned_to)} size={18} />
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-
-                  {/* この商談(案件)にタスクを追加 */}
-                  {m.opportunity_id && (
-                    <details className="mt-2">
-                      <summary className="cursor-pointer text-[11px] text-teal-deep hover:underline list-none inline-flex items-center gap-0.5"><Plus size={12} /> この商談にタスクを追加</summary>
-                      <form action={createTaskAction} className="mt-2 rounded-lg border border-black/[0.06] bg-mist-soft/30 p-2 space-y-1.5">
-                        <input type="hidden" name="opportunity_id" value={m.opportunity_id} />
-                        {(acc?.id || opp?.account_id) && <input type="hidden" name="account_id" value={acc?.id ?? opp?.account_id ?? ""} />}
-                        <input name="title" required className="input py-1 text-xs" placeholder="タスク名（例：議事録を送付／見積提出）" />
-                        <div className="grid grid-cols-2 gap-1.5">
-                          <input name="due_date" type="date" required defaultValue={today} className="input py-1 text-xs" />
-                          <select name="assigned_to" defaultValue={defaultOwner} className="input py-1 text-xs">
-                            {owners.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                          </select>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <select name="priority" defaultValue="middle" className="input py-1 text-xs w-24"><option value="high">高</option><option value="middle">中</option><option value="low">低</option></select>
-                          <button type="submit" className="rounded-lg bg-teal-primary px-3 py-1 text-xs text-white">追加</button>
-                        </div>
-                      </form>
-                    </details>
-                  )}
+                <div key={t.id} className="flex items-center gap-1.5">
+                  <form action={setTaskStatusAction} className="shrink-0">
+                    <input type="hidden" name="id" value={t.id} />
+                    <input type="hidden" name="status" value="done" />
+                    <button className="text-teal-primary hover:text-teal-deep" title="完了にする">
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded border-2 border-teal-primary hover:bg-teal-light"><Check size={10} /></span>
+                    </button>
+                  </form>
+                  <span className="text-xs text-ink truncate max-w-[120px]" title={t.title}>{t.title}</span>
+                  {t.priority === "high" && <Tag tone="orange">高</Tag>}
+                  <span className={`text-[10px] tabular-nums shrink-0 ${od ? "text-rose-500 font-medium" : "text-ink/40"}`}>{formatDateFull(t.due_date)}</span>
+                  <Avatar user={getUser(ws, t.assigned_to)} size={16} />
                 </div>
               );
             })}
           </div>
         )}
-      </Section>
-    </div>
+      </td>
+      <td className="td">
+        {m.opportunity_id ? (
+          <details className="relative">
+            <summary className="cursor-pointer text-[11px] text-teal-deep hover:underline list-none inline-flex items-center gap-0.5"><Plus size={12} /> 追加</summary>
+            <form action={createTaskAction} className="absolute right-0 z-10 mt-1 w-64 rounded-xl border border-black/10 bg-white p-2.5 shadow-lg space-y-1.5">
+              <input type="hidden" name="opportunity_id" value={m.opportunity_id} />
+              {accId && <input type="hidden" name="account_id" value={accId} />}
+              <input name="title" required className="input py-1 text-xs" placeholder="タスク名（例：議事録送付／見積提出）" />
+              <div className="grid grid-cols-2 gap-1.5">
+                <input name="due_date" type="date" required defaultValue={today} className="input py-1 text-xs" />
+                <select name="assigned_to" defaultValue={defaultOwner} className="input py-1 text-xs">
+                  {owners.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <select name="priority" defaultValue="middle" className="input py-1 text-xs w-20"><option value="high">高</option><option value="middle">中</option><option value="low">低</option></select>
+                <button type="submit" className="rounded-lg bg-teal-primary px-3 py-1 text-xs text-white">追加する</button>
+              </div>
+            </form>
+          </details>
+        ) : <span className="text-ink/25 text-[11px]">—</span>}
+      </td>
+    </tr>
   );
 }
 

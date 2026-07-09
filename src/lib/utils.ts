@@ -43,6 +43,22 @@ export function formatDateFull(value?: string | null): string {
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+/** ISO日時をJSTの HH:MM で表示。時刻が無ければ空文字。 */
+export function formatTimeJst(value?: string | null): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
+}
+
+/** ISO日時をJST基準の YYYY-MM-DD に変換(日付グルーピング用)。 */
+export function toJstDate(value?: string | null): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" });
+}
+
 export function formatMonth(value?: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
