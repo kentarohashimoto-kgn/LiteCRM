@@ -14,19 +14,37 @@
 export type RiskLevel = "low" | "middle" | "high";
 export type Involvement = "none" | "low" | "middle" | "high";
 export type Verdict = "go" | "conditional" | "review";
+/** 単価の種類: 人月単価 / 時給。 */
+export type RateUnit = "man_month" | "hourly";
+/** 工数の記述方法: 率(人月×稼働率) / 時間(h)。 */
+export type EffortUnit = "ratio" | "hours";
+
+/** 1人月あたりの標準労働時間(工数換算の既定)。人月単価⇔時給、率⇔時間の換算に使う。 */
+export const DEFAULT_HOURS_PER_MONTH = 160;
 
 /** アサイン1行 × 1ヶ月の原価セル。month は "YYYY-MM"。 */
 export interface CostCell {
   month: string;
-  manMonth: number;
-  ratio: number; // 0..1
+  /** 率モードの人月。 */
+  manMonth?: number;
+  /** 率モードの稼働率 0..1。 */
+  ratio?: number;
+  /** 時間モードの投下時間(h)。 */
+  hours?: number;
 }
 
 /** アサイン（人材×役割×単価）と月別のセル。 */
 export interface Assignment {
   id: string;
   label: string;
+  /** 単価。rateUnit に応じて 円/人月 または 円/時 と解釈。 */
   costRate: number;
+  /** 単価の種類(既定 man_month)。 */
+  rateUnit?: RateUnit;
+  /** 工数の記述方法(既定 ratio)。 */
+  effortUnit?: EffortUnit;
+  /** 1人月あたり時間(既定 160)。時給⇔人月、率⇔時間の換算に使用。 */
+  hoursPerMonth?: number;
   cells: CostCell[];
 }
 
@@ -52,20 +70,58 @@ export function round(n: number, digits = 0): number {
   return Math.round((n + Number.EPSILON) * f) / f;
 }
 
-/** 行原価(月) = 単価 × 人月 × 稼働率。負値・NaNは0に丸める。 */
-export function cellCost(costRate: number, manMonth: number, ratio: number): number {
-  const v = (costRate || 0) * (manMonth || 0) * (ratio ?? 1);
+/** セルの実効人月。率モード=人月×稼働率、時間モード=時間÷(1人月時間)。 */
+export function effectivePM(cell: CostCell, effortUnit: EffortUnit = "ratio", hoursPerMonth = DEFAULT_HOURS_PER_MONTH): number {
+  if (effortUnit === "hours") {
+    const H = hoursPerMonth || DEFAULT_HOURS_PER_MONTH;
+    return H > 0 ? (cell.hours || 0) / H : 0;
+  }
+  return (cell.manMonth || 0) * (cell.ratio ?? 1);
+}
+
+export interface CellCostInput {
+  costRate: number;
+  rateUnit?: RateUnit;
+  effortUnit?: EffortUnit;
+  hoursPerMonth?: number;
+  manMonth?: number;
+  ratio?: number;
+  hours?: number;
+}
+
+/**
+ * 行原価(月)。単価の種類(人月/時給)と工数の記述(率/時間)の4通りに対応。
+ *  - 人月単価 × 実効人月     (rateUnit=man_month)
+ *  - 時給     × 実効時間     (rateUnit=hourly)
+ * 実効人月・実効時間は hoursPerMonth で相互換算する。負値・NaNは0。
+ */
+export function computeCellCost(p: CellCostInput): number {
+  const H = p.hoursPerMonth || DEFAULT_HOURS_PER_MONTH;
+  const eu = p.effortUnit ?? "ratio";
+  const cell: CostCell = { month: "", manMonth: p.manMonth, ratio: p.ratio, hours: p.hours };
+  const pm = effectivePM(cell, eu, H);
+  const hours = eu === "hours" ? p.hours || 0 : pm * H;
+  const rate = p.costRate || 0;
+  const v = (p.rateUnit ?? "man_month") === "hourly" ? rate * hours : rate * pm;
   return Number.isFinite(v) && v > 0 ? v : 0;
 }
 
-/** アサイン1件の原価合計（全月）。 */
-export function assignmentCost(a: Assignment): number {
-  return a.cells.reduce((s, c) => s + cellCost(a.costRate, c.manMonth, c.ratio), 0);
+/** 行原価(月) = 人月単価 × 人月 × 稼働率(率モードの簡易版・後方互換)。負値・NaNは0。 */
+export function cellCost(costRate: number, manMonth: number, ratio: number): number {
+  return computeCellCost({ costRate, manMonth, ratio });
 }
 
-/** アサイン1件の投下人月合計（稼働率換算後の実効人月）。 */
+/** アサイン1件の原価合計（全月）。単価種別・工数記述を考慮。 */
+export function assignmentCost(a: Assignment): number {
+  return a.cells.reduce(
+    (s, c) => s + computeCellCost({ costRate: a.costRate, rateUnit: a.rateUnit, effortUnit: a.effortUnit, hoursPerMonth: a.hoursPerMonth, manMonth: c.manMonth, ratio: c.ratio, hours: c.hours }),
+    0
+  );
+}
+
+/** アサイン1件の投下人月合計（実効人月）。 */
 export function assignmentEffortMM(a: Assignment): number {
-  return a.cells.reduce((s, c) => s + (c.manMonth || 0) * (c.ratio ?? 1), 0);
+  return a.cells.reduce((s, c) => s + effectivePM(c, a.effortUnit, a.hoursPerMonth), 0);
 }
 
 /** 粗利率 = 粗利 ÷ 販売。販売0なら0を返す（0除算ガード）。 */
@@ -102,7 +158,8 @@ export function rollup(assignments: Assignment[], revenue: RevenueCell[]): Rollu
   const costByMonth = new Map<string, number>();
   for (const a of assignments) {
     for (const c of a.cells) {
-      costByMonth.set(c.month, (costByMonth.get(c.month) ?? 0) + cellCost(a.costRate, c.manMonth, c.ratio));
+      const cost = computeCellCost({ costRate: a.costRate, rateUnit: a.rateUnit, effortUnit: a.effortUnit, hoursPerMonth: a.hoursPerMonth, manMonth: c.manMonth, ratio: c.ratio, hours: c.hours });
+      costByMonth.set(c.month, (costByMonth.get(c.month) ?? 0) + cost);
     }
   }
   const revByMonth = new Map<string, number>();

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   cellCost,
+  computeCellCost,
+  effectivePM,
   assignmentCost,
   assignmentEffortMM,
   grossRate,
@@ -48,6 +50,29 @@ describe("cellCost（月途中の稼働率按分）", () => {
   it("負値・NaNは0に丸める", () => {
     expect(cellCost(-100, 1, 1)).toBe(0);
     expect(cellCost(100, NaN, 1)).toBe(0);
+  });
+});
+
+describe("単価種別×工数記述の4通り(computeCellCost)", () => {
+  // 標準160h/人月。人月100万 ⇔ 時給6,250円。0.5人月 ⇔ 80h。
+  it("人月単価 × 率(既定)", () => {
+    expect(computeCellCost({ costRate: 100, manMonth: 0.5, ratio: 1 })).toBe(50);
+  });
+  it("時給 × 時間: 時給6250円 × 80h = 50万", () => {
+    expect(computeCellCost({ costRate: 6250, rateUnit: "hourly", effortUnit: "hours", hours: 80 })).toBe(500000);
+  });
+  it("人月単価 × 時間: 人月100万・80h/160h = 0.5人月 → 50万", () => {
+    expect(computeCellCost({ costRate: 100, rateUnit: "man_month", effortUnit: "hours", hours: 80, hoursPerMonth: 160 })).toBe(50);
+  });
+  it("時給 × 率: 時給6250円・0.5人月=80h → 50万", () => {
+    expect(computeCellCost({ costRate: 6250, rateUnit: "hourly", effortUnit: "ratio", manMonth: 0.5, ratio: 1, hoursPerMonth: 160 })).toBe(500000);
+  });
+  it("hoursPerMonthを変えると人月換算が変わる(140h/人月)", () => {
+    expect(computeCellCost({ costRate: 140, rateUnit: "man_month", effortUnit: "hours", hours: 140, hoursPerMonth: 140 })).toBe(140);
+  });
+  it("effectivePM: 時間モードは時間÷H", () => {
+    expect(effectivePM({ month: "", hours: 80 }, "hours", 160)).toBe(0.5);
+    expect(effectivePM({ month: "", manMonth: 0.5, ratio: 0.5 }, "ratio")).toBe(0.25);
   });
 });
 

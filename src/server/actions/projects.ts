@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireProjectCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import { cellCost } from "@/lib/project-cost";
+import { computeCellCost, type RateUnit, type EffortUnit } from "@/lib/project-cost";
 
 function str(v: FormDataEntryValue | null): string | null {
   const s = typeof v === "string" ? v.trim() : "";
@@ -75,6 +75,7 @@ export async function updateProjectPlanAction(formData: FormData) {
       min_gross_rate: minRate == null ? 0.25 : Math.max(0, Math.min(0.99, minRate > 1 ? minRate / 100 : minRate)),
       hq_involvement: str(formData.get("hq_involvement")) ?? "none",
       plan_risk: str(formData.get("plan_risk")) ?? "low",
+      hours_per_month: num(formData.get("hours_per_month")) ?? 160,
       notes: str(formData.get("notes")),
     })
     .eq("id", planId);
@@ -127,6 +128,9 @@ export async function saveAssignmentAction(formData: FormData) {
   const assignmentId = str(formData.get("assignment_id"));
   const costRate = num(formData.get("cost_rate")) ?? 0;
   const kind = str(formData.get("kind")) ?? "external";
+  const rateUnit = (str(formData.get("rate_unit")) ?? "man_month") as RateUnit;
+  const effortUnit = (str(formData.get("effort_unit")) ?? "ratio") as EffortUnit;
+  const hoursPerMonth = num(formData.get("hours_per_month")) ?? 160;
 
   const patch = {
     kind,
@@ -135,6 +139,8 @@ export async function saveAssignmentAction(formData: FormData) {
     role: str(formData.get("role")),
     cost_rate: costRate,
     bill_rate: num(formData.get("bill_rate")),
+    rate_unit: rateUnit,
+    effort_unit: effortUnit,
     start_month: monthDate(formData.get("start_month")),
     end_month: monthDate(formData.get("end_month")),
     notes: str(formData.get("notes")),
@@ -153,16 +159,18 @@ export async function saveAssignmentAction(formData: FormData) {
   }
 
   if (aid) {
-    // 月別セルを置き換え(工数0は保存しない)。原価は書込時に算出。
+    // 月別セルを置き換え。率モードは人月×稼働率、時間モードは時間で保存。原価は書込時に算出。
     const cmMonths = formData.getAll("cm_month").map((v) => String(v).slice(0, 7));
     const cmMM = formData.getAll("cm_mm").map((v) => Number(String(v)) || 0);
     const cmRatio = formData.getAll("cm_ratio").map((v) => {
       const n = Number(String(v));
       return Number.isFinite(n) ? n : 1;
     });
+    const cmHours = formData.getAll("cm_hours").map((v) => Number(String(v)) || 0);
     const cells = cmMonths
-      .map((m, i) => ({ month: `${m}-01`, mm: cmMM[i] ?? 0, ratio: cmRatio[i] ?? 1 }))
-      .filter((c) => c.month.length === 10 && c.mm > 0);
+      .map((m, i) => ({ month: `${m}-01`, mm: cmMM[i] ?? 0, ratio: cmRatio[i] ?? 1, hours: cmHours[i] ?? 0 }))
+      // 率モードは人月>0、時間モードは時間>0 の行のみ保存
+      .filter((c) => c.month.length === 10 && (effortUnit === "hours" ? c.hours > 0 : c.mm > 0));
 
     await sb.from("project_cost_months").delete().eq("assignment_id", aid);
     if (cells.length > 0) {
@@ -172,9 +180,10 @@ export async function saveAssignmentAction(formData: FormData) {
           plan_id: planId,
           assignment_id: aid,
           month: c.month,
-          man_month: c.mm,
-          ratio: c.ratio,
-          cost_amount: cellCost(costRate, c.mm, c.ratio),
+          man_month: effortUnit === "hours" ? 0 : c.mm,
+          ratio: effortUnit === "hours" ? 1 : c.ratio,
+          hours: effortUnit === "hours" ? c.hours : null,
+          cost_amount: computeCellCost({ costRate, rateUnit, effortUnit, hoursPerMonth, manMonth: c.mm, ratio: c.ratio, hours: c.hours }),
         }))
       );
     }

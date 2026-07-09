@@ -27,14 +27,16 @@ export interface ProjectPlan {
   status: string;
   baseline_locked_at: string | null;
   notes: string | null;
+  hours_per_month: number;
 }
 export interface RevenueMonth { id: string; plan_id: string; month: string; amount: number; note: string | null; }
 export interface ProjAssignment {
   id: string; plan_id: string; kind: string; talent_id: string | null; member_user_id: string | null;
   label: string; role: string | null; cost_rate: number; bill_rate: number | null;
+  rate_unit: "man_month" | "hourly"; effort_unit: "ratio" | "hours";
   start_month: string | null; end_month: string | null; status: string; notes: string | null;
 }
-export interface CostMonth { id: string; plan_id: string; assignment_id: string; month: string; man_month: number; ratio: number; cost_amount: number; }
+export interface CostMonth { id: string; plan_id: string; assignment_id: string; month: string; man_month: number; ratio: number; hours: number | null; cost_amount: number; }
 export interface WeeklyReport {
   id: string; plan_id: string; assignment_id: string | null; week_start: string;
   planned_mm: number | null; actual_mm: number | null; planned_cost: number | null; actual_cost: number | null;
@@ -97,15 +99,19 @@ export async function getProjectBundle(opportunityId: string): Promise<ProjectBu
 
 /** バンドルを純計算ロジックに渡し、月別集計・提案可否・値引き余地を求める。 */
 export function computeProject(bundle: ProjectBundle): ProjectComputed {
+  const H = Number(bundle.plan.hours_per_month) || 160;
   const assignments: CalcAssignment[] = bundle.assignments
     .filter((a) => a.status !== "removed")
     .map((a) => ({
       id: a.id,
       label: a.label,
       costRate: Number(a.cost_rate) || 0,
+      rateUnit: a.rate_unit ?? "man_month",
+      effortUnit: a.effort_unit ?? "ratio",
+      hoursPerMonth: H,
       cells: bundle.costMonths
         .filter((c) => c.assignment_id === a.id)
-        .map((c) => ({ month: monthKey(c.month), manMonth: Number(c.man_month) || 0, ratio: Number(c.ratio ?? 1) })),
+        .map((c) => ({ month: monthKey(c.month), manMonth: Number(c.man_month) || 0, ratio: Number(c.ratio ?? 1), hours: c.hours == null ? undefined : Number(c.hours) })),
     }));
   const revenue: RevenueCell[] = bundle.revenues.map((r) => ({ month: monthKey(r.month), amount: Number(r.amount) || 0 }));
   const roll = rollup(assignments, revenue);

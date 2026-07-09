@@ -9,9 +9,10 @@ import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { ProjectRevenueForm } from "@/components/projects/project-revenue-form";
 import { ProjectAssignmentForm } from "@/components/projects/project-assignment-form";
+import { ProjectWeeklyForm } from "@/components/projects/project-weekly-form";
 import {
   enableProjectManagementAction, disableProjectManagementAction, updateProjectPlanAction,
-  lockBaselineAction, deleteAssignmentAction, saveWeeklyReportAction, deleteWeeklyReportAction,
+  lockBaselineAction, deleteAssignmentAction, deleteWeeklyReportAction,
 } from "@/server/actions/projects";
 import { costVariance } from "@/lib/project-cost";
 import { formatYen, formatPercent, formatDateFull } from "@/lib/utils";
@@ -114,7 +115,7 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
                       const total = months.reduce((s, m) => s + (inner?.get(m) ?? 0), 0);
                       return (
                         <tr key={a.id}>
-                          <td className="td"><div className="font-medium text-ink/90">{a.label}</div><div className="text-[11px] text-ink/45">{a.role ? a.role + "・" : ""}{formatYen(Number(a.cost_rate))}/人月</div></td>
+                          <td className="td"><div className="font-medium text-ink/90">{a.label}</div><div className="text-[11px] text-ink/45">{a.role ? a.role + "・" : ""}{formatYen(Number(a.cost_rate))}{rateSuffix(a.rate_unit)}</div></td>
                           {months.map((m) => <td key={m} className="td text-right text-ink/70">{inner?.get(m) ? formatYen(inner.get(m)!) : "—"}</td>)}
                           <td className="td text-right font-semibold">{formatYen(total)}</td>
                         </tr>
@@ -160,11 +161,12 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
                     <span className="text-sm font-medium text-ink">{a.label}</span>
                     <span className="pill bg-mist-soft text-ink/50 text-[10px]">{a.kind === "internal" ? "社員" : "外注"}</span>
                     {a.role && <span className="text-[11px] text-ink/45">{a.role}</span>}
-                    <span className="ml-auto text-xs text-ink/55 tabular-nums">{formatYen(Number(a.cost_rate))}/人月</span>
+                    <span className="ml-auto text-xs text-ink/55 tabular-nums">{formatYen(Number(a.cost_rate))}{rateSuffix(a.rate_unit)}</span>
                   </summary>
                   <div className="border-t border-black/[0.05] p-3 space-y-3">
                     <ProjectAssignmentForm
                       planId={plan.id} oppId={o.id} members={members.map((m) => ({ id: m.id, name: m.name }))} seedMonths={seedMonths}
+                      hoursPerMonth={Number(plan.hours_per_month) || 160}
                       existing={toExisting(a, cmByAsg.get(a.id) ?? [])}
                     />
                     <form action={deleteAssignmentAction} className="pt-1 border-t border-black/[0.04]">
@@ -179,7 +181,7 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
             <details className="mt-3">
               <summary className="cursor-pointer text-sm font-medium text-teal-deep">＋ アサインを追加</summary>
               <div className="mt-3 border-t border-black/[0.05] pt-3">
-                <ProjectAssignmentForm planId={plan.id} oppId={o.id} members={members.map((m) => ({ id: m.id, name: m.name }))} seedMonths={seedMonths} />
+                <ProjectAssignmentForm planId={plan.id} oppId={o.id} members={members.map((m) => ({ id: m.id, name: m.name }))} seedMonths={seedMonths} hoursPerMonth={Number(plan.hours_per_month) || 160} />
               </div>
             </details>
           </Section>
@@ -222,32 +224,14 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
             </div>
             <details className="mt-3">
               <summary className="cursor-pointer text-sm font-medium text-teal-deep">＋ 週次実績を記録</summary>
-              <form action={saveWeeklyReportAction} className="mt-3 border-t border-black/[0.05] pt-3 space-y-3">
-                <input type="hidden" name="plan_id" value={plan.id} />
-                <input type="hidden" name="opportunity_id" value={o.id} />
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="label">週（月曜日）*</label><input name="week_start" type="date" required className="input" /></div>
-                  <div><label className="label">アサイン（任意）</label>
-                    <select name="assignment_id" defaultValue="" className="input">
-                      <option value="">全体</option>
-                      {activeAssignments.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-                    </select>
-                  </div>
-                  <div><label className="label">予定原価</label><input name="planned_cost" type="number" className="input" /></div>
-                  <div><label className="label">実績原価</label><input name="actual_cost" type="number" className="input" /></div>
-                  <div><label className="label">予定工数(人月)</label><input name="planned_mm" type="number" step="0.05" className="input" /></div>
-                  <div><label className="label">実績工数(人月)</label><input name="actual_mm" type="number" step="0.05" className="input" /></div>
-                  <div><label className="label">進捗率(%)</label><input name="progress_pct" type="number" min={0} max={100} className="input" /></div>
-                  <div><label className="label">状態</label>
-                    <select name="status" defaultValue="on_track" className="input">
-                      <option value="on_track">順調</option><option value="watch">要注意</option><option value="over">超過</option><option value="blocked">停滞</option>
-                    </select>
-                  </div>
-                </div>
-                <div><label className="label">報告者（外注名など）</label><input name="reporter" className="input" /></div>
-                <div><label className="label">ブロッカー・特記</label><textarea name="blockers" rows={2} className="input" /></div>
-                <SubmitButton className="btn-accent" pendingLabel="記録中…">週次実績を記録</SubmitButton>
-              </form>
+              <div className="mt-3 border-t border-black/[0.05] pt-3">
+                <ProjectWeeklyForm
+                  planId={plan.id}
+                  oppId={o.id}
+                  hoursPerMonth={Number(plan.hours_per_month) || 160}
+                  assignments={activeAssignments.map((a) => ({ id: a.id, label: a.label, cost_rate: Number(a.cost_rate), rate_unit: a.rate_unit ?? "man_month", effort_unit: a.effort_unit ?? "ratio" }))}
+                />
+              </div>
             </details>
           </Section>
         </div>
@@ -291,7 +275,10 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
                 <div><label className="label">開始月</label><input name="start_month" type="month" defaultValue={monthKey(plan.start_month)} className="input" /></div>
                 <div><label className="label">終了月</label><input name="end_month" type="month" defaultValue={monthKey(plan.end_month)} className="input" /></div>
               </div>
-              <div><label className="label">最低粗利率(%)</label><input name="min_gross_rate" type="number" min={0} max={99} defaultValue={Math.round(Number(plan.min_gross_rate) * 100)} className="input" /><p className="text-[10px] text-ink/40 mt-1">値引き下限価格の計算に使用</p></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="label">最低粗利率(%)</label><input name="min_gross_rate" type="number" min={0} max={99} defaultValue={Math.round(Number(plan.min_gross_rate) * 100)} className="input" /><p className="text-[10px] text-ink/40 mt-1">値引き下限価格の計算に使用</p></div>
+                <div><label className="label">1人月あたり時間(h)</label><input name="hours_per_month" type="number" min={1} defaultValue={Number(plan.hours_per_month) || 160} className="input" /><p className="text-[10px] text-ink/40 mt-1">人月⇔時給・率⇔時間の換算に使用</p></div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="label">本部関与</label>
                   <select name="hq_involvement" defaultValue={plan.hq_involvement} className="input"><option value="none">なし</option><option value="low">小</option><option value="middle">中</option><option value="high">大</option></select>
@@ -333,12 +320,14 @@ function toExisting(a: ProjAssignment, cells: CostMonth[]) {
   return {
     id: a.id, kind: a.kind, member_user_id: a.member_user_id, label: a.label, role: a.role,
     cost_rate: Number(a.cost_rate), bill_rate: a.bill_rate == null ? null : Number(a.bill_rate),
+    rate_unit: a.rate_unit ?? "man_month", effort_unit: a.effort_unit ?? "ratio",
     start_month: a.start_month, end_month: a.end_month,
     cells: [...cells]
       .sort((x, y) => x.month.localeCompare(y.month))
-      .map((c) => ({ month: monthKey(c.month), manMonth: Number(c.man_month) || 0, ratio: Number(c.ratio ?? 1) })),
+      .map((c) => ({ month: monthKey(c.month), manMonth: Number(c.man_month) || 0, ratio: Number(c.ratio ?? 1), hours: c.hours == null ? null : Number(c.hours) })),
   };
 }
 
 const INVOLVE: Record<string, string> = { none: "なし", low: "小", middle: "中", high: "大" };
 const RISK: Record<string, string> = { low: "低", middle: "中", high: "高" };
+const rateSuffix = (u?: string) => (u === "hourly" ? "/h" : "/人月");
