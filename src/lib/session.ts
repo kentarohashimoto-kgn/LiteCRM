@@ -63,3 +63,10 @@ export async function requireHrCtx(): Promise<Ctx> {
   if (!["hr", "owner", "admin"].includes(ctx.role)) redirect("/app/bo");
   return ctx;
 }
+
+/** 案件管理(デリバリー原価・粗利管理)専用ページで使用。管理職以外は営業トップへ。 */
+export async function requireProjectCtx(): Promise<Ctx> {
+  const ctx = await requireCtx();
+  if (!["owner", "admin", "sales_manager", "finance", "delivery"].includes(ctx.role)) redirect("/app/dashboard");
+  return ctx;
+}

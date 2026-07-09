@@ -95,6 +95,13 @@ export function canReassignOwner(role: Role): boolean {
   return REASSIGN_ROLES.includes(role);
 }
 
+/** 案件管理(デリバリー原価・粗利管理)を閲覧・操作できる管理職ロール。 */
+export const PROJECT_ROLES: Role[] = ["owner", "admin", "sales_manager", "finance", "delivery"];
+/** 現在のロールが案件管理を扱えるか。 */
+export function canManageProjects(role: Role): boolean {
+  return PROJECT_ROLES.includes(role);
+}
+
 /** tenant全体を閲覧できるロール(MVPの簡易RLS方針 14.2) */
 export const FULL_VIEW_ROLES: Role[] = ["owner", "admin", "sales_manager", "viewer"];
 /** 自分担当のみ参照のロール */

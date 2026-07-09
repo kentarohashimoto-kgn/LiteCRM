@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, FileText, Sparkles, Trash2 } from "lucide-react";
+import { ChevronLeft, FileText, Sparkles, Trash2, FolderKanban } from "lucide-react";
 import { getWorkspaceForOpportunity } from "@/lib/data/workspace";
 import {
   getActivitiesByOpportunity,
@@ -28,7 +28,7 @@ import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
 import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction, saveOppResearchAction, updateOpportunityBasicsAction, updateOppMemoAction } from "@/server/actions";
 import { MeetingTaskInputs } from "@/components/opportunities/meeting-task-inputs";
-import { YOMI_OPTIONS, canReassignOwner } from "@/lib/constants";
+import { YOMI_OPTIONS, canReassignOwner, canManageProjects } from "@/lib/constants";
 import { deleteOpportunityAction } from "@/server/actions/trash";
 import { ChangeHistory } from "@/components/history/change-history";
 import { AttachmentSection } from "@/components/attachments/attachment-section";
@@ -131,6 +131,14 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
             <StatusBadge status={o.status} />
             <StageBadge stage={o.stage} />
             <ForecastBadge category={o.forecast_category} />
+            {canManageProjects(ws.ctx.role) && (
+              <Link
+                href={`/app/projects/${o.id}`}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]"
+              >
+                <FolderKanban size={14} /> 案件管理
+              </Link>
+            )}
             <Link
               href={`/app/opportunities/${o.id}/quote`}
               className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]"

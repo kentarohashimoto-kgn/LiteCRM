@@ -27,9 +27,10 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ScanLine,
+  FolderKanban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, canManageProjects } from "@/lib/constants";
 import type { Role } from "@/lib/types";
 import { RecentList } from "@/components/layout/recent-items";
 
@@ -105,12 +106,23 @@ const hrGroup: (typeof groups)[number] = {
   ],
 };
 
+/** 管理職には「案件」グループに案件管理(デリバリー原価・粗利)を差し込む。 */
+function injectProjects(base: typeof groups, role: Role): typeof groups {
+  if (!canManageProjects(role)) return base;
+  return base.map((g) =>
+    g.heading === "案件"
+      ? { ...g, items: [...g.items, { href: "/app/projects", label: "案件管理", icon: FolderKanban }] }
+      : g
+  );
+}
+
 /** ロールに応じたナビ(営業⇔BOの相互不可視、管理者は全部)。 */
 function groupsFor(role: Role): typeof groups {
+  const sales = injectProjects(groups, role);
   if (role === "back_office") return boGroups;
   if (role === "hr") return [...boGroups, hrGroup];
-  if (role === "owner" || role === "admin") return [...groups, ...boGroups, hrGroup];
-  return groups; // 営業系ロール
+  if (role === "owner" || role === "admin") return [...sales, ...boGroups, hrGroup];
+  return sales; // 営業系ロール(管理職は案件管理が入る)
 }
 
 const STORAGE_KEY = "catorce.sidebar.collapsed";
