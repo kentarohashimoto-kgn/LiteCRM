@@ -75,6 +75,7 @@ export async function updateProjectPlanAction(formData: FormData) {
       min_gross_rate: minRate == null ? 0.25 : Math.max(0, Math.min(0.99, minRate > 1 ? minRate / 100 : minRate)),
       hq_involvement: str(formData.get("hq_involvement")) ?? "none",
       plan_risk: str(formData.get("plan_risk")) ?? "low",
+      priority: str(formData.get("priority")) ?? "middle",
       hours_per_month: num(formData.get("hours_per_month")) ?? 160,
       notes: str(formData.get("notes")),
     })

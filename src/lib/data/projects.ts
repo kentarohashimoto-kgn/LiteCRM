@@ -28,6 +28,7 @@ export interface ProjectPlan {
   baseline_locked_at: string | null;
   notes: string | null;
   hours_per_month: number;
+  priority: "high" | "middle" | "low";
 }
 export interface RevenueMonth { id: string; plan_id: string; month: string; amount: number; note: string | null; }
 export interface ProjAssignment {
@@ -134,11 +135,25 @@ export interface ManagedProjectRow {
   status: string;
   plan: ProjectPlan | null;
   computed: ProjectComputed | null;
+  // 一覧の重み付け・進捗表示用
+  priority: "high" | "middle" | "low";
+  startMonth: string | null; // YYYY-MM
+  endMonth: string | null; // YYYY-MM
+  isActive: boolean; // 現在が期間内
+  isFuture: boolean; // 開始前
+  isPast: boolean; // 終了後
+  latestStatus: string | null; // 直近実績の状態
+  latestPeriodType: string | null; // 直近実績の区分(週次/月次/終了時)
+  finalActualCost: number | null; // 終了時実績の原価
+  finalProfit: number | null; // 販売合計 − 終了時実績原価
+  finalVariance: number | null; // 終了時実績原価 − 計画原価
+  finalComment: string | null; // 順調だったか等のコメント
 }
 
-/** 案件管理対象(フラグON)の案件を、月別集計サマリ付きで一覧取得。 */
+/** 案件管理対象(フラグON)の案件を、月別集計＋期間・進捗・完了実績付きで一覧取得。 */
 export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
   const sb = getSupabaseServer();
+  const nowMonth = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" }).slice(0, 7); // YYYY-MM(JST)
   const { data: opps } = await sb
     .from("opportunities")
     .select("id, name, account_id, owner_user_id, status")
@@ -157,16 +172,18 @@ export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
   const planByOpp = new Map(plans.map((p) => [p.opportunity_id, p]));
 
   const planIds = plans.map((p) => p.id);
-  const [revR, cmR, asgR] = planIds.length
+  const [revR, cmR, asgR, wkR] = planIds.length
     ? await Promise.all([
         sb.from("project_revenue_months").select("*").in("plan_id", planIds),
         sb.from("project_cost_months").select("*").in("plan_id", planIds),
         sb.from("project_assignments").select("*").in("plan_id", planIds),
+        sb.from("project_weekly_reports").select("*").in("plan_id", planIds).order("created_at", { ascending: false }),
       ])
-    : [{ data: [] }, { data: [] }, { data: [] }];
+    : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
   const revs = (revR.data ?? []) as RevenueMonth[];
   const cms = (cmR.data ?? []) as CostMonth[];
   const asgs = (asgR.data ?? []) as ProjAssignment[];
+  const weeks = (wkR.data ?? []) as WeeklyReport[];
 
   const byPlan = <T extends { plan_id: string }>(arr: T[], id: string) => arr.filter((x) => x.plan_id === id);
 
@@ -182,6 +199,19 @@ export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
         weekly: [],
       });
     }
+    const startMonth = plan?.start_month ? monthKey(plan.start_month) : null;
+    const endMonth = plan?.end_month ? monthKey(plan.end_month) : null;
+    const isFuture = !!startMonth && nowMonth < startMonth;
+    const isPast = !!endMonth && nowMonth > endMonth;
+    const isActive = !isFuture && !isPast && (!!startMonth || !!endMonth);
+
+    const planWeeks = plan ? byPlan(weeks, plan.id) : [];
+    const latest = planWeeks[0] ?? null; // created_at desc
+    const finalR = planWeeks.find((w) => w.period_type === "final") ?? null;
+    const planCost = computed?.roll.totals.cost ?? 0;
+    const revenueTotal = computed?.roll.totals.revenue ?? 0;
+    const finalActualCost = finalR?.actual_cost != null ? Number(finalR.actual_cost) : null;
+
     return {
       opportunityId: o.id,
       oppName: o.name,
@@ -190,6 +220,18 @@ export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
       status: o.status,
       plan,
       computed,
+      priority: plan?.priority ?? "middle",
+      startMonth,
+      endMonth,
+      isActive,
+      isFuture,
+      isPast,
+      latestStatus: latest?.status ?? null,
+      latestPeriodType: latest?.period_type ?? null,
+      finalActualCost,
+      finalProfit: finalActualCost != null ? revenueTotal - finalActualCost : null,
+      finalVariance: finalActualCost != null ? finalActualCost - planCost : null,
+      finalComment: finalR ? finalR.blockers ?? finalR.notes ?? null : null,
     };
   });
 }

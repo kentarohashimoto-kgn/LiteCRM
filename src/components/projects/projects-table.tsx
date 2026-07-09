@@ -1,0 +1,163 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+
+export interface ProjectRow {
+  opportunityId: string;
+  oppName: string;
+  accountName: string;
+  ownerName: string;
+  priority: "high" | "middle" | "low";
+  startMonth: string | null;
+  endMonth: string | null;
+  isActive: boolean;
+  isFuture: boolean;
+  isPast: boolean;
+  hasPlan: boolean;
+  revenue: number;
+  cost: number;
+  gross: number;
+  grossRate: number;
+  verdict: "go" | "conditional" | "review" | null;
+  latestStatus: string | null;
+  latestPeriodType: string | null;
+  finalActualCost: number | null;
+  finalProfit: number | null;
+  finalVariance: number | null;
+  finalComment: string | null;
+}
+
+const yen = (n: number) => "¥" + Math.round(n).toLocaleString("ja-JP");
+const pct = (r: number) => (r * 100).toFixed(1) + "%";
+const ym = (m: string | null) => (m ? `${m.split("-")[0]}/${Number(m.split("-")[1])}` : "");
+const rateCls = (r: number) => (r >= 0.4 ? "text-emerald-600" : r >= 0.25 ? "text-amber-600" : "text-rose-600");
+
+const PRIO = { high: { label: "高", cls: "bg-rose-50 text-rose-600" }, middle: { label: "中", cls: "bg-amber-50 text-amber-700" }, low: { label: "低", cls: "bg-mist-soft text-ink/50" } } as const;
+const PRIO_RANK = { high: 2, middle: 1, low: 0 } as const;
+const VERDICT = { go: { label: "GO", cls: "bg-emerald-50 text-emerald-700" }, conditional: { label: "条件付き", cls: "bg-amber-50 text-amber-700" }, review: { label: "要協議", cls: "bg-rose-50 text-rose-600" } } as const;
+const STATUS: Record<string, { label: string; cls: string }> = {
+  on_track: { label: "順調", cls: "bg-emerald-50 text-emerald-700" },
+  watch: { label: "要注意", cls: "bg-amber-50 text-amber-700" },
+  over: { label: "超過", cls: "bg-rose-50 text-rose-600" },
+  blocked: { label: "停滞", cls: "bg-rose-50 text-rose-600" },
+};
+const PERIOD: Record<string, string> = { weekly: "週次", monthly: "月次", final: "終了時" };
+
+type SortKey = "weight" | "priority" | "revenue" | "cost" | "gross" | "grossRate" | "end" | "variance";
+
+/** 案件管理一覧。重要度×アクティブの重み付けを既定に、各列でソートできる。 */
+export function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
+  const [sort, setSort] = useState<SortKey>("weight");
+  const [dir, setDir] = useState<"asc" | "desc">("desc");
+
+  const click = (key: SortKey) => {
+    if (key === sort) setDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSort(key); setDir(key === "grossRate" || key === "end" ? "asc" : "desc"); }
+  };
+
+  const val = (r: ProjectRow, key: SortKey): number => {
+    switch (key) {
+      case "priority": return PRIO_RANK[r.priority];
+      case "revenue": return r.revenue;
+      case "cost": return r.cost;
+      case "gross": return r.gross;
+      case "grossRate": return r.grossRate;
+      case "end": return r.endMonth ? Number(r.endMonth.replace("-", "")) : 999999;
+      case "variance": return r.finalVariance ?? -Infinity;
+      case "weight":
+      default:
+        // 重み: アクティブ最優先 → 重要度 → 粗利率が低い(危険)ほど上
+        return (r.isActive ? 1000 : r.isFuture ? 200 : 0) + PRIO_RANK[r.priority] * 100 + (1 - Math.min(1, Math.max(0, r.grossRate))) * 10;
+    }
+  };
+
+  const sorted = [...rows].sort((a, b) => {
+    const d = val(a, sort) - val(b, sort);
+    return dir === "asc" ? d : -d;
+  });
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm tabular-nums" style={{ minWidth: 920 }}>
+        <thead className="text-ink/40 text-xs bg-mist-soft/30">
+          <tr>
+            <th className="th">顧客 / 案件</th>
+            <Th label="重要度" k="priority" sort={sort} dir={dir} onClick={click} />
+            <Th label="期間" k="end" sort={sort} dir={dir} onClick={click} />
+            <Th label="販売" k="revenue" sort={sort} dir={dir} onClick={click} align="right" />
+            <Th label="原価" k="cost" sort={sort} dir={dir} onClick={click} align="right" />
+            <Th label="粗利" k="gross" sort={sort} dir={dir} onClick={click} align="right" />
+            <Th label="粗利率" k="grossRate" sort={sort} dir={dir} onClick={click} align="right" />
+            <th className="th">提案可否</th>
+            <th className="th">進捗 / 完了実績</th>
+            <Th label="予実差" k="variance" sort={sort} dir={dir} onClick={click} align="right" />
+            <th className="th">担当</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-black/[0.04]">
+          {sorted.map((r) => {
+            const period = r.startMonth || r.endMonth ? `${ym(r.startMonth) || "—"}〜${ym(r.endMonth) || "—"}` : "—";
+            const periodBadge = r.isActive ? { t: "進行中", c: "bg-teal-light text-teal-deep" } : r.isFuture ? { t: "予定", c: "bg-mist-soft text-ink/50" } : r.isPast ? { t: "完了", c: "bg-ink/5 text-ink/45" } : null;
+            const v = r.verdict ? VERDICT[r.verdict] : null;
+            const st = r.latestStatus ? STATUS[r.latestStatus] : null;
+            return (
+              <tr key={r.opportunityId} className="row-hover align-top">
+                <td className="td">
+                  <Link href={`/app/projects/${r.opportunityId}`} className="block">
+                    <div className="font-medium text-ink/90">{r.accountName}</div>
+                    <div className="text-xs text-teal-deep">{r.oppName}</div>
+                  </Link>
+                </td>
+                <td className="td"><span className={`pill ${PRIO[r.priority].cls} text-[10px] font-bold`}>{PRIO[r.priority].label}</span></td>
+                <td className="td">
+                  <div className="text-ink/70">{period}</div>
+                  {periodBadge && <span className={`pill ${periodBadge.c} text-[10px] mt-0.5 inline-block`}>{periodBadge.t}</span>}
+                </td>
+                <td className="td text-right text-ink/70">{r.hasPlan ? yen(r.revenue) : "—"}</td>
+                <td className="td text-right text-ink/70">{r.hasPlan ? yen(r.cost) : "—"}</td>
+                <td className={`td text-right font-medium ${r.gross < 0 ? "text-rose-600" : ""}`}>{r.hasPlan ? yen(r.gross) : "—"}</td>
+                <td className={`td text-right font-bold ${r.hasPlan ? rateCls(r.grossRate) : ""}`}>{r.hasPlan ? pct(r.grossRate) : "—"}</td>
+                <td className="td">{v ? <span className={`pill ${v.cls} text-[10px] font-bold`}>{v.label}</span> : <span className="text-ink/30 text-xs">未整備</span>}</td>
+                <td className="td">
+                  {r.finalActualCost != null ? (
+                    <div>
+                      <span className="pill bg-ink/5 text-ink/60 text-[10px]">終了時</span>
+                      <span className="text-xs text-ink/70 ml-1">着地 {yen(r.finalActualCost)}</span>
+                      {r.finalProfit != null && <div className="text-[11px] text-ink/50">最終利益 {yen(r.finalProfit)}</div>}
+                      {r.finalComment && <div className="text-[11px] text-ink/45 max-w-[200px] truncate" title={r.finalComment}>💬 {r.finalComment}</div>}
+                    </div>
+                  ) : st ? (
+                    <div>
+                      <span className={`pill ${st.cls} text-[10px]`}>{st.label}</span>
+                      {r.latestPeriodType && <span className="text-[11px] text-ink/45 ml-1">{PERIOD[r.latestPeriodType]}</span>}
+                    </div>
+                  ) : (
+                    <span className="text-ink/30 text-xs">実績なし</span>
+                  )}
+                </td>
+                <td className={`td text-right ${r.finalVariance == null ? "text-ink/30" : r.finalVariance > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                  {r.finalVariance == null ? "—" : (r.finalVariance > 0 ? "+" : "") + yen(r.finalVariance)}
+                </td>
+                <td className="td text-ink/60 text-xs">{r.ownerName}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Th({ label, k, sort, dir, onClick, align }: { label: string; k: SortKey; sort: SortKey; dir: "asc" | "desc"; onClick: (k: SortKey) => void; align?: "right" }) {
+  const active = sort === k;
+  return (
+    <th className={`th ${align === "right" ? "text-right" : ""}`}>
+      <button type="button" onClick={() => onClick(k)} className={`inline-flex items-center gap-1 hover:text-ink/70 ${active ? "text-teal-deep font-bold" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}>
+        {label}
+        {active ? (dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} className="opacity-40" />}
+      </button>
+    </th>
+  );
+}

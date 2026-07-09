@@ -286,7 +286,10 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
                 <div><label className="label">最低粗利率(%)</label><input name="min_gross_rate" type="number" min={0} max={99} defaultValue={Math.round(Number(plan.min_gross_rate) * 100)} className="input" /><p className="text-[10px] text-ink/40 mt-1">値引き下限価格の計算に使用</p></div>
                 <div><label className="label">1人月あたり時間(h)</label><input name="hours_per_month" type="number" min={1} defaultValue={Number(plan.hours_per_month) || 160} className="input" /><p className="text-[10px] text-ink/40 mt-1">人月⇔時給・率⇔時間の換算に使用</p></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className="label">重要度</label>
+                  <select name="priority" defaultValue={plan.priority ?? "middle"} className="input"><option value="high">高</option><option value="middle">中</option><option value="low">低</option></select>
+                </div>
                 <div><label className="label">本部関与</label>
                   <select name="hq_involvement" defaultValue={plan.hq_involvement} className="input"><option value="none">なし</option><option value="low">小</option><option value="middle">中</option><option value="high">大</option></select>
                 </div>
