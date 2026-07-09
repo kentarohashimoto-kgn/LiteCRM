@@ -254,7 +254,8 @@ export async function updateOpportunityAction(formData: FormData) {
       lost_reason: str(formData.get("lost_reason")),
       lost_reason_code: str(formData.get("lost_reason_code")),
       lost_competitor: str(formData.get("lost_competitor")),
-      notes: str(formData.get("notes")),
+      // メモは専用の「現状メモ・ヨミ」から更新するため、フィールドが送られた時だけ反映(誤消去を防ぐ)。
+      ...(formData.has("notes") ? { notes: str(formData.get("notes")) } : {}),
       status,
     })
     .eq("id", id);
@@ -293,6 +294,31 @@ export async function setOppForecastAction(formData: FormData): Promise<{ ok: bo
   revalidatePath(`/app/opportunities/${id}`);
   revalidatePath("/app/opportunities");
   return { ok: true };
+}
+
+/**
+ * 現状メモとヨミだけを素早く更新(案件の「いまの状況」を常に最新化)。
+ * ヨミが選ばれていればステージ・予測区分・確度・ステータスも自動導出する。
+ */
+export async function updateOppMemoAction(formData: FormData) {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  const yomi = str(formData.get("yomi"));
+  const patch: Record<string, unknown> = { notes: str(formData.get("notes")) };
+  if (yomi) {
+    const f = yomiToFields(yomi);
+    patch.yomi = yomi;
+    patch.stage = f.stage;
+    patch.forecast_category = f.forecast;
+    patch.probability = f.probability;
+    patch.status = f.status;
+  }
+  await sb.from("opportunities").update(patch).eq("id", id);
+  if (patch.status === "won") await ensureTransitionOnWon(ctx.tenantId, ctx.userId, id);
+  revalidatePath(`/app/opportunities/${id}`);
+  revalidatePath("/app/opportunities");
+  redirect(`/app/opportunities/${id}?saved=memo`);
 }
 
 /** 案件の事前リサーチ情報・事前営業戦略を保存(その場更新・再読込なし)。 */
@@ -371,11 +397,13 @@ export async function createMeetingAction(formData: FormData) {
   const meetingAt = meetingDate && meetingTime ? `${meetingDate}T${meetingTime}:00+09:00` : null;
   const nextDate = str(formData.get("next_action_date"));
   const nextText = str(formData.get("next_action_text"));
+  const accountId = str(formData.get("account_id"));
+  const ownerId = str(formData.get("owner_user_id")) ?? ctx.userId;
   await sb.from("meetings").insert({
     tenant_id: ctx.tenantId,
     opportunity_id: oppId,
-    account_id: str(formData.get("account_id")),
-    owner_user_id: str(formData.get("owner_user_id")) ?? ctx.userId,
+    account_id: accountId,
+    owner_user_id: ownerId,
     title: str(formData.get("title")) ?? "商談",
     meeting_date: meetingDate,
     meeting_at: meetingAt,
@@ -386,6 +414,30 @@ export async function createMeetingAction(formData: FormData) {
     next_action_text: nextText,
     created_by: ctx.userId,
   });
+
+  // 商談で発生した任意タスク(資料送付・アポ調整・提案書作成 等)をまとめて登録。
+  const taskTitles = formData.getAll("task_title").map((v) => String(v).trim());
+  const taskDues = formData.getAll("task_due").map((v) => String(v));
+  const fallbackDue = nextDate || meetingDate || new Date().toISOString().slice(0, 10);
+  const taskRows = taskTitles
+    .map((title, i) => ({ title, due: taskDues[i] || fallbackDue }))
+    .filter((r) => r.title);
+  if (taskRows.length > 0) {
+    await sb.from("tasks").insert(
+      taskRows.map((r) => ({
+        tenant_id: ctx.tenantId,
+        opportunity_id: oppId,
+        account_id: accountId,
+        assigned_to: ownerId,
+        created_by: ctx.userId,
+        title: r.title,
+        due_date: r.due,
+        priority: "middle",
+        status: "todo",
+      }))
+    );
+  }
+
   // 親案件の最終活動/次アクションを更新
   const patch: Record<string, unknown> = { last_activity_at: new Date().toISOString() };
   if (nextDate) {
@@ -394,6 +446,7 @@ export async function createMeetingAction(formData: FormData) {
   }
   await sb.from("opportunities").update(patch).eq("id", oppId);
   revalidatePath(`/app/opportunities/${oppId}`);
+  if (taskRows.length > 0) revalidatePath("/app/tasks");
   redirect(`/app/opportunities/${oppId}`);
 }
 
@@ -615,7 +668,14 @@ export async function addActivityAction(formData: FormData) {
   const title = str(formData.get("title"));
   const body = str(formData.get("body"));
   const redirectTo = str(formData.get("redirect_to"));
-  const activityAt = new Date().toISOString();
+  // 活動日時: ユーザーが選べる(未指定なら現在時刻)。日付のみはJSTの0時、datetime-localはJSTとして扱う。
+  const nowIso = new Date().toISOString();
+  const rawAt = str(formData.get("activity_at"));
+  const activityAt = rawAt
+    ? rawAt.length <= 10
+      ? `${rawAt}T00:00:00+09:00`
+      : `${rawAt}:00+09:00`
+    : nowIso;
 
   // 二重登録ガード: 直近60秒に「同じ案件/顧客・同じタイトル・同じ本文」の記録があればスキップ。
   // (保存されたか分からず連打された場合でも重複を作らない)
@@ -650,7 +710,8 @@ export async function addActivityAction(formData: FormData) {
     });
 
     if (oppId) {
-      const patch: Record<string, unknown> = { last_activity_at: activityAt };
+      // 「最終活動」は記録した時点(now)を採用(過去日を選んでも遡って古くしない)。
+      const patch: Record<string, unknown> = { last_activity_at: nowIso };
       if (nextDate) {
         patch.next_action_date = nextDate;
         patch.next_action_text = nextText;

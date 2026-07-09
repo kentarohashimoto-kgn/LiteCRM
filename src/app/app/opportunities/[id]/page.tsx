@@ -26,7 +26,8 @@ import { CATEGORIES, CATEGORY_MAP, STAGE_MAP, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP 
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/ui/badges";
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
-import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction, saveOppResearchAction, updateOpportunityBasicsAction } from "@/server/actions";
+import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction, saveOppResearchAction, updateOpportunityBasicsAction, updateOppMemoAction } from "@/server/actions";
+import { MeetingTaskInputs } from "@/components/opportunities/meeting-task-inputs";
 import { YOMI_OPTIONS, canReassignOwner } from "@/lib/constants";
 import { deleteOpportunityAction } from "@/server/actions/trash";
 import { ChangeHistory } from "@/components/history/change-history";
@@ -40,9 +41,9 @@ import { UnifiedTimeline, type TimelineEvent } from "@/components/history/unifie
 import { CommentThread, type CommentView } from "@/components/opportunities/comment-thread";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { LOST_REASONS } from "@/lib/constants";
-import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince } from "@/lib/utils";
+import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince, toJstDate } from "@/lib/utils";
 
-const SAVED_MSG: Record<string, string> = { "1": "保存しました", activity: "活動を記録しました" };
+const SAVED_MSG: Record<string, string> = { "1": "保存しました", activity: "活動を記録しました", memo: "現状メモ・ヨミを更新しました" };
 
 export default async function OpportunityDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string; saved?: string } }) {
   const ws = await getWorkspaceForOpportunity(params.id);
@@ -62,6 +63,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
   const leadSources = getLeadSources(ws);
   const risk = evaluateRisk(o);
   const since = daysSince(o.last_activity_at);
+  const todayInput = toJstDate(new Date().toISOString()) ?? "";
   const sb = getSupabaseServer();
   const [schedule, allTemplates, commentsR, detailsR] = await Promise.all([
     getLatestSchedule(o.id),
@@ -171,6 +173,32 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">✓ {SAVED_MSG[searchParams.saved] ?? "保存しました"}</div>
       )}
 
+      {/* 現状メモ・ヨミ: この案件が「いま」どういう状況かを常に最新化して伝える(最上部で即編集) */}
+      <Section
+        title="現状メモ・ヨミ（最新状況）"
+        className={`mb-5 ${entityBorder("opportunity")}`}
+        action={<span className="text-[11px] text-ink/40">この案件が今どういう状況かを一言で。ヨミと一緒に常に最新化</span>}
+      >
+        <form action={updateOppMemoAction} className="space-y-3">
+          <input type="hidden" name="id" value={o.id} />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label className="label">ヨミ</label>
+              <select name="yomi" defaultValue={o.yomi ?? ""} className="input">
+                <option value="">—</option>
+                {YOMI_OPTIONS.map((y) => <option key={y.key} value={y.key}>{y.label}</option>)}
+              </select>
+              <p className="text-[10px] text-ink/40 mt-1">ステージ・予測区分・確度も自動更新</p>
+            </div>
+            <div className="md:col-span-3">
+              <label className="label">現状メモ</label>
+              <textarea name="notes" rows={2} defaultValue={o.notes ?? ""} className="input" placeholder="例：予算取り中。9月の役員会で決裁予定。競合はA社。次回は事例提示で背中を押す。" />
+            </div>
+          </div>
+          <SubmitButton className="btn-primary" pendingLabel="保存中…">現状を更新</SubmitButton>
+        </form>
+      </Section>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         {/* 左: 編集 + 情報 */}
         <div className="lg:col-span-2 space-y-5">
@@ -250,6 +278,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                     <input name="next_action_text" className="input" />
                   </div>
                 </div>
+                <MeetingTaskInputs />
                 <button type="submit" className="btn-accent">商談を登録</button>
               </form>
             </details>
@@ -340,7 +369,11 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
               <input type="hidden" name="opportunity_id" value={o.id} />
               <input type="hidden" name="account_id" value={o.account_id} />
               <input type="hidden" name="redirect_to" value={`/app/opportunities/${o.id}`} />
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-4 gap-3">
+                <div className="col-span-1">
+                  <label className="label">活動日</label>
+                  <input name="activity_at" type="date" defaultValue={todayInput} className="input" />
+                </div>
                 <div className="col-span-1">
                   <label className="label">種別</label>
                   <select name="activity_type" className="input" defaultValue="meeting">
@@ -430,6 +463,12 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
               <Row label="最終活動">{since != null ? `${since}日前` : "—"}</Row>
               <Row label="作成日">{formatDateFull(o.created_at)}</Row>
             </dl>
+            {o.notes && (
+              <div className="mt-3 pt-3 border-t border-black/[0.05]">
+                <div className="text-xs text-ink/45 mb-1">現状メモ</div>
+                <p className="text-sm text-ink/80 whitespace-pre-wrap">{o.notes}</p>
+              </div>
+            )}
 
             {/* 基本情報の編集(案件名・担当営業の割振り/変更ほか) */}
             <details className="mt-4 pt-3 border-t border-black/[0.05]">
