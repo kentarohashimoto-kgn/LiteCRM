@@ -399,30 +399,46 @@ export async function createMeetingAction(formData: FormData) {
   const nextText = str(formData.get("next_action_text"));
   const accountId = str(formData.get("account_id"));
   const ownerId = str(formData.get("owner_user_id")) ?? ctx.userId;
-  await sb.from("meetings").insert({
-    tenant_id: ctx.tenantId,
-    opportunity_id: oppId,
-    account_id: accountId,
-    owner_user_id: ownerId,
-    title: str(formData.get("title")) ?? "商談",
-    meeting_date: meetingDate,
-    meeting_at: meetingAt,
-    method: str(formData.get("method")),
-    summary: str(formData.get("summary")),
-    minutes_detail: str(formData.get("minutes_detail")),
-    next_action_date: nextDate,
-    next_action_text: nextText,
-    created_by: ctx.userId,
-  });
+  const title = str(formData.get("title")) ?? "商談";
 
-  // 商談で発生した任意タスク(資料送付・アポ調整・提案書作成 等)をまとめて登録。
+  // 二重登録ガード: 直近90秒に「同じ案件・同じタイトル・同じ実施日」の商談があれば新規作成しない
+  // (保存ボタンの連打・二重送信で同一商談が複数作られるのを防ぐ)。
+  const since = new Date(Date.now() - 90 * 1000).toISOString();
+  const { data: recent } = await sb
+    .from("meetings")
+    .select("id")
+    .eq("opportunity_id", oppId)
+    .eq("title", title)
+    .gte("created_at", since)
+    .limit(5);
+  const dup = (recent ?? []).length > 0; // 同案件・同タイトルの直近作成があれば重複とみなす
+
+  if (!dup) {
+    await sb.from("meetings").insert({
+      tenant_id: ctx.tenantId,
+      opportunity_id: oppId,
+      account_id: accountId,
+      owner_user_id: ownerId,
+      title,
+      meeting_date: meetingDate,
+      meeting_at: meetingAt,
+      method: str(formData.get("method")),
+      summary: str(formData.get("summary")),
+      minutes_detail: str(formData.get("minutes_detail")),
+      next_action_date: nextDate,
+      next_action_text: nextText,
+      created_by: ctx.userId,
+    });
+  }
+
+  // 商談で発生した任意タスク(資料送付・アポ調整・提案書作成 等)をまとめて登録。重複時は起票しない。
   const taskTitles = formData.getAll("task_title").map((v) => String(v).trim());
   const taskDues = formData.getAll("task_due").map((v) => String(v));
   const fallbackDue = nextDate || meetingDate || new Date().toISOString().slice(0, 10);
   const taskRows = taskTitles
-    .map((title, i) => ({ title, due: taskDues[i] || fallbackDue }))
+    .map((t, i) => ({ title: t, due: taskDues[i] || fallbackDue }))
     .filter((r) => r.title);
-  if (taskRows.length > 0) {
+  if (!dup && taskRows.length > 0) {
     await sb.from("tasks").insert(
       taskRows.map((r) => ({
         tenant_id: ctx.tenantId,
@@ -438,15 +454,17 @@ export async function createMeetingAction(formData: FormData) {
     );
   }
 
-  // 親案件の最終活動/次アクションを更新
-  const patch: Record<string, unknown> = { last_activity_at: new Date().toISOString() };
-  if (nextDate) {
-    patch.next_action_date = nextDate;
-    patch.next_action_text = nextText;
+  if (!dup) {
+    // 親案件の最終活動/次アクションを更新
+    const patch: Record<string, unknown> = { last_activity_at: new Date().toISOString() };
+    if (nextDate) {
+      patch.next_action_date = nextDate;
+      patch.next_action_text = nextText;
+    }
+    await sb.from("opportunities").update(patch).eq("id", oppId);
   }
-  await sb.from("opportunities").update(patch).eq("id", oppId);
   revalidatePath(`/app/opportunities/${oppId}`);
-  if (taskRows.length > 0) revalidatePath("/app/tasks");
+  if (!dup && taskRows.length > 0) revalidatePath("/app/tasks");
   redirect(`/app/opportunities/${oppId}`);
 }
 
