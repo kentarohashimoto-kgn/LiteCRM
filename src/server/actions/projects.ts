@@ -202,17 +202,20 @@ export async function deleteAssignmentAction(formData: FormData) {
   redirect(`/app/projects/${oppId}?saved=1`);
 }
 
-/** 週次実績(予定/実績の工数・原価、進捗、状態)を保存。 */
+/** 実績(週次/月次/終了時 の予定・実績の工数・原価、進捗、状態)を保存。 */
 export async function saveWeeklyReportAction(formData: FormData) {
   const ctx = await requireProjectCtx();
   const sb = getSupabaseServer();
   const planId = String(formData.get("plan_id"));
   const oppId = String(formData.get("opportunity_id"));
+  const periodType = str(formData.get("period_type")) ?? "weekly";
   await sb.from("project_weekly_reports").insert({
     tenant_id: ctx.tenantId,
     plan_id: planId,
-    assignment_id: str(formData.get("assignment_id")),
-    week_start: str(formData.get("week_start")),
+    assignment_id: periodType === "weekly" ? str(formData.get("assignment_id")) : null,
+    period_type: periodType,
+    week_start: periodType === "weekly" ? str(formData.get("week_start")) : null,
+    period_month: periodType === "monthly" ? monthDate(formData.get("period_month")) : null,
     planned_mm: num(formData.get("planned_mm")),
     actual_mm: num(formData.get("actual_mm")),
     planned_cost: num(formData.get("planned_cost")),

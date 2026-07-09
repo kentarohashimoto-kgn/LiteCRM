@@ -38,7 +38,8 @@ export interface ProjAssignment {
 }
 export interface CostMonth { id: string; plan_id: string; assignment_id: string; month: string; man_month: number; ratio: number; hours: number | null; cost_amount: number; }
 export interface WeeklyReport {
-  id: string; plan_id: string; assignment_id: string | null; week_start: string;
+  id: string; plan_id: string; assignment_id: string | null;
+  period_type: "weekly" | "monthly" | "final"; week_start: string | null; period_month: string | null;
   planned_mm: number | null; actual_mm: number | null; planned_cost: number | null; actual_cost: number | null;
   progress_pct: number | null; status: string; reporter: string | null; blockers: string | null; notes: string | null;
 }
@@ -86,7 +87,7 @@ export async function getProjectBundle(opportunityId: string): Promise<ProjectBu
     sb.from("project_revenue_months").select("*").eq("plan_id", planId).order("month"),
     sb.from("project_assignments").select("*").eq("plan_id", planId).order("created_at"),
     sb.from("project_cost_months").select("*").eq("plan_id", planId),
-    sb.from("project_weekly_reports").select("*").eq("plan_id", planId).order("week_start", { ascending: false }),
+    sb.from("project_weekly_reports").select("*").eq("plan_id", planId).order("created_at", { ascending: false }),
   ]);
   return {
     plan: plan as ProjectPlan,

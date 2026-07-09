@@ -20,6 +20,7 @@ import { formatYen, formatPercent, formatDateFull } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 const ymLabel = (m: string) => (m ? `${m.split("-")[0]}/${Number(m.split("-")[1])}` : "—");
+const ymLabelMonth = (d: string | null) => (d ? `${d.slice(0, 4)}/${Number(d.slice(5, 7))}` : "—");
 const VERDICT = {
   go: { label: "GO", cls: "bg-emerald-50 text-emerald-700" },
   conditional: { label: "条件付き", cls: "bg-amber-50 text-amber-700" },
@@ -186,16 +187,16 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
             </details>
           </Section>
 
-          {/* 週次実績(予実) */}
-          <Section title="週次実績（予実）" action={<span className="text-[11px] text-ink/40">受注後の進捗・原価消化を週次で</span>}>
+          {/* 実績(予実): 週次/月次/終了時 */}
+          <Section title="実績（予実）" action={<span className="text-[11px] text-ink/40">週次・月次・終了時で予定と実績を比較</span>}>
             <div className="space-y-2">
               {weekly.length === 0 ? (
-                <p className="text-sm text-ink/40 py-2">まだ週次実績がありません。</p>
+                <p className="text-sm text-ink/40 py-2">まだ実績がありません。</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm tabular-nums" style={{ minWidth: 480 }}>
+                  <table className="w-full text-sm tabular-nums" style={{ minWidth: 520 }}>
                     <thead className="text-ink/40 text-xs bg-mist-soft/30">
-                      <tr><th className="th">週</th><th className="th text-right">予定原価</th><th className="th text-right">実績原価</th><th className="th text-right">差異</th><th className="th">状態</th><th className="th">報告者</th><th className="th"></th></tr>
+                      <tr><th className="th">区分</th><th className="th">対象</th><th className="th text-right">予定原価</th><th className="th text-right">実績原価</th><th className="th text-right">差異</th><th className="th">状態</th><th className="th">報告者</th><th className="th"></th></tr>
                     </thead>
                     <tbody className="divide-y divide-black/[0.04]">
                       {weekly.map((w) => {
@@ -203,9 +204,13 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
                         const st = va.status === "over" || w.status === "over" ? "over" : va.status === "watch" || w.status === "watch" ? "watch" : w.status === "blocked" ? "blocked" : "on_track";
                         const stCls = st === "over" ? "bg-rose-50 text-rose-600" : st === "watch" ? "bg-amber-50 text-amber-700" : st === "blocked" ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-700";
                         const stLabel = st === "over" ? "超過" : st === "watch" ? "やや超" : st === "blocked" ? "停滞" : "順調";
+                        const pType = w.period_type ?? "weekly";
+                        const pLabel = pType === "monthly" ? "月次" : pType === "final" ? "終了時" : "週次";
+                        const pTarget = pType === "monthly" ? ymLabelMonth(w.period_month) : pType === "final" ? "全体" : formatDateFull(w.week_start);
                         return (
                           <tr key={w.id}>
-                            <td className="td">{formatDateFull(w.week_start)}</td>
+                            <td className="td"><span className="pill bg-mist-soft text-ink/50 text-[10px]">{pLabel}</span></td>
+                            <td className="td text-ink/70">{pTarget}</td>
                             <td className="td text-right text-ink/70">{w.planned_cost != null ? formatYen(Number(w.planned_cost)) : "—"}</td>
                             <td className="td text-right text-ink/70">{w.actual_cost != null ? formatYen(Number(w.actual_cost)) : "—"}</td>
                             <td className={`td text-right ${va.diff > 0 ? "text-rose-600" : "text-emerald-600"}`}>{w.planned_cost != null && w.actual_cost != null ? (va.diff > 0 ? "+" : "") + formatYen(va.diff) : "—"}</td>
@@ -230,6 +235,8 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
                   oppId={o.id}
                   hoursPerMonth={Number(plan.hours_per_month) || 160}
                   assignments={activeAssignments.map((a) => ({ id: a.id, label: a.label, cost_rate: Number(a.cost_rate), rate_unit: a.rate_unit ?? "man_month", effort_unit: a.effort_unit ?? "ratio" }))}
+                  monthlyPlan={roll.months.map((m) => ({ month: m.month, cost: m.cost }))}
+                  totalPlanCost={roll.totals.cost}
                 />
               </div>
             </details>
