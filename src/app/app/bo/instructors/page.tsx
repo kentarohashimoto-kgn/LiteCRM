@@ -2,9 +2,10 @@ import Link from "next/link";
 import { requireBoCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
-import { createInstructorAction, updateInstructorAction } from "@/server/actions/bo";
+import { createInstructorAction, updateInstructorAction, updateTrainingSessionAction, deleteTrainingSessionAction } from "@/server/actions/bo";
 import { ScheduleSessionForm } from "@/components/bo/schedule-session-form";
 import { InstructorHoursBar, InstructorHoursTrend } from "@/components/bo/instructor-hours-charts";
+import { ExternalLink, ChevronDown } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ interface Instructor { id: string; name: string; schedule_url: string | null; em
 interface Sess {
   id: string; held_on: string; start_time: string | null; end_time: string | null;
   course: string; instructor: string; instructor_id: string | null; account_name: string | null; venue: string | null;
+  session_part?: string | null; meeting_url?: string | null;
 }
 
 // 講師ごとの色(登録色が無ければ順番で自動割当)。カレンダーとグラフで同じ色を使う。
@@ -56,16 +58,21 @@ export default async function InstructorsPage({ searchParams }: { searchParams: 
   const TREND_MONTHS = 6;
   const trendStart = monthAdd(month, -(TREND_MONTHS - 1));
 
-  const [insR, sessR, dealsR, hoursR] = await Promise.all([
+  const [insR, sessR, dealsR, hoursR, listR] = await Promise.all([
     sb.from("instructors").select("id, name, schedule_url, email, color, active, notes").order("name").limit(200),
-    sb.from("training_sessions").select("id, held_on, start_time, end_time, course, instructor, instructor_id, account_name, venue")
+    sb.from("training_sessions").select("id, held_on, start_time, end_time, course, instructor, instructor_id, account_name, venue, session_part, meeting_url")
       .gte("held_on", `${monthAdd(month, -1)}-01`).lte("held_on", `${monthAdd(month, 2)}-01`).order("held_on").limit(500),
     sb.rpc("bo_training_deals"),
     sb.from("training_sessions").select("held_on, start_time, end_time, instructor_id")
       .gte("held_on", `${trendStart}-01`).lte("held_on", `${monthAdd(month, 1)}-01`).limit(5000),
+    // 一覧・クライアント別集約(月に依存しない・直近45日以降の実施予定)
+    sb.from("training_sessions").select("id, held_on, start_time, end_time, course, instructor, instructor_id, account_name, venue, session_part, meeting_url")
+      .gte("held_on", new Date(Date.now() + 9 * 3600 * 1000 - 45 * 86400 * 1000).toISOString().slice(0, 10))
+      .order("held_on").order("start_time").limit(500),
   ]);
   const instructors = (insR.data ?? []) as Instructor[];
   const sessions = (sessR.data ?? []) as Sess[];
+  const listSessions = (listR.data ?? []) as Sess[];
   const deals = ((dealsR.data ?? []) as { account_name: string | null; name: string }[]);
   const hoursRows = (hoursR.data ?? []) as { held_on: string; start_time: string | null; end_time: string | null; instructor_id: string | null }[];
 
@@ -119,6 +126,21 @@ export default async function InstructorsPage({ searchParams }: { searchParams: 
   for (const arr of byDate.values()) arr.sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? ""));
 
   const monthSessions = sessions.filter((s) => s.held_on.slice(0, 7) === month);
+
+  // 一覧・クライアント別集約(直近45日以降)
+  const activeInstructors = instructors.filter((i) => i.active).map((i) => ({ id: i.id, name: i.name }));
+  const wd = ["日", "月", "火", "水", "木", "金", "土"];
+  const fmtDate = (d: string) => { const [y, m, dd] = d.split("-").map(Number); return `${m}/${dd}(${wd[new Date(Date.UTC(y, m - 1, dd)).getUTCDay()]})`; };
+  const partOf = (s: Sess, i: number) => (s.session_part?.trim() || `Day${i + 1}`);
+  const clientGroups = (() => {
+    const m = new Map<string, Sess[]>();
+    for (const s of listSessions) {
+      const k = s.account_name?.trim() || "(企業未設定)";
+      (m.get(k) ?? m.set(k, []).get(k)!).push(s);
+    }
+    return Array.from(m.entries()).sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "ja"));
+  })();
+  const dot = (s: Sess) => (s.instructor_id && (colorOf.get(s.instructor_id) || "").split(" ")[0]) || "bg-ink/40";
 
   return (
     <div>
@@ -247,6 +269,98 @@ export default async function InstructorsPage({ searchParams }: { searchParams: 
           <p className="text-xs text-ink/40 mt-2">※ 稼働時間は各研修の「開始・終了時刻」から算出します。時刻未設定の回は集計に含まれません。</p>
         </div>
       </div>
+
+      {/* 研修予定 一覧(時系列) */}
+      <Section title={`研修予定 一覧（時系列・${listSessions.length}件）`} action={<span className="text-[11px] text-ink/40">直近45日以降の予定</span>} className="mb-5">
+        {listSessions.length === 0 ? (
+          <p className="text-sm text-ink/40 py-6 text-center">予定はありません</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[860px]">
+              <thead className="border-b border-black/[0.06]">
+                <tr>
+                  <th className="th">開催日</th><th className="th">時間</th><th className="th">クライアント</th>
+                  <th className="th">研修</th><th className="th">パート</th><th className="th">講師</th>
+                  <th className="th">会場</th><th className="th">会議URL</th><th className="th w-16"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/[0.04]">
+                {listSessions.map((s, i) => (
+                  <tr key={s.id} className="align-top">
+                    <td className="td whitespace-nowrap tabular-nums">{fmtDate(s.held_on)}</td>
+                    <td className="td whitespace-nowrap tabular-nums text-ink/70">{s.start_time ? `${hhmm(s.start_time)}${s.end_time ? "–" + hhmm(s.end_time) : ""}` : <span className="text-ink/30">未設定</span>}</td>
+                    <td className="td font-medium">{s.account_name ?? "—"}</td>
+                    <td className="td text-ink/70">{s.course}</td>
+                    <td className="td"><span className="pill bg-mist-soft text-ink/60 text-[10px] whitespace-nowrap">{partOf(s, i)}</span></td>
+                    <td className="td whitespace-nowrap"><span className="inline-flex items-center gap-1"><span className={`h-2.5 w-2.5 rounded-full ${dot(s)}`} />{s.instructor}</span></td>
+                    <td className="td text-ink/70">{s.venue ?? "—"}</td>
+                    <td className="td">
+                      {s.meeting_url ? (
+                        <a href={s.meeting_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-teal-deep hover:underline text-xs">開く <ExternalLink size={11} /></a>
+                      ) : <span className="text-ink/30 text-xs">—</span>}
+                    </td>
+                    <td className="td">
+                      <details>
+                        <summary className="cursor-pointer text-xs text-ink/45 hover:text-teal-deep list-none inline-flex items-center gap-0.5">編集 <ChevronDown size={12} /></summary>
+                        <form action={updateTrainingSessionAction} className="mt-2 space-y-1.5 rounded-lg border border-black/[0.06] bg-mist-soft/30 p-2 w-[260px]">
+                          <input type="hidden" name="id" value={s.id} />
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div><label className="label text-[10px]">パート</label><input name="session_part" defaultValue={s.session_part ?? ""} className="input py-1 text-xs" placeholder="Day1" /></div>
+                            <div><label className="label text-[10px]">会場</label><input name="venue" defaultValue={s.venue ?? ""} className="input py-1 text-xs" /></div>
+                            <div><label className="label text-[10px]">開始</label><input name="start_time" type="time" defaultValue={hhmm(s.start_time)} className="input py-1 text-xs" /></div>
+                            <div><label className="label text-[10px]">終了</label><input name="end_time" type="time" defaultValue={hhmm(s.end_time)} className="input py-1 text-xs" /></div>
+                          </div>
+                          <div><label className="label text-[10px]">講師</label>
+                            <select name="instructor_id" defaultValue={s.instructor_id ?? ""} className="input py-1 text-xs">
+                              <option value="">（未定）</option>
+                              {activeInstructors.map((ins) => <option key={ins.id} value={ins.id}>{ins.name}</option>)}
+                            </select>
+                          </div>
+                          <div><label className="label text-[10px]">会議URL</label><input name="meeting_url" type="url" defaultValue={s.meeting_url ?? ""} className="input py-1 text-xs" placeholder="Zoom / Teams" /></div>
+                          <div className="flex items-center gap-2 pt-0.5">
+                            <button type="submit" className="rounded-lg bg-teal-primary px-2.5 py-1 text-xs text-white">保存</button>
+                            <button formAction={deleteTrainingSessionAction} className="text-xs text-rose-500 hover:underline">削除</button>
+                          </div>
+                        </form>
+                      </details>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      {/* クライアント別スケジュール */}
+      <Section title={`クライアント別スケジュール（${clientGroups.length}社）`} action={<span className="text-[11px] text-ink/40">Day1・Day2…の担当と会場を把握</span>}>
+        {clientGroups.length === 0 ? (
+          <p className="text-sm text-ink/40 py-6 text-center">予定はありません</p>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {clientGroups.map(([client, list]) => (
+              <div key={client} className="rounded-xl border border-black/[0.06] p-3">
+                <div className="flex items-baseline justify-between mb-2">
+                  <span className="font-semibold text-sm text-ink truncate">{client}</span>
+                  <span className="text-[11px] text-ink/40 shrink-0 ml-2">{list.length}回</span>
+                </div>
+                <ol className="space-y-1.5">
+                  {list.map((s, i) => (
+                    <li key={s.id} className="flex items-center gap-2 text-xs">
+                      <span className="pill bg-teal-light text-teal-deep text-[10px] shrink-0 w-14 justify-center">{partOf(s, i)}</span>
+                      <span className="tabular-nums text-ink/70 shrink-0 w-16">{fmtDate(s.held_on)}</span>
+                      <span className="tabular-nums text-ink/45 shrink-0 w-20">{s.start_time ? `${hhmm(s.start_time)}${s.end_time ? "–" + hhmm(s.end_time) : ""}` : "—"}</span>
+                      <span className="inline-flex items-center gap-1 shrink-0"><span className={`h-2 w-2 rounded-full ${dot(s)}`} />{s.instructor}</span>
+                      <span className="text-ink/55 truncate flex-1">{s.venue ?? ""}</span>
+                      {s.meeting_url && <a href={s.meeting_url} target="_blank" rel="noopener noreferrer" className="text-teal-deep shrink-0" title="会議URL"><ExternalLink size={12} /></a>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
     </div>
   );
 }

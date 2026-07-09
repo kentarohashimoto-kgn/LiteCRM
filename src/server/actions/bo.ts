@@ -487,12 +487,14 @@ export async function scheduleTrainingSessionAction(formData: FormData): Promise
     instructorName = (ins?.name as string) ?? "";
   }
 
-  // 複数日程(held_on[]/start_time[]/end_time[])を対応する行に展開
+  // 複数日程(held_on[]/start_time[]/end_time[]/session_part[]/meeting_url[])を対応する行に展開
   const dates = formData.getAll("held_on").map((v) => String(v));
   const starts = formData.getAll("start_time").map((v) => String(v));
   const ends = formData.getAll("end_time").map((v) => String(v));
+  const parts = formData.getAll("session_part").map((v) => String(v));
+  const urls = formData.getAll("meeting_url").map((v) => String(v));
   const rows = dates
-    .map((d, i) => ({ d, s: starts[i] ?? "", e: ends[i] ?? "" }))
+    .map((d, i) => ({ d, s: starts[i] ?? "", e: ends[i] ?? "", part: parts[i] ?? "", url: urls[i] ?? "" }))
     .filter((r) => r.d)
     .map((r) => ({
       tenant_id: ctx.tenantId,
@@ -505,10 +507,36 @@ export async function scheduleTrainingSessionAction(formData: FormData): Promise
       account_name: accountName,
       venue,
       attendee_count: attendee,
+      session_part: r.part.trim() || null,
+      meeting_url: r.url.trim() || null,
     }));
   if (rows.length === 0) return;
 
   await sb.from("training_sessions").insert(rows);
   revalidatePath("/app/bo/instructors");
   revalidatePath("/app/bo/surveys");
+}
+
+/** 研修予定の個別更新(パート・会議URL・時刻・会場・講師)。一覧からのインライン編集用。 */
+export async function updateTrainingSessionAction(formData: FormData): Promise<void> {
+  const ctx = await requireBoCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  const instructorId = String(formData.get("instructor_id") || "") || null;
+  let instructorName: string | undefined;
+  if (instructorId) {
+    const { data: ins } = await sb.from("instructors").select("name").eq("id", instructorId).maybeSingle();
+    instructorName = (ins?.name as string) ?? "(未定)";
+  }
+  const patch: Record<string, unknown> = {
+    session_part: String(formData.get("session_part") || "").trim() || null,
+    meeting_url: String(formData.get("meeting_url") || "").trim() || null,
+    start_time: String(formData.get("start_time") || "") || null,
+    end_time: String(formData.get("end_time") || "") || null,
+    venue: String(formData.get("venue") || "").trim() || null,
+  };
+  if (instructorId !== null) { patch.instructor_id = instructorId; patch.instructor = instructorName; }
+  await sb.from("training_sessions").update(patch).eq("id", id).eq("tenant_id", ctx.tenantId);
+  revalidatePath("/app/bo/instructors");
 }

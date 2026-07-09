@@ -7,19 +7,19 @@ import { SubmitButton } from "@/components/ui/submit-button";
 
 interface Instructor { id: string; name: string; }
 interface Deal { account_name: string | null; name: string; }
-interface DateRow { key: number; held_on: string; start_time: string; end_time: string; }
+interface DateRow { key: number; held_on: string; start_time: string; end_time: string; part: string; url: string; }
 
 /**
  * 研修予定の登録フォーム。
  * 企業(成約済研修案件から選択)・研修種類・会場・受講者数・講師を1回入力し、
- * 実施日(＋開始/終了)を「日程を追加」で複数まとめて登録できる。
+ * 実施日(＋開始/終了/研修パート/会議URL)を「日程を追加」で複数まとめて登録できる。
  */
 export function ScheduleSessionForm({ instructors, deals }: { instructors: Instructor[]; deals: Deal[] }) {
-  const [rows, setRows] = useState<DateRow[]>([{ key: 1, held_on: "", start_time: "", end_time: "" }]);
+  const [rows, setRows] = useState<DateRow[]>([{ key: 1, held_on: "", start_time: "", end_time: "", part: "Day1", url: "" }]);
   const [seq, setSeq] = useState(2);
 
   const addRow = () => {
-    setRows((rs) => [...rs, { key: seq, held_on: "", start_time: "", end_time: "" }]);
+    setRows((rs) => [...rs, { key: seq, held_on: "", start_time: "", end_time: "", part: `Day${rs.length + 1}`, url: "" }]);
     setSeq((n) => n + 1);
   };
   const removeRow = (key: number) => setRows((rs) => (rs.length > 1 ? rs.filter((r) => r.key !== key) : rs));
@@ -79,6 +79,16 @@ export function ScheduleSessionForm({ instructors, deals }: { instructors: Instr
                 <div>
                   <label className="label text-[10px]">終了</label>
                   <input name="end_time" type="time" value={r.end_time} onChange={(e) => patch(r.key, "end_time", e.target.value)} className="input" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-1.5">
+                <div>
+                  <label className="label text-[10px]">研修パート</label>
+                  <input name="session_part" value={r.part} onChange={(e) => patch(r.key, "part", e.target.value)} className="input" placeholder="例: Day1 基礎編" />
+                </div>
+                <div className="col-span-2">
+                  <label className="label text-[10px]">会議URL</label>
+                  <input name="meeting_url" type="url" value={r.url} onChange={(e) => patch(r.key, "url", e.target.value)} className="input" placeholder="Zoom / Teams 等" />
                 </div>
               </div>
             </div>
