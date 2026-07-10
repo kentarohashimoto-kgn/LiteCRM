@@ -40,14 +40,14 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
     items: [
       { href: "/app/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
       { href: "/app/today", label: "今日のアポ・AC", icon: Sun },
-      { href: "/app/tasks", label: "タスク", icon: CheckSquare },
+      { href: "/app/tasks", label: "タスク・商談一覧", icon: CheckSquare },
       { href: "/app/activities", label: "活動履歴", icon: ActivityIcon },
     ],
   },
   {
     heading: "案件",
     items: [
-      { href: "/app/appointments/new", label: "アポ登録", icon: CalendarCheck },
+      { href: "/app/appointments/new", label: "アポ・商談登録", icon: CalendarCheck },
       { href: "/app/opportunities", label: "案件（表・ボード）", icon: Target },
       { href: "/app/reps", label: "営業ビュー", icon: UserCog },
       { href: "/app/forecast", label: "売上予測", icon: TrendingUp },
@@ -106,12 +106,12 @@ const hrGroup: (typeof groups)[number] = {
   ],
 };
 
-/** 管理職には「案件」グループに案件管理(デリバリー原価・粗利)を差し込む。 */
+/** 管理職には「案件」グループに原価管理(デリバリー原価・粗利)を差し込む。 */
 function injectProjects(base: typeof groups, role: Role): typeof groups {
   if (!canManageProjects(role)) return base;
   return base.map((g) =>
     g.heading === "案件"
-      ? { ...g, items: [...g.items, { href: "/app/projects", label: "案件管理", icon: FolderKanban }] }
+      ? { ...g, items: [...g.items, { href: "/app/projects", label: "原価管理", icon: FolderKanban }] }
       : g
   );
 }

@@ -1,20 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { List, LayoutGrid, CalendarDays, FileText, Loader2 } from "lucide-react";
+import { List, LayoutGrid, CalendarDays, FileText, Handshake, Loader2 } from "lucide-react";
 import type { OppView } from "@/lib/data/select";
 import { leanToOppView } from "@/lib/data/opps-page";
-import { fetchAllOppsLeanAction, fetchCalendarItemsAction } from "@/server/actions/opportunities";
+import { fetchAllOppsLeanAction, fetchCalendarItemsAction, fetchMeetingsListAction, type MeetingListRow } from "@/server/actions/opportunities";
 import type { CalItem } from "@/lib/data/calendar";
 import { fetchProposalOppsAction, type ProposalOppRow } from "@/server/actions/proposals";
 import { OppPaginatedTable } from "./opp-paginated-table";
 import { OppViews } from "./opp-views";
 import { ProposalBoard } from "./proposal-board";
+import { MeetingsList } from "./meetings-list";
 import { AppointmentCalendarPro, type BookingLink } from "./appointment-calendar-pro";
 import { cn } from "@/lib/utils";
 
 interface Option { id: string; name: string; }
-type View = "list" | "board" | "calendar" | "proposal";
+type View = "list" | "meetings" | "board" | "calendar" | "proposal";
 
 export function OppWorkspace({
   initialRows,
@@ -43,6 +44,7 @@ export function OppWorkspace({
   const [allOpps, setAllOpps] = useState<OppView[] | null>(null);      // ボード用(全件)
   const [calItems, setCalItems] = useState<CalItem[] | null>(null);    // カレンダー用(アポ＋アポ済)
   const [proposalRows, setProposalRows] = useState<ProposalOppRow[] | null>(null); // 提案タブ用
+  const [meetings, setMeetings] = useState<MeetingListRow[] | null>(null); // 商談一覧タブ用
   const [loadingAll, setLoadingAll] = useState(false);
 
   async function ensureAll() {
@@ -64,17 +66,25 @@ export function OppWorkspace({
     setProposalRows(await fetchProposalOppsAction());
     setLoadingAll(false);
   }
+  async function ensureMeetings() {
+    if (meetings || loadingAll) return;
+    setLoadingAll(true);
+    setMeetings(await fetchMeetingsListAction());
+    setLoadingAll(false);
+  }
   function switchTo(v: View) {
     setView(v);
     if (v === "board") ensureAll();
     if (v === "calendar") ensureAppts();
     if (v === "proposal") ensureProposals();
+    if (v === "meetings") ensureMeetings();
   }
 
   return (
     <div className="space-y-4">
       <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5">
-        <Tab active={view === "list"} onClick={() => switchTo("list")} icon={<List size={15} />} label="一覧" />
+        <Tab active={view === "list"} onClick={() => switchTo("list")} icon={<List size={15} />} label="案件一覧" />
+        <Tab active={view === "meetings"} onClick={() => switchTo("meetings")} icon={<Handshake size={15} />} label="商談一覧" />
         <Tab active={view === "board"} onClick={() => switchTo("board")} icon={<LayoutGrid size={15} />} label="ボード" />
         <Tab active={view === "calendar"} onClick={() => switchTo("calendar")} icon={<CalendarDays size={15} />} label="カレンダー" />
         <Tab active={view === "proposal"} onClick={() => switchTo("proposal")} icon={<FileText size={15} />} label="提案" />
@@ -83,6 +93,12 @@ export function OppWorkspace({
       {view === "proposal" ? (
         proposalRows ? (
           <ProposalBoard rows={proposalRows} />
+        ) : (
+          <div className="card card-pad flex items-center gap-2 text-sm text-ink/40"><Loader2 size={15} className="animate-spin" /> 読み込み中…</div>
+        )
+      ) : view === "meetings" ? (
+        meetings ? (
+          <MeetingsList rows={meetings} owners={owners} />
         ) : (
           <div className="card card-pad flex items-center gap-2 text-sm text-ink/40"><Loader2 size={15} className="animate-spin" /> 読み込み中…</div>
         )

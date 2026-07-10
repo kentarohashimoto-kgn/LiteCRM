@@ -123,6 +123,50 @@ export async function fetchCalendarItemsAction(): Promise<CalItem[]> {
   return (data ?? []) as CalItem[];
 }
 
+// ===================== 商談一覧(案件の下位階層) =====================
+export interface MeetingListRow {
+  id: string;
+  title: string | null;
+  summary: string | null;
+  meeting_date: string | null;   // 商談実施日(日付)
+  meeting_at: string | null;     // 商談実施日時
+  created_at: string;            // 商談登録日
+  method: string | null;
+  owner_user_id: string | null;
+  opportunity_id: string;
+  opp_name: string;
+  account_name: string;
+  yomi: string | null;
+}
+
+/** 商談(meetings)の一覧を、案件名・顧客名付きで取得(RLSスコープ済・最大2000件)。
+ *  案件一覧の下位階層として「商談一覧」タブで表示する。ソートはクライアント側で行う。 */
+export async function fetchMeetingsListAction(): Promise<MeetingListRow[]> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  // opportunities!inner で親案件が可視(削除除外・権限内)の商談のみに絞る。
+  const { data } = await sb
+    .from("meetings")
+    .select("id,title,summary,meeting_date,meeting_at,created_at,method,owner_user_id,opportunity_id, opportunities!inner(name,yomi,accounts(name))")
+    .order("created_at", { ascending: false })
+    .limit(2000);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).map((m) => ({
+    id: m.id as string,
+    title: (m.title as string) ?? null,
+    summary: (m.summary as string) ?? null,
+    meeting_date: (m.meeting_date as string) ?? null,
+    meeting_at: (m.meeting_at as string) ?? null,
+    created_at: m.created_at as string,
+    method: (m.method as string) ?? null,
+    owner_user_id: (m.owner_user_id as string) ?? null,
+    opportunity_id: m.opportunity_id as string,
+    opp_name: (m.opportunities?.name as string) ?? "—",
+    yomi: (m.opportunities?.yomi as string) ?? null,
+    account_name: (m.opportunities?.accounts?.name as string) ?? "—",
+  }));
+}
+
 export type OppInlineField =
   | "yomi"
   | "amount"

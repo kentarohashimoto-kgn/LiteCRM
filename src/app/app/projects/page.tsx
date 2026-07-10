@@ -43,7 +43,7 @@ export default async function ProjectsListPage() {
   return (
     <div>
       <PageHeader
-        title="案件管理（デリバリー原価・粗利）"
+        title="原価管理（デリバリー原価・粗利）"
         subtitle="原価管理が必要な案件を、計画（月別の販売・原価・粗利）から受注後の進捗・完了実績まで管理します。重要度と進行中を上位に表示します。"
         action={<span className="text-xs text-ink/45">{rows.length} 件</span>}
       />

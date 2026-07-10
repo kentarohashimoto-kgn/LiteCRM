@@ -25,8 +25,8 @@ export default async function NewAppointmentPage() {
   return (
     <div>
       <PageHeader
-        title="アポ登録"
-        subtitle="リード（展示会リスト）・既存顧客・新規のいずれからでも登録。リード起点は詳細情報が案件に自動コピーされ、リードはアポ決着に更新されます。"
+        title="アポ・商談登録"
+        subtitle="リード（展示会リスト）・既存顧客・新規のいずれからでも登録。案件と初回商談を同時に作成します。リード起点は詳細情報が案件に自動コピーされ、リードはアポ決着に更新されます。"
       />
       <AppointmentRegisterForm owners={owners} products={products} sources={sources} details={details} bookingLinks={bookingLinks} currentUserId={ctx.userId} />
     </div>
