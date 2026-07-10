@@ -40,7 +40,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
     items: [
       { href: "/app/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
       { href: "/app/today", label: "今日のアポ・AC", icon: Sun },
-      { href: "/app/tasks", label: "タスク・商談一覧", icon: CheckSquare },
+      { href: "/app/tasks", label: "タスク", icon: CheckSquare },
       { href: "/app/activities", label: "活動履歴", icon: ActivityIcon },
     ],
   },

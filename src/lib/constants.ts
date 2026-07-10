@@ -338,3 +338,46 @@ export const CATORCE_PRODUCTS: {
   { category: "営業AX", name: "営業AX支援", notes: "CRM/SFA/営業AI化支援", is_recurring: true, default_price: 800000, default_gross_profit_rate: 0.6 },
   { category: "展示会", name: "プロンプト100選導線", notes: "展示会リード獲得", is_recurring: false, default_price: 300000, default_gross_profit_rate: 0.7 },
 ];
+
+// ===================== タスク（Asana型: プロジェクト/ゴール） =====================
+import type { ColorKey, GoalStatus, TaskViewKind } from "@/lib/types";
+
+/** プロジェクト/ポートフォリオの識別色。CSS変数ではなくTailwind静的クラスで表現。 */
+export const COLOR_KEYS: { key: ColorKey; label: string; dot: string; bg: string; soft: string; text: string; ring: string }[] = [
+  { key: "teal",   label: "ティール", dot: "bg-teal-primary",  bg: "bg-teal-primary",  soft: "bg-teal-light",     text: "text-teal-deep",    ring: "ring-teal-primary" },
+  { key: "orange", label: "オレンジ", dot: "bg-accent-orange", bg: "bg-accent-orange", soft: "bg-orange-50",      text: "text-orange-600",   ring: "ring-accent-orange" },
+  { key: "violet", label: "バイオレット", dot: "bg-violet-500", bg: "bg-violet-500",    soft: "bg-violet-50",      text: "text-violet-600",   ring: "ring-violet-500" },
+  { key: "rose",   label: "ローズ",   dot: "bg-rose-500",      bg: "bg-rose-500",       soft: "bg-rose-50",        text: "text-rose-600",     ring: "ring-rose-500" },
+  { key: "amber",  label: "アンバー", dot: "bg-amber-500",     bg: "bg-amber-500",      soft: "bg-amber-50",       text: "text-amber-700",    ring: "ring-amber-500" },
+  { key: "sky",    label: "スカイ",   dot: "bg-sky-500",       bg: "bg-sky-500",        soft: "bg-sky-50",         text: "text-sky-600",      ring: "ring-sky-500" },
+  { key: "lime",   label: "ライム",   dot: "bg-lime-500",      bg: "bg-lime-500",       soft: "bg-lime-50",        text: "text-lime-700",     ring: "ring-lime-500" },
+  { key: "slate",  label: "スレート", dot: "bg-slate-400",     bg: "bg-slate-500",      soft: "bg-slate-100",      text: "text-slate-600",    ring: "ring-slate-400" },
+];
+export const COLOR_MAP = Object.fromEntries(COLOR_KEYS.map((c) => [c.key, c])) as Record<ColorKey, (typeof COLOR_KEYS)[number]>;
+export function colorOf(key?: string) {
+  return COLOR_MAP[(key as ColorKey) ?? "teal"] ?? COLOR_MAP.teal;
+}
+
+/** タスクビューの種類。 */
+export const TASK_VIEWS: { key: TaskViewKind; label: string; icon: string }[] = [
+  { key: "list", label: "リスト", icon: "list" },
+  { key: "board", label: "ボード", icon: "board" },
+  { key: "calendar", label: "カレンダー", icon: "calendar" },
+];
+
+/** ゴールの進捗ステータス表示。 */
+export const GOAL_STATUSES: { key: GoalStatus; label: string; dot: string; text: string; bg: string }[] = [
+  { key: "on_track",  label: "順調",       dot: "bg-teal-primary",  text: "text-teal-deep",  bg: "bg-teal-light" },
+  { key: "at_risk",   label: "注意",       dot: "bg-amber-500",     text: "text-amber-700",  bg: "bg-amber-50" },
+  { key: "off_track", label: "遅延",       dot: "bg-rose-500",      text: "text-rose-600",   bg: "bg-rose-50" },
+  { key: "achieved",  label: "達成",       dot: "bg-violet-500",    text: "text-violet-600", bg: "bg-violet-50" },
+  { key: "no_status", label: "未設定",     dot: "bg-slate-300",     text: "text-slate-500",  bg: "bg-slate-100" },
+];
+export const GOAL_STATUS_MAP = Object.fromEntries(GOAL_STATUSES.map((s) => [s.key, s])) as Record<GoalStatus, (typeof GOAL_STATUSES)[number]>;
+
+/** 優先度の表示（ラベル/トーン）。 */
+export const PRIORITY_META: Record<string, { label: string; tone: "rose" | "orange" | "teal" | "gray" }> = {
+  high: { label: "高", tone: "rose" },
+  middle: { label: "中", tone: "orange" },
+  low: { label: "低", tone: "teal" },
+};

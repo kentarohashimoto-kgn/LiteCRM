@@ -688,6 +688,85 @@ export interface Task {
   status: TaskStatus;
   priority?: Priority;
   completed_at?: string;
+  /** Asana型: 上位プロジェクト（任意）。 */
+  project_id?: UUID;
+  /** Asana型: プロジェクト内セクション（ボード列/リスト見出し）。 */
+  section_id?: UUID;
+  /** 手動並び替え用の並び順（小さいほど上）。 */
+  sort_order?: number;
+  /** 着手予定日（任意）。 */
+  start_date?: string;
+}
+
+/** タスクビューの表示形式。 */
+export type TaskViewKind = "list" | "board" | "calendar";
+/** UIカラーキー（プロジェクト/ポートフォリオの識別色）。 */
+export type ColorKey = "teal" | "orange" | "violet" | "rose" | "amber" | "sky" | "lime" | "slate";
+/** ゴールの進捗ステータス。 */
+export type GoalStatus = "on_track" | "at_risk" | "off_track" | "achieved" | "no_status";
+
+/** ポートフォリオ（複数プロジェクトの束ね）。 */
+export interface TaskPortfolio {
+  id: UUID;
+  tenant_id: UUID;
+  name: string;
+  description?: string;
+  color: ColorKey;
+  owner_user_id?: UUID;
+  status: "active" | "archived";
+  sort_order?: number;
+  created_by?: UUID;
+  created_at?: string;
+}
+
+/** プロジェクト（タスクの上位）。 */
+export interface TaskProject {
+  id: UUID;
+  tenant_id: UUID;
+  portfolio_id?: UUID;
+  name: string;
+  description?: string;
+  color: ColorKey;
+  icon?: string;
+  owner_user_id?: UUID;
+  status: "active" | "archived";
+  start_date?: string;
+  due_date?: string;
+  default_view: TaskViewKind;
+  sort_order?: number;
+  created_by?: UUID;
+  created_at?: string;
+}
+
+/** プロジェクト内セクション（ボードの列 / リストの見出し）。 */
+export interface TaskSection {
+  id: UUID;
+  tenant_id: UUID;
+  project_id: UUID;
+  name: string;
+  sort_order?: number;
+}
+
+/** ゴール（数値目標＋進捗）。 */
+export interface Goal {
+  id: UUID;
+  tenant_id: UUID;
+  parent_goal_id?: UUID;
+  portfolio_id?: UUID;
+  project_id?: UUID;
+  name: string;
+  description?: string;
+  owner_user_id?: UUID;
+  metric_kind: "number" | "percent" | "currency";
+  target_value?: number;
+  current_value: number;
+  unit?: string;
+  status: GoalStatus;
+  period_start?: string;
+  period_end?: string;
+  sort_order?: number;
+  created_by?: UUID;
+  created_at?: string;
 }
 
 /** 商談(meetings): 案件配下の個別商談(1回ごと)。 */
