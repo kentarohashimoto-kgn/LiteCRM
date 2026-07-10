@@ -30,16 +30,14 @@ export async function fetchTrashAction(): Promise<TrashData> {
   return data as unknown as TrashData;
 }
 
-/** 案件を論理削除(30日間はゴミ箱から復元可能)。 */
+/** 案件を論理削除(30日間はゴミ箱から復元可能)。
+ *  論理削除は SECURITY DEFINER RPC 経由。RLS 適用クライアントの直接 update だと
+ *  SELECT ポリシーの deleted_at is null により更新後の行が拒否され、削除が効かないため。 */
 export async function deleteOpportunityAction(formData: FormData) {
-  const ctx = await requireCtx();
+  await requireCtx();
   const sb = getSupabaseServer();
   const id = String(formData.get("id"));
-  await sb
-    .from("opportunities")
-    .update({ deleted_at: new Date().toISOString(), deleted_by: ctx.userId })
-    .eq("id", id)
-    .eq("tenant_id", ctx.tenantId);
+  await sb.rpc("trash_soft_delete", { p_kind: "opportunity", p_id: id });
   revalidatePath("/app/opportunities");
   redirect("/app/opportunities");
 }
@@ -57,11 +55,7 @@ export async function deleteAccountAction(formData: FormData) {
   if ((count ?? 0) > 0) {
     redirect(`/app/accounts/${id}?error=` + encodeURIComponent(`案件が${count}件紐づいているため削除できません。先に案件を削除してください。`));
   }
-  await sb
-    .from("accounts")
-    .update({ deleted_at: new Date().toISOString(), deleted_by: ctx.userId })
-    .eq("id", id)
-    .eq("tenant_id", ctx.tenantId);
+  await sb.rpc("trash_soft_delete", { p_kind: "account", p_id: id });
   revalidatePath("/app/accounts");
   redirect("/app/accounts");
 }

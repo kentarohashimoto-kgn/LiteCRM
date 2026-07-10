@@ -250,6 +250,23 @@ export async function registerAppointmentAction(input: RegisterAppointmentInput)
     .single();
   if (oppErr || !opp) return { ok: false, error: "案件の作成に失敗しました: " + (oppErr?.message ?? "") };
 
+  // 4.2) 商談(初回アポ)の枠を作成。案件だけでなく商談レコードも同時に作り、
+  //      アポカレンダー/商談一覧に「予定の商談」として表示されるようにする。
+  //      ヨミ=4.アポ のままなのでカレンダー上は「アポ(予定)」扱い(実施済みにはならない)。
+  await sb.from("meetings").insert({
+    tenant_id: ctx.tenantId,
+    opportunity_id: opp.id as string,
+    account_id: accountId,
+    owner_user_id: input.ownerUserId,
+    title: "初回商談（アポ）",
+    meeting_date: input.date,
+    meeting_at: appointmentAt,
+    next_action_date: input.date,
+    next_action_text: "初回商談（アポ）" + (input.time ? ` ${input.time}` : ""),
+    pre_info: researchParts.length ? researchParts.join("\n\n") : null,
+    created_by: ctx.userId,
+  });
+
   // 4.5) 直接入力された流入詳細はマスタ(lead_source_details)へ自動登録(選択肢を育てる)
   const savedSourceId = input.leadSourceId || lead?.lead_source_id || null;
   const savedDetail = input.sourceDetail?.trim() || lead?.raw_event || null;

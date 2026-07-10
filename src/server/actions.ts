@@ -957,15 +957,13 @@ export async function updateLeadAction(formData: FormData) {
   redirect("/app/leads/" + id);
 }
 
-/** リード1件を削除(論理削除・30日間は設定のゴミ箱から復元可能)。 */
+/** リード1件を削除(論理削除・30日間は設定のゴミ箱から復元可能)。
+ *  論理削除は SECURITY DEFINER RPC 経由(RLS 適用の直接 update では
+ *  SELECT ポリシーの deleted_at is null により拒否され削除が効かないため)。 */
 export async function deleteLeadAction(formData: FormData) {
-  const ctx = await requireCtx();
+  await requireCtx();
   const sb = getSupabaseServer();
-  await sb
-    .from("leads")
-    .update({ deleted_at: new Date().toISOString(), deleted_by: ctx.userId })
-    .eq("id", String(formData.get("id")))
-    .eq("tenant_id", ctx.tenantId);
+  await sb.rpc("trash_soft_delete", { p_kind: "lead", p_id: String(formData.get("id")) });
   revalidatePath("/app/leads");
   redirect("/app/leads");
 }
