@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { listOpportunities, listCampaignsByChannel } from "@/lib/data/select";
@@ -189,6 +191,9 @@ export default async function ExhibitionAnalyticsPage() {
                 <td className="td">
                   <EditableName id={m.campaign.id} name={exhibitionLabel(m.campaign)} />
                   <span className="text-xs text-ink/45 block">{m.campaign.organizer ?? "—"}</span>
+                  <Link href={`/app/analytics/exhibitions/${m.campaign.id}`} className="inline-flex items-center gap-0.5 text-[11px] text-teal-deep hover:underline mt-0.5">
+                    案件・未商談リストを見る <ChevronRight size={11} />
+                  </Link>
                 </td>
                 <td className="td text-xs text-ink/70">{m.campaign.venue ?? "—"}</td>
                 <td className="td text-xs">
@@ -227,9 +232,12 @@ function ExhibitionRow({ m }: { m: CampaignMetric }) {
       : null;
   return (
     <tr className="row-hover">
-      <td className="td max-w-[220px]">
+      <td className="td max-w-[240px]">
         <EditableName id={c.id} name={exhibitionLabel(c)} />
         <span className="text-xs text-ink/45 block">{c.organizer ?? "—"}</span>
+        <Link href={`/app/analytics/exhibitions/${c.id}`} className="inline-flex items-center gap-0.5 text-[11px] text-teal-deep hover:underline mt-0.5">
+          案件・未商談リストを見る <ChevronRight size={11} />
+        </Link>
       </td>
       <td className="td text-xs whitespace-nowrap">{formatDateFull(c.event_date)}</td>
       <td className="td text-right tabular-nums">{num(m.actualLeads)}</td>
