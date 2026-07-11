@@ -139,6 +139,18 @@ export async function renameSectionAction(id: string, name: string) {
   touch();
 }
 
+/** セクションの並び順を確定する（ドラッグ＆ドロップ後の永続化）。 */
+export async function reorderSectionsAction(projectId: string, orderedIds: string[]) {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  await Promise.all(
+    orderedIds.map((id, i) =>
+      sb.from("task_sections").update({ sort_order: i }).eq("id", id).eq("project_id", projectId).eq("tenant_id", ctx.tenantId),
+    ),
+  );
+  touch();
+}
+
 export async function deleteSectionAction(id: string) {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
