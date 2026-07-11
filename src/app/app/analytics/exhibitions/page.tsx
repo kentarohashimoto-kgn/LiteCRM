@@ -1,6 +1,7 @@
 import { getWorkspaceLite } from "@/lib/data/workspace";
+import { getSupabaseServer } from "@/lib/supabase/server";
 import { listOpportunities, listCampaignsByChannel } from "@/lib/data/select";
-import { campaignMetrics, campaignTotals, type CampaignMetric } from "@/lib/analytics";
+import { campaignMetrics, campaignTotals, type CampaignMetric, type CampaignLiveStat } from "@/lib/analytics";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { ExhibitionChart } from "@/components/charts/exhibition-chart";
 import { EditableName } from "@/components/analytics/editable-name";
@@ -15,7 +16,18 @@ export default async function ExhibitionAnalyticsPage() {
   const ws = await getWorkspaceLite();
   const opps = listOpportunities(ws);
   const exhibitions = listCampaignsByChannel(ws, "exhibition");
-  const metrics = campaignMetrics(exhibitions, opps);
+
+  // リード/アポは leads 実データからライブ集計（exhibition_events で campaign と橋渡し）。
+  // 手入力の actual_leads/appointments に依存せず自動で最新化する。
+  const sb = getSupabaseServer();
+  const { data: liveRows } = await sb.rpc("exhibition_campaign_lead_stats");
+  const liveStats = new Map<string, CampaignLiveStat>(
+    ((liveRows ?? []) as { campaign_id: string; leads: number; appts: number }[]).map((r) => [
+      r.campaign_id,
+      { leads: Number(r.leads), appts: Number(r.appts) },
+    ]),
+  );
+  const metrics = campaignMetrics(exhibitions, opps, liveStats);
 
   // 実施済み/今後は「開催日」を正本に自動判定（状態=done でも開催日が過ぎていても実施済み）。
   // 状態の手動更新に依存せず、日付が過ぎれば自動で実施済みへ移る。
@@ -181,8 +193,8 @@ export default async function ExhibitionAnalyticsPage() {
 
       <p className="text-xs text-ink/40 leading-relaxed">
         ※ <b>成約数・売上</b>は CRM の案件データを正本に集計（紐付き案件の受注実績）。
-        <b>リード数・アポ数・費用</b>は展示会管理表の実績値。
-        既存案件の展示会への紐付けは作成日からの<b>自動推定</b>（案件詳細で修正可）。
+        <b>リード数・アポ数</b>は<b>リード実データからライブ集計</b>し自動で最新化（リードが未取込の展示会のみ管理表の入力値を表示）。
+        <b>費用</b>は展示会管理表の値。既存案件の展示会への紐付けは作成日からの<b>自動推定</b>（案件詳細で修正可）。
         括弧内の「表」は管理表の記載値（参考）。
       </p>
     </div>

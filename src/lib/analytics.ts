@@ -131,7 +131,23 @@ export interface CampaignMetric {
   winRate: number | null; // 成約数 / アポ数
 }
 
-export function campaignMetrics(campaigns: Campaign[], opps: OppView[]): CampaignMetric[] {
+/** 展示会などの「ライブ実績」（leadsテーブルから集計したリード/アポ）。campaign_id 別。 */
+export interface CampaignLiveStat {
+  leads: number;
+  appts: number;
+}
+
+/**
+ * 施策別の指標を算出。
+ * live を渡すと、リード数・アポ数は「ライブ集計（leads実データ）」を優先し、
+ * ライブが 0（＝まだ実データが無い）の場合のみ静的フィールド(actual_leads/appointments)へフォールバックする。
+ * これにより展示会のリード/アポが手入力に依存せず自動で最新化される。
+ */
+export function campaignMetrics(
+  campaigns: Campaign[],
+  opps: OppView[],
+  live?: Map<string, CampaignLiveStat>,
+): CampaignMetric[] {
   const byCampaign = groupBy(
     opps.filter((o) => o.campaign_id),
     (o) => o.campaign_id!,
@@ -143,8 +159,10 @@ export function campaignMetrics(campaigns: Campaign[], opps: OppView[]): Campaig
     const lost = list.filter((o) => o.status === "lost");
     const wonAmount = sum(won, (o) => o.amount);
     const cost = c.cost ?? null;
-    const actualLeads = c.actual_leads ?? null;
-    const appts = c.appointments ?? null;
+    const ls = live?.get(c.id);
+    // ライブ値が正なら最新のリード/アポとして採用。無ければ従来の静的フィールド。
+    const actualLeads = (ls && ls.leads > 0 ? ls.leads : c.actual_leads) ?? null;
+    const appts = (ls && ls.appts > 0 ? ls.appts : c.appointments) ?? null;
     return {
       campaign: c,
       oppCount: list.length,
