@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Plus, Check, X, Pencil } from "lucide-react";
-import { createSectionAction, renameSectionAction, deleteSectionAction } from "@/server/actions/tasks";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { Plus, Check, X, Pencil, GripVertical } from "lucide-react";
+import { createSectionAction, renameSectionAction, deleteSectionAction, reorderSectionsAction } from "@/server/actions/tasks";
 import { cn } from "@/lib/utils";
 
 interface SectionVM {
@@ -17,6 +17,20 @@ export function SectionManager({ projectId, sections }: { projectId: string; sec
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
 
+  // 並び替え用のローカル順序（サーバー反映まで即時に見せる）。propsが変わったら同期。
+  const [order, setOrder] = useState<SectionVM[]>(sections);
+  const sig = sections.map((s) => s.id).join("|");
+  const lastSig = useRef(sig);
+  useEffect(() => {
+    if (lastSig.current !== sig) {
+      lastSig.current = sig;
+      setOrder(sections);
+    }
+  }, [sig, sections]);
+
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+
   const add = () => {
     const n = name.trim();
     if (n) start(() => createSectionAction(projectId, n));
@@ -29,10 +43,26 @@ export function SectionManager({ projectId, sections }: { projectId: string; sec
     setEditId(null);
   };
 
+  const drop = (targetId: string) => {
+    if (!dragId || dragId === targetId) {
+      setDragId(null);
+      setOverId(null);
+      return;
+    }
+    const ids = order.map((s) => s.id).filter((id) => id !== dragId);
+    const idx = ids.indexOf(targetId);
+    ids.splice(idx, 0, dragId);
+    const next = ids.map((id) => order.find((s) => s.id === id)!).filter(Boolean);
+    setOrder(next);
+    start(() => reorderSectionsAction(projectId, ids));
+    setDragId(null);
+    setOverId(null);
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="text-[11px] font-semibold text-ink/40">セクション</span>
-      {sections.map((s) =>
+      {order.map((s) =>
         editId === s.id ? (
           <span key={s.id} className="inline-flex items-center gap-1 rounded-full bg-white border border-teal-primary px-2 py-0.5">
             <input
@@ -50,7 +80,27 @@ export function SectionManager({ projectId, sections }: { projectId: string; sec
             </button>
           </span>
         ) : (
-          <span key={s.id} className="group inline-flex items-center gap-1 rounded-full bg-mist-soft px-2.5 py-0.5 text-xs text-ink/60">
+          <span
+            key={s.id}
+            draggable
+            onDragStart={() => setDragId(s.id)}
+            onDragEnd={() => {
+              setDragId(null);
+              setOverId(null);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOverId(s.id);
+            }}
+            onDrop={() => drop(s.id)}
+            className={cn(
+              "group inline-flex items-center gap-1 rounded-full bg-mist-soft px-2 py-0.5 text-xs text-ink/60 cursor-grab active:cursor-grabbing transition-colors",
+              dragId === s.id && "opacity-40",
+              overId === s.id && dragId && dragId !== s.id && "ring-2 ring-teal-primary/50",
+            )}
+            title="ドラッグで並び替え"
+          >
+            <GripVertical size={11} className="text-ink/25 group-hover:text-ink/45" />
             {s.name}
             <button
               type="button"
