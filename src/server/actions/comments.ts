@@ -89,3 +89,40 @@ export async function deleteOppCommentAction(input: { id: string; opportunityId:
   revalidatePath(`/app/opportunities/${input.opportunityId}`);
   return { ok: true };
 }
+
+/* ===================== リードコメント（展示会ドリルダウン用） ===================== */
+
+export interface LeadComment {
+  id: string;
+  author_user_id: string;
+  body: string;
+  mentions: string[];
+  created_at: string;
+}
+
+/** 未商談リード等に社内コメントを投稿。展示会別ドリルダウンからアプローチ状況を追記する。 */
+export async function addLeadCommentAction(input: { leadId: string; body: string }): Promise<{ ok: boolean; error?: string }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const body = input.body.trim();
+  if (!body) return { ok: false, error: "コメントが空です" };
+  const { error } = await sb.from("lead_comments").insert({
+    tenant_id: ctx.tenantId,
+    lead_id: input.leadId,
+    author_user_id: ctx.userId,
+    body,
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/app/analytics/exhibitions", "layout");
+  revalidatePath(`/app/leads/${input.leadId}`);
+  return { ok: true };
+}
+
+/** リードコメント削除（本人 or 管理者。権限はRLSが担保）。 */
+export async function deleteLeadCommentAction(input: { id: string }): Promise<{ ok: boolean }> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("lead_comments").delete().eq("id", input.id);
+  revalidatePath("/app/analytics/exhibitions", "layout");
+  return { ok: true };
+}
