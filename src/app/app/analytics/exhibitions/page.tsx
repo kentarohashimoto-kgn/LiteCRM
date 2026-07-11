@@ -4,7 +4,8 @@ import { campaignMetrics, campaignTotals, type CampaignMetric } from "@/lib/anal
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import { ExhibitionChart } from "@/components/charts/exhibition-chart";
 import { EditableName } from "@/components/analytics/editable-name";
-import { formatYen, formatPercent, formatDateFull } from "@/lib/utils";
+import { formatYen, formatPercent, formatDateFull, toJstDate } from "@/lib/utils";
+import { isExhibitionDone, exhibitionLabel } from "@/lib/exhibition-label";
 
 function num(v: number | null | undefined): string {
   return v == null ? "—" : Math.round(v).toLocaleString("ja-JP");
@@ -16,22 +17,28 @@ export default async function ExhibitionAnalyticsPage() {
   const exhibitions = listCampaignsByChannel(ws, "exhibition");
   const metrics = campaignMetrics(exhibitions, opps);
 
+  // 実施済み/今後は「開催日」を正本に自動判定（状態=done でも開催日が過ぎていても実施済み）。
+  // 状態の手動更新に依存せず、日付が過ぎれば自動で実施済みへ移る。
+  const today = toJstDate(new Date().toISOString()) ?? new Date().toISOString().slice(0, 10);
   const done = metrics
-    .filter((m) => m.campaign.event_status === "done")
+    .filter((m) => isExhibitionDone(m.campaign, today))
     .sort((a, b) => (a.campaign.event_date ?? "").localeCompare(b.campaign.event_date ?? ""));
   const future = metrics
-    .filter((m) => m.campaign.event_status !== "done")
+    .filter((m) => !isExhibitionDone(m.campaign, today))
     .sort((a, b) => (a.campaign.event_date ?? "").localeCompare(b.campaign.event_date ?? ""));
 
   const totals = campaignTotals(done);
 
   const chartData = done
     .filter((m) => m.campaign.event_date)
-    .map((m) => ({
-      label: m.campaign.name.length > 10 ? m.campaign.name.slice(0, 10) + "…" : m.campaign.name,
-      revenue: m.wonAmount,
-      leads: m.actualLeads ?? 0,
-    }));
+    .map((m) => {
+      const label = exhibitionLabel(m.campaign);
+      return {
+        label: label.length > 12 ? label.slice(0, 12) + "…" : label,
+        revenue: m.wonAmount,
+        leads: m.actualLeads ?? 0,
+      };
+    });
 
   // 費用対効果ランキング(費用が登録され成約のある実施済み)
   const roiRank = [...done]
@@ -118,7 +125,7 @@ export default async function ExhibitionAnalyticsPage() {
               return (
                 <div key={m.campaign.id} className="flex items-center gap-3">
                   <span className="w-5 text-xs text-ink/40 tabular-nums">{i + 1}</span>
-                  <span className="w-48 truncate text-sm">{m.campaign.name}</span>
+                  <span className="w-48 truncate text-sm">{exhibitionLabel(m.campaign)}</span>
                   <div className="flex-1 h-3 rounded-full bg-mist-soft overflow-hidden">
                     <div className="h-full rounded-full bg-teal-primary" style={{ width: `${pct}%` }} />
                   </div>
@@ -150,7 +157,7 @@ export default async function ExhibitionAnalyticsPage() {
             {future.map((m) => (
               <tr key={m.campaign.id} className="row-hover">
                 <td className="td">
-                  <EditableName id={m.campaign.id} name={m.campaign.name} />
+                  <EditableName id={m.campaign.id} name={exhibitionLabel(m.campaign)} />
                   <span className="text-xs text-ink/45 block">{m.campaign.organizer ?? "—"}</span>
                 </td>
                 <td className="td text-xs text-ink/70">{m.campaign.venue ?? "—"}</td>
@@ -191,7 +198,7 @@ function ExhibitionRow({ m }: { m: CampaignMetric }) {
   return (
     <tr className="row-hover">
       <td className="td max-w-[220px]">
-        <EditableName id={c.id} name={c.name} />
+        <EditableName id={c.id} name={exhibitionLabel(c)} />
         <span className="text-xs text-ink/45 block">{c.organizer ?? "—"}</span>
       </td>
       <td className="td text-xs whitespace-nowrap">{formatDateFull(c.event_date)}</td>

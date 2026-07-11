@@ -8,6 +8,7 @@ import { requireCtx } from "@/lib/session";
 import { STAGE_MAP, canReassignOwner } from "@/lib/constants";
 import { normCompany } from "@/lib/lead-import";
 import { yomiToFields, productToCategory, canonicalExhibition, type DealRow } from "@/lib/deal-import";
+import { exhibitionCoreName } from "@/lib/exhibition-label";
 import { parsePeriod, parseProbability, parseAmount, parseDateLoose } from "@/lib/revenue-forecast";
 import { ensureTransitionOnWon } from "@/server/transitions-util";
 
@@ -1090,11 +1091,14 @@ export async function upsertLeadsBatchAction(
   return { inserted: toInsert.length, updated: updates.length };
 }
 
-/** 展示会・施策(campaign)の表示名を変更。 */
+/** 展示会・施策(campaign)の表示名を変更。
+ * 展示会の YYYYMM 接頭辞は開催日(event_date)を正本に表示側で付与するため、
+ * 保存時は日付プレフィックスを剥がして「核名」だけを保持し、二重付与・表記揺れを防ぐ。 */
 export async function updateCampaignNameAction(id: string, name: string): Promise<{ ok: boolean }> {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
-  const n = name.trim();
+  const core = exhibitionCoreName(name);
+  const n = (core || name).trim();
   if (!n) return { ok: false };
   await sb.from("campaigns").update({ name: n.slice(0, 200) }).eq("id", id).eq("tenant_id", ctx.tenantId);
   revalidatePath("/app/analytics/exhibitions");
