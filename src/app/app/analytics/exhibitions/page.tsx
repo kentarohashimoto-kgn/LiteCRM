@@ -17,14 +17,32 @@ export default async function ExhibitionAnalyticsPage() {
   const opps = listOpportunities(ws);
   const exhibitions = listCampaignsByChannel(ws, "exhibition");
 
-  // リード/アポは leads 実データからライブ集計（exhibition_events で campaign と橋渡し）。
-  // 手入力の actual_leads/appointments に依存せず自動で最新化する。
+  // リード/アポ/成約/売上/進行中は CRM実データからライブ集計する。
+  // 展示会は exhibition_events を橋渡しに、リードは raw_event、案件は source_detail で紐づく。
+  // （campaign_id 直付けは運用されないため、静的値や campaign_id 集計に依存しない）
   const sb = getSupabaseServer();
-  const { data: liveRows } = await sb.rpc("exhibition_campaign_lead_stats");
+  const { data: liveRows } = await sb.rpc("exhibition_campaign_stats");
   const liveStats = new Map<string, CampaignLiveStat>(
-    ((liveRows ?? []) as { campaign_id: string; leads: number; appts: number }[]).map((r) => [
+    ((liveRows ?? []) as Array<{
+      campaign_id: string;
+      leads: number;
+      opp_count: number;
+      won_count: number;
+      won_amount: number;
+      open_count: number;
+      lost_count: number;
+      open_weighted: number;
+    }>).map((r) => [
       r.campaign_id,
-      { leads: Number(r.leads), appts: Number(r.appts) },
+      {
+        leads: Number(r.leads),
+        opp_count: Number(r.opp_count),
+        won_count: Number(r.won_count),
+        won_amount: Number(r.won_amount),
+        open_count: Number(r.open_count),
+        lost_count: Number(r.lost_count),
+        open_weighted: Number(r.open_weighted),
+      },
     ]),
   );
   const metrics = campaignMetrics(exhibitions, opps, liveStats);
@@ -192,9 +210,9 @@ export default async function ExhibitionAnalyticsPage() {
       </div>
 
       <p className="text-xs text-ink/40 leading-relaxed">
-        ※ <b>成約数・売上</b>は CRM の案件データを正本に集計（紐付き案件の受注実績）。
-        <b>リード数・アポ数</b>は<b>リード実データからライブ集計</b>し自動で最新化（リードが未取込の展示会のみ管理表の入力値を表示）。
-        <b>費用</b>は展示会管理表の値。既存案件の展示会への紐付けは作成日からの<b>自動推定</b>（案件詳細で修正可）。
+        ※ すべて<b>CRM実データからライブ集計</b>（展示会は案件の流入詳細＝source_detail で紐付け）。
+        <b>リード数</b>はリード実データ、<b>アポ数</b>は展示会由来の<b>商談（案件）数</b>（営業レントゲン等と同基準）、
+        <b>成約数・売上・進行中Weighted</b>は紐付き案件の実績。<b>費用</b>は展示会管理表の値。
         括弧内の「表」は管理表の記載値（参考）。
       </p>
     </div>

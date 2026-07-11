@@ -131,17 +131,31 @@ export interface CampaignMetric {
   winRate: number | null; // 成約数 / アポ数
 }
 
-/** 展示会などの「ライブ実績」（leadsテーブルから集計したリード/アポ）。campaign_id 別。 */
+/**
+ * 展示会などの「ライブ実績」。exhibition_events を橋渡しに集計した値。campaign_id 別。
+ *  - leads: leads(raw_event一致)の件数
+ *  - opp_count: 展示会由来の案件(商談)数 ← アポ数の正本（他機能=営業レントゲンと統一）
+ *  - won_count / won_amount: 受注数・受注金額
+ *  - open_count / lost_count / open_weighted: 進行中/失注/加重パイプライン
+ */
 export interface CampaignLiveStat {
   leads: number;
-  appts: number;
+  opp_count: number;
+  won_count: number;
+  won_amount: number;
+  open_count: number;
+  lost_count: number;
+  open_weighted: number;
 }
 
 /**
  * 施策別の指標を算出。
- * live を渡すと、リード数・アポ数は「ライブ集計（leads実データ）」を優先し、
- * ライブが 0（＝まだ実データが無い）の場合のみ静的フィールド(actual_leads/appointments)へフォールバックする。
- * これにより展示会のリード/アポが手入力に依存せず自動で最新化される。
+ * live を渡すと、展示会の「リード/アポ/成約/売上/進行中」を CRM実データ（opportunities）から
+ * ライブ集計した値で正本化する。展示会案件は source_detail(=raw_event) で紐づくため、
+ * o.campaign_id ベースの集計では 0 になってしまう問題を解消する。
+ *   - リード: leads実データ（無ければ静的 actual_leads）
+ *   - アポ  : 展示会由来の案件(商談)数 opp_count（無ければ静的 appointments）
+ *   - 成約/売上/進行中/失注/weighted: opportunities から集計
  */
 export function campaignMetrics(
   campaigns: Campaign[],
@@ -157,30 +171,39 @@ export function campaignMetrics(
     const won = list.filter((o) => o.status === "won");
     const open = list.filter((o) => o.status === "open");
     const lost = list.filter((o) => o.status === "lost");
-    const wonAmount = sum(won, (o) => o.amount);
     const cost = c.cost ?? null;
     const ls = live?.get(c.id);
-    // ライブ値が正なら最新のリード/アポとして採用。無ければ従来の静的フィールド。
+
+    // 案件由来の指標は、ライブ集計があればそれを正本にする（展示会は source_detail 紐付けのため）。
+    const oppCount = ls ? ls.opp_count : list.length;
+    const openCount = ls ? ls.open_count : open.length;
+    const wonCount = ls ? ls.won_count : won.length;
+    const lostCount = ls ? ls.lost_count : lost.length;
+    const wonAmount = ls ? ls.won_amount : sum(won, (o) => o.amount);
+    const weighted = ls ? ls.open_weighted : sum(open, (o) => o.weighted);
+
+    // リードはleads実データ、アポは商談(案件)数を優先。無ければ静的フィールドへフォールバック。
     const actualLeads = (ls && ls.leads > 0 ? ls.leads : c.actual_leads) ?? null;
-    const appts = (ls && ls.appts > 0 ? ls.appts : c.appointments) ?? null;
+    const appts = (ls && ls.opp_count > 0 ? ls.opp_count : c.appointments) ?? null;
+
     return {
       campaign: c,
-      oppCount: list.length,
-      openCount: open.length,
-      wonCount: won.length,
-      lostCount: lost.length,
+      oppCount,
+      openCount,
+      wonCount,
+      lostCount,
       wonAmount,
-      weighted: sum(open, (o) => o.weighted),
+      weighted,
       actualLeads,
       appointments: appts,
       expectedLeads: c.expected_leads ?? null,
       cost,
       cpl: cost != null && actualLeads ? cost / actualLeads : null,
       cpa: cost != null && appts ? cost / appts : null,
-      cpo: cost != null && won.length ? cost / won.length : null,
+      cpo: cost != null && wonCount ? cost / wonCount : null,
       roi: cost != null && cost > 0 ? (wonAmount - cost) / cost : null,
       apptRate: actualLeads && appts != null ? appts / actualLeads : null,
-      winRate: appts ? won.length / appts : null,
+      winRate: appts ? wonCount / appts : null,
     };
   });
 }
