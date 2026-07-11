@@ -696,6 +696,18 @@ export interface Task {
   sort_order?: number;
   /** 着手予定日（任意）。 */
   start_date?: string;
+  /** 自由ラベル（タグ）。ボードのグルーピング軸に使える。 */
+  labels?: string[];
+}
+
+/** プロジェクト参照権限（割当メンバー）。管理者のみ割当可能。 */
+export interface TaskProjectMember {
+  id: UUID;
+  tenant_id: UUID;
+  project_id: UUID;
+  user_id: UUID;
+  added_by?: UUID;
+  created_at?: string;
 }
 
 /** タスクビューの表示形式。 */

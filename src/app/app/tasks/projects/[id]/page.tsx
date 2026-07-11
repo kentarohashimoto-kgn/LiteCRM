@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, FolderKanban, CalendarRange } from "lucide-react";
 import { getWorkspaceLite } from "@/lib/data/workspace";
+import { getSupabaseServer } from "@/lib/supabase/server";
 import { listMembers } from "@/lib/data/select";
 import { getTaskHub, getProject, sectionsOf, toTaskVM } from "@/lib/data/tasks";
 import { TaskViews } from "@/components/tasks/task-views";
 import { SectionManager } from "@/components/tasks/section-manager";
+import { ProjectMembers } from "@/components/tasks/project-members";
 import { ProgressBar } from "@/components/ui/primitives";
 import { colorOf } from "@/lib/constants";
 import { formatDateFull, cn } from "@/lib/utils";
@@ -38,6 +40,13 @@ export default async function ProjectDetailPage({
   const c = colorOf(project.color);
   const owner = members.find((m) => m.id === project.owner_user_id);
   const portfolio = hub.portfolios.find((pf) => pf.id === project.portfolio_id);
+
+  // 参照権限（プロジェクトメンバー）。割当・解除は管理者のみ。
+  const sb = getSupabaseServer();
+  const { data: memberRows } = await sb.from("task_project_members").select("user_id").eq("project_id", params.id);
+  const memberIds = new Set(((memberRows ?? []) as { user_id: string }[]).map((r) => r.user_id));
+  const projectMembers = members.filter((m) => memberIds.has(m.id));
+  const isAdmin = ["owner", "admin"].includes(ws.ctx.role);
 
   const view: TaskViewKind = ["list", "board", "calendar"].includes(searchParams.view ?? "")
     ? (searchParams.view as TaskViewKind)
@@ -83,6 +92,10 @@ export default async function ProjectDetailPage({
       </div>
 
       {project.description && <p className="text-sm text-ink/50 mb-3 max-w-3xl">{project.description}</p>}
+
+      <div className="mb-4">
+        <ProjectMembers projectId={params.id} members={projectMembers} allUsers={members} isAdmin={isAdmin} />
+      </div>
 
       <div className="mb-4">
         <SectionManager projectId={params.id} sections={sections} />

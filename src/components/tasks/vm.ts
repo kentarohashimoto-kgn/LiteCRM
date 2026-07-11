@@ -17,6 +17,7 @@ export interface TaskVM {
   projectName?: string | null;
   projectColor?: string | null;
   accountName?: string | null;
+  labels?: string[];
 }
 
 export interface UserVM {

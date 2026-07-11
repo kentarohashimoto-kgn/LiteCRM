@@ -25,6 +25,7 @@ import {
   createProjectTaskAction,
   updateTaskAction,
   deleteTaskAction,
+  setTaskLabelsAction,
   type TaskInput,
 } from "@/server/actions/tasks";
 
@@ -164,6 +165,10 @@ export function TaskViews(props: Props) {
     });
     startTransition(() => reorderTasksAction(sectionId, orderedIds));
   };
+  const setLabels = (id: string, labels: string[]) => {
+    setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, labels } : t)));
+    startTransition(() => setTaskLabelsAction(id, labels));
+  };
 
   const setView = (v: ViewKind) => {
     const p = new URLSearchParams(params.toString());
@@ -208,6 +213,8 @@ export function TaskViews(props: Props) {
           usersById={usersById}
           onToggle={toggle}
           onReorder={reorder}
+          onPatch={patch}
+          onSetLabels={setLabels}
           onOpen={setOpenId}
           onCreate={create}
           projectId={projectId}
@@ -231,7 +238,7 @@ export function TaskViews(props: Props) {
       )}
 
       {openTask && (
-        <TaskDrawer task={openTask} users={users} today={today} onClose={() => setOpenId(null)} onPatch={patch} onToggle={toggle} onDelete={remove} />
+        <TaskDrawer task={openTask} users={users} today={today} onClose={() => setOpenId(null)} onPatch={patch} onSetLabels={setLabels} onToggle={toggle} onDelete={remove} />
       )}
     </div>
   );
@@ -268,8 +275,10 @@ function ListView(p: CommonViewProps) {
             ))}
           </ul>
           <QuickAdd
-            sectionId={p.groupMode === "section" ? (g.sectionId ?? null) : null}
-            defaultDue={p.groupMode === "date" ? g.defaultDue : null}
+            seed={{
+              section_id: p.groupMode === "section" ? (g.sectionId ?? null) : null,
+              due_date: p.groupMode === "date" ? g.defaultDue : null,
+            }}
             projectId={p.projectId}
             currentUserId={p.currentUserId}
             onCreate={p.onCreate}
@@ -324,71 +333,128 @@ function ListRow({
 }
 
 /* ===================== ボードビュー ===================== */
-function BoardView(p: CommonViewProps & { onReorder: (sectionId: string | null, ids: string[]) => void }) {
+type BoardGroup = "section" | "priority" | "label";
+const NO_PRI = "__nopri__";
+const NO_LABEL = "__nolabel__";
+
+function BoardView(
+  p: CommonViewProps & {
+    onReorder: (sectionId: string | null, ids: string[]) => void;
+    onPatch: (id: string, patch: Partial<TaskInput>) => void;
+    onSetLabels: (id: string, labels: string[]) => void;
+  },
+) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
+  const [group, setGroup] = useState<BoardGroup>("section");
+  const [extraLabels, setExtraLabels] = useState<string[]>([]);
+  const [newLabel, setNewLabel] = useState("");
 
-  const cols = boardColumns(p.tasks, p.sections, p.groupMode, p.today);
-  const draggable = p.groupMode === "section";
+  // マイタスク(date)は期日バケットのまま。プロジェクト(section)のみグルーピング切替可。
+  const isProject = p.groupMode === "section";
+  const gb: BoardGroup = isProject ? group : "section";
+  const cols = boardCols(p.tasks, p.sections, gb, p.groupMode, p.today, extraLabels);
+  const draggable = isProject;
 
-  const drop = (colId: string) => {
+  const drop = (colKey: string) => {
     if (!dragId || !draggable) return;
-    const col = cols.find((c) => c.key === colId);
-    if (!col) return;
-    const sectionId = colId === NO_SECTION ? null : colId;
-    const ids = col.tasks.filter((t) => t.id !== dragId).map((t) => t.id);
-    ids.push(dragId); // 末尾に追加
-    p.onReorder(sectionId, ids);
+    if (gb === "priority") {
+      p.onPatch(dragId, { priority: colKey === NO_PRI ? null : colKey });
+    } else if (gb === "label") {
+      p.onSetLabels(dragId, colKey === NO_LABEL ? [] : [colKey]);
+    } else {
+      const col = cols.find((c) => c.key === colKey);
+      if (col) {
+        const sectionId = colKey === NO_SECTION ? null : colKey;
+        const ids = col.tasks.filter((t) => t.id !== dragId).map((t) => t.id);
+        ids.push(dragId);
+        p.onReorder(sectionId, ids);
+      }
+    }
     setDragId(null);
     setOverCol(null);
   };
 
+  const seedFor = (c: Column): Partial<TaskInput> => {
+    if (gb === "priority") return { priority: c.key === NO_PRI ? "middle" : c.key };
+    if (gb === "label") return {};
+    return { section_id: c.key === NO_SECTION ? null : c.key, due_date: p.groupMode === "date" ? c.defaultDue : null };
+  };
+
   return (
-    <div className="flex gap-3 overflow-x-auto pb-3">
-      {cols.map((c) => (
-        <div
-          key={c.key}
-          className={cn("task-col", overCol === c.key && draggable && "ring-2 ring-teal-primary/40")}
-          onDragOver={(e) => {
-            if (draggable) {
-              e.preventDefault();
-              setOverCol(c.key);
-            }
-          }}
-          onDragLeave={() => setOverCol((v) => (v === c.key ? null : v))}
-          onDrop={() => drop(c.key)}
-        >
-          <div className="flex items-center gap-2 px-2 py-1.5">
-            <span className={cn("h-2 w-2 rounded-full", c.dot)} />
-            <span className="text-xs font-bold text-ink/80">{c.title}</span>
-            <span className="pill bg-white text-ink/45 text-[10px]">{c.tasks.length}</span>
-          </div>
-          <div className="flex flex-col gap-2 px-0.5 min-h-[8px]">
-            {c.tasks.map((t) => (
-              <BoardCard
-                key={t.id}
-                t={t}
-                today={p.today}
-                user={p.usersById.get(t.assigned_to ?? "")}
-                draggable={draggable}
-                dragging={dragId === t.id}
-                onToggle={p.onToggle}
-                onOpen={p.onOpen}
-                onDragStart={() => setDragId(t.id)}
-                onDragEnd={() => setDragId(null)}
-              />
+    <div>
+      {isProject && (
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-[11px] font-semibold text-ink/40">グルーピング</span>
+          <div className="inline-flex items-center gap-0.5 rounded-lg bg-mist-soft p-0.5">
+            {([["section", "進捗（セクション）"], ["priority", "優先度"], ["label", "ラベル"]] as [BoardGroup, string][]).map(([g, label]) => (
+              <button key={g} type="button" onClick={() => setGroup(g)} className={cn("rounded-md px-2.5 py-1 text-xs font-semibold", group === g ? "bg-white text-teal-deep shadow-sm" : "text-ink/50 hover:text-ink/80")}>
+                {label}
+              </button>
             ))}
           </div>
-          <QuickAdd
-            compact
-            sectionId={c.key === NO_SECTION ? null : c.key}
-            defaultDue={p.groupMode === "date" ? c.defaultDue : null}
-            projectId={p.projectId}
-            currentUserId={p.currentUserId}
-            onCreate={p.onCreate}
-          />
+          {gb === "label" && (
+            <form
+              className="flex items-center gap-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const n = newLabel.trim();
+                if (n) setExtraLabels((x) => Array.from(new Set([...x, n])));
+                setNewLabel("");
+              }}
+            >
+              <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="ラベル列を追加" className="rounded-lg border border-black/10 px-2 py-1 text-xs outline-none focus:border-teal-primary w-32" />
+              <button type="submit" className="rounded-lg bg-mist-soft px-2 py-1 text-xs text-ink/60 hover:text-teal-deep">＋列</button>
+            </form>
+          )}
         </div>
-      ))}
+      )}
+
+      <div className="flex gap-3 overflow-x-auto pb-3">
+        {cols.map((c) => (
+          <div
+            key={c.key}
+            className={cn("task-col", overCol === c.key && draggable && "ring-2 ring-teal-primary/40")}
+            onDragOver={(e) => {
+              if (draggable) {
+                e.preventDefault();
+                setOverCol(c.key);
+              }
+            }}
+            onDragLeave={() => setOverCol((v) => (v === c.key ? null : v))}
+            onDrop={() => drop(c.key)}
+          >
+            <div className="flex items-center gap-2 px-2 py-1.5">
+              <span className={cn("h-2 w-2 rounded-full", c.dot)} />
+              <span className="text-xs font-bold text-ink/80">{c.title}</span>
+              <span className="pill bg-white text-ink/45 text-[10px]">{c.tasks.length}</span>
+            </div>
+            <div className="flex flex-col gap-2 px-0.5 min-h-[8px]">
+              {c.tasks.map((t) => (
+                <BoardCard
+                  key={t.id}
+                  t={t}
+                  today={p.today}
+                  user={p.usersById.get(t.assigned_to ?? "")}
+                  draggable={draggable}
+                  dragging={dragId === t.id}
+                  onToggle={p.onToggle}
+                  onOpen={p.onOpen}
+                  onDragStart={() => setDragId(t.id)}
+                  onDragEnd={() => setDragId(null)}
+                />
+              ))}
+            </div>
+            <QuickAdd
+              compact
+              seed={seedFor(c)}
+              projectId={p.projectId}
+              currentUserId={p.currentUserId}
+              onCreate={p.onCreate}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -437,6 +503,15 @@ function BoardCard({
             </span>
           )}
           {t.accountName && <span className="ml-1.5">{t.accountName}</span>}
+        </div>
+      )}
+      {t.labels && t.labels.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {t.labels.map((l) => (
+            <span key={l} className="inline-flex items-center rounded-md bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-600">
+              {l}
+            </span>
+          ))}
         </div>
       )}
       <div className="mt-2 flex items-center gap-2">
@@ -537,15 +612,13 @@ function CalendarView(p: Omit<CommonViewProps, "sections" | "groupMode">) {
 
 /* ===================== クイック追加 ===================== */
 function QuickAdd({
-  sectionId,
-  defaultDue,
+  seed,
   projectId,
   currentUserId,
   onCreate,
   compact,
 }: {
-  sectionId: string | null;
-  defaultDue?: string | null;
+  seed?: Partial<TaskInput>;
   projectId?: string;
   currentUserId: string;
   onCreate: (input: TaskInput) => void;
@@ -563,11 +636,12 @@ function QuickAdd({
     }
     onCreate({
       title: t,
-      section_id: sectionId,
+      section_id: seed?.section_id ?? null,
       project_id: projectId ?? null,
-      due_date: defaultDue ?? null,
+      due_date: seed?.due_date ?? null,
       assigned_to: currentUserId,
-      priority: "middle",
+      priority: seed?.priority ?? "middle",
+      ...seed,
     });
     setTitle("");
     ref.current?.focus();
@@ -618,6 +692,7 @@ function TaskDrawer({
   today,
   onClose,
   onPatch,
+  onSetLabels,
   onToggle,
   onDelete,
 }: {
@@ -626,12 +701,15 @@ function TaskDrawer({
   today: string;
   onClose: () => void;
   onPatch: (id: string, p: Partial<TaskInput>) => void;
+  onSetLabels: (id: string, labels: string[]) => void;
   onToggle: (id: string, done: boolean) => void;
   onDelete: (id: string) => void;
 }) {
   const done = task.status === "done";
   const [title, setTitle] = useState(task.title);
   useEffect(() => setTitle(task.title), [task.id, task.title]);
+  const [labelInput, setLabelInput] = useState("");
+  const labels = task.labels ?? [];
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal>
@@ -699,6 +777,33 @@ function TaskDrawer({
                   </button>
                 );
               })}
+            </div>
+          </Field>
+
+          <Field label="ラベル">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {labels.map((l) => (
+                <span key={l} className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-600">
+                  {l}
+                  <button type="button" onClick={() => onSetLabels(task.id, labels.filter((x) => x !== l))} className="text-violet-400 hover:text-violet-700">
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+              <input
+                value={labelInput}
+                onChange={(e) => setLabelInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const n = labelInput.trim();
+                    if (n && !labels.includes(n)) onSetLabels(task.id, [...labels, n]);
+                    setLabelInput("");
+                  }
+                }}
+                placeholder="＋ラベル"
+                className="w-24 rounded-md border border-black/10 px-2 py-0.5 text-xs outline-none focus:border-teal-primary"
+              />
             </div>
           </Field>
 
@@ -778,6 +883,40 @@ function boardColumns(tasks: TaskVM[], sections: SectionVM[], mode: "section" | 
   if (orphan.length > 0 || sections.length === 0) {
     cols.unshift({ key: NO_SECTION, title: "未分類", dot: "bg-slate-300", tasks: orphan });
   }
+  return cols;
+}
+
+/** ボードのグルーピング軸に応じた列を返す（進捗/優先度/ラベル）。 */
+function boardCols(
+  tasks: TaskVM[],
+  sections: SectionVM[],
+  group: BoardGroup,
+  mode: "section" | "date",
+  today: string,
+  extraLabels: string[],
+): Column[] {
+  if (mode === "date" || group === "section") return boardColumns(tasks, sections, mode, today);
+
+  if (group === "priority") {
+    const defs: { key: string; title: string; dot: string; match: (p?: string | null) => boolean }[] = [
+      { key: "high", title: "高", dot: "bg-rose-500", match: (p) => p === "high" },
+      { key: "middle", title: "中", dot: "bg-accent-orange", match: (p) => p === "middle" || p == null },
+      { key: "low", title: "低", dot: "bg-teal-primary", match: (p) => p === "low" },
+    ];
+    return defs.map((d) => ({ key: d.key, title: d.title, dot: d.dot, tasks: tasks.filter((t) => d.match(t.priority)).sort(sortTasks) }));
+  }
+
+  // label: 代表ラベル（先頭）で1列に配置。
+  const used = new Set<string>();
+  for (const t of tasks) if (t.labels && t.labels.length) used.add(t.labels[0]);
+  const labels = Array.from(new Set([...Array.from(used), ...extraLabels])).sort((a, b) => a.localeCompare(b, "ja"));
+  const cols: Column[] = labels.map((l) => ({
+    key: l,
+    title: l,
+    dot: "bg-violet-500",
+    tasks: tasks.filter((t) => (t.labels?.[0] ?? null) === l).sort(sortTasks),
+  }));
+  cols.push({ key: NO_LABEL, title: "ラベルなし", dot: "bg-slate-300", tasks: tasks.filter((t) => !t.labels || t.labels.length === 0).sort(sortTasks) });
   return cols;
 }
 
