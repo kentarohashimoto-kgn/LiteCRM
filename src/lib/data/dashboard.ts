@@ -22,6 +22,38 @@ export interface DashboardMetrics {
   closing: MiniOpp[];
 }
 
+/** 案件の内訳（売上/予測のツールチップ・展開用）。 */
+export interface DealLite {
+  name: string;
+  account: string | null;
+  amount: number;
+  weighted?: number;
+  forecast_category?: string;
+  yomi?: string | null;
+}
+/** 当月中心±6ヶ月（13ヶ月）の月次系列（実績・予測＋内訳）。 */
+export interface MonthSeriesRow {
+  month_key: string;
+  ym: string;
+  revenue: number;
+  deals: number;
+  appts: number;
+  wrevenue: number;
+  commit: number;
+  bestcase: number;
+  weighted: number;
+  won_deals: DealLite[];
+  open_deals: DealLite[];
+}
+
+/** dashboard_month_series RPC: 当月中心±6ヶ月の系列を取得。center未指定は当月。 */
+export async function getDashboardMonthSeries(center?: string): Promise<MonthSeriesRow[]> {
+  const sb = getSupabaseServer();
+  const p_center = center ?? new Date().toISOString().slice(0, 10);
+  const { data } = await sb.rpc("dashboard_month_series", { p_center });
+  return ((data ?? []) as MonthSeriesRow[]);
+}
+
 export async function getDashboardMetrics(fyStart: number): Promise<DashboardMetrics> {
   const sb = getSupabaseServer();
   const { data } = await sb.rpc("dashboard_metrics", { p_fy_start: fyStart });

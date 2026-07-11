@@ -3,7 +3,7 @@ import { CalendarCheck, AlertTriangle, Clock, Target as TargetIcon } from "lucid
 import { redirect } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { requireCtx } from "@/lib/session";
-import { getDashboardMetrics, miniToOppView } from "@/lib/data/dashboard";
+import { getDashboardMetrics, getDashboardMonthSeries, miniToOppView, type DealLite } from "@/lib/data/dashboard";
 import { getLeadMetrics } from "@/lib/data/leads";
 import { getSalesAlerts, summarizeAlerts } from "@/lib/data/alerts";
 import { Card, PageHeader, ProgressBar, Section, StatCard } from "@/components/ui/primitives";
@@ -48,6 +48,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   // 案件集計はサーバー(RPC dashboard_metrics)から取得。
   const metrics = await getDashboardMetrics(fy);
+  // 当月中心±6ヶ月の月次系列（前後6ヶ月ビュー＋売上/予測の内訳用）。
+  const monthSeries = await getDashboardMonthSeries();
 
   // 予測バケット(6ヶ月・現在起点)に目標を付与。
   const buckets = metrics.forecast6.map((f) => {
@@ -93,6 +95,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const appts = fr?.appts ?? 0;
     const deals = fr?.deals ?? 0;
     return {
+      key: m.key,
       label: m.label,
       leads: leadMetrics.byMonth.get(m.key) ?? 0,
       appts,
@@ -106,6 +109,31 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       wRevenue: fr?.wrevenue ?? 0,
     };
   });
+
+  // 当月中心±6ヶ月ビュー用の系列。当月にマーカーを付ける。
+  const thisMonthKey = monthKey(startOfMonth(now));
+  const centeredTrend: TrendPoint[] = monthSeries.map((r) => {
+    const t = targetMap.get(r.month_key);
+    const [yy, mm] = r.ym.split("-");
+    return {
+      key: r.month_key,
+      label: mm === "01" ? `${yy.slice(2)}/1` : `${Number(mm)}月`,
+      isCurrent: r.month_key === thisMonthKey,
+      leads: leadMetrics.byMonth.get(r.month_key) ?? 0,
+      appts: r.appts,
+      deals: r.deals,
+      revenue: r.revenue,
+      closeRate: r.appts > 0 ? Math.round((r.deals / r.appts) * 100) : null,
+      tLeads: t?.target_leads ?? 0,
+      tAppts: t?.target_appointments ?? 0,
+      tDeals: t?.target_deals ?? 0,
+      tAmount: t?.target_amount ?? 0,
+      wRevenue: r.wrevenue,
+    };
+  });
+  // 売上/予測の内訳（月キー別の上位案件）。ツールチップ・クリック展開で使用。
+  const breakdowns: Record<string, { won: DealLite[]; open: DealLite[] }> = {};
+  for (const r of monthSeries) breakdowns[r.month_key] = { won: r.won_deals, open: r.open_deals };
 
   // ファネル(リード起点): リード→アポ獲得→受注。獲得月でコホート集計(集計値のみ使用)。
   //   アポ = 決着がアポ獲得のリード / 成約 = そのリードに紐づく案件が受注(won)
@@ -201,7 +229,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           className="lg:col-span-2"
           action={<span className="text-[11px] text-ink/40">棒=実績／線=見込み(予測)・目標</span>}
         >
-          <MetricTrendChart data={trendData} />
+          <MetricTrendChart data={trendData} centered={centeredTrend} breakdowns={breakdowns} fyLabel={`${fy}年度`} />
         </Section>
         <Section title="ファネル分析" action={<span className="text-[11px] text-ink/40">リード起点・獲得月</span>}>
           <FunnelView data={funnelData} totalLabel={`${fy}年度`} />
@@ -233,6 +261,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         >
           <ForecastChart
             data={buckets.map((b) => ({
+              key: b.monthKey,
               label: b.label,
               commit: b.commit,
               bestCase: Math.max(0, b.bestCase - b.commit),
@@ -240,6 +269,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               weighted: b.weighted,
               target: b.target,
             }))}
+            breakdowns={Object.fromEntries(Object.entries(breakdowns).map(([k, v]) => [k, v.open]))}
           />
         </Section>
 
