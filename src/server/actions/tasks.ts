@@ -254,6 +254,43 @@ export async function reorderTasksAction(sectionId: string | null, orderedIds: s
   touch();
 }
 
+/** タスクの自由ラベル（タグ）を設定する。 */
+export async function setTaskLabelsAction(id: string, labels: string[]) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const clean = Array.from(new Set(labels.map((l) => l.trim()).filter(Boolean))).slice(0, 20);
+  await sb.from("tasks").update({ labels: clean }).eq("id", id);
+  touch();
+}
+
+/* ==================== プロジェクト参照権限（管理者のみ） ==================== */
+
+/** プロジェクトにメンバー（参照権限）を割り当てる。管理者のみ。 */
+export async function addProjectMemberAction(projectId: string, userId: string) {
+  const ctx = await requireCtx();
+  if (!["owner", "admin"].includes(ctx.role)) return { ok: false, error: "権限がありません（管理者のみ）" };
+  const sb = getSupabaseServer();
+  const { error } = await sb
+    .from("task_project_members")
+    .upsert(
+      { tenant_id: ctx.tenantId, project_id: projectId, user_id: userId, added_by: ctx.userId },
+      { onConflict: "project_id,user_id", ignoreDuplicates: true },
+    );
+  if (error) return { ok: false, error: error.message };
+  touch();
+  return { ok: true };
+}
+
+/** プロジェクトのメンバー（参照権限）を解除する。管理者のみ。 */
+export async function removeProjectMemberAction(projectId: string, userId: string) {
+  const ctx = await requireCtx();
+  if (!["owner", "admin"].includes(ctx.role)) return { ok: false, error: "権限がありません（管理者のみ）" };
+  const sb = getSupabaseServer();
+  await sb.from("task_project_members").delete().eq("project_id", projectId).eq("user_id", userId);
+  touch();
+  return { ok: true };
+}
+
 /* ========================= ポートフォリオ ========================= */
 
 export async function createPortfolioAction(formData: FormData) {
