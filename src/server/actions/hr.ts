@@ -118,6 +118,7 @@ export async function createTalentAction(formData: FormData): Promise<void> {
   const name = String(formData.get("name") || "").trim();
   if (!name) return;
   const joined = String(formData.get("joined_on") || "");
+  const rate = String(formData.get("hourly_rate") || "").replace(/[^\d.]/g, "");
   await sb.from("talents").insert({
     tenant_id: ctx.tenantId,
     name,
@@ -125,6 +126,10 @@ export async function createTalentAction(formData: FormData): Promise<void> {
     skills: String(formData.get("skills") || "").trim() || null,
     current_assignment: String(formData.get("current_assignment") || "").trim() || null,
     joined_on: joined || null,
+    department: String(formData.get("department") || "").trim() || null,
+    role_text: String(formData.get("role_text") || "").trim() || null,
+    email: String(formData.get("email") || "").trim() || null,
+    hourly_rate: rate ? Number(rate) : null,
   });
   revalidatePath("/app/hr/talents");
 }
@@ -140,15 +145,28 @@ export async function updateTalentAction(formData: FormData): Promise<void> {
   } else if (op === "leave") {
     await sb.from("talents").update({ left_on: new Date().toISOString().slice(0, 10) }).eq("id", id);
   } else {
+    const str = (k: string) => String(formData.get(k) || "").trim() || null;
+    const rate = String(formData.get("hourly_rate") || "").replace(/[^\d.]/g, "");
     await sb
       .from("talents")
       .update({
         employment_type: String(formData.get("employment_type") || "employee"),
-        skills: String(formData.get("skills") || "").trim() || null,
-        current_assignment: String(formData.get("current_assignment") || "").trim() || null,
-        notes: String(formData.get("notes") || "").trim() || null,
-        // CRMログイン紐付け(稼働報告の本人特定に使用)。フォームに無い場合は変更しない
-        ...(formData.has("user_id") ? { user_id: String(formData.get("user_id") || "").trim() || null } : {}),
+        notes: str("notes"),
+        // 台帳拡張(0122)
+        title: str("title"),
+        department: str("department"),
+        role_text: str("role_text"),
+        layer: str("layer"),
+        contract_status: str("contract_status") ?? "継続",
+        email: str("email"),
+        mail_system: str("mail_system"),
+        hourly_rate: rate ? Number(rate) : null,
+        cost_managed: formData.get("cost_managed") === "on",
+        // フォームに無い項目は変更しない
+        ...(formData.has("skills") ? { skills: str("skills") } : {}),
+        ...(formData.has("current_assignment") ? { current_assignment: str("current_assignment") } : {}),
+        // CRMログイン紐付け(稼働報告の本人特定に使用)
+        ...(formData.has("user_id") ? { user_id: str("user_id") } : {}),
       })
       .eq("id", id);
   }
