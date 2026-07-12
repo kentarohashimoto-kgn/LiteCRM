@@ -30,6 +30,7 @@ import {
   FolderKanban,
   Bot,
   Inbox,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME, canManageProjects } from "@/lib/constants";
@@ -74,6 +75,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/analytics", label: "分析ハブ", icon: Gauge },
       { href: "/app/exec", label: "経営レビュー", icon: Presentation },
       { href: "/app/reviews/weekly", label: "週次レビュー", icon: CalendarCheck },
+      { href: "/app/reviews/snapshots", label: "週報スナップショット", icon: History },
       { href: "/app/exec/batch", label: "AIバッチ運用", icon: Bot },
     ],
   },
