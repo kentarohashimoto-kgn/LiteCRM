@@ -35,6 +35,7 @@ import {
   Swords,
   PenLine,
   Scale,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME, canManageProjects } from "@/lib/constants";
@@ -48,6 +49,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
       { href: "/app/today", label: "今日のアポ・AC", icon: Sun },
       { href: "/app/review", label: "AI確認キュー", icon: Inbox },
+      { href: "/app/checklist", label: "商談チェック", icon: ClipboardCheck },
       { href: "/app/tasks", label: "タスク", icon: CheckSquare },
       { href: "/app/activities", label: "活動履歴", icon: ActivityIcon },
     ],
