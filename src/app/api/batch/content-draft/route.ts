@@ -35,10 +35,25 @@ function jstDate(): string {
   return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
+/** アプリ側のスタート/停止設定(batch_job_settings)。停止中はGET=対象0件/POST=409。 */
+async function jobDisabled(): Promise<boolean> {
+  const admin = getSupabaseAdmin();
+  const { data } = await admin
+    .from("batch_job_settings")
+    .select("enabled")
+    .eq("tenant_id", TENANT_ID)
+    .eq("job_kind", "content_draft")
+    .maybeSingle();
+  return data ? !data.enabled : false; // 設定行が無い場合は従来どおり稼働
+}
+
 /** GET /api/batch/content-draft?limit=5 — 執筆対象の記事ネタを返す。 */
 export async function GET(req: Request) {
   const fail = authFail(req);
   if (fail) return fail;
+  if (await jobDisabled()) {
+    return NextResponse.json({ ok: true, enabled: false, count: 0, targets: [], message: "AI記事作成はアプリ側で停止中です（AIバッチ運用画面で再開できます）。" });
+  }
 
   const url = new URL(req.url);
   const limit = Math.min(20, Math.max(1, Number(url.searchParams.get("limit")) || DEFAULT_LIMIT));
@@ -72,6 +87,9 @@ type IngestBody = {
 export async function POST(req: Request) {
   const fail = authFail(req);
   if (fail) return fail;
+  if (await jobDisabled()) {
+    return NextResponse.json({ ok: false, enabled: false, error: "AI記事作成はアプリ側で停止中のため書き戻しできません。" }, { status: 409 });
+  }
 
   let body: IngestBody;
   try {
