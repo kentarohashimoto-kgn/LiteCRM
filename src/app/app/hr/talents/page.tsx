@@ -1,5 +1,6 @@
 import { requireHrCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getMembersLite } from "@/lib/data/workspace";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { createTalentAction, updateTalentAction, addTalentReviewAction } from "@/server/actions/hr";
 
@@ -10,6 +11,7 @@ const EMP_LABEL: Record<string, string> = { employee: "社員", contractor: "業
 interface Talent {
   id: string; name: string; employment_type: string; skills: string | null;
   current_assignment: string | null; joined_on: string | null; left_on: string | null; notes: string | null;
+  user_id: string | null;
 }
 interface Review {
   id: string; talent_id: string; period: string; reviewer: string | null;
@@ -24,9 +26,10 @@ function stars(n: number | null): string {
 export default async function TalentsPage() {
   await requireHrCtx();
   const sb = getSupabaseServer();
-  const [talR, revR] = await Promise.all([
-    sb.from("talents").select("id, name, employment_type, skills, current_assignment, joined_on, left_on, notes").order("created_at", { ascending: false }).limit(300),
+  const [talR, revR, members] = await Promise.all([
+    sb.from("talents").select("id, name, employment_type, skills, current_assignment, joined_on, left_on, notes, user_id").order("created_at", { ascending: false }).limit(300),
     sb.from("talent_reviews").select("id, talent_id, period, reviewer, overall, comment, goals").order("created_at", { ascending: false }).limit(1000),
+    getMembersLite(),
   ]);
   const talents = (talR.data ?? []) as Talent[];
   const reviews = (revR.data ?? []) as Review[];
@@ -94,6 +97,17 @@ export default async function TalentsPage() {
                       <input name="skills" defaultValue={t.skills ?? ""} className="input flex-1 min-w-[180px] text-xs py-1.5" placeholder="スキル" />
                       <input name="current_assignment" defaultValue={t.current_assignment ?? ""} className="input flex-1 min-w-[160px] text-xs py-1.5" placeholder="現在の稼働先" />
                       <input name="notes" defaultValue={t.notes ?? ""} className="input flex-1 min-w-[160px] text-xs py-1.5" placeholder="メモ" />
+                      <select
+                        name="user_id"
+                        defaultValue={t.user_id ?? ""}
+                        className="input w-auto text-xs py-1.5"
+                        title="CRMログインの紐付け。紐付けると本人が「稼働報告」で自分のアサインに実績を記入できます"
+                      >
+                        <option value="">CRMアカウント未紐付け</option>
+                        {members.map((m) => (
+                          <option key={m.user.id} value={m.user.id}>{m.user.name}（{m.user.email}）</option>
+                        ))}
+                      </select>
                     </div>
                   </form>
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { FolderKanban } from "lucide-react";
 import { requireProjectCtx } from "@/lib/session";
 import { getMembersLite } from "@/lib/data/workspace";
@@ -38,6 +39,8 @@ export default async function ProjectsListPage() {
       finalProfit: r.finalProfit,
       finalVariance: r.finalVariance,
       finalComment: r.finalComment,
+      approvedHours: r.approvedHours,
+      approvedCost: r.approvedCost,
     };
   });
 
@@ -46,7 +49,12 @@ export default async function ProjectsListPage() {
       <PageHeader
         title="原価管理（デリバリー原価・粗利）"
         subtitle="原価管理が必要な案件を、計画（月別の販売・原価・粗利）から受注後の進捗・完了実績まで管理します。重要度と進行中を上位に表示します。"
-        action={<span className="text-xs text-ink/45">{rows.length} 件</span>}
+        action={
+          <div className="flex items-center gap-2">
+            <Link href="/app/projects/approvals" className="btn-ghost text-xs">稼働承認</Link>
+            <span className="text-xs text-ink/45">{rows.length} 件</span>
+          </div>
+        }
       />
 
       <Section title="">

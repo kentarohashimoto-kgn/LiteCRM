@@ -27,6 +27,8 @@ export interface ProjectRow {
   finalProfit: number | null;
   finalVariance: number | null;
   finalComment: string | null;
+  approvedHours: number;
+  approvedCost: number;
 }
 
 const yen = (n: number) => "¥" + Math.round(n).toLocaleString("ja-JP");
@@ -45,7 +47,14 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 };
 const PERIOD: Record<string, string> = { weekly: "週次", monthly: "月次", final: "終了時" };
 
-type SortKey = "weight" | "priority" | "revenue" | "cost" | "gross" | "grossRate" | "end" | "variance";
+type SortKey = "weight" | "priority" | "revenue" | "cost" | "gross" | "grossRate" | "end" | "variance" | "approved";
+
+/** 1.5h → "1:30" (稼働実績列の表示用) */
+function hm(n: number): string {
+  const h = Math.floor(n);
+  const m = Math.round((n - h) * 60);
+  return m === 60 ? `${h + 1}:00` : `${h}:${String(m).padStart(2, "0")}`;
+}
 
 /** 案件管理一覧。重要度×アクティブの重み付けを既定に、各列でソートできる。 */
 export function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
@@ -66,6 +75,7 @@ export function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
       case "grossRate": return r.grossRate;
       case "end": return r.endMonth ? Number(r.endMonth.replace("-", "")) : 999999;
       case "variance": return r.finalVariance ?? -Infinity;
+      case "approved": return r.approvedCost;
       case "weight":
       default:
         // 重み: アクティブ最優先 → 重要度 → 粗利率が低い(危険)ほど上
@@ -91,6 +101,7 @@ export function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
             <Th label="粗利" k="gross" sort={sort} dir={dir} onClick={click} align="right" />
             <Th label="粗利率" k="grossRate" sort={sort} dir={dir} onClick={click} align="right" />
             <th className="th">提案可否</th>
+            <Th label="稼働実績(承認)" k="approved" sort={sort} dir={dir} onClick={click} align="right" />
             <th className="th">進捗 / 完了実績</th>
             <Th label="予実差" k="variance" sort={sort} dir={dir} onClick={click} align="right" />
             <th className="th">担当</th>
@@ -120,6 +131,16 @@ export function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
                 <td className={`td text-right font-medium ${r.gross < 0 ? "text-rose-600" : ""}`}>{r.hasPlan ? yen(r.gross) : "—"}</td>
                 <td className={`td text-right font-bold ${r.hasPlan ? rateCls(r.grossRate) : ""}`}>{r.hasPlan ? pct(r.grossRate) : "—"}</td>
                 <td className="td">{v ? <span className={`pill ${v.cls} text-[10px] font-bold`}>{v.label}</span> : <span className="text-ink/30 text-xs">未整備</span>}</td>
+                <td className="td text-right">
+                  {r.approvedHours > 0 ? (
+                    <div>
+                      <div className={`font-medium ${r.hasPlan && r.approvedCost > r.cost ? "text-rose-600" : "text-ink/80"}`}>{yen(r.approvedCost)}</div>
+                      <div className="text-[11px] text-ink/45">{hm(r.approvedHours)}</div>
+                    </div>
+                  ) : (
+                    <span className="text-ink/30 text-xs">—</span>
+                  )}
+                </td>
                 <td className="td">
                   {r.finalActualCost != null ? (
                     <div>
