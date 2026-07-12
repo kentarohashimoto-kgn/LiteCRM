@@ -1,4 +1,5 @@
-import { Trash2, Plus, ChevronRight, PenLine } from "lucide-react";
+import Link from "next/link";
+import { Trash2, Plus, ChevronRight, PenLine, FileText } from "lucide-react";
 import { Section, EmptyState } from "@/components/ui/primitives";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatDate, cn } from "@/lib/utils";
@@ -7,7 +8,7 @@ import {
   advanceContentStatusAction,
   deleteContentIdeaAction,
 } from "@/server/actions/content-ideas";
-import type { ContentIdea, ContentStatus } from "@/lib/data/content-ideas";
+import type { ContentIdea, ContentStatus, DesignStatus } from "@/lib/data/content-ideas";
 
 const STATUS_META: Record<ContentStatus, { label: string; cls: string }> = {
   idea: { label: "ネタ", cls: "bg-mist-soft text-ink/60 border border-black/5" },
@@ -20,6 +21,13 @@ const SOURCE_LABEL: Record<string, string> = {
   manual: "手動",
   sales_need: "営業ニーズ",
   web_trend: "Webトレンド",
+};
+
+const DESIGN_META: Record<DesignStatus, { label: string; cls: string }> = {
+  none: { label: "—", cls: "text-ink/30" },
+  ready: { label: "連携待ち", cls: "bg-amber-50 text-accent-orange border border-accent-orange/20" },
+  linked: { label: "連携済", cls: "bg-teal-primary text-white" },
+  manual: { label: "手動", cls: "bg-emerald-100 text-emerald-700" },
 };
 
 const STATUS_FILTERS: { value: string; label: string }[] = [
@@ -99,11 +107,13 @@ export function ContentView({
           <EmptyState message="該当する記事ネタがありません。上の「登録する」から追加できます。将来は営業ニーズ(ノウハウ)＋Web検索から夜間バッチで候補を自動生成します。" />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ minWidth: 820 }}>
+            <table className="w-full text-sm" style={{ minWidth: 1000 }}>
               <thead>
                 <tr>
                   <th className="th">状態</th>
                   <th className="th">タイトル案</th>
+                  <th className="th">本文</th>
+                  <th className="th">デザイン</th>
                   <th className="th">テーマ / キーワード</th>
                   <th className="th">出所</th>
                   <th className="th"></th>
@@ -114,8 +124,26 @@ export function ContentView({
                   <tr key={c.id} className="row-hover border-t border-black/[0.04] align-top">
                     <td className="td"><span className={cn("pill", STATUS_META[c.status].cls)}>{STATUS_META[c.status].label}</span></td>
                     <td className="td">
-                      <div className="font-medium text-ink whitespace-normal max-w-[360px]">{c.title}</div>
-                      {c.angle && <div className="text-xs text-ink/50 whitespace-normal max-w-[360px] mt-0.5">{c.angle}</div>}
+                      <Link href={`/app/content/${c.id}`} className="font-medium text-ink whitespace-normal max-w-[340px] block hover:text-teal-deep">
+                        {c.title}
+                      </Link>
+                      {c.angle && <div className="text-xs text-ink/50 whitespace-normal max-w-[340px] mt-0.5">{c.angle}</div>}
+                    </td>
+                    <td className="td">
+                      {c.hasDraft ? (
+                        <Link href={`/app/content/${c.id}`} className="inline-flex items-center gap-1 text-teal-deep text-xs hover:underline">
+                          <FileText size={13} /> あり
+                        </Link>
+                      ) : (
+                        <span className="text-ink/30 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="td">
+                      {c.design_status === "none" ? (
+                        <span className={DESIGN_META.none.cls}>—</span>
+                      ) : (
+                        <span className={cn("pill text-[11px]", DESIGN_META[c.design_status].cls)}>{DESIGN_META[c.design_status].label}</span>
+                      )}
                     </td>
                     <td className="td text-ink/70">
                       {c.theme ?? "—"}
