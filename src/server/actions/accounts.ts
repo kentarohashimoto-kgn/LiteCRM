@@ -15,13 +15,14 @@ export async function fetchAccountsPageAction(input: {
 }): Promise<AccountsPage> {
   await requireCtx();
   const sb = getSupabaseServer();
-  const { data } = await sb.rpc("accounts_page", {
+  const { data, error } = await sb.rpc("accounts_page", {
     p_filter: input.filter,
     p_sort: input.sort,
     p_asc: input.asc,
     p_limit: input.limit ?? 50,
     p_offset: input.offset,
   });
+  if (error) throw new Error(`顧客一覧の取得に失敗しました: ${error.message}`);
   const d = (data ?? {}) as Partial<AccountsPage>;
   return { rows: d.rows ?? [], total: d.total ?? 0 };
 }

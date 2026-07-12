@@ -15,11 +15,14 @@ import { sizeBucket, type AggLead, type WsListRow, type WsQueueRow, type LeadsFi
 // 件数を取得→全ページを並列取得(逐次round-tripを排除)。RLSはuserセッションで担保。
 async function selectAll<T>(sb: any, table: string, columns: string, orderCol = "id"): Promise<T[]> {
   const PAGE = 1000;
-  const { count } = await sb.from(table).select("id", { count: "exact", head: true });
+  const { count, error: countErr } = await sb.from(table).select("id", { count: "exact", head: true });
+  if (countErr) throw new Error(`${table} の件数取得に失敗しました: ${countErr.message}`);
   const pages = Math.max(1, Math.ceil((count ?? 0) / PAGE));
   const reqs = [];
   for (let p = 0; p < pages; p++) reqs.push(sb.from(table).select(columns).order(orderCol).range(p * PAGE, (p + 1) * PAGE - 1));
   const res = await Promise.all(reqs);
+  // タイムアウト等を握り潰すと歯抜けの集計になる(2026-07-12障害)。必ずthrow
+  for (const r of res) if (r?.error) throw new Error(`${table} の取得に失敗しました: ${r.error.message}`);
   return res.flatMap((r: any) => (r?.data ?? []) as T[]);
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

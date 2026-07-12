@@ -31,13 +31,15 @@ export async function fetchOppsPageAction(input: {
 }): Promise<OppsPage> {
   await requireCtx();
   const sb = getSupabaseServer();
-  const { data } = await sb.rpc("opportunities_page", {
+  const { data, error } = await sb.rpc("opportunities_page", {
     p_filter: input.filter,
     p_sort: input.sort,
     p_asc: input.asc,
     p_limit: input.limit ?? 50,
     p_offset: input.offset,
   });
+  // タイムアウト等のエラーを握り潰すと「0件」に見える(2026-07-12障害)。必ずthrowしerror.tsxで再読込を促す
+  if (error) throw new Error(`案件一覧の取得に失敗しました: ${error.message}`);
   const d = (data ?? {}) as Partial<OppsPage>;
   return { rows: d.rows ?? [], total: d.total ?? 0, sum_amount: d.sum_amount ?? 0, sum_weighted: d.sum_weighted ?? 0 };
 }
@@ -91,13 +93,15 @@ export async function setAppointmentAtAction(input: { id: string; iso: string | 
 export async function fetchAllOppsLeanAction(): Promise<LeanOppRow[]> {
   await requireCtx();
   const sb = getSupabaseServer();
-  const { data } = await sb.rpc("opportunities_page", {
+  const { data, error } = await sb.rpc("opportunities_page", {
     p_filter: {},
     p_sort: "expected_close_date",
     p_asc: true,
     p_limit: 5000,
     p_offset: 0,
   });
+  // タイムアウト等のエラーを握り潰すと「0件」に見える(2026-07-12障害)。必ずthrowしerror.tsxで再読込を促す
+  if (error) throw new Error(`案件一覧の取得に失敗しました: ${error.message}`);
   return ((data ?? {}) as Partial<OppsPage>).rows ?? [];
 }
 
@@ -105,13 +109,15 @@ export async function fetchAllOppsLeanAction(): Promise<LeanOppRow[]> {
 export async function fetchApptOppsLeanAction(): Promise<LeanOppRow[]> {
   await requireCtx();
   const sb = getSupabaseServer();
-  const { data } = await sb.rpc("opportunities_page", {
+  const { data, error } = await sb.rpc("opportunities_page", {
     p_filter: { yomi: ["4.アポ"] },
     p_sort: "expected_close_date",
     p_asc: true,
     p_limit: 2000,
     p_offset: 0,
   });
+  // タイムアウト等のエラーを握り潰すと「0件」に見える(2026-07-12障害)。必ずthrowしerror.tsxで再読込を促す
+  if (error) throw new Error(`案件一覧の取得に失敗しました: ${error.message}`);
   return ((data ?? {}) as Partial<OppsPage>).rows ?? [];
 }
 
