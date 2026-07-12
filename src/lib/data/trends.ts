@@ -12,11 +12,13 @@ import { monthKey, startOfMonth } from "@/lib/utils";
 // 件数→全ページ並列取得(逐次round-tripを排除)。
 async function selectAll(sb: any, table: string, columns: string): Promise<any[]> {
   const PAGE = 1000;
-  const { count } = await sb.from(table).select("id", { count: "exact", head: true });
+  const { count, error: countErr } = await sb.from(table).select("id", { count: "exact", head: true });
+  if (countErr) throw new Error(`${table} の件数取得に失敗しました: ${countErr.message}`);
   const pages = Math.max(1, Math.ceil((count ?? 0) / PAGE));
   const reqs = [];
   for (let p = 0; p < pages; p++) reqs.push(sb.from(table).select(columns).order("id").range(p * PAGE, (p + 1) * PAGE - 1));
   const res = await Promise.all(reqs);
+  for (const r of res) if (r?.error) throw new Error(`${table} の取得に失敗しました: ${r.error.message}`);
   return res.flatMap((r: any) => r?.data ?? []);
 }
 
