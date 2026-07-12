@@ -117,7 +117,7 @@ export async function POST(req: Request) {
   const webhook = process.env.SLACK_WEBHOOK_URL;
   if (webhook) {
     try {
-      const url = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://litecrm.vercel.app"}/app/leads/${lead.id as string}`;
+      const url = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://lite-crm-tau.vercel.app"}/app/leads/${lead.id as string}`;
       const text =
         `:inbox_tray: *Webフォームから新しいリード*（${rawEvent}）\n` +
         `<${url}|${company || "(会社名未入力)"}${name ? `｜${name}` : ""}>` +

@@ -63,7 +63,7 @@ export async function addOppCommentAction(input: {
 
       const webhook = process.env.SLACK_WEBHOOK_URL;
       if (webhook) {
-        const url = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://litecrm.vercel.app"}${href}`;
+        const url = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://lite-crm-tau.vercel.app"}${href}`;
         const to = mentions.map((m) => nameOf.get(m) ?? "—").join(" ");
         const text = `:speech_balloon: *${authorName}* さんが *${to}* さんをメンションしました\n<${url}|${oppLabel}>\n> ${body.slice(0, 300)}`;
         await fetch(webhook, {
