@@ -26,6 +26,8 @@ import { UnifiedTimeline, type TimelineEvent } from "@/components/history/unifie
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { ACTIVITY_TYPE_MAP } from "@/lib/constants";
 import { getSolutionPackages, getAccountSouvenirs } from "@/lib/data/souvenirs";
+import { getCardsByAccount } from "@/lib/data/business-cards";
+import { CardMiniList } from "@/components/business-cards/card-mini-list";
 import { getTransitionsByAccount, TRANSITION_STATUS_LABEL, FOLLOWUP_STATUS_LABEL } from "@/lib/data/transitions";
 import { STAGES, FORECAST_CATEGORIES, DEAL_PHASES } from "@/lib/constants";
 import { formatYen, sum } from "@/lib/utils";
@@ -51,10 +53,11 @@ export default async function AccountDetailPage({ params, searchParams }: { para
   const orFilter = oppIds.length > 0
     ? `account_id.eq.${account.id},opportunity_id.in.(${oppIds.join(",")})`
     : `account_id.eq.${account.id}`;
-  const [packages, souvenirs, transitions, activitiesR, tasksR] = await Promise.all([
+  const [packages, souvenirs, transitions, businessCards, activitiesR, tasksR] = await Promise.all([
     getSolutionPackages(),
     getAccountSouvenirs(account.id),
     getTransitionsByAccount(account.id),
+    getCardsByAccount(account.id),
     sb.from("activities").select("id,activity_type,title,body,activity_at,owner_user_id").or(orFilter).order("activity_at", { ascending: false }).limit(60),
     sb.from("tasks").select("id,title,due_date,status,assigned_to").or(orFilter).order("due_date", { ascending: false }).limit(30),
   ]);
@@ -290,6 +293,10 @@ export default async function AccountDetailPage({ params, searchParams }: { para
                 ))}
               </ul>
             )}
+          </Section>
+
+          <Section title={`名刺情報（${businessCards.length}）`} action={<Link href="/app/business-cards" className="text-[11px] text-teal-deep hover:underline">名刺一覧へ</Link>}>
+            <CardMiniList cards={businessCards} usersById={usersById} />
           </Section>
 
           <AttachmentSection targetType="account" targetId={account.id} revalidatePath={`/app/accounts/${account.id}`} />

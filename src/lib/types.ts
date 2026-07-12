@@ -176,6 +176,40 @@ export interface Contact {
   notes?: string;
 }
 
+/** 名刺情報（Eight等から取込・組織共有）。owner_user_id=名刺交換者。 */
+export interface BusinessCard {
+  id: UUID;
+  tenant_id: UUID;
+  owner_user_id: UUID;
+  company_name: string;
+  department?: string | null;
+  title?: string | null;
+  full_name: string;
+  last_name?: string | null;
+  first_name?: string | null;
+  email?: string | null;
+  postal_code?: string | null;
+  address?: string | null;
+  tel_company?: string | null;
+  tel_department?: string | null;
+  tel_direct?: string | null;
+  fax?: string | null;
+  mobile_phone?: string | null;
+  url?: string | null;
+  exchanged_on?: string | null;
+  eight_connected: boolean;
+  rank?: string | null;
+  memo?: string | null;
+  tags: string[];
+  source: string;
+  account_id?: UUID | null;
+  contact_id?: UUID | null;
+  match_type?: "email" | "company_contact" | "company" | "manual" | null;
+  matched_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface LeadSource {
   id: UUID;
   tenant_id: UUID;

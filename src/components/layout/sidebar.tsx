@@ -27,6 +27,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ScanLine,
+  Contact,
   FolderKanban,
   Bot,
   Inbox,
@@ -73,6 +74,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
     items: [
       { href: "/app/accounts", label: "顧客", icon: Building2 },
       { href: "/app/contacts", label: "担当者", icon: Users },
+      { href: "/app/business-cards", label: "名刺情報", icon: Contact },
       { href: "/app/leads", label: "リード", icon: Sparkles },
       { href: "/app/srank", label: "Sランク攻略", icon: Star },
       { href: "/app/nurture", label: "既存顧客深耕", icon: TrendingUp },
