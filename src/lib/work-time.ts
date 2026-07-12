@@ -1,5 +1,8 @@
 /** 稼働報告の日付・時間ヘルパー(クライアント/サーバー共用の純関数)。 */
 
+/** 全般稼働(案件に紐づかない稼働)の記入単位キー。 */
+export const GENERAL_UNIT = "g";
+
 /** JSTの今日 (YYYY-MM-DD)。 */
 export function todayJST(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" });
