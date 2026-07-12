@@ -26,22 +26,23 @@ export type ContentIdeaFull = ContentIdea & { body_md: string | null };
 
 export const CONTENT_STATUS_ORDER: ContentStatus[] = ["idea", "selected", "drafting", "published"];
 
-type ListRow = Omit<ContentIdea, "hasDraft"> & { body_md: string | null };
+type ListRow = Omit<ContentIdea, "hasDraft"> & { has_draft: boolean | null };
 
 export async function listContentIdeas(status: string): Promise<ContentIdea[]> {
   const sb = getSupabaseServer();
+  // 一覧では本文(body_md)を転送しない。有無はDBの生成列 has_draft で取得(記事増加時のペイロード削減)。
   let query = sb
     .from("content_ideas")
-    .select("id,theme,title,angle,target_keyword,source,status,design_status,body_md,note,scheduled_date,created_at")
+    .select("id,theme,title,angle,target_keyword,source,status,design_status,has_draft,note,scheduled_date,created_at")
     .order("created_at", { ascending: false })
     .limit(500);
   if (status && CONTENT_STATUS_ORDER.includes(status as ContentStatus)) {
     query = query.eq("status", status);
   }
   const { data } = await query;
-  return ((data ?? []) as ListRow[]).map(({ body_md, ...rest }) => ({
+  return ((data ?? []) as ListRow[]).map(({ has_draft, ...rest }) => ({
     ...rest,
-    hasDraft: !!body_md?.trim(),
+    hasDraft: !!has_draft,
   }));
 }
 
@@ -54,7 +55,7 @@ export async function getContentIdea(id: string): Promise<ContentIdeaFull | null
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
-  const row = data as ListRow;
+  const row = data as Omit<ContentIdeaFull, "hasDraft">;
   return { ...row, hasDraft: !!row.body_md?.trim() };
 }
 

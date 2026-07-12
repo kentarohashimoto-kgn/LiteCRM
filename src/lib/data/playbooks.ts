@@ -30,6 +30,7 @@ export async function listPlaybooks(): Promise<Playbook[]> {
     .select(
       "id,title,industry,employee_size_band,target_role,hypothesis_issues,value_props,key_questions,proposal_flow,objections,decision_tips,status,win_count,loss_count,created_at",
     )
+    .neq("status", "archived")
     .order("created_at", { ascending: false })
     .limit(500);
   return (data ?? []) as Playbook[];
@@ -38,7 +39,6 @@ export async function listPlaybooks(): Promise<Playbook[]> {
 export function filterPlaybooks(items: Playbook[], q: string, industry: string): Playbook[] {
   const needle = q.trim().toLowerCase();
   return items.filter((p) => {
-    if (p.status === "archived") return false;
     if (industry && (p.industry ?? "") !== industry) return false;
     if (!needle) return true;
     const hay = [

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { checkBearer } from "@/lib/secure-compare";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ function authFail(req: Request): NextResponse | null {
   if (!secret) {
     return NextResponse.json({ ok: false, error: "CRON_SECRET が未設定です（管理者に連絡）。" }, { status: 503 });
   }
-  if (req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!checkBearer(req, secret)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   return null;

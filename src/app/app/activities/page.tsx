@@ -1,6 +1,5 @@
 import { Plus } from "lucide-react";
-import { getWorkspaceLite } from "@/lib/data/workspace";
-import { listMembers } from "@/lib/data/select";
+import { getMembersLite } from "@/lib/data/workspace";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { ActivitiesPaginatedList } from "@/components/activities/activities-paginated-list";
 import { fetchActivitiesPageAction } from "@/server/actions/activities";
@@ -12,9 +11,12 @@ export const dynamic = "force-dynamic";
  * サーバーページング(activities_page RPC)＋無限スクロールに変更。
  */
 export default async function ActivitiesPage() {
-  const ws = await getWorkspaceLite();
-  const members = listMembers(ws).map(({ user }) => ({ id: user.id, name: user.name }));
-  const first = await fetchActivitiesPageAction({ filter: {}, offset: 0, limit: 50 });
+  // メンバー名しか使わないため lite(≈800KB) ではなく軽量フェッチャで取得(監査2026-07-12)
+  const [membersRaw, first] = await Promise.all([
+    getMembersLite(),
+    fetchActivitiesPageAction({ filter: {}, offset: 0, limit: 50 }),
+  ]);
+  const members = membersRaw.map(({ user }) => ({ id: user.id, name: user.name }));
 
   return (
     <div>

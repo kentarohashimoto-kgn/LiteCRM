@@ -1,9 +1,11 @@
-import Link from "next/link";
-import { User, Save } from "lucide-react";
+import { User, Save, Target } from "lucide-react";
 import { Section, StatCard, EmptyState, ProgressBar } from "@/components/ui/primitives";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatYen, formatPercent, formatDate } from "@/lib/utils";
-import { saveRepReportAction, saveRepForecastAction } from "@/server/actions/rep-report";
+import { saveRepReportAction, saveRepMonthlyTargetAction } from "@/server/actions/rep-report";
+import { RepTrendSummary } from "@/components/reviews/rep-trend-summary";
+import { RepFunnel } from "@/components/reviews/rep-funnel";
+import { RepOppTable } from "@/components/reviews/rep-opp-table";
 import type { RepReport } from "@/lib/data/rep-report";
 
 export function RepReportView({ report, weekStart }: { report: RepReport; weekStart: string }) {
@@ -39,6 +41,29 @@ export function RepReportView({ report, weekStart }: { report: RepReport; weekSt
           <StatCard label="月末見込み" amount={m.forecast} />
           <StatCard label="達成率(見込)" raw={formatPercent(m.achieve)} sub={<ProgressBar value={m.forecast} max={m.target || 1} />} />
         </div>
+        {/* 個人目標の設定(今月をブレークダウン) */}
+        <form action={saveRepMonthlyTargetAction} className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <input type="hidden" name="owner_user_id" value={report.ownerId} />
+          <input type="hidden" name="target_month" value={report.monthKey} />
+          <Target size={14} className="text-ink/40" />
+          <span className="text-xs text-ink/50">{report.monthKey} の個人目標</span>
+          <input
+            type="number"
+            name="target_amount"
+            defaultValue={m.target || ""}
+            placeholder="円"
+            min={0}
+            step={100000}
+            className="w-40 rounded-lg border border-black/10 px-3 py-1.5 text-sm text-right"
+          />
+          <SubmitButton className="btn-ghost text-xs" pendingLabel="保存中…">目標を保存</SubmitButton>
+        </form>
+      </div>
+
+      {/* 推移グラフ(週別/月別) ＋ ヨミファネル */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <RepTrendSummary monthly={report.trendMonthly} weekly={report.trendWeekly} />
+        <RepFunnel funnel={report.funnel} />
       </div>
 
       {/* パイプライン */}
@@ -51,66 +76,16 @@ export function RepReportView({ report, weekStart }: { report: RepReport; weekSt
         </div>
       </Section>
 
-      {/* 担当案件リスト */}
+      {/* 担当案件リスト(ソート・背景色・1行メモ) */}
       <Section title={`担当案件（進行中 ${report.opps.length}）`}>
         {report.opps.length === 0 ? (
           <EmptyState message="進行中の担当案件がありません。" />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm tabular-nums" style={{ minWidth: 1060 }}>
-              <thead>
-                <tr>
-                  <th className="th">顧客 / 案件</th>
-                  <th className="th">ヨミ</th>
-                  <th className="th text-right">金額</th>
-                  <th className="th text-right">Weighted</th>
-                  <th className="th">次回AC</th>
-                  <th className="th">成約月(読み)</th>
-                  <th className="th text-right">売上(読み)</th>
-                  <th className="th text-right">残商談</th>
-                  <th className="th"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.opps.map((o) => {
-                  const fid = `pf-${o.id}`;
-                  return (
-                    <tr key={o.id} className="row-hover border-t border-black/[0.04]">
-                      <td className="td">
-                        <Link href={`/app/opportunities/${o.id}`} className="hover:text-teal-deep">
-                          {o.account ? <span className="text-ink/50">{o.account}／</span> : null}{o.name}
-                        </Link>
-                      </td>
-                      <td className="td text-ink/70">{o.yomi ?? "—"}</td>
-                      <td className="td text-right">{formatYen(o.amount)}</td>
-                      <td className="td text-right text-ink/70">{formatYen(o.weighted)}</td>
-                      <td className="td text-ink/70">{o.nextActionDate ? formatDate(o.nextActionDate) : <span className="text-rose-500">未設定</span>}</td>
-                      <td className="td">
-                        <input type="month" name="rep_close_month" form={fid} defaultValue={o.repCloseMonth ?? ""} className="w-[130px] rounded border border-black/10 px-1.5 py-1 text-xs" />
-                      </td>
-                      <td className="td text-right">
-                        <input type="number" name="rep_amount_forecast" form={fid} defaultValue={o.repAmountForecast ?? ""} placeholder="円" min={0} step={10000} className="w-[110px] rounded border border-black/10 px-1.5 py-1 text-xs text-right" />
-                      </td>
-                      <td className="td text-right">
-                        <input type="number" name="rep_meetings_left" form={fid} defaultValue={o.repMeetingsLeft ?? ""} placeholder="回" min={0} max={99} className="w-[56px] rounded border border-black/10 px-1.5 py-1 text-xs text-right" />
-                      </td>
-                      <td className="td">
-                        <form action={saveRepForecastAction} id={fid}>
-                          <input type="hidden" name="opp_id" value={o.id} />
-                          <button type="submit" className="btn-ghost text-xs" title="この案件の読みを保存">保存</button>
-                        </form>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <p className="mt-2 text-xs text-ink/45">「読み」= 担当自身の予測（成約タイミング・売上額・成約まで必要な残商談回数）。行ごとに保存できます。</p>
-          </div>
+          <RepOppTable opps={report.opps} />
         )}
       </Section>
 
-      {/* ナラティブ入力 */}
+      {/* ナラティブ入力(保存時に上部サマリーもスナップショット) */}
       <Section title="週次コメント（型に沿って記入）">
         <form action={saveRepReportAction} className="space-y-3">
           <input type="hidden" name="owner_user_id" value={report.ownerId} />
@@ -131,7 +106,8 @@ export function RepReportView({ report, weekStart }: { report: RepReport; weekSt
             <label className="block text-xs font-semibold text-ink/50 mb-1">メモ</label>
             <textarea name="note" rows={2} defaultValue={report.narrative?.note ?? ""} className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm" />
           </div>
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-ink/45">保存すると、上部の集計サマリー（目標/実績/見込み/パイプライン/ファネル/推移/案件）もその時点で固定保存されます。</p>
             <SubmitButton className="btn-primary inline-flex items-center gap-1.5" pendingLabel="保存中…"><Save size={15} /> 週報を保存</SubmitButton>
           </div>
         </form>

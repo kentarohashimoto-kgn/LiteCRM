@@ -1,6 +1,7 @@
 "use server";
 
 import { requireCtx } from "@/lib/session";
+import { canReassignOwner } from "@/lib/constants";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import type { AccountsPage, AccountPageFilter } from "@/lib/data/accounts-page";
 
@@ -31,7 +32,9 @@ export async function setAccountFieldAction(input: {
   field: "rank" | "focus" | "owner_user_id";
   value: string | null;
 }): Promise<{ ok: boolean }> {
-  await requireCtx();
+  const ctx = await requireCtx();
+  // 担当変更は管理職限定(案件と同じ規律。DBトリガでも防御。監査2026-07-12)
+  if (input.field === "owner_user_id" && !canReassignOwner(ctx.role)) return { ok: false };
   const sb = getSupabaseServer();
   const patch: Record<string, unknown> = { [input.field]: input.value || null };
   const { error } = await sb.from("accounts").update(patch).eq("id", input.id);
