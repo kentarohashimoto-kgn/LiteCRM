@@ -25,7 +25,7 @@ interface Talent {
   user_id: string | null;
   title: string | null; department: string | null; role_text: string | null; layer: string | null;
   contract_status: string; email: string | null; mail_system: string | null;
-  hourly_rate: number | null; cost_managed: boolean;
+  hourly_rate: number | null; cost_managed: boolean; work_report_required: boolean;
 }
 interface Review {
   id: string; talent_id: string; period: string; reviewer: string | null;
@@ -42,7 +42,7 @@ export default async function TalentsPage() {
   await requireHrCtx();
   const sb = getSupabaseServer();
   const [talR, revR, members] = await Promise.all([
-    sb.from("talents").select("id, name, employment_type, skills, current_assignment, joined_on, left_on, notes, user_id, title, department, role_text, layer, contract_status, email, mail_system, hourly_rate, cost_managed").order("created_at", { ascending: true }).limit(300),
+    sb.from("talents").select("id, name, employment_type, skills, current_assignment, joined_on, left_on, notes, user_id, title, department, role_text, layer, contract_status, email, mail_system, hourly_rate, cost_managed, work_report_required").order("created_at", { ascending: true }).limit(300),
     sb.from("talent_reviews").select("id, talent_id, period, reviewer, overall, comment, goals").order("created_at", { ascending: false }).limit(1000),
     getMembersLite(),
   ]);
@@ -138,6 +138,9 @@ export default async function TalentsPage() {
                       <input name="hourly_rate" defaultValue={t.hourly_rate != null ? String(Number(t.hourly_rate)) : ""} inputMode="numeric" className="input w-20 text-xs py-1.5 text-right" placeholder="時給" title="時給(円)" />
                       <label className="inline-flex items-center gap-1.5 text-xs text-ink/70 whitespace-nowrap px-1" title="成功報酬など特殊な報酬体系の場合はOFF">
                         <input type="checkbox" name="cost_managed" defaultChecked={t.cost_managed} className="accent-teal-600" /> 原価管理対象
+                      </label>
+                      <label className="inline-flex items-center gap-1.5 text-xs text-ink/70 whitespace-nowrap px-1" title="ONにすると案件アサインがなくても本人の稼働報告に「全般稼働」の記入枠が表示されます（CRMアカウント紐付けが必要）">
+                        <input type="checkbox" name="work_report_required" defaultChecked={t.work_report_required} className="accent-teal-600" /> 稼働報告必須
                       </label>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
