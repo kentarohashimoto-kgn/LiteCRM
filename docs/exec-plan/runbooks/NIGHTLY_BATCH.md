@@ -12,14 +12,34 @@
 > - **対象の下限（直近N日ポリシー / ユーザー決定 2026-07-12）**: `RECENT_DAYS = 7`。開催が直近7日以内（`meeting_date >= JST今日 - 7日`）の商談のみを対象とし、それ以前は対象外（枠コストを最小化しつつ late 入力の取りこぼしを防ぐ）。値の変更はこの1箇所を直す。
 >   - 商談後1〜2日で議事録が入る運用に対し7日の余裕を持たせる。もっと絞るなら3、緩めるなら14/30。
 >   - リサーチ/ブリーフィング(将来のjob)は本来「翌日アポ」を対象にするため、この下限は自然に満たす（登録日では絞らない）。
+> - **実行方式 = F1 ingest API（2026-07-12 実証で確定）**: フレッシュ起動の夜間セッションには Supabase MCP が繋がらないため、DB読み書きはアプリのAPIに委譲する。
+>   - エンドポイント: `${APP_URL}/api/batch/meeting-summary`（APP_URL 既定 `https://litecrm.vercel.app`）
+>   - 認可ヘッダ: `Authorization: Bearer ${CRON_SECRET}`（値は環境変数 or 起動プロンプトで受け取る。リポジトリには置かない）
+>   - セッションは **Supabase MCP を使わない**。`curl`(Bash) か WebFetch で GET/POST するだけ。生成はセッション自身（サブスク枠）。
 
 ---
 
-## 0. 前提チェック（最初に必ず）
+## 0. 実行方式（F1 ingest API・正）
 
-1. **Supabase MCP が使えるか確認**（`mcp__Supabase__execute_sql` 等）。使えなければ、生成も記録もできない。
-   → その場合は Slack（`mcp__Slack__slack_send_message`, あれば）に「夜間バッチ: Supabase MCP不可で中止」と通知し、**何も書き込まず終了**。
-2. 利用枠に注意。処理中にレート制限/枠到達を感じたら、その時点で打ち切り、残りは `deferred_count` に記録して `limit_hit=true` でログする（§4）。
+夜間セッションは **Supabase MCP を使わず**、次の2ステップで処理する。SQLは打たない（DB操作はAPI内で完結）。
+
+```bash
+# 1) 対象取得（最大10件）
+curl -s -H "Authorization: Bearer $CRON_SECRET" \
+  "$APP_URL/api/batch/meeting-summary?limit=10"
+#   → {ok:true, targets:[{meeting_id, title, opp_name, acc_name, minutes_detail}, ...]}
+
+# 2) 各 target を自分(サブスク枠)で要約(§2.2の形式) してから、まとめて書き戻し
+curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+  "$APP_URL/api/batch/meeting-summary" \
+  -d '{"items":[{"meeting_id":"...","ai_summary":"## 要点\n- ..."}],
+       "trigger":"nightly","usage_note":"10件中10件生成。レート制限なし。"}'
+#   → {ok:true, generated:N, failed:M, batch_run_id:"..."}  ※書き戻しと batch_runs 記録はAPIが実施
+```
+
+- API未応答/401/503なら **何も生成せず終了**（可能ならユーザーへ理由を報告）。
+- 利用枠に注意。レート制限/枠到達を感じたら打ち切り、POSTの `deferred_count`/`limit_hit`/`limit_hit_at` に記録（§4はAPIが担当）。
+- **F2（常設セッション/MCP保持時）に限り**、以下 §2.1/§2.3/§4 の SQL を直接実行してよい（参考）。
 
 ---
 
