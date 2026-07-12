@@ -81,7 +81,8 @@ export function monthRange(startMonth: string | null, endMonth: string | null): 
 /** 案件(opportunity)の案件管理バンドルを取得。計画がなければ null。 */
 export async function getProjectBundle(opportunityId: string): Promise<ProjectBundle | null> {
   const sb = getSupabaseServer();
-  const { data: plan } = await sb.from("project_plans").select("*").eq("opportunity_id", opportunityId).maybeSingle();
+  const { data: plan, error: planErr } = await sb.from("project_plans").select("*").eq("opportunity_id", opportunityId).maybeSingle();
+  if (planErr) throw new Error(`原価計画の取得に失敗: ${planErr.message}`);
   if (!plan) return null;
   const planId = (plan as ProjectPlan).id;
   const [rev, asg, cm, wk] = await Promise.all([
@@ -90,6 +91,7 @@ export async function getProjectBundle(opportunityId: string): Promise<ProjectBu
     sb.from("project_cost_months").select("*").eq("plan_id", planId),
     sb.from("project_weekly_reports").select("*").eq("plan_id", planId).order("created_at", { ascending: false }),
   ]);
+  for (const r of [rev, asg, cm, wk]) if (r.error) throw new Error(`原価データの取得に失敗: ${r.error.message}`);
   return {
     plan: plan as ProjectPlan,
     revenues: (rev.data ?? []) as RevenueMonth[],
@@ -154,10 +156,11 @@ export interface ManagedProjectRow {
 export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
   const sb = getSupabaseServer();
   const nowMonth = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" }).slice(0, 7); // YYYY-MM(JST)
-  const { data: opps } = await sb
+  const { data: opps, error: oppErr } = await sb
     .from("opportunities")
     .select("id, name, account_id, owner_user_id, status")
     .eq("is_project_managed", true);
+  if (oppErr) throw new Error(`原価管理対象の取得に失敗: ${oppErr.message}`);
   const oppRows = (opps ?? []) as { id: string; name: string; account_id: string | null; owner_user_id: string | null; status: string }[];
   if (oppRows.length === 0) return [];
 
@@ -167,6 +170,8 @@ export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
     sb.from("project_plans").select("*").in("opportunity_id", oppIds),
     accIds.length ? sb.from("accounts").select("id, name").in("id", accIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
   ]);
+  if (plansR.error) throw new Error(`原価計画の取得に失敗: ${plansR.error.message}`);
+  if ("error" in accR && accR.error) throw new Error(`取引先の取得に失敗: ${accR.error.message}`);
   const plans = (plansR.data ?? []) as ProjectPlan[];
   const accName = new Map((((accR.data ?? []) as { id: string; name: string }[])).map((a) => [a.id, a.name]));
   const planByOpp = new Map(plans.map((p) => [p.opportunity_id, p]));
@@ -180,6 +185,7 @@ export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
         sb.from("project_weekly_reports").select("*").in("plan_id", planIds).order("created_at", { ascending: false }),
       ])
     : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+  for (const r of [revR, cmR, asgR, wkR]) if ("error" in r && r.error) throw new Error(`原価明細の取得に失敗: ${(r.error as { message: string }).message}`);
   const revs = (revR.data ?? []) as RevenueMonth[];
   const cms = (cmR.data ?? []) as CostMonth[];
   const asgs = (asgR.data ?? []) as ProjAssignment[];
