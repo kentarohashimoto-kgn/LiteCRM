@@ -60,6 +60,9 @@ export function AllocationEditor({
         <div className="text-sm">
           <span className="text-ink/60">{monthLabel} の全社目標</span>{" "}
           <span className="font-bold text-ink tabular-nums">{yen(companyTarget)}</span>
+          {companyTarget === 0 && (
+            <span className="ml-2 text-xs text-accent-orange">未設定です。「全社」タブで先に月別目標を保存してください。</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={expandByMember} className="btn-ghost inline-flex items-center gap-1 text-xs">

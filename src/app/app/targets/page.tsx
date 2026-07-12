@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getWorkspaceLite } from "@/lib/data/workspace";
+import { getWorkspaceLite, getMembersLite } from "@/lib/data/workspace";
+import { getSupabaseServer } from "@/lib/supabase/server";
 import { getSalesTargets, listOpportunities, listMembers, listRepTargets, getLeadSources } from "@/lib/data/select";
 import { getLeadMetrics } from "@/lib/data/leads";
 import { PageHeader, Section } from "@/components/ui/primitives";
@@ -74,7 +75,7 @@ export default async function TargetsPage({ searchParams }: { searchParams: { fy
       />
 
       {scope === "alloc" && isMgmt ? (
-        <AllocationSection ws={ws} fy={fy} months={months} month={searchParams.month} />
+        <AllocationSection fy={fy} months={months} month={searchParams.month} />
       ) : repMode && selectedUser ? (
         <RepTargetForm ws={ws} fy={fy} months={months} userId={selectedUser} userName={members.find((m) => m.user.id === selectedUser)?.user.name ?? ""} />
       ) : (
@@ -191,16 +192,25 @@ function RepTargetForm({ ws, fy, months, userId, userName }: { ws: Awaited<Retur
   );
 }
 
-/** 全社の月間目標を担当×流入元に配分(担当分は rep_targets→週報目標へ反映)。管理ロールのみ。 */
-async function AllocationSection({ ws, fy, months, month }: { ws: Awaited<ReturnType<typeof getWorkspaceLite>>; fy: number; months: ReturnType<typeof fiscalMonths>; month?: string }) {
-  const targetMap = new Map(getSalesTargets(ws).map((t) => [t.target_month, t]));
+/** 全社の月間目標を担当×流入元に配分(担当分は rep_targets→週報目標へ反映)。管理ロールのみ。
+ *  重いworkspace RPCに依存せず直接取得(軽量・一時障害の影響を受けない)。 */
+async function AllocationSection({ fy, months, month }: { fy: number; months: ReturnType<typeof fiscalMonths>; month?: string }) {
   const thisKey = monthKey(startOfMonth(new Date()));
   const sel = month && months.some((m) => m.key === month) ? month : months.some((m) => m.key === thisKey) ? thisKey : months[0].key;
   const selMonth = months.find((m) => m.key === sel);
-  const companyTarget = targetMap.get(sel)?.target_amount ?? 0;
-  const members = listMembers(ws).map(({ user }) => ({ id: user.id, name: user.name }));
-  const sources = getLeadSources(ws).map((s) => ({ id: s.id, name: s.name }));
-  const initial = await getAllocations(sel);
+
+  const sb = getSupabaseServer();
+  const [membersRaw, sourcesR, targetR, initial] = await Promise.all([
+    getMembersLite(),
+    sb.from("lead_sources").select("id,name").order("name"),
+    sb.from("sales_targets").select("target_amount").eq("target_month", sel).maybeSingle(),
+    getAllocations(sel),
+  ]);
+  if (sourcesR.error) throw new Error(`流入元の取得に失敗しました: ${sourcesR.error.message}`);
+  if (targetR.error) throw new Error(`全社目標の取得に失敗しました: ${targetR.error.message}`);
+  const companyTarget = Number((targetR.data as { target_amount?: number } | null)?.target_amount ?? 0);
+  const members = membersRaw.map(({ user }) => ({ id: user.id, name: user.name }));
+  const sources = ((sourcesR.data ?? []) as { id: string; name: string }[]).map((s) => ({ id: s.id, name: s.name }));
 
   return (
     <Section
