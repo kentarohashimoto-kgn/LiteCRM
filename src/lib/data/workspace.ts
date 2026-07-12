@@ -106,6 +106,8 @@ export const getMembersLite = cache(
       sb.from("profiles").select("id,email,display_name,avatar_color"),
       sb.from("memberships").select("*"),
     ]);
+    if (profilesR.error) throw new Error(`メンバー情報の取得に失敗: ${profilesR.error.message}`);
+    if (membershipsR.error) throw new Error(`メンバー情報の取得に失敗: ${membershipsR.error.message}`);
     const profiles = (profilesR.data ?? []) as ProfileRow[];
     const usersById = new Map(
       profiles.map((p) => [

@@ -1,7 +1,6 @@
 import { FolderKanban } from "lucide-react";
 import { requireProjectCtx } from "@/lib/session";
-import { getWorkspaceLite } from "@/lib/data/workspace";
-import { getUser } from "@/lib/data/select";
+import { getMembersLite } from "@/lib/data/workspace";
 import { listManagedProjects } from "@/lib/data/projects";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { ProjectsTable, type ProjectRow } from "@/components/projects/projects-table";
@@ -10,7 +9,9 @@ export const dynamic = "force-dynamic";
 
 export default async function ProjectsListPage() {
   await requireProjectCtx();
-  const [rows, ws] = await Promise.all([listManagedProjects(), getWorkspaceLite()]);
+  // 一覧に必要なのは担当者名だけなので、重いworkspace RPCではなく軽量なメンバー一覧を使う
+  const [rows, members] = await Promise.all([listManagedProjects(), getMembersLite()]);
+  const nameById = new Map(members.map((m) => [m.user.id, m.user.name]));
 
   const viewRows: ProjectRow[] = rows.map((r) => {
     const t = r.computed?.roll.totals;
@@ -18,7 +19,7 @@ export default async function ProjectsListPage() {
       opportunityId: r.opportunityId,
       oppName: r.oppName,
       accountName: r.accountName,
-      ownerName: r.ownerUserId ? getUser(ws, r.ownerUserId)?.name ?? "—" : "—",
+      ownerName: r.ownerUserId ? nameById.get(r.ownerUserId) ?? "—" : "—",
       priority: r.priority,
       startMonth: r.startMonth,
       endMonth: r.endMonth,
