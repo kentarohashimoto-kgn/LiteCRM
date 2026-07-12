@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getRepReport } from "@/lib/data/rep-report";
@@ -50,13 +51,24 @@ export async function saveRepReportAction(formData: FormData): Promise<void> {
   );
 
   revalidatePath("/app/reviews/rep");
+  redirect(`/app/reviews/rep?owner=${encodeURIComponent(ownerUserId)}&week=${encodeURIComponent(weekStart)}&saved=report`);
+}
+
+/** 月キーを YYYY-MM-01 に正規化(monthKey互換)。 */
+function normMonth(v: string): string | null {
+  const m = v.trim().match(/^(\d{4})-(\d{2})(-\d{2})?$/);
+  return m ? `${m[1]}-${m[2]}-01` : null;
 }
 
 /** 案件ごとの「担当の読み」(成約月/売上額/残商談回数)＋1行メモを保存。担当案件リストから行単位で更新。 */
 export async function saveRepForecastAction(formData: FormData): Promise<void> {
   await requireCtx();
   const oppId = String(formData.get("opp_id") ?? "");
-  if (!oppId) return;
+  const backOwner = String(formData.get("back_owner") ?? "");
+  const backWeek = String(formData.get("back_week") ?? "");
+  const back = (q: string) =>
+    redirect(`/app/reviews/rep?owner=${encodeURIComponent(backOwner)}&week=${encodeURIComponent(backWeek)}&${q}`);
+  if (!oppId) back("error=save_failed");
 
   const month = String(formData.get("rep_close_month") ?? "").trim(); // <input type="month"> は YYYY-MM
   const amountRaw = String(formData.get("rep_amount_forecast") ?? "").replace(/[,、]/g, "").trim();
@@ -77,6 +89,7 @@ export async function saveRepForecastAction(formData: FormData): Promise<void> {
     .eq("id", oppId);
 
   revalidatePath("/app/reviews/rep");
+  back("saved=opp");
 }
 
 /**
@@ -86,16 +99,23 @@ export async function saveRepForecastAction(formData: FormData): Promise<void> {
 export async function saveRepMonthlyTargetAction(formData: FormData): Promise<void> {
   const ctx = await requireCtx();
   const userId = String(formData.get("owner_user_id") ?? "").trim() || ctx.userId;
-  const month = String(formData.get("target_month") ?? "").trim();
-  if (!/^\d{4}-\d{2}$/.test(month)) return;
-  const amountRaw = String(formData.get("target_amount") ?? "").replace(/[,、]/g, "").trim();
+  const backWeek = String(formData.get("back_week") ?? "");
+  const back = (q: string) =>
+    redirect(`/app/reviews/rep?owner=${encodeURIComponent(userId)}&week=${encodeURIComponent(backWeek)}&${q}`);
+
+  // 月キーは YYYY-MM-01(monthKey互換)。旧実装は YYYY-MM 前提の検証で黙って失敗していた(バグ修正)
+  const month = normMonth(String(formData.get("target_month") ?? ""));
+  if (!month) back("error=invalid_month");
+  const amountRaw = String(formData.get("target_amount") ?? "").replace(/[^\d]/g, "").trim();
   const amount = amountRaw ? Number(amountRaw) : 0;
-  if (!Number.isFinite(amount) || amount < 0) return;
+  if (!Number.isFinite(amount) || amount < 0) back("error=invalid_amount");
 
   const sb = getSupabaseServer();
-  await sb.from("rep_targets").upsert(
-    { tenant_id: ctx.tenantId, user_id: userId, target_month: month, target_amount: amount },
+  const up = await sb.from("rep_targets").upsert(
+    { tenant_id: ctx.tenantId, user_id: userId, target_month: month!, target_amount: amount },
     { onConflict: "tenant_id,user_id,target_month" },
   );
+  if (up.error) back("error=save_failed");
   revalidatePath("/app/reviews/rep");
+  back("saved=target");
 }

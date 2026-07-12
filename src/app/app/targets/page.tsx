@@ -8,12 +8,14 @@ import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fis
 import { actualByMonth } from "@/lib/targets";
 import { monthKey, startOfMonth, formatYen } from "@/lib/utils";
 import { MoneyInput } from "@/components/ui/money-input";
+import { ActionNotice } from "@/components/ui/action-notice";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { AllocationEditor } from "@/components/targets/allocation-editor";
 import { getAllocations } from "@/lib/data/target-allocations";
 
 const MGMT_ROLES = ["owner", "admin", "sales_manager"];
 
-export default async function TargetsPage({ searchParams }: { searchParams: { fy?: string; ok?: string; scope?: string; month?: string } }) {
+export default async function TargetsPage({ searchParams }: { searchParams: { fy?: string; ok?: string; scope?: string; month?: string; saved?: string; error?: string } }) {
   const ws = await getWorkspaceLite();
   const isMgmt = MGMT_ROLES.includes(ws.ctx.role);
   const cur = currentFiscalStartYear();
@@ -59,6 +61,17 @@ export default async function TargetsPage({ searchParams }: { searchParams: { fy
       {searchParams.ok && (
         <p className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 mb-3">目標を保存しました（{fiscalYearLabel(fy)}）。</p>
       )}
+      <ActionNotice
+        saved={searchParams.saved}
+        error={searchParams.error}
+        savedMessages={{ alloc: "配分を保存しました。担当分は営業マン別週報の目標に反映されています。" }}
+        errorMessages={{
+          invalid_month: "月の指定が不正で保存できませんでした。",
+          forbidden: "配分の設定は管理者・営業マネージャーのみ可能です。",
+          save_failed: "配分の保存に失敗しました。もう一度お試しください。",
+          rep_reflect_failed: "配分は保存しましたが、週報目標への反映に失敗しました。",
+        }}
+      />
 
       {scope === "alloc" && isMgmt ? (
         <AllocationSection ws={ws} fy={fy} months={months} month={searchParams.month} />
@@ -127,7 +140,7 @@ async function AllTargetForm({ ws, fy, months }: { ws: Awaited<ReturnType<typeof
             </tbody>
           </table>
         </div>
-        <div className="mt-4"><button type="submit" className="btn-primary">全社の目標を保存</button></div>
+        <div className="mt-4"><SubmitButton className="btn-primary" pendingLabel="保存中…">全社の目標を保存</SubmitButton></div>
       </form>
     </Section>
   );
@@ -172,7 +185,7 @@ function RepTargetForm({ ws, fy, months, userId, userName }: { ws: Awaited<Retur
             </tbody>
           </table>
         </div>
-        <div className="mt-4"><button type="submit" className="btn-primary">{userName} の目標を保存</button></div>
+        <div className="mt-4"><SubmitButton className="btn-primary" pendingLabel="保存中…">{userName} の目標を保存</SubmitButton></div>
       </form>
     </Section>
   );
@@ -208,6 +221,7 @@ async function AllocationSection({ ws, fy, months, month }: { ws: Awaited<Return
       <AllocationEditor
         month={sel}
         monthLabel={`${selMonth?.year}年${selMonth?.month}月`}
+        fy={fy}
         companyTarget={companyTarget}
         members={members}
         sources={sources}

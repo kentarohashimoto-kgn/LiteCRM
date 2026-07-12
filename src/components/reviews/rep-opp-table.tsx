@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowUpDown } from "lucide-react";
 import { formatYen, formatDate, cn } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { saveRepForecastAction } from "@/server/actions/rep-report";
 import type { RepReportOpp } from "@/lib/data/rep-report";
 
@@ -59,7 +60,7 @@ function SortHeader({
   );
 }
 
-export function RepOppTable({ opps }: { opps: RepReportOpp[] }) {
+export function RepOppTable({ opps, ownerId, weekStart }: { opps: RepReportOpp[]; ownerId: string; weekStart: string }) {
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "amount", asc: false });
 
   const onSort = (k: SortKey) =>
@@ -129,7 +130,9 @@ export function RepOppTable({ opps }: { opps: RepReportOpp[] }) {
                 <td className="td">
                   <form action={saveRepForecastAction} id={fid}>
                     <input type="hidden" name="opp_id" value={o.id} />
-                    <button type="submit" className="btn-ghost text-xs">保存</button>
+                    <input type="hidden" name="back_owner" value={ownerId} />
+                    <input type="hidden" name="back_week" value={weekStart} />
+                    <SubmitButton className="btn-ghost text-xs" pendingLabel="保存中…">保存</SubmitButton>
                   </form>
                 </td>
               </tr>

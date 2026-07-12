@@ -45,6 +45,7 @@ export function RepReportView({ report, weekStart }: { report: RepReport; weekSt
         <form action={saveRepMonthlyTargetAction} className="mt-2 flex flex-wrap items-center gap-2 text-sm">
           <input type="hidden" name="owner_user_id" value={report.ownerId} />
           <input type="hidden" name="target_month" value={report.monthKey} />
+          <input type="hidden" name="back_week" value={weekStart} />
           <Target size={14} className="text-ink/40" />
           <span className="text-xs text-ink/50">{report.monthKey} の個人目標</span>
           <input
@@ -81,7 +82,7 @@ export function RepReportView({ report, weekStart }: { report: RepReport; weekSt
         {report.opps.length === 0 ? (
           <EmptyState message="進行中の担当案件がありません。" />
         ) : (
-          <RepOppTable opps={report.opps} />
+          <RepOppTable opps={report.opps} ownerId={report.ownerId} weekStart={weekStart} />
         )}
       </Section>
 
