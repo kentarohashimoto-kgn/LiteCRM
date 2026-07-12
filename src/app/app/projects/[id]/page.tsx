@@ -15,6 +15,8 @@ import {
   lockBaselineAction, deleteAssignmentAction, deleteWeeklyReportAction,
 } from "@/server/actions/projects";
 import { costVariance } from "@/lib/project-cost";
+import { getApprovedWorkByPlan } from "@/lib/data/work-log";
+import { hoursToCost, formatHoursHM } from "@/lib/work-time";
 import { formatYen, formatPercent, formatDateFull } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +57,7 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
 
   const { plan, revenues, assignments, costMonths, weekly } = bundle;
   const { roll, verdict, room } = computeProject(bundle);
+  const { byAssignmentMonth } = await getApprovedWorkByPlan([plan.id]);
   const seedMonths = monthRange(plan.start_month, plan.end_month);
   const months = roll.months.map((m) => m.month);
 
@@ -146,6 +149,86 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
                 </table>
               </div>
             )}
+          </Section>
+
+          {/* 稼働実績(週次承認済み→実績原価) */}
+          <Section title="稼働実績（週次承認済み）" action={<Link href="/app/projects/approvals" className="text-[11px] text-teal-deep hover:underline">稼働承認へ</Link>}>
+            {(() => {
+              const H = Number(plan.hours_per_month) || 160;
+              const actualMonths = [...new Set([...byAssignmentMonth.values()].flatMap((m) => [...m.keys()]))];
+              const workMonths = [...new Set([...months, ...actualMonths])].sort();
+              const plannedHoursByAsgMonth = new Map<string, Map<string, number>>();
+              for (const c of costMonths) {
+                const inner = plannedHoursByAsgMonth.get(c.assignment_id) ?? new Map<string, number>();
+                inner.set(monthKey(c.month), c.hours != null ? Number(c.hours) : Math.round((Number(c.man_month) || 0) * Number(c.ratio ?? 1) * H));
+                plannedHoursByAsgMonth.set(c.assignment_id, inner);
+              }
+              const asgRows = assignments.filter((a) => a.status !== "removed" || byAssignmentMonth.has(a.id));
+              if (workMonths.length === 0 || asgRows.length === 0) {
+                return <p className="text-sm text-ink/40 py-6 text-center">承認済みの稼働実績はまだありません。担当者が「稼働報告」で記入・提出し、「稼働承認」で承認すると反映されます。</p>;
+              }
+              const actualCostByMonth = new Map<string, number>();
+              for (const a of asgRows) {
+                const am = byAssignmentMonth.get(a.id);
+                if (!am) continue;
+                for (const [m, h] of am) actualCostByMonth.set(m, (actualCostByMonth.get(m) ?? 0) + hoursToCost(h, Number(a.cost_rate) || 0, a.rate_unit ?? "man_month", H));
+              }
+              const totalActualCost = [...actualCostByMonth.values()].reduce((s, v) => s + v, 0);
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm tabular-nums" style={{ minWidth: 480 }}>
+                    <thead className="text-ink/40 text-xs bg-mist-soft/30">
+                      <tr>
+                        <th className="th">アサイン（実績h / 予定h）</th>
+                        {workMonths.map((m) => <th key={m} className="th text-right">{ymLabel(m)}</th>)}
+                        <th className="th text-right">合計</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-black/[0.04]">
+                      {asgRows.map((a) => {
+                        const am = byAssignmentMonth.get(a.id);
+                        const pm = plannedHoursByAsgMonth.get(a.id);
+                        const totalH = workMonths.reduce((s, m) => s + (am?.get(m) ?? 0), 0);
+                        return (
+                          <tr key={a.id}>
+                            <td className="td font-medium text-ink/90">{a.label}</td>
+                            {workMonths.map((m) => {
+                              const act = am?.get(m) ?? 0;
+                              const pl = pm?.get(m) ?? 0;
+                              return (
+                                <td key={m} className="td text-right text-ink/70">
+                                  {act || pl ? (
+                                    <span>
+                                      <span className={act > pl && pl > 0 ? "text-rose-600 font-semibold" : "font-semibold"}>{act ? formatHoursHM(act) : "—"}</span>
+                                      <span className="text-[11px] text-ink/40"> / {pl ? formatHoursHM(pl) : "—"}</span>
+                                    </span>
+                                  ) : "—"}
+                                </td>
+                              );
+                            })}
+                            <td className="td text-right font-semibold">{totalH ? formatHoursHM(totalH) : "—"}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="bg-mist-soft/40 font-semibold">
+                        <td className="td">実績原価（換算）</td>
+                        {workMonths.map((m) => <td key={m} className="td text-right">{actualCostByMonth.get(m) ? formatYen(Math.round(actualCostByMonth.get(m)!)) : "—"}</td>)}
+                        <td className="td text-right">{formatYen(Math.round(totalActualCost))}</td>
+                      </tr>
+                      <tr>
+                        <td className="td text-ink/60">計画原価</td>
+                        {workMonths.map((m) => {
+                          const mm = roll.months.find((r) => r.month === m);
+                          return <td key={m} className="td text-right text-ink/70">{mm?.cost ? formatYen(mm.cost) : "—"}</td>;
+                        })}
+                        <td className="td text-right">{formatYen(roll.totals.cost)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p className="text-[11px] text-ink/40 mt-1.5">実績hは承認済みの稼働報告の合計。実績原価は単価換算（人月単価は月{H}hで時間割り）。</p>
+                </div>
+              );
+            })()}
           </Section>
 
           {/* 販売計画 */}

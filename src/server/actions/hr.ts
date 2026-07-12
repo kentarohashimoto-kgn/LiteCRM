@@ -147,6 +147,8 @@ export async function updateTalentAction(formData: FormData): Promise<void> {
         skills: String(formData.get("skills") || "").trim() || null,
         current_assignment: String(formData.get("current_assignment") || "").trim() || null,
         notes: String(formData.get("notes") || "").trim() || null,
+        // CRMログイン紐付け(稼働報告の本人特定に使用)。フォームに無い場合は変更しない
+        ...(formData.has("user_id") ? { user_id: String(formData.get("user_id") || "").trim() || null } : {}),
       })
       .eq("id", id);
   }

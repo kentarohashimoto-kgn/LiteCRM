@@ -37,6 +37,7 @@ import {
   Scale,
   ClipboardCheck,
   NotebookPen,
+  Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME, canManageProjects } from "@/lib/constants";
@@ -63,6 +64,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/reps", label: "営業ビュー", icon: UserCog },
       { href: "/app/forecast", label: "売上予測", icon: TrendingUp },
       { href: "/app/targets", label: "目標入力", icon: Goal },
+      { href: "/app/work", label: "稼働報告", icon: Timer },
     ],
   },
   {
@@ -112,6 +114,7 @@ const boGroups: typeof groups = [
       { href: "/app/bo/instructors", label: "AI講師スケジュール", icon: CalendarCheck },
       { href: "/app/bo/cases", label: "事例・インタビュー", icon: BookOpen },
       { href: "/app/bo/surveys", label: "講師アンケート", icon: ClipboardList },
+      { href: "/app/work", label: "稼働報告", icon: Timer },
     ],
   },
 ];
@@ -124,12 +127,19 @@ const hrGroup: (typeof groups)[number] = {
   ],
 };
 
-/** 管理職には「案件」グループに原価管理(デリバリー原価・粗利)を差し込む。 */
+/** 管理職には「案件」グループに原価管理(デリバリー原価・粗利)と稼働承認を差し込む。 */
 function injectProjects(base: typeof groups, role: Role): typeof groups {
   if (!canManageProjects(role)) return base;
   return base.map((g) =>
     g.heading === "案件"
-      ? { ...g, items: [...g.items, { href: "/app/projects", label: "原価管理", icon: FolderKanban }] }
+      ? {
+          ...g,
+          items: [
+            ...g.items,
+            { href: "/app/projects", label: "原価管理", icon: FolderKanban },
+            { href: "/app/projects/approvals", label: "稼働承認", icon: BadgeCheck },
+          ],
+        }
       : g
   );
 }

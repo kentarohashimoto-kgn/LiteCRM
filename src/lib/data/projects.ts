@@ -1,5 +1,7 @@
 /** 案件管理(デリバリー原価・粗利管理)のデータ取得と集計。 */
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getApprovedWorkByPlan } from "@/lib/data/work-log";
+import { hoursToCost } from "@/lib/work-time";
 import {
   rollup,
   discountRoom,
@@ -150,6 +152,8 @@ export interface ManagedProjectRow {
   finalProfit: number | null; // 販売合計 − 終了時実績原価
   finalVariance: number | null; // 終了時実績原価 − 計画原価
   finalComment: string | null; // 順調だったか等のコメント
+  approvedHours: number; // 稼働報告の承認済み実績工数(h)
+  approvedCost: number; // 承認済み実績の原価換算(円)
 }
 
 /** 案件管理対象(フラグON)の案件を、月別集計＋期間・進捗・完了実績付きで一覧取得。 */
@@ -186,6 +190,7 @@ export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
       ])
     : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
   for (const r of [revR, cmR, asgR, wkR]) if ("error" in r && r.error) throw new Error(`原価明細の取得に失敗: ${(r.error as { message: string }).message}`);
+  const approvedWork = await getApprovedWorkByPlan(planIds);
   const revs = (revR.data ?? []) as RevenueMonth[];
   const cms = (cmR.data ?? []) as CostMonth[];
   const asgs = (asgR.data ?? []) as ProjAssignment[];
@@ -210,6 +215,21 @@ export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
     const isFuture = !!startMonth && nowMonth < startMonth;
     const isPast = !!endMonth && nowMonth > endMonth;
     const isActive = !isFuture && !isPast && (!!startMonth || !!endMonth);
+
+    // 稼働報告(承認済み)の実績工数と原価換算
+    let approvedHours = 0;
+    let approvedCost = 0;
+    if (plan) {
+      const H = Number(plan.hours_per_month) || 160;
+      for (const a of byPlan(asgs, plan.id)) {
+        const am = approvedWork.byAssignmentMonth.get(a.id);
+        if (!am) continue;
+        for (const h of am.values()) {
+          approvedHours += h;
+          approvedCost += hoursToCost(h, Number(a.cost_rate) || 0, a.rate_unit ?? "man_month", H);
+        }
+      }
+    }
 
     const planWeeks = plan ? byPlan(weeks, plan.id) : [];
     const latest = planWeeks[0] ?? null; // created_at desc
@@ -238,6 +258,8 @@ export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
       finalProfit: finalActualCost != null ? revenueTotal - finalActualCost : null,
       finalVariance: finalActualCost != null ? finalActualCost - planCost : null,
       finalComment: finalR ? finalR.blockers ?? finalR.notes ?? null : null,
+      approvedHours,
+      approvedCost: Math.round(approvedCost),
     };
   });
 }
