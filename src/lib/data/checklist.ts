@@ -34,66 +34,40 @@ export type ChecklistBoard = {
   gapCount: number; // 抜けのある案件数
 };
 
-type Row = {
+const TOTAL = CHECKLIST_ITEMS.length;
+
+type RpcOpp = {
   id: string;
   name: string | null;
+  account: string | null;
   yomi: string | null;
   amount: number | null;
-  customer_issue: string | null;
-  proposed_solution: string | null;
-  next_action_date: string | null;
-  decision_maker_status: string | null;
-  budget_status: string | null;
-  proposal_required: boolean | null;
-  proposal_status: string | null;
-  accounts: { name: string | null } | null;
+  done: Record<string, boolean>;
+  doneCount: number;
 };
+type RpcPayload = { total?: number; gapCount?: number; avgRate?: number; opps?: RpcOpp[] };
 
-/** 「記録済み」判定: 値があり、未確認系でない。 */
-function recorded(v: string | null): boolean {
-  const s = (v ?? "").trim();
-  if (!s) return false;
-  return !["未確認", "未", "未定", "unknown", "none", "なし"].includes(s);
-}
-
+/**
+ * 集計RPC `checklist_metrics` に移行(監査2026-07-12)。6項目の充足判定はSQL側で実施し
+ * 判定済みの軽量行だけを返す(全opp列のJS転送を回避・データ増耐性)。並びはRPCで
+ * done_count昇順・amount降順(旧JSと同一)。gapOnly絞り込みのみJS側(軽量)。
+ */
 export async function getChecklistBoard(gapOnly: boolean): Promise<ChecklistBoard> {
   const sb = getSupabaseServer();
-  const { data } = await sb
-    .from("opportunities")
-    .select(
-      "id,name,yomi,amount,customer_issue,proposed_solution,next_action_date,decision_maker_status,budget_status,proposal_required,proposal_status,accounts(name)",
-    )
-    .eq("status", "open")
-    .is("deleted_at", null)
-    .limit(2000);
+  const { data } = await sb.rpc("checklist_metrics");
+  const p = (data ?? {}) as RpcPayload;
 
-  const rows = (data ?? []) as unknown as Row[];
-  const opps: ChecklistOpp[] = rows.map((o) => {
-    const done: Record<string, boolean> = {
-      issue: !!o.customer_issue?.trim(),
-      solution: !!o.proposed_solution?.trim(),
-      next: !!o.next_action_date,
-      dm: recorded(o.decision_maker_status),
-      budget: recorded(o.budget_status),
-      proposal: o.proposal_required ? recorded(o.proposal_status) : true,
-    };
-    const doneCount = CHECKLIST_ITEMS.filter((i) => done[i.key]).length;
-    return {
-      id: o.id,
-      name: o.name ?? "—",
-      account: o.accounts?.name ?? null,
-      yomi: o.yomi,
-      amount: o.amount ?? 0,
-      done,
-      doneCount,
-      total: CHECKLIST_ITEMS.length,
-    };
-  });
+  const opps: ChecklistOpp[] = (p.opps ?? []).map((o) => ({
+    id: o.id,
+    name: o.name ?? "—",
+    account: o.account ?? null,
+    yomi: o.yomi,
+    amount: Number(o.amount ?? 0),
+    done: o.done ?? {},
+    doneCount: Number(o.doneCount ?? 0),
+    total: TOTAL,
+  }));
 
-  const gaps = opps.filter((o) => o.doneCount < o.total);
-  const avgRate = opps.length ? opps.reduce((s, o) => s + o.doneCount / o.total, 0) / opps.length : 0;
-
-  const shown = (gapOnly ? gaps : opps).sort((a, b) => a.doneCount - b.doneCount || b.amount - a.amount);
-
-  return { opps: shown, avgRate, gapCount: gaps.length };
+  const shown = gapOnly ? opps.filter((o) => o.doneCount < o.total) : opps;
+  return { opps: shown, avgRate: Number(p.avgRate ?? 0), gapCount: Number(p.gapCount ?? 0) };
 }
