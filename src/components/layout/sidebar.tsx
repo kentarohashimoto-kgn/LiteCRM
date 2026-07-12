@@ -34,6 +34,7 @@ import {
   Lightbulb,
   Swords,
   PenLine,
+  Scale,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME, canManageProjects } from "@/lib/constants";
@@ -78,6 +79,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
     items: [
       { href: "/app/analytics/xray", label: "営業レントゲン", icon: ScanLine },
       { href: "/app/analytics", label: "分析ハブ", icon: Gauge },
+      { href: "/app/analytics/winloss", label: "失注/成約分析", icon: Scale },
       { href: "/app/exec", label: "経営レビュー", icon: Presentation },
       { href: "/app/reviews/weekly", label: "週次レビュー", icon: CalendarCheck },
       { href: "/app/reviews/snapshots", label: "週報スナップショット", icon: History },
