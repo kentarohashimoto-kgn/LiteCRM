@@ -31,6 +31,7 @@ import {
   Bot,
   Inbox,
   History,
+  Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME, canManageProjects } from "@/lib/constants";
@@ -66,6 +67,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/leads", label: "リード", icon: Sparkles },
       { href: "/app/srank", label: "Sランク攻略", icon: Star },
       { href: "/app/nurture", label: "既存顧客深耕", icon: TrendingUp },
+      { href: "/app/knowledge", label: "ノウハウ・事例", icon: Lightbulb },
     ],
   },
   {
