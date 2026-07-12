@@ -6,6 +6,8 @@ import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getRepReport } from "@/lib/data/rep-report";
 import { mondayJst } from "@/lib/data/weekly-snapshot";
+import { YOMI_OPTIONS } from "@/lib/constants";
+import { attachReasonToLatestYomiLog } from "@/server/actions/yomi";
 
 /**
  * 営業マン別週報のナラティブ＋自動集計サマリーをスナップショット保存(upsert: 1営業マン×1週で1行)。
@@ -77,18 +79,32 @@ export async function saveRepForecastAction(formData: FormData): Promise<void> {
   const left = leftRaw ? Number(leftRaw) : null;
   const note = String(formData.get("rep_status_note") ?? "").trim();
 
+  // ヨミの変更(一覧から直接)。変更はDBトリガーが履歴(yomi_change_logs)に自動記録する
+  const yomiProvided = formData.has("yomi");
+  const yomiRaw = String(formData.get("yomi") ?? "").trim();
+  const yomi = YOMI_OPTIONS.some((o) => o.key === yomiRaw) ? yomiRaw : null;
+
   const sb = getSupabaseServer();
-  await sb
+  const up = await sb
     .from("opportunities")
     .update({
       rep_close_month: /^\d{4}-\d{2}$/.test(month) ? month : null,
       rep_amount_forecast: amount != null && Number.isFinite(amount) ? amount : null,
       rep_meetings_left: left != null && Number.isInteger(left) && left >= 0 ? left : null,
       rep_status_note: note || null,
+      ...(yomiProvided ? { yomi } : {}),
     })
     .eq("id", oppId);
+  if (up.error) back("error=save_failed");
+
+  // 同時に入力された要因を、いま記録された履歴行と受注/失注分析(win_reason/lost_reason)へ反映
+  const reason = String(formData.get("yomi_reason") ?? "").trim();
+  if (yomiProvided && reason) {
+    await attachReasonToLatestYomiLog(oppId, yomi, reason);
+  }
 
   revalidatePath("/app/reviews/rep");
+  revalidatePath("/app/reviews/yomi-history");
   back("saved=opp");
 }
 
