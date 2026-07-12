@@ -162,6 +162,7 @@ export async function updateTalentAction(formData: FormData): Promise<void> {
         mail_system: str("mail_system"),
         hourly_rate: rate ? Number(rate) : null,
         cost_managed: formData.get("cost_managed") === "on",
+        work_report_required: formData.get("work_report_required") === "on",
         // フォームに無い項目は変更しない
         ...(formData.has("skills") ? { skills: str("skills") } : {}),
         ...(formData.has("current_assignment") ? { current_assignment: str("current_assignment") } : {}),

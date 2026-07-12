@@ -37,13 +37,17 @@ function hoursDisplay(n: number): string {
 export function WorkWeekEditor({
   assignmentId,
   planId,
+  talentId,
   weekStart,
   days,
   initial,
   status,
 }: {
-  assignmentId: string;
-  planId: string;
+  /** 案件アサイン紐づきの記入(原価連動)。全般稼働の場合は null。 */
+  assignmentId?: string | null;
+  planId?: string | null;
+  /** 全般稼働(案件に紐づかない稼働)の記入。 */
+  talentId?: string | null;
   weekStart: string;
   days: string[]; // 週の7日(ISO)
   initial: WorkEntry[];
@@ -112,8 +116,9 @@ export function WorkWeekEditor({
   return (
     <div className="space-y-3">
       <form action={saveWorkWeekAction}>
-        <input type="hidden" name="assignment_id" value={assignmentId} />
-        <input type="hidden" name="plan_id" value={planId} />
+        {assignmentId && <input type="hidden" name="assignment_id" value={assignmentId} />}
+        {planId && <input type="hidden" name="plan_id" value={planId} />}
+        {talentId && <input type="hidden" name="talent_id" value={talentId} />}
         <input type="hidden" name="week_start" value={weekStart} />
         <div className="overflow-x-auto">
           <table className="w-full text-sm" style={{ minWidth: 1080 }}>
@@ -185,8 +190,9 @@ export function WorkWeekEditor({
         }}
         className="flex justify-end border-t border-black/[0.04] pt-2.5"
       >
-        <input type="hidden" name="assignment_id" value={assignmentId} />
-        <input type="hidden" name="plan_id" value={planId} />
+        {assignmentId && <input type="hidden" name="assignment_id" value={assignmentId} />}
+        {planId && <input type="hidden" name="plan_id" value={planId} />}
+        {talentId && <input type="hidden" name="talent_id" value={talentId} />}
         <input type="hidden" name="week_start" value={weekStart} />
         <SubmitButton className="btn-accent inline-flex items-center gap-1.5 text-sm" pendingLabel="提出中…">
           <Send size={14} /> この週を提出（承認依頼）

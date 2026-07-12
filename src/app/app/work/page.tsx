@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, ClipboardList } from "lucide-react";
 import { requireCtx } from "@/lib/session";
-import { getMyAssignments, getMyWorkWeek, type WorkWeekStatus } from "@/lib/data/work-log";
+import { getMyWorkContext, getMyWorkWeek, type WorkWeekStatus, type WorkWeek } from "@/lib/data/work-log";
 import { todayJST, weekStartOf, addDaysISO, monthEndOf, formatHoursHM } from "@/lib/work-time";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { ActionNotice } from "@/components/ui/action-notice";
@@ -26,13 +26,18 @@ export default async function WorkPage({ searchParams }: { searchParams: { week?
   const weekEnd = addDaysISO(week, 6);
   const days = Array.from({ length: 7 }, (_, i) => addDaysISO(week, i));
 
-  const assignments = await getMyAssignments();
+  const { assignments, talent } = await getMyWorkContext();
   const ids = assignments.map((a) => a.assignment_id);
+  const generalRequired = !!talent?.work_report_required;
   const monthKeyStr = week.slice(0, 7); // 表示週の月曜が属する月
   const monthStart = `${monthKeyStr}-01`;
   const monthEnd = monthEndOf(monthStart);
-  const { entries, weeks, monthHours } = await getMyWorkWeek(ids, week, monthStart, monthEnd);
-  const weekByAssignment = new Map(weeks.map((w) => [w.assignment_id, w]));
+  const { entries, weeks, monthHours, generalMonthHours } = await getMyWorkWeek(
+    ids, generalRequired ? talent!.talent_id : null, week, monthStart, monthEnd,
+  );
+  const weekByAssignment = new Map(weeks.filter((w) => w.assignment_id).map((w) => [w.assignment_id!, w]));
+  const generalWeek: WorkWeek | null = weeks.find((w) => !w.assignment_id) ?? null;
+  const generalEntries = entries.filter((e) => !e.assignment_id);
 
   // 当月の経過割合(按分ペースの計算用)。過去月=1、未来月=0。
   const elapsedRatio =
@@ -69,12 +74,12 @@ export default async function WorkPage({ searchParams }: { searchParams: { week?
         }}
       />
 
-      {assignments.length === 0 ? (
+      {assignments.length === 0 && !generalRequired ? (
         <Section title="">
           <div className="py-12 text-center">
             <ClipboardList size={28} className="mx-auto text-ink/25 mb-2" />
-            <p className="text-sm text-ink/50">記入対象のアサインがありません。</p>
-            <p className="text-xs text-ink/40 mt-1">案件へのアサイン（原価管理のアサイン設定、外部委託の場合はタレント台帳とのアカウント紐付け）を管理者にご確認ください。</p>
+            <p className="text-sm text-ink/50">記入対象がありません。</p>
+            <p className="text-xs text-ink/40 mt-1">「稼働報告必須」の設定（タレント台帳）または案件へのアサイン（原価管理）と、CRMアカウントの紐付けを管理者にご確認ください。</p>
           </div>
         </Section>
       ) : (
@@ -127,6 +132,28 @@ export default async function WorkPage({ searchParams }: { searchParams: { week?
             </Section>
           );
         })
+      )}
+
+      {generalRequired && (
+        <Section title="全般稼働（案件に紐づかない稼働）" className="mb-5">
+          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            {generalWeek && <span className={`pill ${STATUS_PILL[generalWeek.status].cls} text-[11px] font-bold`}>{STATUS_PILL[generalWeek.status].label}</span>}
+            {generalWeek?.status === "returned" && generalWeek.review_note && (
+              <span className="text-xs text-rose-600">差戻し理由: {generalWeek.review_note}</span>
+            )}
+            <span className="tabular-nums text-ink/70">
+              {Number(monthKeyStr.slice(5, 7))}月の実績入力 <b>{formatHoursHM(generalMonthHours)}</b>
+            </span>
+            <span className="text-xs text-ink/45">営業活動・社内業務など、特定案件の原価に紐づかない稼働はこちらに記入してください。</span>
+          </div>
+          <WorkWeekEditor
+            talentId={talent!.talent_id}
+            weekStart={week}
+            days={days}
+            initial={generalEntries}
+            status={generalWeek?.status ?? null}
+          />
+        </Section>
       )}
 
       <p className="text-xs text-ink/40 mt-2">
