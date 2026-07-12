@@ -1,5 +1,4 @@
-import { getWorkspaceLite } from "@/lib/data/workspace";
-import { listMembers } from "@/lib/data/select";
+import { getMembersLite } from "@/lib/data/workspace";
 import { getKpiReview, weekRange, weeksInMonth, parsePeriod } from "@/lib/data/exec";
 import { saveKpiTargetsAction, saveKpiActualAction, saveWeeklyReviewAction, createMtgActionAction } from "@/server/actions";
 import { PageHeader, Section } from "@/components/ui/primitives";
@@ -12,9 +11,9 @@ function pct(v: number | null) { return v == null ? "—" : `${Math.round(v * 10
 
 export default async function ExecKpiPage({ searchParams }: { searchParams: { month?: string; week?: string } }) {
   const { month, week } = parsePeriod(searchParams);
-  const ws = await getWorkspaceLite();
-  const members = listMembers(ws).map(({ user }) => user);
-  const rows = await getKpiReview(month, week);
+  // メンバー名しか使わないため lite(≈800KB) ではなく軽量フェッチャで取得(監査2026-07-12)
+  const [membersRaw, rows] = await Promise.all([getMembersLite(), getKpiReview(month, week)]);
+  const members = membersRaw.map(({ user }) => user);
   const range = weekRange(month, week);
 
   return (

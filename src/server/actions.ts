@@ -686,7 +686,9 @@ export async function addActivityAction(formData: FormData) {
   const nextText = str(formData.get("next_action_text"));
   const title = str(formData.get("title"));
   const body = str(formData.get("body"));
-  const redirectTo = str(formData.get("redirect_to"));
+  // open redirect対策: 内部パス(/で始まり//でない)のみ許可(監査2026-07-12)
+  const rawRedirect = str(formData.get("redirect_to"));
+  const redirectTo = rawRedirect && /^\/(?!\/)/.test(rawRedirect) ? rawRedirect : null;
   // 活動日時: ユーザーが選べる(未指定なら現在時刻)。日付のみはJSTの0時、datetime-localはJSTとして扱う。
   const nowIso = new Date().toISOString();
   const rawAt = str(formData.get("activity_at"));
@@ -851,9 +853,10 @@ export async function setAccountFocusAction(formData: FormData) {
   revalidatePath("/app/accounts");
 }
 
-/** 顧客の担当営業(owner_user_id)を割当・変更。 */
+/** 顧客の担当営業(owner_user_id)を割当・変更。担当変更は管理職限定(案件と同じ規律。監査2026-07-12) */
 export async function setAccountOwnerAction(formData: FormData) {
-  await requireCtx();
+  const ctx = await requireCtx();
+  if (!canReassignOwner(ctx.role)) return; // DB側トリガ(trg_accounts_owner_reassign)でも二重に防御
   const sb = getSupabaseServer();
   await sb.from("accounts").update({ owner_user_id: str(formData.get("owner_user_id")) }).eq("id", String(formData.get("id")));
   revalidatePath("/app/accounts");

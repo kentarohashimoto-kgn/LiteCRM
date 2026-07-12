@@ -24,7 +24,9 @@ export async function searchApptLeadsAction(q: string): Promise<ApptLeadHit[]> {
     .select("id,company_name,contact_name,raw_event,rank,converted_opportunity_id")
     .order("priority_score", { ascending: false })
     .limit(20);
-  if (q.trim()) query = query.or(`company_name.ilike.%${q.trim()}%,contact_name.ilike.%${q.trim()}%`);
+  // PostgRESTのor句に入れるためメタ文字を除去(フィルタ注入対策。leads.ts と同じサニタイズ)
+  const safeQ = q.replace(/[,%_()]/g, " ").trim();
+  if (safeQ) query = query.or(`company_name.ilike.%${safeQ}%,contact_name.ilike.%${safeQ}%`);
   const { data } = await query;
   return (data ?? [])
     .filter((l) => !l.converted_opportunity_id) // 既に案件化済みは除外

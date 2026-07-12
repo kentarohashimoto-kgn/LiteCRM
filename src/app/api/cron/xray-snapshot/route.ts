@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { checkBearer } from "@/lib/secure-compare";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +11,10 @@ export const dynamic = "force-dynamic";
  * 必要な環境変数: CRON_SECRET(認可)。
  */
 export async function GET(req: Request) {
+  // fail-closed: CRON_SECRET 未設定なら拒否(監査2026-07-12。従来は未設定時に素通しだった)
   const secret = process.env.CRON_SECRET;
-  if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!secret) return NextResponse.json({ ok: false, error: "CRON_SECRET未設定" }, { status: 503 });
+  if (!checkBearer(req, secret)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const admin = getSupabaseAdmin();

@@ -95,6 +95,31 @@ async function fetchMasters(sb: ReturnType<typeof getSupabaseServer>) {
   };
 }
 
+/**
+ * メンバー一覧だけが必要なページ用の超軽量フェッチャ(profiles+membershipsのみ、数KB)。
+ * listMembers(getWorkspaceLite()) の置き換え。lite(accounts+opps全件≈800KB)の転送を避ける。
+ */
+export const getMembersLite = cache(
+  async (): Promise<{ user: User; role: Membership["role"]; repStatus?: string }[]> => {
+    const sb = getSupabaseServer();
+    const [profilesR, membershipsR] = await Promise.all([
+      sb.from("profiles").select("id,email,display_name,avatar_color"),
+      sb.from("memberships").select("*"),
+    ]);
+    const profiles = (profilesR.data ?? []) as ProfileRow[];
+    const usersById = new Map(
+      profiles.map((p) => [
+        p.id,
+        { id: p.id, name: p.display_name ?? p.email ?? "—", email: p.email ?? "", avatarColor: p.avatar_color ?? "#008C8C" } as User,
+      ]),
+    );
+    return ((membershipsR.data ?? []) as Membership[]).flatMap((m) => {
+      const user = usersById.get(m.user_id);
+      return user ? [{ user, role: m.role, repStatus: m.rep_status as string | undefined }] : [];
+    });
+  },
+);
+
 /** 空配列の共通スロット（スコープ付きワークスペースで未使用の領域）。 */
 const EMPTY_SLOTS = {
   salesTargets: [] as SalesTarget[],
