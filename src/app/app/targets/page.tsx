@@ -1,15 +1,21 @@
 import Link from "next/link";
 import { getWorkspaceLite } from "@/lib/data/workspace";
-import { getSalesTargets, listOpportunities, listMembers, listRepTargets } from "@/lib/data/select";
+import { getSalesTargets, listOpportunities, listMembers, listRepTargets, getLeadSources } from "@/lib/data/select";
 import { getLeadMetrics } from "@/lib/data/leads";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { saveTargetsAction, saveRepTargetsAction } from "@/server/actions";
 import { currentFiscalStartYear, fiscalMonths, fiscalYearLabel } from "@/lib/fiscal";
 import { actualByMonth } from "@/lib/targets";
 import { monthKey, startOfMonth, formatYen } from "@/lib/utils";
+import { MoneyInput } from "@/components/ui/money-input";
+import { AllocationEditor } from "@/components/targets/allocation-editor";
+import { getAllocations } from "@/lib/data/target-allocations";
 
-export default async function TargetsPage({ searchParams }: { searchParams: { fy?: string; ok?: string; scope?: string } }) {
+const MGMT_ROLES = ["owner", "admin", "sales_manager"];
+
+export default async function TargetsPage({ searchParams }: { searchParams: { fy?: string; ok?: string; scope?: string; month?: string } }) {
   const ws = await getWorkspaceLite();
+  const isMgmt = MGMT_ROLES.includes(ws.ctx.role);
   const cur = currentFiscalStartYear();
   const fy = searchParams.fy ? parseInt(searchParams.fy, 10) : cur;
   const months = fiscalMonths(fy);
@@ -40,6 +46,9 @@ export default async function TargetsPage({ searchParams }: { searchParams: { fy
       {/* スコープ切替: 全社 / 各営業マン */}
       <div className="flex flex-wrap items-center gap-1.5 mb-4">
         <Link href={`/app/targets?fy=${fy}&scope=all`} className={`pill border ${scope === "all" ? "bg-teal-primary text-white border-teal-primary" : "bg-white text-ink/60 border-black/10"}`}>全社</Link>
+        {isMgmt && (
+          <Link href={`/app/targets?fy=${fy}&scope=alloc`} className={`pill border ${scope === "alloc" ? "bg-accent-orange text-white border-accent-orange" : "bg-white text-accent-orange border-accent-orange/30"}`}>担当・流入元へ配分</Link>
+        )}
         {members.map((m) => (
           <Link key={m.user.id} href={`/app/targets?fy=${fy}&scope=${m.user.id}`} className={`pill border ${selectedUser === m.user.id ? "bg-teal-primary text-white border-teal-primary" : "bg-white text-ink/60 border-black/10"}`}>
             {m.user.name}
@@ -51,7 +60,9 @@ export default async function TargetsPage({ searchParams }: { searchParams: { fy
         <p className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 mb-3">目標を保存しました（{fiscalYearLabel(fy)}）。</p>
       )}
 
-      {repMode && selectedUser ? (
+      {scope === "alloc" && isMgmt ? (
+        <AllocationSection ws={ws} fy={fy} months={months} month={searchParams.month} />
+      ) : repMode && selectedUser ? (
         <RepTargetForm ws={ws} fy={fy} months={months} userId={selectedUser} userName={members.find((m) => m.user.id === selectedUser)?.user.name ?? ""} />
       ) : (
         <AllTargetForm ws={ws} fy={fy} months={months} />
@@ -95,7 +106,7 @@ async function AllTargetForm({ ws, fy, months }: { ws: Awaited<ReturnType<typeof
                   <tr key={m.key} className="row-hover align-top">
                     <td className="td font-medium whitespace-nowrap">{m.year}年{m.month}月</td>
                     <td className="td">
-                      <input name={`m_${m.key}_amount`} type="number" defaultValue={t?.target_amount || ""} className="input text-right" placeholder="0" />
+                      <MoneyInput name={`m_${m.key}_amount`} defaultValue={t?.target_amount ?? ""} />
                       <div className="text-[10px] text-ink/40 text-right mt-0.5">実績 {formatYen(a?.revenue ?? 0)}</div>
                     </td>
                     <td className="td">
@@ -153,7 +164,7 @@ function RepTargetForm({ ws, fy, months, userId, userName }: { ws: Awaited<Retur
                 <tr key={m.key} className="row-hover">
                   <td className="td font-medium whitespace-nowrap">{m.year}年{m.month}月</td>
                   <td className="td">
-                    <input name={`m_${m.key}_amount`} type="number" defaultValue={repTargetMap.get(m.key) || ""} className="input text-right" placeholder="0" />
+                    <MoneyInput name={`m_${m.key}_amount`} defaultValue={repTargetMap.get(m.key) ?? ""} />
                     <div className="text-[10px] text-ink/40 text-right mt-0.5">実績 {formatYen(repRev.get(m.key) ?? 0)}</div>
                   </td>
                 </tr>
@@ -163,6 +174,45 @@ function RepTargetForm({ ws, fy, months, userId, userName }: { ws: Awaited<Retur
         </div>
         <div className="mt-4"><button type="submit" className="btn-primary">{userName} の目標を保存</button></div>
       </form>
+    </Section>
+  );
+}
+
+/** 全社の月間目標を担当×流入元に配分(担当分は rep_targets→週報目標へ反映)。管理ロールのみ。 */
+async function AllocationSection({ ws, fy, months, month }: { ws: Awaited<ReturnType<typeof getWorkspaceLite>>; fy: number; months: ReturnType<typeof fiscalMonths>; month?: string }) {
+  const targetMap = new Map(getSalesTargets(ws).map((t) => [t.target_month, t]));
+  const thisKey = monthKey(startOfMonth(new Date()));
+  const sel = month && months.some((m) => m.key === month) ? month : months.some((m) => m.key === thisKey) ? thisKey : months[0].key;
+  const selMonth = months.find((m) => m.key === sel);
+  const companyTarget = targetMap.get(sel)?.target_amount ?? 0;
+  const members = listMembers(ws).map(({ user }) => ({ id: user.id, name: user.name }));
+  const sources = getLeadSources(ws).map((s) => ({ id: s.id, name: s.name }));
+  const initial = await getAllocations(sel);
+
+  return (
+    <Section
+      title="担当・流入元への目標配分"
+      action={
+        <form method="get" className="flex items-center gap-2">
+          <input type="hidden" name="fy" value={fy} />
+          <input type="hidden" name="scope" value="alloc" />
+          <select name="month" defaultValue={sel} className="rounded-lg border border-black/10 px-2 py-1 text-sm">
+            {months.map((m) => (
+              <option key={m.key} value={m.key}>{m.year}年{m.month}月</option>
+            ))}
+          </select>
+          <button type="submit" className="btn-ghost text-xs">表示</button>
+        </form>
+      }
+    >
+      <AllocationEditor
+        month={sel}
+        monthLabel={`${selMonth?.year}年${selMonth?.month}月`}
+        companyTarget={companyTarget}
+        members={members}
+        sources={sources}
+        initial={initial}
+      />
     </Section>
   );
 }
