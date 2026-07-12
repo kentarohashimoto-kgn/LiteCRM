@@ -202,7 +202,9 @@ export const getWorkspace = cache(async (): Promise<Workspace> => {
   const sb = getSupabaseServer();
 
   // 1往復のRPCで全参照データを取得(RLS準拠)。多数クエリの往復を排除。
-  const { data } = await sb.rpc("workspace_full");
+  const { data, error } = await sb.rpc("workspace_full");
+  // エラーを握り潰して空データで描画すると「目標0円で上書き保存」等の事故につながるため必ずthrow(error.tsxで再読込を促す)
+  if (error) throw new Error(`workspace_full の取得に失敗しました: ${error.message}`);
   const j = (data ?? {}) as Record<string, unknown[]>;
   const profiles = (j.profiles ?? []) as ProfileRow[];
   const memberships = (j.memberships ?? []) as Membership[];
@@ -278,7 +280,8 @@ export const getWorkspaceLite = cache(async (): Promise<Workspace> => {
   const sb = getSupabaseServer();
 
   // 1往復のRPCで参照データをまとめて取得(RLS準拠)。逐次/並列の多数クエリを排除。
-  const { data } = await sb.rpc("workspace_lite");
+  const { data, error } = await sb.rpc("workspace_lite");
+  if (error) throw new Error(`workspace_lite の取得に失敗しました: ${error.message}`);
   const j = (data ?? {}) as Record<string, unknown[]>;
   const profiles = (j.profiles ?? []) as ProfileRow[];
   const memberships = (j.memberships ?? []) as Membership[];
