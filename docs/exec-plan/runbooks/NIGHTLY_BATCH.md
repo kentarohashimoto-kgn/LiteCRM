@@ -9,8 +9,8 @@
 > - tenant_id: `00000000-0000-0000-0000-000000000001`
 > - タイムゾーン: 実行環境はUTC。「本日(JST)」= `(now() at time zone 'Asia/Tokyo')::date`。03:00 JST = 前日18:00 UTC。
 > - 1晩の処理上限: **議事録要約 = 最大10件/晩**（平均3〜5件想定）。超過は翌晩へ繰り越し。
-> - **対象の下限（直近N日ポリシー / ユーザー決定 2026-07-12）**: `RECENT_DAYS = 3`。開催が直近3日以内（`meeting_date >= JST今日 - 3日`）の商談のみを対象とし、それ以前は対象外（枠コストを最小化）。値の変更はこの1箇所を直す。
->   - 注意: 商談から3日を超えて議事録が入った場合は自動対象外になる（手動要約 or 一時的にNを広げて対応）。緩めるなら7/14。
+> - **対象の下限（直近N日ポリシー / ユーザー決定 2026-07-12）**: `RECENT_DAYS = 7`。開催が直近7日以内（`meeting_date >= JST今日 - 7日`）の商談のみを対象とし、それ以前は対象外（枠コストを最小化しつつ late 入力の取りこぼしを防ぐ）。値の変更はこの1箇所を直す。
+>   - 商談後1〜2日で議事録が入る運用に対し7日の余裕を持たせる。もっと絞るなら3、緩めるなら14/30。
 >   - リサーチ/ブリーフィング(将来のjob)は本来「翌日アポ」を対象にするため、この下限は自然に満たす（登録日では絞らない）。
 
 ---
@@ -45,7 +45,7 @@ left join public.accounts a on a.id = m.account_id
 where m.tenant_id = '00000000-0000-0000-0000-000000000001'
   and coalesce(length(btrim(m.minutes_detail)),0) >= 30
   and (m.ai_summary is null or btrim(m.ai_summary) = '')
-  and m.meeting_date >= (now() at time zone 'Asia/Tokyo')::date - interval '3 days'  -- RECENT_DAYS=3
+  and m.meeting_date >= (now() at time zone 'Asia/Tokyo')::date - interval '7 days'  -- RECENT_DAYS=7
 order by m.meeting_date asc nulls last, m.created_at asc
 limit 10;
 ```
