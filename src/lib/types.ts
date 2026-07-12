@@ -819,6 +819,10 @@ export interface BillingSchedule {
   recurring_start_month?: string;
   recurring_end_month?: string;
   note?: string;
+  /** 検収日（freee連携: これが請求下書きの起点） */
+  accepted_on?: string;
+  /** pending / accepted / drafted / issued / paid（freee連携） */
+  billing_status?: string;
   created_by?: UUID;
   created_at: string;
   updated_at: string;

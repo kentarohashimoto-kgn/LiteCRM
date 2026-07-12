@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { GitMerge, Trash2 } from "lucide-react";
+import { GitMerge, Trash2, Receipt } from "lucide-react";
 import { getWorkspaceLite } from "@/lib/data/workspace";
+import { canManageFinance } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/badges";
@@ -50,6 +51,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
         subtitle="メンバー・商材・流入経路・展示会/施策をマスタとして管理します。ステージ・ヨミはシステム定義（下部参照）。"
         action={
           <div className="flex items-center gap-2">
+            {canManageFinance(ws.ctx.role) && (
+              <Link href="/app/settings/freee" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
+                <Receipt size={15} /> freee連携
+              </Link>
+            )}
             <Link href="/app/settings/duplicates" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
               <GitMerge size={15} /> 重複マージ
             </Link>

@@ -70,3 +70,15 @@ export async function requireProjectCtx(): Promise<Ctx> {
   if (!["owner", "admin", "sales_manager", "finance", "delivery"].includes(ctx.role)) redirect("/app/dashboard");
   return ctx;
 }
+
+/** 経理領域(経理/代表/管理者)専用ページで使用。freee連携・請求まわり。権限なしは営業トップへ。 */
+export async function requireFinanceCtx(): Promise<Ctx> {
+  const ctx = await requireCtx();
+  if (!["finance", "owner", "admin"].includes(ctx.role)) redirect("/app/dashboard");
+  return ctx;
+}
+
+/** 現在のロールが経理領域(freee連携・請求)を扱えるか。 */
+export function canManageFinance(role: Role): boolean {
+  return ["finance", "owner", "admin"].includes(role);
+}

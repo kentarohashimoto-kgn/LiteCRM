@@ -199,8 +199,42 @@ export async function GET(req: Request) {
     /* BO通知失敗は無視 */
   }
 
+  // freee連携: 検収済なのに請求未発行 / 支払期日超過 を経理へ通知
+  let financeNotified = 0;
+  try {
+    const [{ data: tenant }, acceptedR, overdueR, financeMembersR] = await Promise.all([
+      admin.from("tenants").select("id").limit(1).maybeSingle(),
+      // 検収済(accepted)で下書き止まり、または accepted のまま請求されていない請求予定
+      admin.from("billing_schedules").select("id, amount, billing_status, opportunity_id, accepted_on").in("billing_status", ["accepted", "drafted"]),
+      // 発行済みで支払期日超過の請求書
+      admin.from("freee_invoices").select("id, amount, due_date, invoice_number, opportunity_id").eq("status", "issued").lt("due_date", today),
+      admin.from("memberships").select("user_id").eq("status", "active").in("role", ["finance", "owner", "admin"]),
+    ]);
+    const financeUsers = (financeMembersR.data ?? []).map((m) => m.user_id as string);
+    const acceptedLines = (acceptedR.data ?? []).map((b) => {
+      const st = (b as { billing_status: string }).billing_status;
+      return `${st === "drafted" ? "請求下書きを承認・発行" : "検収済・請求未作成"}（¥${Math.round((b as { amount: number }).amount).toLocaleString("ja-JP")}）`;
+    });
+    const overdueLines = (overdueR.data ?? []).map((i) => `入金遅延: ${(i as { invoice_number: string | null }).invoice_number ?? "請求書"}（期日 ${(i as { due_date: string }).due_date} 超過）`);
+    const allLines = [...acceptedLines, ...overdueLines];
+    if (tenant && financeUsers.length > 0 && allLines.length > 0) {
+      const rows = financeUsers.map((uid) => ({
+        tenant_id: tenant.id as string,
+        user_id: uid,
+        kind: "freee_due",
+        title: `請求・入金の要対応（${allLines.length}件）`,
+        body: allLines.slice(0, 8).join("\n") + (allLines.length > 8 ? `\n他${allLines.length - 8}件` : ""),
+        href: "/app/settings/freee",
+      }));
+      const { error } = await admin.from("notifications").insert(rows);
+      if (!error) financeNotified = rows.length;
+    }
+  } catch {
+    /* freee通知失敗は無視 */
+  }
+
   if (!webhook) {
-    return NextResponse.json({ ok: true, owners: owners.length, pending, purged, notified, boNotified, skipped: "SLACK_WEBHOOK_URL not configured" });
+    return NextResponse.json({ ok: true, owners: owners.length, pending, purged, notified, boNotified, financeNotified, skipped: "SLACK_WEBHOOK_URL not configured" });
   }
   const res = await fetch(webhook, {
     method: "POST",
@@ -208,5 +242,5 @@ export async function GET(req: Request) {
     body: JSON.stringify({ text: lines.join("\n") }),
   });
 
-  return NextResponse.json({ ok: res.ok, owners: owners.length, pending, purged, notified, boNotified });
+  return NextResponse.json({ ok: res.ok, owners: owners.length, pending, purged, notified, boNotified, financeNotified });
 }

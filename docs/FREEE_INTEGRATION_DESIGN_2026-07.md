@@ -143,14 +143,27 @@ RLS: いずれも `finance` / owner / admin。営業には案件詳細で「請�
 
 ## 5. 実装ロードマップ（弾で管理）
 
-| 弾 | 内容 | 規模 | 前提 |
+| 弾 | 内容 | 規模 | 状態 |
 |---|---|---|---|
-| **第1弾 接続・マスタ** | F-0（OAuth接続・トークン管理・取引先/品目の初期インポート=freee正・新規push=CRM正・名寄せ表） | M | — |
-| **第2弾 見積** | F-1（案件→見積下書き→承認→発行） | M | 第1弾 |
-| **第3弾 検収請求** ★ | F-2（billing_schedules検収拡張→請求下書き→承認→発行、請求漏れ検知） | L | 第1弾 |
-| **第4弾 入金・督促** | F-3（入金取込・売掛可視化・遅延アラート） | M | 第3弾 |
-| **第5弾 予実突合** | F-4（予測 vs 実績、週次レビュー統合） | M | 第3弾 |
-| **将来** | 粗利の実原価化、freee人事労務（インセンティブ）、webhook化 | — | — |
+| **第1弾 接続・マスタ** | F-0（OAuth接続・トークン管理・取引先の初期インポート=freee正・新規push=CRM正・名寄せ表・名称変更の都度確認UI） | M | ✅実装（0112）。OAuthアプリ登録＋接続操作は要対話（下記） |
+| **第2弾 見積** | F-1（案件→見積下書き→承認→発行） | M | ✅実装。案件詳細の「freee連携」パネル |
+| **第3弾 検収請求** ★ | F-2（billing_schedules検収拡張→請求下書き→承認→発行、請求漏れ検知） | L | ✅実装。検収記録→下書き→承認発行、朝cronで検収済未請求を通知 |
+| **第4弾 入金・督促** | F-3（入金取込・遅延アラート） | M | ✅実装。設定画面「入金を同期」＋朝cronで期日超過を通知 |
+| **第5弾 予実突合** | F-4（予測 vs 実績、週次レビュー統合） | M | 未着手（次フェーズ） |
+| **将来** | 品目マスタ同期、粗利の実原価化、freee人事労務、webhook化、MCPサーバー | — | 未着手 |
+
+### 実装メモ（第1〜4弾 / migration 0112）
+
+- **DB**: `supabase/migrations/0112_freee_integration.sql`
+  - `is_finance()` ヘルパー、`freee_connections`（トークンはservice roleのみ／secdef `freee_status()` で状態のみ公開）、`freee_links`（名寄せ・link_mode=renamed/linked）、`freee_quotes`、`freee_invoices`、`freee_sync_log`
+  - `billing_schedules` に `accepted_on` / `billing_status`（pending→accepted→drafted→issued→paid）
+- **Layer①（自動連携・MCP共通の純関数）**: `src/lib/freee/{client,sync,types}.ts`
+  - 承認フロー: 見積・請求の「下書き」は **freeeを叩かずCRMに保存**、承認者の「発行」で初めて freee へ push
+- **OAuth**: `src/app/api/freee/{connect,callback}/route.ts`
+- **Server Actions（承認ガードつき）**: `src/server/actions/freee.ts`
+- **UI**: `/app/settings/freee`（接続・名寄せ承認・請求一覧・ログ）、案件詳細の「freee連携」パネル（検収→請求／見積）
+- **cron**: `daily-digest` に「検収済・請求未発行」「支払期日超過」を経理へ通知（kind=`freee_due`）
+- **要対話の残作業**: freeeアプリ登録（Client ID/Secret取得・コールバックURL設定）と `.env` 設定、設定画面からの「freeeに接続」操作。品目/税区分マッピングの初期表（未確定#3）。→ 詳細は `docs/FREEE_MCP_SETUP.md`
 
 ---
 

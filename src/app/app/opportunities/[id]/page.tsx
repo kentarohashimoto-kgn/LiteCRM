@@ -41,6 +41,9 @@ import { UnifiedTimeline, type TimelineEvent } from "@/components/history/unifie
 import { CommentThread, type CommentView } from "@/components/opportunities/comment-thread";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { LOST_REASONS } from "@/lib/constants";
+import { canManageFinance } from "@/lib/session";
+import { getOppFreeeData } from "@/lib/data/freee";
+import { FreeeBillingPanel } from "@/components/billing/freee-billing";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince, toJstDate } from "@/lib/utils";
 
 const SAVED_MSG: Record<string, string> = { "1": "保存しました", activity: "活動を記録しました", memo: "現状メモ・ヨミを更新しました" };
@@ -53,6 +56,8 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
   const activities = getActivitiesByOpportunity(ws, o.id);
   const meetings = getMeetingsByOpportunity(ws, o.id);
   const billing = getBillingByOpportunity(ws, o.id);
+  const canFinance = canManageFinance(ws.ctx.role);
+  const freeeData = canFinance ? await getOppFreeeData(o.id) : null;
   const members = listMembers(ws).map(({ user }) => user);
   const canReassign = canReassignOwner(ws.ctx.role);
   const tasks = getTasksByOpportunity(ws, o.id);
@@ -371,6 +376,12 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
             <BillingSection schedules={billing} opportunityId={o.id} accountId={o.account_id} category={o.category} />
             <SubscriptionForm opportunityId={o.id} accountId={o.account_id} />
           </Section>
+
+          {canFinance && freeeData && (
+            <Section title="freee 連携（見積・検収→請求）" action={<Link href="/app/settings/freee" className="text-xs text-ink/40 hover:text-ink">連携設定</Link>}>
+              <FreeeBillingPanel opportunityId={o.id} data={freeeData} />
+            </Section>
+          )}
 
           <Section title="活動を記録" className={entityBorder("activity")} action={<EditTarget level="activity" />}>
             <form action={addActivityAction} className="space-y-3">
