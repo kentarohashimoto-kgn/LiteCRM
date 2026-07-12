@@ -167,3 +167,51 @@
   .checkmark-path,
   .confetti-piece { animation: none; }
 }
+
+/* ===== 全画面フィードバックオーバーレイ(監査UX 2026-07-12) ===== */
+.fb-fade-in { animation: fbFadeIn 150ms ease-out; }
+@keyframes fbFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* 更新中スピナー: ブランドティールのリング */
+.fb-spinner {
+  height: 56px; width: 56px; border-radius: 9999px;
+  border: 5px solid rgba(0, 140, 140, 0.15);
+  border-top-color: #008C8C;
+  animation: fbSpin 0.7s linear infinite;
+}
+@keyframes fbSpin { to { transform: rotate(360deg); } }
+
+/* 完了: 円がポップ→チェックが描かれる→リングが広がる */
+.fb-pop { animation: fbPop 320ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes fbPop { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+.fb-check {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: fbCheck 380ms ease-out 180ms forwards;
+}
+@keyframes fbCheck { to { stroke-dashoffset: 0; } }
+
+.fb-ring {
+  position: absolute; inset: -6px; border-radius: 9999px;
+  border: 3px solid rgba(0, 140, 140, 0.5);
+  animation: fbRing 700ms ease-out 150ms forwards;
+  opacity: 0;
+}
+@keyframes fbRing {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.fb-rise { animation: fbRise 350ms ease-out 250ms backwards; }
+@keyframes fbRise { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* 失敗: シェイク */
+.fb-shake { animation: fbShake 450ms ease-in-out; }
+@keyframes fbShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-10px); }
+  40% { transform: translateX(10px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
