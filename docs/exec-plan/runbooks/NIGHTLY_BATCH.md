@@ -21,6 +21,14 @@
 
 ## 0. 実行方式（F1 ingest API・正）
 
+> **スタート/停止制御（2026-07-12〜）**: 各ジョブの実行可否はアプリの「AIバッチ運用」画面
+> （`batch_job_settings` テーブル）で制御される。**実行前に必ず確認**すること:
+> - F1経路: GETが `{enabled:false, targets:[]}` を返したら**そのジョブは何も生成せず終了**
+>   （POSTも409で拒否される）。
+> - MCP保持セッション(F2)の場合: `select job_kind, enabled from batch_job_settings where tenant_id='00000000-0000-0000-0000-000000000001'`
+>   を最初に実行し、`enabled=false` のジョブはスキップ（batch_runs にも書かない）。
+> - 現在: `meeting_summary`=稼働 / `na_task_draft`=停止 / `content_draft`=**停止（記事品質の改善まで・ユーザー指示 2026-07-12）**
+
 夜間セッションは **Supabase MCP を使わず**、次の2ステップで処理する。SQLは打たない（DB操作はAPI内で完結）。
 
 ```bash
@@ -47,9 +55,9 @@ curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: applic
 
 | 順 | job_kind | 対象 | 生成物 | 書き戻し先 | 状態 |
 |---|---|---|---|---|---|
-| 1 | `meeting_summary` | 議事録テキスト有り＆未要約＆直近7日開催の商談（最大10件） | 議事録要約 | `meetings.ai_summary` | 稼働 |
-| 2 | `na_task_draft` | 手順1で新たに要約された商談（ai_summary_at が直近24h） | 次アクションのタスク下書き | `tasks`(origin='ai_meeting') | **疎通確認後に有効化** |
-| 3 | `content_draft` | 記事ネタで status='selected' ＆本文未作成（最大5件/晩＝1日5本） | SEO記事ドラフト(Markdown) | `content_ideas.body_md`(status→drafting, design_status→ready) | **疎通確認後に有効化** |
+| 1 | `meeting_summary` | 議事録テキスト有り＆未要約＆直近7日開催の商談（最大10件） | 議事録要約 | `meetings.ai_summary` | `batch_job_settings` に従う（現在: 稼働） |
+| 2 | `na_task_draft` | 手順1で新たに要約された商談（ai_summary_at が直近24h） | 次アクションのタスク下書き | `tasks`(origin='ai_meeting') | `batch_job_settings` に従う（現在: **停止**） |
+| 3 | `content_draft` | 記事ネタで status='selected' ＆本文未作成（最大5件/晩＝1日5本） | SEO記事ドラフト(Markdown) | `content_ideas.body_md`(status→drafting, design_status→ready) | `batch_job_settings` に従う（現在: **停止**・記事品質の改善まで） |
 
 > 今後ここに `followup_draft`（お礼・資料のGmail下書き / WO-11後半）、`briefing`（翌日アポの事前ブリーフ / WO-15）、`knowledge_extract`（ノウハウ抽出 / WO-13）を追加していく。追加時も本runbookの「対象抽出→生成→書き戻し→batch_runs記録」の型を踏襲する。
 >

@@ -37,6 +37,18 @@ function jstDate(offsetDays = 0): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** アプリ側のスタート/停止設定(batch_job_settings)。停止中はGET=対象0件/POST=409。 */
+async function jobDisabled(): Promise<boolean> {
+  const admin = getSupabaseAdmin();
+  const { data } = await admin
+    .from("batch_job_settings")
+    .select("enabled")
+    .eq("tenant_id", TENANT_ID)
+    .eq("job_kind", "meeting_summary")
+    .maybeSingle();
+  return data ? !data.enabled : false; // 設定行が無い場合は従来どおり稼働
+}
+
 type MeetingRow = {
   id: string;
   title: string | null;
@@ -50,6 +62,9 @@ type MeetingRow = {
 export async function GET(req: Request) {
   const fail = authFail(req);
   if (fail) return fail;
+  if (await jobDisabled()) {
+    return NextResponse.json({ ok: true, enabled: false, count: 0, targets: [], message: "議事録AI要約はアプリ側で停止中です（AIバッチ運用画面で再開できます）。" });
+  }
 
   const url = new URL(req.url);
   const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit")) || DEFAULT_LIMIT));
@@ -97,6 +112,9 @@ type IngestBody = {
 export async function POST(req: Request) {
   const fail = authFail(req);
   if (fail) return fail;
+  if (await jobDisabled()) {
+    return NextResponse.json({ ok: false, enabled: false, error: "議事録AI要約はアプリ側で停止中のため書き戻しできません。" }, { status: 409 });
+  }
 
   let body: IngestBody;
   try {
