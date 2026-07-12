@@ -4,9 +4,17 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowUpDown } from "lucide-react";
 import { formatYen, formatDate, cn } from "@/lib/utils";
+import { YOMI_OPTIONS } from "@/lib/constants";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { saveRepForecastAction } from "@/server/actions/rep-report";
 import type { RepReportOpp } from "@/lib/data/rep-report";
+
+/** 要因の記入を求めるヨミ(受注/定期追い/オチ)。 */
+const REASON_YOMI: Record<string, string> = {
+  "0.受注": "受注の要因(勝因)を一言…",
+  "6.定期追い": "定期追いに切り替える要因を一言…",
+  "7.オチ": "オチた要因を一言…",
+};
 
 type SortKey = "yomi" | "amount" | "lastActivity" | "risk";
 
@@ -61,7 +69,10 @@ function SortHeader({
 }
 
 export function RepOppTable({ opps, ownerId, weekStart }: { opps: RepReportOpp[]; ownerId: string; weekStart: string }) {
-  const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "amount", asc: false });
+  // 既定はヨミの高い順(0.受注→9.調整中)
+  const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "yomi", asc: true });
+  // 行ごとに選択中のヨミ(要因入力欄の出し分け用)
+  const [yomiSel, setYomiSel] = useState<Record<string, string>>({});
 
   const onSort = (k: SortKey) =>
     setSort((p) => (p.key === k ? { key: k, asc: !p.asc } : { key: k, asc: k === "yomi" || k === "risk" }));
@@ -109,7 +120,41 @@ export function RepOppTable({ opps, ownerId, weekStart }: { opps: RepReportOpp[]
                     {o.account ? <span className="text-ink/50">{o.account}／</span> : null}{o.name}
                   </Link>
                 </td>
-                <td className="td text-ink/70">{o.yomi ?? "—"}</td>
+                <td className="td">
+                  {(() => {
+                    const sel = yomiSel[o.id] ?? o.yomi ?? "";
+                    const changed = sel !== (o.yomi ?? "");
+                    const reasonPh = changed ? REASON_YOMI[sel] : undefined;
+                    return (
+                      <div className="space-y-1">
+                        <select
+                          name="yomi"
+                          form={fid}
+                          value={sel}
+                          onChange={(e) => setYomiSel((m) => ({ ...m, [o.id]: e.target.value }))}
+                          className="w-[110px] rounded border border-black/10 px-1 py-1 text-xs bg-white"
+                          title="ヨミを変更すると履歴に自動記録されます"
+                        >
+                          <option value="">—</option>
+                          {YOMI_OPTIONS.map((y) => (
+                            <option key={y.key} value={y.key}>{y.label}</option>
+                          ))}
+                        </select>
+                        {reasonPh && (
+                          <input
+                            name="yomi_reason"
+                            form={fid}
+                            placeholder={reasonPh}
+                            maxLength={200}
+                            className="w-[180px] rounded border border-accent-orange/50 bg-amber-50/50 px-1.5 py-1 text-xs"
+                            title="この変更の要因(成約/失注分析に使われます)"
+                          />
+                        )}
+                        {changed && !reasonPh && <span className="block text-[10px] text-teal-deep">保存で確定</span>}
+                      </div>
+                    );
+                  })()}
+                </td>
                 <td className="td text-right">{formatYen(o.amount)}</td>
                 <td className="td text-right text-ink/60">{formatYen(o.weighted)}</td>
                 <td className="td">{risk ? <span className={cn("pill text-[10px]", risk.cls)}>{risk.label}</span> : <span className="text-ink/25">—</span>}</td>
@@ -141,7 +186,8 @@ export function RepOppTable({ opps, ownerId, weekStart }: { opps: RepReportOpp[]
         </tbody>
       </table>
       <p className="mt-2 text-xs text-ink/45">
-        列見出し（ヨミ／金額／重要度／直近商談）をクリックで並び替え。「読み」＝担当自身の予測。行ごとに保存できます。背景色はヨミランクを表します。
+        既定はヨミの高い順。列見出し（ヨミ／金額／重要度／直近商談）をクリックで並び替え。「読み」＝担当自身の予測。行ごとに保存できます。
+        ヨミもここから変更でき、履歴に自動記録されます（受注・定期追い・オチに変えるときは要因を一言入れてください。成約/失注分析の元データになります）。
       </p>
     </div>
   );

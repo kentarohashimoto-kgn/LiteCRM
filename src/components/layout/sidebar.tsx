@@ -38,6 +38,7 @@ import {
   ClipboardCheck,
   NotebookPen,
   Timer,
+  ArrowRightLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME, canManageProjects } from "@/lib/constants";
@@ -88,6 +89,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/exec", label: "経営レビュー", icon: Presentation },
       { href: "/app/reviews/weekly", label: "週次レビュー", icon: CalendarCheck },
       { href: "/app/reviews/rep", label: "営業マン別週報", icon: NotebookPen },
+      { href: "/app/reviews/yomi-history", label: "ヨミ変更履歴", icon: ArrowRightLeft },
       { href: "/app/reviews/snapshots", label: "週報スナップショット", icon: History },
       { href: "/app/content", label: "記事ネタ・ブログ", icon: PenLine },
       { href: "/app/exec/batch", label: "AIバッチ運用", icon: Bot },
