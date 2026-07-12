@@ -13,7 +13,8 @@
 >   - 商談後1〜2日で議事録が入る運用に対し7日の余裕を持たせる。もっと絞るなら3、緩めるなら14/30。
 >   - リサーチ/ブリーフィング(将来のjob)は本来「翌日アポ」を対象にするため、この下限は自然に満たす（登録日では絞らない）。
 > - **実行方式 = F1 ingest API（2026-07-12 実証で確定）**: フレッシュ起動の夜間セッションには Supabase MCP が繋がらないため、DB読み書きはアプリのAPIに委譲する。
->   - エンドポイント: `${APP_URL}/api/batch/meeting-summary`（APP_URL 既定 `https://litecrm.vercel.app`）
+>   - エンドポイント: `${APP_URL}/api/batch/meeting-summary`（APP_URL 既定 `https://lite-crm-tau.vercel.app` = 本番ドメイン。環境変数 APP_URL があればそちらを優先）
+>   - **前提**: 実行環境(Claude Code環境)の環境変数に `CRON_SECRET`/`APP_URL` を設定し、ネットワークアクセスで本番ドメインを許可しておくこと（未許可だと curl が CONNECT 403 で失敗する）
 >   - 認可ヘッダ: `Authorization: Bearer ${CRON_SECRET}`（値は環境変数 or 起動プロンプトで受け取る。リポジトリには置かない）
 >   - セッションは **Supabase MCP を使わない**。`curl`(Bash) か WebFetch で GET/POST するだけ。生成はセッション自身（サブスク枠）。
 

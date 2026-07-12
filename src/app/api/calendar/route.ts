@@ -55,7 +55,7 @@ export async function GET(req: Request) {
     for (const p of profs ?? []) names.set(p.id as string, (p.display_name as string) || (p.email as string) || "");
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://litecrm.vercel.app";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://lite-crm-tau.vercel.app";
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",

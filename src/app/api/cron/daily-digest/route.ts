@@ -107,7 +107,7 @@ export async function GET(req: Request) {
   }
   const pending = (schedR.data ?? []).length;
   if (pending) lines.push(`:bookmark_tabs: 承認待ちのスケジュール分類: *${pending}件*（経営レビューで確認）`);
-  lines.push(`<${process.env.NEXT_PUBLIC_APP_URL ?? "https://litecrm.vercel.app"}/app/dashboard|ダッシュボードを開く>`);
+  lines.push(`<${process.env.NEXT_PUBLIC_APP_URL ?? "https://lite-crm-tau.vercel.app"}/app/dashboard|ダッシュボードを開く>`);
 
   // A-1: 担当者ごとのアプリ内ダイジェスト通知(Slack未設定でも届く)
   let notified = 0;
