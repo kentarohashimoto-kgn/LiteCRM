@@ -9,6 +9,7 @@ import { setTaskStatusAction, createTaskAction } from "@/server/actions";
 import { AssigneeFilter } from "@/components/tasks/assignee-filter";
 import { formatDateFull, formatTimeJst, toJstDate } from "@/lib/utils";
 import type { Task, Opportunity, User } from "@/lib/types";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -195,7 +196,7 @@ function MeetingTableRow({ r, ws, owners, today }: { r: MeetRow; ws: Workspace; 
               </div>
               <div className="flex items-center gap-2">
                 <select name="priority" defaultValue="middle" className="input py-1 text-xs w-20"><option value="high">高</option><option value="middle">中</option><option value="low">低</option></select>
-                <button type="submit" className="rounded-lg bg-teal-primary px-3 py-1 text-xs text-white">追加する</button>
+                <SubmitButton className="rounded-lg bg-teal-primary px-3 py-1 text-xs text-white" pendingLabel="追加中…">追加する</SubmitButton>
               </div>
             </form>
           </details>

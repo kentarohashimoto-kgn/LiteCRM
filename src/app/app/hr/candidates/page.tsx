@@ -2,6 +2,7 @@ import { requireHrCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { createCandidateAction, updateCandidateAction, addInterviewAction } from "@/server/actions/hr";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +81,7 @@ export default async function CandidatesPage() {
           </div>
           <div><label className="label">メール</label><input name="email" type="email" className="input" /></div>
           <div><label className="label">経路</label><input name="source" className="input" placeholder="紹介/媒体名など" /></div>
-          <button type="submit" className="btn-accent">追加</button>
+          <SubmitButton className="btn-accent" pendingLabel="追加中…">追加</SubmitButton>
         </form>
       </Section>
 
@@ -104,7 +105,7 @@ export default async function CandidatesPage() {
                       <select name="status" defaultValue={c.status} className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs ml-auto">
                         {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                       </select>
-                      <button type="submit" className="rounded-lg border border-black/10 px-2.5 py-1 text-xs hover:bg-black/[0.03]">保存</button>
+                      <SubmitButton className="rounded-lg border border-black/10 px-2.5 py-1 text-xs hover:bg-black/[0.03]" pendingLabel="保存中…">保存</SubmitButton>
                       <button name="op" value="delete" className="text-xs text-rose-500 hover:underline">削除</button>
                     </div>
                     <input name="notes" defaultValue={c.notes ?? ""} className="input text-xs py-1.5" placeholder="メモ" />
@@ -151,7 +152,7 @@ export default async function CandidatesPage() {
                       </div>
                       <div><label className="label">評点1-5</label><input name="score" type="number" min={1} max={5} className="input w-16 text-xs" /></div>
                       <div className="min-w-[160px] flex-1"><label className="label">メモ</label><input name="notes" className="input text-xs" /></div>
-                      <button type="submit" className="rounded-lg border border-black/10 px-3 py-1.5 text-xs hover:bg-black/[0.03]">記録</button>
+                      <SubmitButton className="rounded-lg border border-black/10 px-3 py-1.5 text-xs hover:bg-black/[0.03]" pendingLabel="記録中…">記録</SubmitButton>
                     </form>
                   </details>
                 </li>

@@ -5,6 +5,7 @@ import { designateSrankAction } from "@/server/actions";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { SRANK_STAGE_MAP } from "@/lib/srank";
 import { formatYen, formatDateFull } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function SrankPage() {
   const ws = await getWorkspaceLite();
@@ -33,7 +34,7 @@ export default async function SrankPage() {
           <input name="target_sales" type="number" placeholder="今年度目標売上(円)" className="input" />
           <input name="revenue_potential" type="number" placeholder="年間売上ポテンシャル(円)" className="input" />
           <input name="srank_reason" placeholder="Sランク指定理由(大型化/横展開/戦略実績化 等)" className="input md:col-span-3" />
-          <button type="submit" className="btn-primary">Sランク指定</button>
+          <SubmitButton className="btn-primary" pendingLabel="指定中…">Sランク指定</SubmitButton>
         </form>
       </Section>
 

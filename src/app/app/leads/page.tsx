@@ -3,13 +3,14 @@ import { rescoreAllLeadsAction } from "@/server/actions";
 import {
   queryLeadList,
   queryCallQueue,
-  fetchLeadsForAggregation,
+  getLeadsCompanies,
+  getLeadsFunnel,
+  getLeadsAnalysis,
   getLeadImportBatches,
   getAcquirerAliases,
   getLeadEvents,
   getExportPresets,
 } from "@/lib/data/leads";
-import { buildCompanies, buildAnalysis, buildFunnel } from "@/lib/data/leads-workspace";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { LeadsWorkspace, type LeadsTab } from "@/components/leads/leads-workspace";
 
@@ -33,11 +34,12 @@ export default async function LeadsPage({
   // アクティブなタブに必要なデータだけ取得する(全件ロードを避ける)。
   const list = tab === "list" ? await queryLeadList(filters) : undefined;
   const queue = tab === "queue" ? await queryCallQueue() : undefined;
-  const company = tab === "company" ? buildCompanies(await fetchLeadsForAggregation()) : undefined;
-  const funnel = tab === "funnel" ? buildFunnel(await fetchLeadsForAggregation()) : undefined;
+  // 集計タブはSQL集計RPC(行を転送しない)。別名(エイリアス)の適用もSQL側で実施
+  const company = tab === "company" ? await getLeadsCompanies() : undefined;
+  const funnel = tab === "funnel" ? await getLeadsFunnel() : undefined;
   const aliasRows = tab === "analysis" ? await getAcquirerAliases() : [];
   const aliases = aliasRows.map((a) => ({ raw: a.raw, name: a.display_name ?? "" }));
-  const analysis = tab === "analysis" ? buildAnalysis(await fetchLeadsForAggregation(), aliases) : undefined;
+  const analysis = tab === "analysis" ? await getLeadsAnalysis() : undefined;
   const events = tab === "list" || tab === "download" ? await getLeadEvents() : [];
   const presets = tab === "download" ? (await getExportPresets()).map((p) => ({ id: p.id, name: p.name, columns: p.columns })) : [];
   const batchRows = tab === "batches" ? await getLeadImportBatches() : [];

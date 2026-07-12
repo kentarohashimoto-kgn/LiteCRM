@@ -5,6 +5,7 @@ import { saveAccountNurtureAction, addNurtureTouchAction } from "@/server/action
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { NURTURE_STAGES, NURTURE_STAGE_LABEL, RELATIONSHIP_OPTS, RELATIONSHIP_LABEL, STALE_CONTACT_DAYS } from "@/lib/nurture";
 import { formatYen, formatDateFull, daysSince } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function NurturePage() {
   const ws = await getWorkspaceLite();
@@ -97,7 +98,7 @@ export default async function NurturePage() {
                   <input name="expansion_depts" defaultValue={r.n?.expansion_depts ?? ""} placeholder="横展開可能部門(人事/営業/経理/情シス)" className="input text-sm" />
                   <input name="next_proposal" defaultValue={r.n?.next_proposal ?? ""} placeholder="次回提案予定" className="input text-sm" />
                   <input name="services_done" defaultValue={r.n?.services_done ?? ""} placeholder="実施済みサービス(補足)" className="input text-sm" />
-                  <button type="submit" className="btn-accent text-sm">深耕情報を保存</button>
+                  <SubmitButton className="btn-accent text-sm" pendingLabel="保存中…">深耕情報を保存</SubmitButton>
                 </form>
 
                 {/* 接点履歴 */}
@@ -118,7 +119,7 @@ export default async function NurturePage() {
                     <input name="summary" placeholder="接点内容" className="input text-sm col-span-2" />
                     <input name="reaction" placeholder="顧客反応" className="input text-sm" />
                     <input name="next_date" type="date" className="input text-sm" title="次回接点予定" />
-                    <button type="submit" className="btn-ghost text-sm col-span-2">接点を記録</button>
+                    <SubmitButton className="btn-ghost text-sm col-span-2" pendingLabel="保存中…">接点を記録</SubmitButton>
                   </form>
                 </div>
               </div>

@@ -5,6 +5,7 @@ import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { PeriodSelect } from "@/components/exec/period-select";
 import { EVALUATION_META, CAMPAIGN_PREP_STATUS, PREP_LABEL } from "@/lib/exec-review";
 import { formatYen, formatDateFull } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 const CH_LABEL: Record<string, string> = { exhibition: "展示会", seminar: "セミナー", agency: "代理店", media_ipros: "広告", media_aismiley: "広告", sns: "SNS", networking: "交流", whitelist_call: "リスト架電", exec_appt_bt: "経営者アポ", exec_appt_rm: "経営者アポ", other: "その他" };
 
@@ -69,7 +70,7 @@ export default async function ExecMarketingPage({ searchParams }: { searchParams
                   <div></div>
                   <textarea name="review_comment" defaultValue={c.ext?.review_comment ?? ""} rows={2} placeholder="振り返り（良かった点・悪かった点）" className="input text-sm" />
                   <textarea name="next_improvement" defaultValue={c.ext?.next_improvement ?? ""} rows={2} placeholder="次回改善点" className="input text-sm" />
-                  <button type="submit" className="btn-accent text-sm md:col-span-2">施策の振り返りを保存</button>
+                  <SubmitButton className="btn-accent text-sm md:col-span-2" pendingLabel="保存中…">施策の振り返りを保存</SubmitButton>
                 </form>
               </details>
             );

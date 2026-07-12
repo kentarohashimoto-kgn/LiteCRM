@@ -3,6 +3,7 @@ import { requireBoCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { createFuCaseAction, updateFuCaseAction, updateFuMeetingAction } from "@/server/actions/bo";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -228,7 +229,7 @@ export default async function FollowupsPage({ searchParams }: { searchParams: { 
               <div><label className="label">会社名 *</label><input name="account_name" required className="input" /></div>
               <div><label className="label">研修名</label><input name="training_name" className="input" /></div>
               <div><label className="label">基準日(受注日)</label><input name="won_date" type="date" className="input w-auto" /></div>
-              <button type="submit" className="btn-accent">追加（1/3/6ヶ月後Mtgを自動生成）</button>
+              <SubmitButton className="btn-accent" pendingLabel="保存中…">追加（1/3/6ヶ月後Mtgを自動生成）</SubmitButton>
             </form>
           </Section>
 
@@ -255,7 +256,7 @@ export default async function FollowupsPage({ searchParams }: { searchParams: { 
                             <option value="">未割当</option>
                             {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                           </select>
-                          <button type="submit" className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/[0.03]">変更</button>
+                          <SubmitButton className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/[0.03]" pendingLabel="保存中…">変更</SubmitButton>
                         </form>
                         <form action={updateFuCaseAction} className="flex items-center gap-1.5">
                           <input type="hidden" name="id" value={c.id} />
@@ -300,7 +301,7 @@ export default async function FollowupsPage({ searchParams }: { searchParams: { 
                                     {UPSELL.map((u) => <option key={u.key} value={u.key}>{u.label}</option>)}
                                   </select>
                                 </div>
-                                <button type="submit" className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs hover:bg-black/[0.03]">保存</button>
+                                <SubmitButton className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs hover:bg-black/[0.03]" pendingLabel="保存中…">保存</SubmitButton>
                               </div>
                               <div className="flex items-center gap-2 flex-wrap mt-1.5">
                                 <input name="issues" defaultValue={m.issues ?? ""} className="input flex-1 min-w-[220px] text-xs py-1" placeholder="他の業務課題（ここからソリューション提案につなげる）" />

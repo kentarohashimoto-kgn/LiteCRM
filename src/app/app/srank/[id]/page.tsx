@@ -6,6 +6,7 @@ import { updateSrankAccountAction, saveSrankDeptAction, deleteSrankDeptAction, s
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { SRANK_STAGES, DEAL_STATUS, PROPOSAL_STATUS, PROPOSAL_STATUS_LABEL, KEYPERSON_ROLES, KEYPERSON_ROLE_LABEL, LEVEL3, RELATIONSHIP, TOPDOWN_MENU, BOTTOMUP_MENU } from "@/lib/srank";
 import { formatYen, formatDateFull } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function SrankDetailPage({ params }: { params: { id: string } }) {
   const { account: a, departments, keypersons } = await getSrankDetail(params.id);
@@ -42,7 +43,7 @@ export default async function SrankDetailPage({ params }: { params: { id: string
                     <div><label className="label">横展開可能性</label><select name="expansion_potential" defaultValue={d.expansion_potential ?? ""} className="input text-sm"><option value="">—</option>{LEVEL3.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}</select></div>
                     <div className="md:col-span-2"><label className="label">次アクション</label><input name="next_action" defaultValue={d.next_action ?? ""} className="input text-sm" /></div>
                     <div><label className="label">次アクション日</label><input name="next_action_date" type="date" defaultValue={d.next_action_date ?? ""} className="input text-sm" /></div>
-                    <div className="md:col-span-3 flex items-center gap-2"><button type="submit" className="btn-accent text-sm">保存</button></div>
+                    <div className="md:col-span-3 flex items-center gap-2"><SubmitButton className="btn-accent text-sm" pendingLabel="保存中…">保存</SubmitButton></div>
                   </form>
                   <form action={deleteSrankDeptAction} className="mt-1"><input type="hidden" name="id" value={d.id} /><input type="hidden" name="srank_account_id" value={a.id} /><button className="text-xs text-rose-400 hover:text-rose-600 inline-flex items-center gap-1"><Trash2 size={12} />削除</button></form>
                 </details>
@@ -58,7 +59,7 @@ export default async function SrankDetailPage({ params }: { params: { id: string
                   <select name="proposal_status" defaultValue="none" className="input text-sm">{PROPOSAL_STATUS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>
                   <input name="amount" type="number" placeholder="想定金額" className="input text-sm" />
                   <input name="next_action_date" type="date" className="input text-sm" />
-                  <button type="submit" className="btn-primary text-sm md:col-span-3">部署を追加</button>
+                  <SubmitButton className="btn-primary text-sm md:col-span-3" pendingLabel="保存中…">部署を追加</SubmitButton>
                 </form>
               </details>
             </div>
@@ -85,7 +86,7 @@ export default async function SrankDetailPage({ params }: { params: { id: string
                     <div className="md:col-span-2"><label className="label">紹介可能部署</label><input name="intro_depts" defaultValue={k.intro_depts ?? ""} className="input text-sm" /></div>
                     <div className="md:col-span-2"><label className="label">次に依頼したいこと</label><input name="next_request" defaultValue={k.next_request ?? ""} className="input text-sm" placeholder="上司紹介/他部署紹介/追加課題共有 等" /></div>
                     <div><label className="label">懸念点</label><input name="concern" defaultValue={k.concern ?? ""} className="input text-sm" /></div>
-                    <div className="md:col-span-3"><button type="submit" className="btn-accent text-sm">保存</button></div>
+                    <div className="md:col-span-3"><SubmitButton className="btn-accent text-sm" pendingLabel="保存中…">保存</SubmitButton></div>
                   </form>
                   <form action={deleteSrankKeypersonAction} className="mt-1"><input type="hidden" name="id" value={k.id} /><input type="hidden" name="srank_account_id" value={a.id} /><button className="text-xs text-rose-400 hover:text-rose-600 inline-flex items-center gap-1"><Trash2 size={12} />削除</button></form>
                 </details>
@@ -100,7 +101,7 @@ export default async function SrankDetailPage({ params }: { params: { id: string
                   <select name="role" defaultValue="" className="input text-sm"><option value="">役割</option>{KEYPERSON_ROLES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select>
                   <select name="influence" defaultValue="" className="input text-sm"><option value="">影響力</option>{LEVEL3.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}</select>
                   <select name="relationship" defaultValue="" className="input text-sm"><option value="">関係性</option>{RELATIONSHIP.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}</select>
-                  <button type="submit" className="btn-primary text-sm md:col-span-3">キーマンを追加</button>
+                  <SubmitButton className="btn-primary text-sm md:col-span-3" pendingLabel="保存中…">キーマンを追加</SubmitButton>
                 </form>
               </details>
             </div>
@@ -135,7 +136,7 @@ export default async function SrankDetailPage({ params }: { params: { id: string
                 <div><label className="label">次回部門接点</label><input name="next_dept_contact_date" type="date" defaultValue={a.next_dept_contact_date ?? ""} className="input text-sm" /></div>
               </div>
               <div><label className="label">重点攻略月</label><input name="priority_month" defaultValue={a.priority_month ?? ""} className="input text-sm" /></div>
-              <button type="submit" className="btn-primary text-sm w-full">会社攻略情報を保存</button>
+              <SubmitButton className="btn-primary text-sm w-full" pendingLabel="保存中…">会社攻略情報を保存</SubmitButton>
             </form>
           </Section>
           <Section title="トップダウン提案メニュー候補">

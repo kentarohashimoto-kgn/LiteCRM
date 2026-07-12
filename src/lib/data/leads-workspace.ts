@@ -1,6 +1,8 @@
 /**
- * リード画面の集計(企業ビュー・分析)。サーバー側でのみ実行し、
- * クライアントへは境界のある結果だけ渡す。
+ * リード画面の集計(企業ビュー・分析)の型定義とJS参照実装。
+ * 【重要】集計の本番経路は SQL集計RPC(migration 0125: leads_companies/leads_funnel/
+ * leads_analysis)に移行済み(2026-07-12・パリティ検証済み)。build* 関数は仕様の
+ * 参照実装として残している。RPC側を変更する場合はここと意味を一致させること。
  * 一覧/架電キューは SQL 側でページング・件数制限して取得する(lib/data/leads.ts)。
  */
 import type { Lead } from "@/lib/types";

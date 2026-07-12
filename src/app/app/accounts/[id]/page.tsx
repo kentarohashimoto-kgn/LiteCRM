@@ -29,6 +29,7 @@ import { getSolutionPackages, getAccountSouvenirs } from "@/lib/data/souvenirs";
 import { getTransitionsByAccount, TRANSITION_STATUS_LABEL, FOLLOWUP_STATUS_LABEL } from "@/lib/data/transitions";
 import { STAGES, FORECAST_CATEGORIES, DEAL_PHASES } from "@/lib/constants";
 import { formatYen, sum } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 const statusLabel: Record<string, string> = { prospect: "見込み", customer: "顧客", inactive: "休眠" };
 
@@ -195,7 +196,7 @@ export default async function AccountDetailPage({ params, searchParams }: { para
                   <label className="label">次回アクション内容 *</label>
                   <input name="next_action_text" required className="input" placeholder="次に誰が何をするか（例：提案書を送付し来週アポ打診）" />
                 </div>
-                <button type="submit" className="btn-accent">案件を登録</button>
+                <SubmitButton className="btn-accent" pendingLabel="登録中…">案件を登録</SubmitButton>
               </form>
             </details>
           </Section>
@@ -262,7 +263,7 @@ export default async function AccountDetailPage({ params, searchParams }: { para
                     <label className="label">議事・要点</label>
                     <textarea name="summary" rows={2} className="input" />
                   </div>
-                  <button type="submit" className="btn-accent">商談を登録</button>
+                  <SubmitButton className="btn-accent" pendingLabel="登録中…">商談を登録</SubmitButton>
                 </form>
               </details>
             ) : (

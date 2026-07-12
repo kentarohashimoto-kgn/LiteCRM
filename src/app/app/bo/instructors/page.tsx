@@ -6,6 +6,7 @@ import { createInstructorAction, updateInstructorAction, updateTrainingSessionAc
 import { ScheduleSessionForm } from "@/components/bo/schedule-session-form";
 import { InstructorHoursBar, InstructorHoursTrend } from "@/components/bo/instructor-hours-charts";
 import { ExternalLink, ChevronDown } from "lucide-react";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -174,7 +175,7 @@ export default async function InstructorsPage({ searchParams }: { searchParams: 
                   </select>
                 </div>
               </div>
-              <button type="submit" className="btn-accent">登録</button>
+              <SubmitButton className="btn-accent" pendingLabel="登録中…">登録</SubmitButton>
             </form>
           </Section>
 
@@ -195,7 +196,7 @@ export default async function InstructorsPage({ searchParams }: { searchParams: 
                     <form action={updateInstructorAction} className="mt-1.5 flex items-center gap-1.5">
                       <input type="hidden" name="id" value={ins.id} />
                       <input name="schedule_url" defaultValue={ins.schedule_url ?? ""} className="input text-xs py-1 flex-1" placeholder="日程調整URL" />
-                      <button type="submit" className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/[0.03]">保存</button>
+                      <SubmitButton className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/[0.03]" pendingLabel="保存中…">保存</SubmitButton>
                       <button name="op" value="delete" className="text-xs text-rose-500 hover:underline">削除</button>
                     </form>
                   </li>
@@ -318,7 +319,7 @@ export default async function InstructorsPage({ searchParams }: { searchParams: 
                           </div>
                           <div><label className="label text-[10px]">会議URL</label><input name="meeting_url" type="url" defaultValue={s.meeting_url ?? ""} className="input py-1 text-xs" placeholder="Zoom / Teams" /></div>
                           <div className="flex items-center gap-2 pt-0.5">
-                            <button type="submit" className="rounded-lg bg-teal-primary px-2.5 py-1 text-xs text-white">保存</button>
+                            <SubmitButton className="rounded-lg bg-teal-primary px-2.5 py-1 text-xs text-white" pendingLabel="保存中…">保存</SubmitButton>
                             <button formAction={deleteTrainingSessionAction} className="text-xs text-rose-500 hover:underline">削除</button>
                           </div>
                         </form>

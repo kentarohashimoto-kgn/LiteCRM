@@ -11,6 +11,7 @@ import { LEAD_DISPOSITIONS } from "@/lib/constants";
 import { ROLE_LEVELS, NEEDS_OPTS, TIMING_OPTS, AUTHORITY_OPTS, BUDGET_OPTS, REVENUE_OPTS } from "@/lib/lead-import";
 import { formatDateFull } from "@/lib/utils";
 import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 const TP_LABEL: Record<string, string> = {
   exhibition: "展示会で名刺交換", call: "架電ログ", seminar: "セミナー参加", survey: "アンケート回答",
@@ -159,7 +160,7 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
           <F label="メモ"><textarea name="notes" rows={2} defaultValue={l.notes ?? ""} className="input" /></F>
         </Section>
 
-        <button type="submit" className="btn-primary">保存する</button>
+        <SubmitButton className="btn-primary" pendingLabel="保存中…">保存する</SubmitButton>
       </form>
 
       {/* 削除(控えめ・確認つき) */}

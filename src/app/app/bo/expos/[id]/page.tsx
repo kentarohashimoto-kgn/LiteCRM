@@ -5,6 +5,7 @@ import { requireBoCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { confirmExpoAction, rescheduleExpoAction, updateExpoTaskAction, updateExpoStaffingAction } from "@/server/actions/bo";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function ExpoDetailPage({ params }: { params: { id: string 
           project.status !== "confirmed" ? (
             <form action={confirmExpoAction}>
               <input type="hidden" name="id" value={params.id} />
-              <button type="submit" className="btn-accent">出展を確定（WBS自動生成）</button>
+              <SubmitButton className="btn-accent" pendingLabel="保存中…">出展を確定（WBS自動生成）</SubmitButton>
             </form>
           ) : (
             <span className="pill bg-teal-light text-teal-deep">確定</span>
@@ -59,7 +60,7 @@ export default async function ExpoDetailPage({ params }: { params: { id: string 
           <input type="hidden" name="id" value={params.id} />
           <div><label className="label">会期(初日)</label><input name="starts_on" type="date" defaultValue={project.starts_on as string} className="input" /></div>
           <div><label className="label">会期(最終日)</label><input name="ends_on" type="date" defaultValue={(project.ends_on as string) ?? ""} className="input" /></div>
-          <button type="submit" className="rounded-xl border border-black/10 px-3 py-2 text-sm hover:bg-black/[0.03]">変更を反映</button>
+          <SubmitButton className="rounded-xl border border-black/10 px-3 py-2 text-sm hover:bg-black/[0.03]" pendingLabel="保存中…">変更を反映</SubmitButton>
         </form>
       </details>
 
@@ -90,7 +91,7 @@ export default async function ExpoDetailPage({ params }: { params: { id: string 
                       <option value="">担当なし</option>
                       {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
-                    <button type="submit" className="text-[11px] text-teal-deep hover:underline ml-1">設定</button>
+                    <SubmitButton className="text-[11px] text-teal-deep hover:underline ml-1" pendingLabel="保存中…">設定</SubmitButton>
                   </form>
                   <span className={`text-xs tabular-nums shrink-0 ${isOverdue ? "text-rose-600 font-semibold" : "text-ink/45"}`}>{t.due_date}{isOverdue && " 超過"}</span>
                   <form action={updateExpoTaskAction} className="shrink-0">
@@ -110,7 +111,7 @@ export default async function ExpoDetailPage({ params }: { params: { id: string 
           <input name="name" required className="input max-w-xs" placeholder="タスクを追加" />
           <select name="category" className="input w-auto">{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>
           <input name="due_date" type="date" required className="input w-auto" />
-          <button type="submit" className="rounded-xl border border-black/10 px-3 py-2 text-sm hover:bg-black/[0.03]">追加</button>
+          <SubmitButton className="rounded-xl border border-black/10 px-3 py-2 text-sm hover:bg-black/[0.03]" pendingLabel="追加中…">追加</SubmitButton>
         </form>
       </Section>
 
@@ -151,7 +152,7 @@ export default async function ExpoDetailPage({ params }: { params: { id: string 
             </select>
           </div>
           <input name="member_name" className="input max-w-[160px]" placeholder="社外メンバー名" />
-          <button type="submit" className="btn-accent">アサイン</button>
+          <SubmitButton className="btn-accent" pendingLabel="保存中…">アサイン</SubmitButton>
         </form>
         <p className="text-[11px] text-ink/35 mt-2">社内メンバーをアサインすると本人へ通知(ベル)が届きます。</p>
       </Section>
