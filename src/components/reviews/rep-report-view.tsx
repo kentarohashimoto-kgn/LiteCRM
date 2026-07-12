@@ -3,7 +3,7 @@ import { User, Save } from "lucide-react";
 import { Section, StatCard, EmptyState, ProgressBar } from "@/components/ui/primitives";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatYen, formatPercent, formatDate } from "@/lib/utils";
-import { saveRepReportAction } from "@/server/actions/rep-report";
+import { saveRepReportAction, saveRepForecastAction } from "@/server/actions/rep-report";
 import type { RepReport } from "@/lib/data/rep-report";
 
 export function RepReportView({ report, weekStart }: { report: RepReport; weekStart: string }) {
@@ -57,7 +57,7 @@ export function RepReportView({ report, weekStart }: { report: RepReport; weekSt
           <EmptyState message="進行中の担当案件がありません。" />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm tabular-nums" style={{ minWidth: 720 }}>
+            <table className="w-full text-sm tabular-nums" style={{ minWidth: 1060 }}>
               <thead>
                 <tr>
                   <th className="th">顧客 / 案件</th>
@@ -65,26 +65,47 @@ export function RepReportView({ report, weekStart }: { report: RepReport; weekSt
                   <th className="th text-right">金額</th>
                   <th className="th text-right">Weighted</th>
                   <th className="th">次回AC</th>
-                  <th className="th">クローズ予定</th>
+                  <th className="th">成約月(読み)</th>
+                  <th className="th text-right">売上(読み)</th>
+                  <th className="th text-right">残商談</th>
+                  <th className="th"></th>
                 </tr>
               </thead>
               <tbody>
-                {report.opps.map((o) => (
-                  <tr key={o.id} className="row-hover border-t border-black/[0.04]">
-                    <td className="td">
-                      <Link href={`/app/opportunities/${o.id}`} className="hover:text-teal-deep">
-                        {o.account ? <span className="text-ink/50">{o.account}／</span> : null}{o.name}
-                      </Link>
-                    </td>
-                    <td className="td text-ink/70">{o.yomi ?? "—"}</td>
-                    <td className="td text-right">{formatYen(o.amount)}</td>
-                    <td className="td text-right text-ink/70">{formatYen(o.weighted)}</td>
-                    <td className="td text-ink/70">{o.nextActionDate ? formatDate(o.nextActionDate) : <span className="text-rose-500">未設定</span>}</td>
-                    <td className="td text-ink/70">{formatDate(o.expectedClose)}</td>
-                  </tr>
-                ))}
+                {report.opps.map((o) => {
+                  const fid = `pf-${o.id}`;
+                  return (
+                    <tr key={o.id} className="row-hover border-t border-black/[0.04]">
+                      <td className="td">
+                        <Link href={`/app/opportunities/${o.id}`} className="hover:text-teal-deep">
+                          {o.account ? <span className="text-ink/50">{o.account}／</span> : null}{o.name}
+                        </Link>
+                      </td>
+                      <td className="td text-ink/70">{o.yomi ?? "—"}</td>
+                      <td className="td text-right">{formatYen(o.amount)}</td>
+                      <td className="td text-right text-ink/70">{formatYen(o.weighted)}</td>
+                      <td className="td text-ink/70">{o.nextActionDate ? formatDate(o.nextActionDate) : <span className="text-rose-500">未設定</span>}</td>
+                      <td className="td">
+                        <input type="month" name="rep_close_month" form={fid} defaultValue={o.repCloseMonth ?? ""} className="w-[130px] rounded border border-black/10 px-1.5 py-1 text-xs" />
+                      </td>
+                      <td className="td text-right">
+                        <input type="number" name="rep_amount_forecast" form={fid} defaultValue={o.repAmountForecast ?? ""} placeholder="円" min={0} step={10000} className="w-[110px] rounded border border-black/10 px-1.5 py-1 text-xs text-right" />
+                      </td>
+                      <td className="td text-right">
+                        <input type="number" name="rep_meetings_left" form={fid} defaultValue={o.repMeetingsLeft ?? ""} placeholder="回" min={0} max={99} className="w-[56px] rounded border border-black/10 px-1.5 py-1 text-xs text-right" />
+                      </td>
+                      <td className="td">
+                        <form action={saveRepForecastAction} id={fid}>
+                          <input type="hidden" name="opp_id" value={o.id} />
+                          <button type="submit" className="btn-ghost text-xs" title="この案件の読みを保存">保存</button>
+                        </form>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+            <p className="mt-2 text-xs text-ink/45">「読み」= 担当自身の予測（成約タイミング・売上額・成約まで必要な残商談回数）。行ごとに保存できます。</p>
           </div>
         )}
       </Section>

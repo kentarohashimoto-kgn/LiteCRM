@@ -42,6 +42,33 @@ export async function advanceContentStatusAction(formData: FormData): Promise<vo
   revalidatePath("/app/content");
 }
 
+const DESIGN_STATUSES = ["none", "ready", "linked", "manual"] as const;
+
+/** デザイン連携フラグを更新(none/ready=連携待ち/linked=Claudeデザイン連携済/manual=手動コピペ)。 */
+export async function setDesignStatusAction(formData: FormData): Promise<void> {
+  await requireCtx();
+  const id = String(formData.get("id") ?? "");
+  const status = String(formData.get("design_status") ?? "");
+  if (!id || !(DESIGN_STATUSES as readonly string[]).includes(status)) return;
+
+  const sb = getSupabaseServer();
+  await sb.from("content_ideas").update({ design_status: status }).eq("id", id);
+  revalidatePath("/app/content");
+  revalidatePath(`/app/content/${id}`);
+}
+
+/** 記事本文(Markdown)を保存(詳細画面での手動編集)。 */
+export async function saveContentBodyAction(formData: FormData): Promise<void> {
+  await requireCtx();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const body = String(formData.get("body_md") ?? "");
+
+  const sb = getSupabaseServer();
+  await sb.from("content_ideas").update({ body_md: body }).eq("id", id);
+  revalidatePath(`/app/content/${id}`);
+}
+
 /** 記事ネタを削除。 */
 export async function deleteContentIdeaAction(formData: FormData): Promise<void> {
   await requireCtx();

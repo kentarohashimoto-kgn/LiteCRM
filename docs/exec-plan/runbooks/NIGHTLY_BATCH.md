@@ -49,6 +49,7 @@ curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: applic
 |---|---|---|---|---|---|
 | 1 | `meeting_summary` | 議事録テキスト有り＆未要約＆直近7日開催の商談（最大10件） | 議事録要約 | `meetings.ai_summary` | 稼働 |
 | 2 | `na_task_draft` | 手順1で新たに要約された商談（ai_summary_at が直近24h） | 次アクションのタスク下書き | `tasks`(origin='ai_meeting') | **疎通確認後に有効化** |
+| 3 | `content_draft` | 記事ネタで status='selected' ＆本文未作成（最大5件/晩＝1日5本） | SEO記事ドラフト(Markdown) | `content_ideas.body_md`(status→drafting, design_status→ready) | **疎通確認後に有効化** |
 
 > 今後ここに `followup_draft`（お礼・資料のGmail下書き / WO-11後半）、`briefing`（翌日アポの事前ブリーフ / WO-15）、`knowledge_extract`（ノウハウ抽出 / WO-13）を追加していく。追加時も本runbookの「対象抽出→生成→書き戻し→batch_runs記録」の型を踏襲する。
 >
@@ -141,6 +142,31 @@ values ('00000000-0000-0000-0000-000000000001', $opp, $acc, $owner, null,
   array['AI下書き']);
 ```
 - 1件失敗しても続行。作成件数を batch_runs(job_kind='na_task_draft') に記録。
+
+---
+
+## 2C. job: content_draft（SEO記事ドラフト生成）※疎通確認後に有効化
+
+**目的**: `/app/content` で「選定(selected)」にした記事ネタから、SEOブログ記事のドラフト(Markdown)を夜間に執筆する（方針A＝このセッション自身が書く。外部APIは使わない）。人が翌朝 CRM上で確認し、Claudeデザインへ連携（または手動コピペ）する。
+
+**実行（F1 ingest API経由・SQL不要）**:
+```bash
+# 1) 対象取得（最大5件 = 1日5本）
+curl -s -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/batch/content-draft?limit=5"
+#   → {ok:true, targets:[{id, title, theme, angle, target_keyword, note}, ...]}
+
+# 2) 各 target について、このセッションがSEO記事を執筆して書き戻し
+curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+  "$APP_URL/api/batch/content-draft" \
+  -d '{"items":[{"id":"...","body_md":"# タイトル\n\n..."}],"trigger":"nightly","usage_note":"5本執筆。"}'
+#   → 書き戻し(status→drafting, design_status→ready)と batch_runs 記録はAPIが実施
+```
+
+**執筆ガイド（プロンプト方針）**:
+- 想定読者は `angle`（誰に何を）に従う。`target_keyword` を見出し・冒頭に自然に含める（詰め込み禁止）。
+- 構成: H1タイトル → 導入(読者の課題共感) → H2×3〜5(具体例・手順・事例) → まとめ＋CTA(カトルセのAI研修/SUISHIN等への自然な導線)。
+- 分量目安 2,000〜3,500字。日本語。事実の捏造禁止（不確かな統計・固有名詞は書かない。一般論と自社ナレッジ(knowledge_entries)の範囲で）。
+- Markdownのみ（HTML不可）。冒頭に `# タイトル`。
 
 ---
 

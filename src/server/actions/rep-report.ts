@@ -29,3 +29,28 @@ export async function saveRepReportAction(formData: FormData): Promise<void> {
 
   revalidatePath("/app/reviews/rep");
 }
+
+/** 案件ごとの「担当の読み」(成約月/売上額/残商談回数)を保存。週報の担当案件リストから行単位で更新。 */
+export async function saveRepForecastAction(formData: FormData): Promise<void> {
+  await requireCtx();
+  const oppId = String(formData.get("opp_id") ?? "");
+  if (!oppId) return;
+
+  const month = String(formData.get("rep_close_month") ?? "").trim(); // <input type="month"> は YYYY-MM
+  const amountRaw = String(formData.get("rep_amount_forecast") ?? "").replace(/[,、]/g, "").trim();
+  const leftRaw = String(formData.get("rep_meetings_left") ?? "").trim();
+  const amount = amountRaw ? Number(amountRaw) : null;
+  const left = leftRaw ? Number(leftRaw) : null;
+
+  const sb = getSupabaseServer();
+  await sb
+    .from("opportunities")
+    .update({
+      rep_close_month: /^\d{4}-\d{2}$/.test(month) ? month : null,
+      rep_amount_forecast: amount != null && Number.isFinite(amount) ? amount : null,
+      rep_meetings_left: left != null && Number.isInteger(left) && left >= 0 ? left : null,
+    })
+    .eq("id", oppId);
+
+  revalidatePath("/app/reviews/rep");
+}

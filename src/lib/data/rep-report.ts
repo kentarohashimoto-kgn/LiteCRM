@@ -18,6 +18,10 @@ export type RepReportOpp = {
   weighted: number;
   nextActionDate: string | null;
   expectedClose: string | null;
+  // 担当の読み(自分の予測): 成約月/売上額/残商談回数
+  repCloseMonth: string | null;
+  repAmountForecast: number | null;
+  repMeetingsLeft: number | null;
 };
 
 export type RepNarrative = {
@@ -55,10 +59,24 @@ export async function getRepReport(ownerId: string, weekStart: string): Promise<
   const actual = sum(wonThisMonth, (o) => o.amount);
   const forecast = actual + sum(closingOpen, (o) => o.weighted);
 
-  const opps: RepReportOpp[] = [...open]
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 60)
-    .map((o) => ({
+  const sb = getSupabaseServer();
+
+  // 担当の読み(新設カラム)は workspace RPC に含まれないため直接取得してマージ
+  const top = [...open].sort((a, b) => b.amount - a.amount).slice(0, 60);
+  const forecastById = new Map<string, { m: string | null; a: number | null; l: number | null }>();
+  if (top.length) {
+    const { data: fc } = await sb
+      .from("opportunities")
+      .select("id,rep_close_month,rep_amount_forecast,rep_meetings_left")
+      .in("id", top.map((o) => o.id));
+    for (const r of (fc ?? []) as { id: string; rep_close_month: string | null; rep_amount_forecast: number | null; rep_meetings_left: number | null }[]) {
+      forecastById.set(r.id, { m: r.rep_close_month, a: r.rep_amount_forecast, l: r.rep_meetings_left });
+    }
+  }
+
+  const opps: RepReportOpp[] = top.map((o) => {
+    const fc = forecastById.get(o.id);
+    return {
       id: o.id,
       name: o.name,
       account: o.account_id ? accountsById.get(o.account_id) ?? null : null,
@@ -67,9 +85,11 @@ export async function getRepReport(ownerId: string, weekStart: string): Promise<
       weighted: o.weighted,
       nextActionDate: o.next_action_date ?? null,
       expectedClose: o.expected_close_date ?? null,
-    }));
-
-  const sb = getSupabaseServer();
+      repCloseMonth: fc?.m ?? null,
+      repAmountForecast: fc?.a ?? null,
+      repMeetingsLeft: fc?.l ?? null,
+    };
+  });
   const { data: nar } = await sb
     .from("weekly_rep_reports")
     .select("last_week_comment,next_week_plan,month_ahead_plan,note")
