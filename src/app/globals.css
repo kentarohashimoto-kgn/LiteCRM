@@ -13,6 +13,16 @@
 }
 
 @layer base {
+  /* 全ボタン共通の「押した感」: 押下で縮む・処理中(disabled)は待ちカーソル＋薄く(監査UX 2026-07-12) */
+  button:active:not(:disabled) {
+    transform: scale(0.97);
+    transition: transform 80ms ease;
+  }
+  button:disabled {
+    cursor: progress;
+    opacity: 0.65;
+  }
+
   html,
   body {
     @apply bg-mist-soft text-ink;

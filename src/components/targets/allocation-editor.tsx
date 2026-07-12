@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Trash2, Users, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { saveAllocationsAction } from "@/server/actions/targets-allocation";
 import type { Allocation } from "@/lib/data/target-allocations";
 
@@ -15,6 +16,7 @@ const yen = (n: number) => "¥" + Math.round(n).toLocaleString("ja-JP");
 export function AllocationEditor({
   month,
   monthLabel,
+  fy,
   companyTarget,
   members,
   sources,
@@ -22,6 +24,7 @@ export function AllocationEditor({
 }: {
   month: string;
   monthLabel: string;
+  fy: number;
   companyTarget: number;
   members: Opt[];
   sources: Opt[];
@@ -51,6 +54,7 @@ export function AllocationEditor({
   return (
     <form action={saveAllocationsAction} className="space-y-3">
       <input type="hidden" name="target_month" value={month} />
+      <input type="hidden" name="fy" value={fy} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm">
@@ -128,9 +132,9 @@ export function AllocationEditor({
             残り {yen(remaining)}
           </span>
         </div>
-        <button type="submit" className="btn-primary inline-flex items-center gap-1.5">
+        <SubmitButton className="btn-primary inline-flex items-center gap-1.5" pendingLabel="保存中…（週報目標へ反映しています）">
           <Save size={15} /> 配分を保存（担当分は週報目標へ反映）
-        </button>
+        </SubmitButton>
       </div>
       <p className="text-xs text-ink/45">担当者を選んだ行の金額は、その営業マンの当月目標（`rep_targets`）として保存され、営業マン別週報に反映されます。同一担当が複数行にある場合は合算されます。</p>
     </form>
