@@ -25,11 +25,14 @@
 
 ## 1. ジョブ一覧（この順で実行）
 
-| 順 | job_kind | 対象 | 生成物 | 書き戻し先 |
-|---|---|---|---|---|
-| 1 | `meeting_summary` | 議事録テキスト有り＆未要約の商談（最大10件） | 議事録要約＋次アクション | `meetings.ai_summary` |
+| 順 | job_kind | 対象 | 生成物 | 書き戻し先 | 状態 |
+|---|---|---|---|---|---|
+| 1 | `meeting_summary` | 議事録テキスト有り＆未要約＆直近7日開催の商談（最大10件） | 議事録要約 | `meetings.ai_summary` | 稼働 |
+| 2 | `na_task_draft` | 手順1で新たに要約された商談（ai_summary_at が直近24h） | 次アクションのタスク下書き | `tasks`(origin='ai_meeting') | **疎通確認後に有効化** |
 
-> 今後ここに `briefing`（翌日アポの事前ブリーフ / WO-15）、`followup_draft`（お礼・資料のGmail下書き / WO-11後半）、`knowledge_extract`（ノウハウ抽出 / WO-13）を追加していく。追加時も本runbookの「対象抽出→生成→書き戻し→batch_runs記録」の型を踏襲する。
+> 今後ここに `followup_draft`（お礼・資料のGmail下書き / WO-11後半）、`briefing`（翌日アポの事前ブリーフ / WO-15）、`knowledge_extract`（ノウハウ抽出 / WO-13）を追加していく。追加時も本runbookの「対象抽出→生成→書き戻し→batch_runs記録」の型を踏襲する。
+>
+> **有効化ゲート**: job 2 以降は、job 1（meeting_summary）が夜間フレッシュセッションで**MCP疎通OK**（batch_runs に heartbeat/nightly 行が残る）を確認してから trigger プロンプトに組み込む。それまでは job 1 のみ。
 
 ---
 
@@ -76,6 +79,48 @@ set ai_summary = $1, ai_summary_at = now(), updated_at = now()
 where id = $2 and tenant_id = '00000000-0000-0000-0000-000000000001';
 ```
 - 1件失敗しても他は続行（items_failed を+1して次へ）。
+
+---
+
+## 2B. job: na_task_draft（次アクションのタスク下書き）※疎通確認後に有効化
+
+**目的**: 議事録要約(手順1)から「宿題・次アクション」を拾い、既存 `tasks` に **AI下書きタスク**として起票。営業は翌朝アプリで確認→確定/修正/削除。**メール送信・案件更新はしない**。
+
+### 2B.1 対象抽出（手順1で今回要約された商談）
+```sql
+select m.id as meeting_id, m.opportunity_id, m.account_id, m.owner_user_id, m.ai_summary,
+       o.name as opp_name, a.name as acc_name
+from public.meetings m
+left join public.opportunities o on o.id = m.opportunity_id
+left join public.accounts a on a.id = m.account_id
+where m.tenant_id = '00000000-0000-0000-0000-000000000001'
+  and m.ai_summary_at >= now() - interval '24 hours'
+  and coalesce(btrim(m.ai_summary),'') <> ''
+  -- 冪等性: 同じ商談に対しAI下書きタスクが未作成のものだけ
+  and not exists (
+    select 1 from public.tasks t
+    where t.tenant_id = m.tenant_id and t.origin = 'ai_meeting'
+      and t.opportunity_id = m.opportunity_id
+      and t.created_at >= m.ai_summary_at
+  );
+```
+
+### 2B.2 生成（このセッション）
+- ai_summary の「## 宿題・次アクション」から、実行すべきタスクを **0〜3件** 抽出（無ければ作らない）。
+- 各タスク: `title`(命令形で簡潔) / `description`(背景1〜2行＋「AI下書き・要確認」明記) / `due_date`(期日が読めれば。読めなければ null)。
+
+### 2B.3 書き戻し（下書きとして）
+- **実行前に必ず** `tasks` の `status`/`priority` の許容値を実データで確認（`select distinct status, priority from public.tasks limit 50;`）してから、その値域に合わせて insert する（enum/NOT NULL 事故防止）。
+- `origin='ai_meeting'` を必ず付与（＝AI由来の識別）。可能なら `labels` に `'AI下書き'` を追加（アプリで絞り込み・確認しやすくする）。
+- `assigned_to = m.owner_user_id`、`opportunity_id`/`account_id` を紐付け、`created_by` は NULL（無人）。
+```sql
+insert into public.tasks (tenant_id, opportunity_id, account_id, assigned_to, created_by,
+  title, description, due_date, status, priority, origin, labels)
+values ('00000000-0000-0000-0000-000000000001', $opp, $acc, $owner, null,
+  $title, $desc, $due, $status_default, $priority_default, 'ai_meeting',
+  array['AI下書き']);
+```
+- 1件失敗しても続行。作成件数を batch_runs(job_kind='na_task_draft') に記録。
 
 ---
 
