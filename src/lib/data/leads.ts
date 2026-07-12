@@ -9,23 +9,7 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
 import type { OppView } from "@/lib/data/select";
 import type { Lead, LeadImportBatch, AcquirerAlias, LeadExportPreset } from "@/lib/types";
-import { sizeBucket, type AggLead, type WsListRow, type WsQueueRow, type LeadsFilters } from "@/lib/data/leads-workspace";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// 件数を取得→全ページを並列取得(逐次round-tripを排除)。RLSはuserセッションで担保。
-async function selectAll<T>(sb: any, table: string, columns: string, orderCol = "id"): Promise<T[]> {
-  const PAGE = 1000;
-  const { count, error: countErr } = await sb.from(table).select("id", { count: "exact", head: true });
-  if (countErr) throw new Error(`${table} の件数取得に失敗しました: ${countErr.message}`);
-  const pages = Math.max(1, Math.ceil((count ?? 0) / PAGE));
-  const reqs = [];
-  for (let p = 0; p < pages; p++) reqs.push(sb.from(table).select(columns).order(orderCol).range(p * PAGE, (p + 1) * PAGE - 1));
-  const res = await Promise.all(reqs);
-  // タイムアウト等を握り潰すと歯抜けの集計になる(2026-07-12障害)。必ずthrow
-  for (const r of res) if (r?.error) throw new Error(`${table} の取得に失敗しました: ${r.error.message}`);
-  return res.flatMap((r: any) => (r?.data ?? []) as T[]);
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
+import { sizeBucket, type WsListRow, type WsQueueRow, type LeadsFilters, type CompaniesData, type FunnelData, type AnalysisData } from "@/lib/data/leads-workspace";
 
 export interface LeadMetrics {
   total: number;
@@ -115,10 +99,31 @@ export async function queryCallQueue(): Promise<{ rows: WsQueueRow[]; total: num
   return { rows, total: count ?? 0 };
 }
 
-/** 企業ビュー・分析用: 集計に必要な最小列のみを全件取得。 */
-export async function fetchLeadsForAggregation(): Promise<AggLead[]> {
+/**
+ * 企業ビュー/ファネル/分析: SQL集計RPC(0125)。行を転送しない。
+ * 出力形状・可視範囲(RLS同等)はJS実装(leads-workspace.ts)と互換。
+ * パリティ検証済み(2026-07-12: owner/external両ロールで全指標一致)。
+ */
+export async function getLeadsCompanies(): Promise<CompaniesData> {
   const sb = getSupabaseServer();
-  return selectAll<AggLead>(sb, "leads", "id,company_name,company_norm,contact_name,rank,job_title,employee_size,raw_event,priority_score,disposition,acquirer,scanned_at,funnel_stage");
+  const { data, error } = await sb.rpc("leads_companies");
+  if (error) throw new Error(`企業ビューの集計に失敗: ${error.message}`);
+  const j = (data ?? {}) as Partial<CompaniesData>;
+  return { rows: j.rows ?? [], total: j.total ?? 0, multi: j.multi ?? 0 };
+}
+export async function getLeadsFunnel(): Promise<FunnelData> {
+  const sb = getSupabaseServer();
+  const { data, error } = await sb.rpc("leads_funnel");
+  if (error) throw new Error(`ファネル集計に失敗: ${error.message}`);
+  const j = (data ?? {}) as Partial<FunnelData>;
+  return { stages: j.stages ?? {}, total: j.total ?? 0 };
+}
+export async function getLeadsAnalysis(): Promise<AnalysisData> {
+  const sb = getSupabaseServer();
+  const { data, error } = await sb.rpc("leads_analysis");
+  if (error) throw new Error(`リード分析の集計に失敗: ${error.message}`);
+  const j = (data ?? {}) as Partial<AnalysisData>;
+  return { events: j.events ?? [], scopes: j.scopes ?? {}, rawAcquirers: j.rawAcquirers ?? [] };
 }
 
 /** 流入フィルタ用の取込イベント一覧(取込履歴の小テーブルから)。 */

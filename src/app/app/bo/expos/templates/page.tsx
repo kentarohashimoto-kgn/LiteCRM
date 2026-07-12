@@ -4,6 +4,7 @@ import { requireBoCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { updateExpoTemplateAction } from "@/server/actions/bo";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,7 @@ export default async function ExpoTemplatesPage() {
             <label className="label">会期初日の何日前？</label>
             <input name="offset_days_before" type="number" min={0} defaultValue={30} className="input w-24" aria-label="日数(前)" />
           </div>
-          <button type="submit" className="btn-accent">追加</button>
+          <SubmitButton className="btn-accent" pendingLabel="追加中…">追加</SubmitButton>
         </form>
       </Section>
     </div>

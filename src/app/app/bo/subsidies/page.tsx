@@ -2,6 +2,7 @@ import { requireBoCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { createSubsidyCaseAction, toggleMilestoneAction, updateSubsidyCaseAction } from "@/server/actions/bo";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +77,7 @@ export default async function SubsidiesPage() {
               <input name="training_end_date" type="date" className="input" />
             </div>
           </div>
-          <button type="submit" className="btn-accent">登録（納期3件を自動生成）</button>
+          <SubmitButton className="btn-accent" pendingLabel="保存中…">登録（納期3件を自動生成）</SubmitButton>
           <p className="text-[11px] text-ink/35">事前説明会=開始6週間前 / 事前申請=開始1ヶ月前 / 実績報告=終了2ヶ月後 で自動設定されます。</p>
         </form>
       </Section>

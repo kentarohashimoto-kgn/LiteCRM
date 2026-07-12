@@ -2,6 +2,7 @@ import { requireBoCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { createTrainingSessionAction, importSurveyResponsesAction, deleteTrainingSessionAction } from "@/server/actions/bo";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +85,7 @@ export default async function SurveysPage() {
           <div><label className="label">講師 *</label><input name="instructor" required className="input" placeholder="例: 山田" /></div>
           <div><label className="label">受講企業</label><input name="account_name" className="input" /></div>
           <div><label className="label">受講者数</label><input name="attendee_count" type="number" min={0} className="input w-24" /></div>
-          <button type="submit" className="btn-accent">登録</button>
+          <SubmitButton className="btn-accent" pendingLabel="登録中…">登録</SubmitButton>
         </form>
       </Section>
 
@@ -105,7 +106,7 @@ export default async function SurveysPage() {
                     <span className="text-xs text-ink/40 ml-auto">回答 {n}件{s.attendee_count ? ` / ${s.attendee_count}名` : ""}</span>
                     <form action={deleteTrainingSessionAction}>
                       <input type="hidden" name="id" value={s.id} />
-                      <button type="submit" className="text-xs text-rose-500 hover:underline">削除</button>
+                      <SubmitButton className="text-xs text-rose-500 hover:underline" pendingLabel="保存中…">削除</SubmitButton>
                     </form>
                   </div>
                   <details className="mt-1.5">
@@ -113,7 +114,7 @@ export default async function SurveysPage() {
                     <form action={importSurveyResponsesAction} className="mt-2 space-y-2">
                       <input type="hidden" name="session_id" value={s.id} />
                       <textarea name="rows" rows={4} className="input text-xs font-mono" placeholder={"1行=1回答（タブ/カンマ区切り）:\n役職層(経営/管理職/一般), 職種, 年代, 満足度1-5, 理解度1-5, 講師評価1-5, NPS0-10, 自由記述\n例: 管理職,営業,40代,5,4,5,9,実務に直結して良かった"} />
-                      <button type="submit" className="rounded-lg border border-black/10 px-3 py-1.5 text-xs hover:bg-black/[0.03]">取込</button>
+                      <SubmitButton className="rounded-lg border border-black/10 px-3 py-1.5 text-xs hover:bg-black/[0.03]" pendingLabel="取込中…">取込</SubmitButton>
                     </form>
                   </details>
                 </li>

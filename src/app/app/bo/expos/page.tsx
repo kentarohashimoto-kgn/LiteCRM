@@ -4,6 +4,7 @@ import { requireBoCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { createExpoProjectAction } from "@/server/actions/bo";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export default async function ExposPage() {
               <input type="checkbox" name="confirmed" value="1" defaultChecked className="accent-teal-primary" />
               出展確定（WBSを自動生成）
             </label>
-            <button type="submit" className="btn-accent">登録</button>
+            <SubmitButton className="btn-accent" pendingLabel="登録中…">登録</SubmitButton>
           </div>
         </form>
       </Section>

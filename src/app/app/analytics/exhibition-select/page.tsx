@@ -3,6 +3,7 @@ import { saveExhibitionCandidateAction, setExhibitionStatusAction, setExhibition
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { EXH_STATUS, EXH_STATUS_LABEL, EXH_DECISION, EXH_DECISION_LABEL, THEME_FIT, EXH_RANK_COLOR } from "@/lib/exhibition";
 import { formatYen, formatDateFull, cn } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 function pctRoi(v: number | null) { return v == null ? "—" : `${Math.round(v * 100)}%`; }
 
@@ -43,7 +44,7 @@ export default async function ExhibitionSelectPage() {
           <input name="expected_revenue" type="number" placeholder="想定売上(円)" className="input" />
           <select name="status" defaultValue="considering" className="input">{EXH_STATUS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</select>
           <input name="notes" placeholder="メモ" className="input md:col-span-2" />
-          <button type="submit" className="btn-primary md:col-span-2">候補を登録</button>
+          <SubmitButton className="btn-primary md:col-span-2" pendingLabel="保存中…">候補を登録</SubmitButton>
         </form>
       </Section>
 
@@ -83,7 +84,7 @@ export default async function ExhibitionSelectPage() {
                         <input name="other_cost" type="number" defaultValue={r.other_cost ?? ""} placeholder="その他費" className="input text-xs" />
                         <input name="expected_revenue" type="number" defaultValue={r.expected_revenue ?? ""} placeholder="想定売上" className="input text-xs" />
                         <input type="hidden" name="status" value={r.status} />
-                        <button type="submit" className="btn-accent text-xs col-span-2">保存</button>
+                        <SubmitButton className="btn-accent text-xs col-span-2" pendingLabel="保存中…">保存</SubmitButton>
                       </form>
                       <form action={deleteExhibitionCandidateAction} className="mt-1"><input type="hidden" name="id" value={r.id} /><button className="text-[11px] text-rose-400 hover:text-rose-600">削除</button></form>
                     </details>

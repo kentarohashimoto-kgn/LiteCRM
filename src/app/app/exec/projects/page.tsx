@@ -5,6 +5,7 @@ import { saveProjectReviewAction } from "@/server/actions";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { PROJECT_TYPES, PROJECT_TYPE_LABEL, CONTINUATION_STATUS, CONTINUATION_LABEL, EVALUATION_META, judgeProject } from "@/lib/exec-review";
 import { formatYen, formatPercent } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function ExecProjectsPage() {
   const ws = await getWorkspaceLite();
@@ -28,7 +29,7 @@ export default async function ExecProjectsPage() {
           <select name="continuation_status" defaultValue="" className="input"><option value="">継続状況</option>{CONTINUATION_STATUS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}</select>
           <input name="satisfaction_status" placeholder="顧客満足(不満等)" className="input" />
           <input name="countermeasure" placeholder="対策" className="input" />
-          <button type="submit" className="btn-primary md:col-span-4">追加</button>
+          <SubmitButton className="btn-primary md:col-span-4" pendingLabel="追加中…">追加</SubmitButton>
         </form>
       </Section>
 
@@ -65,7 +66,7 @@ export default async function ExecProjectsPage() {
                 <div><label className="label">継続状況</label><select name="continuation_status" defaultValue={r.continuation_status ?? ""} className="input text-sm"><option value="">—</option>{CONTINUATION_STATUS.map((c) => <option key={c.key} value={c.key}>{CONTINUATION_LABEL[c.key]}</option>)}</select></div>
                 <div><label className="label">顧客満足</label><input name="satisfaction_status" defaultValue={r.satisfaction_status ?? ""} className="input text-sm" /></div>
                 <div><label className="label">対策</label><input name="countermeasure" defaultValue={r.countermeasure ?? ""} className="input text-sm" /></div>
-                <button type="submit" className="btn-accent text-sm col-span-2 md:col-span-4">更新</button>
+                <SubmitButton className="btn-accent text-sm col-span-2 md:col-span-4" pendingLabel="更新中…">更新</SubmitButton>
               </form>
             </details>
           );

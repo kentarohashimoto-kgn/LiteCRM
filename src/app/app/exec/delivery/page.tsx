@@ -5,6 +5,7 @@ import { saveDeliveryReviewAction } from "@/server/actions";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { DELIVERY_TYPES, DELIVERY_TYPE_LABEL, DELIVERY_STATUS, EVALUATION_META, judgeDelivery } from "@/lib/exec-review";
 import { formatDateFull } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function ExecDeliveryPage() {
   const ws = await getWorkspaceLite();
@@ -29,7 +30,7 @@ export default async function ExecDeliveryPage() {
           <select name="status" defaultValue="open" className="input">{DELIVERY_STATUS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</select>
           <input name="issue_detail" placeholder="課題内容" className="input md:col-span-2" />
           <input name="countermeasure" placeholder="対策" className="input" />
-          <button type="submit" className="btn-primary md:col-span-3">追加</button>
+          <SubmitButton className="btn-primary md:col-span-3" pendingLabel="追加中…">追加</SubmitButton>
         </form>
       </Section>
 
@@ -64,7 +65,7 @@ export default async function ExecDeliveryPage() {
                 <select name="status" defaultValue={r.status} className="input text-sm">{DELIVERY_STATUS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</select>
                 <input name="issue_detail" defaultValue={r.issue_detail ?? ""} placeholder="課題内容" className="input text-sm md:col-span-2" />
                 <input name="countermeasure" defaultValue={r.countermeasure ?? ""} placeholder="対策（低評価時は必須）" className="input text-sm" />
-                <button type="submit" className="btn-accent text-sm md:col-span-3">更新</button>
+                <SubmitButton className="btn-accent text-sm md:col-span-3" pendingLabel="更新中…">更新</SubmitButton>
               </form>
             </details>
           );

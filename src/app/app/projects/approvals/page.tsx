@@ -7,6 +7,7 @@ import { todayJST, addDaysISO, monthEndOf, formatHoursHM, hoursToCost } from "@/
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { ActionNotice } from "@/components/ui/action-notice";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { MonthlySummaryCsv } from "@/components/work/monthly-summary-csv";
 import { formatYen } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -147,6 +148,7 @@ export default async function WorkApprovalsPage({ searchParams }: { searchParams
         title={`月次サマリー（請求参考） — ${monthLabel}`}
         action={
           <div className="flex items-center gap-1.5 text-sm">
+            <MonthlySummaryCsv rows={summary} monthLabel={month.slice(0, 7)} />
             <Link href={`/app/projects/approvals?month=${addMonths(month, -1)}`} className="btn-ghost px-2 py-1" aria-label="前の月"><ChevronLeft size={15} /></Link>
             <Link href={`/app/projects/approvals?month=${addMonths(month, 1)}`} className="btn-ghost px-2 py-1" aria-label="次の月"><ChevronRight size={15} /></Link>
             <Link href="/app/projects/approvals" className="btn-ghost text-xs">今月へ</Link>

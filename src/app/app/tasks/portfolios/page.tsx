@@ -7,6 +7,7 @@ import { PageHeader, EmptyState, ProgressBar } from "@/components/ui/primitives"
 import { colorOf, COLOR_KEYS } from "@/lib/constants";
 import { createPortfolioAction } from "@/server/actions/tasks";
 import { cn } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -110,7 +111,7 @@ function NewPortfolioButton({ members }: { members: { id: string; name: string }
             </select>
           </div>
         </div>
-        <button type="submit" className="btn-primary w-full">作成する</button>
+        <SubmitButton className="btn-primary w-full" pendingLabel="作成中…">作成する</SubmitButton>
       </form>
     </details>
   );

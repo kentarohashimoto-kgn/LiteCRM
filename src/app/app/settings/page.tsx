@@ -10,6 +10,7 @@ import { addLeadSourceDetailAction, deleteLeadSourceDetailAction } from "@/serve
 import { MemberManager } from "@/components/settings/member-manager";
 import { ProductMaster, type ProductRow } from "@/components/settings/product-master";
 import { NameMaster } from "@/components/settings/name-master";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
               <select name="role" defaultValue="sales_rep" className="input">{ROLES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select>
             </div>
             <div className="md:col-span-2"><label className="label">メモ</label><input name="memo" className="input" placeholder="担当領域・入社日など" /></div>
-            <div className="md:col-span-2"><button type="submit" className="btn-primary">発行する</button></div>
+            <div className="md:col-span-2"><SubmitButton className="btn-primary" pendingLabel="発行中…">発行する</SubmitButton></div>
           </form>
         </Section>
       )}
@@ -123,7 +124,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
               </select>
             </div>
             <div className="min-w-[220px]"><label className="label">詳細の名称</label><input name="name" required className="input" placeholder="例: 202609_AIWorld / 株式会社○○(パートナー名)" /></div>
-            <button type="submit" className="btn-accent">追加</button>
+            <SubmitButton className="btn-accent" pendingLabel="追加中…">追加</SubmitButton>
           </form>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {sources
@@ -137,7 +138,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
                         <span className="truncate">{d.name}</span>
                         <form action={deleteLeadSourceDetailAction} className="ml-auto shrink-0">
                           <input type="hidden" name="id" value={d.id} />
-                          <button type="submit" className="text-xs text-rose-500 hover:underline">削除</button>
+                          <SubmitButton className="text-xs text-rose-500 hover:underline" pendingLabel="保存中…">削除</SubmitButton>
                         </form>
                       </li>
                     ))}

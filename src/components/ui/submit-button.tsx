@@ -12,14 +12,16 @@ export function SubmitButton({
   children = "保存する",
   pendingLabel = "保存中…",
   className = "btn-primary",
+  title,
 }: {
   children?: React.ReactNode;
   pendingLabel?: string;
   className?: string;
+  title?: string;
 }) {
   const { pending } = useFormStatus();
   return (
-    <button type="submit" disabled={pending} className={cn(className, pending && "opacity-70 cursor-wait")} aria-busy={pending}>
+    <button type="submit" disabled={pending} title={title} className={cn(className, pending && "opacity-70 cursor-wait")} aria-busy={pending}>
       {pending ? pendingLabel : children}
     </button>
   );

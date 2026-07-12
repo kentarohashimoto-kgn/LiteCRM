@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/primitives";
 import { createAccountAction } from "@/server/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default function NewAccountPage() {
   return (
@@ -31,7 +32,7 @@ export default function NewAccountPage() {
         </div>
         <div><label className="label">メモ</label><textarea name="notes" rows={3} className="input" /></div>
         <div className="flex gap-2 pt-2">
-          <button type="submit" className="btn-primary">登録する</button>
+          <SubmitButton className="btn-primary" pendingLabel="登録中…">登録する</SubmitButton>
           <Link href="/app/accounts" className="btn-ghost">キャンセル</Link>
         </div>
       </form>

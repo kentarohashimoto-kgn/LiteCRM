@@ -2,6 +2,7 @@ import { requireHrCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { createJobOpeningAction, updateJobOpeningAction } from "@/server/actions/hr";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export default async function OpeningsPage() {
           <div><label className="label">クライアント名</label><input name="client_name" className="input" placeholder="クライアント案件の場合" /></div>
           <div><label className="label">単価・条件メモ</label><input name="rate_note" className="input" /></div>
           <div className="w-full"><label className="label">募集要件</label><input name="role_description" className="input" placeholder="必要スキル・経験など" /></div>
-          <button type="submit" className="btn-accent">追加</button>
+          <SubmitButton className="btn-accent" pendingLabel="追加中…">追加</SubmitButton>
         </form>
       </Section>
 

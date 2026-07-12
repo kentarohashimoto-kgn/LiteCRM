@@ -3,6 +3,7 @@ import { getDealReads, parsePeriod } from "@/lib/data/exec";
 import { saveOppReviewExtAction } from "@/server/actions";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { formatYen, formatDateFull } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function ExecDealsPage({ searchParams }: { searchParams: { month?: string; week?: string } }) {
   const { month, week } = parsePeriod(searchParams);
@@ -47,7 +48,7 @@ export default async function ExecDealsPage({ searchParams }: { searchParams: { 
                 <textarea name="blocking_issue" defaultValue={r.ext?.blocking_issue ?? ""} rows={2} placeholder="成約阻害要因（予算・決裁者・競合・時期・稟議）" className="input text-sm" />
                 <textarea name="executive_comment" defaultValue={r.ext?.executive_comment ?? ""} rows={2} placeholder="幹部コメント" className="input text-sm" />
                 <input name="next_check_point" defaultValue={r.ext?.next_check_point ?? ""} placeholder="次回MTGで確認すること" className="input text-sm md:col-span-2" />
-                <button type="submit" className="btn-accent text-sm md:col-span-2">商談振り返りを保存</button>
+                <SubmitButton className="btn-accent text-sm md:col-span-2" pendingLabel="保存中…">商談振り返りを保存</SubmitButton>
               </form>
             </details>
           ))}

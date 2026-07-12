@@ -2,6 +2,7 @@ import { requireBoCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { createCaseStudyAction, updateCaseStudyAction } from "@/server/actions/bo";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,7 @@ export default async function CasesPage() {
           </div>
           <div><label className="label">会社名 *</label><input name="account_name" required className="input" /></div>
           <div><label className="label">研修名</label><input name="training_name" className="input" /></div>
-          <button type="submit" className="btn-accent">追加</button>
+          <SubmitButton className="btn-accent" pendingLabel="追加中…">追加</SubmitButton>
         </form>
       </Section>
 
@@ -80,7 +81,7 @@ export default async function CasesPage() {
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <input name="published_url" defaultValue={c.published_url ?? ""} className="input flex-1 min-w-[200px] text-xs py-1.5" placeholder="公開URL" />
                     <input name="notes" defaultValue={c.notes ?? ""} className="input flex-1 min-w-[200px] text-xs py-1.5" placeholder="メモ" />
-                    <button type="submit" className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs hover:bg-black/[0.03]">保存</button>
+                    <SubmitButton className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs hover:bg-black/[0.03]" pendingLabel="保存中…">保存</SubmitButton>
                     <button name="op" value="delete" className="text-xs text-rose-500 hover:underline">削除</button>
                   </div>
                 </form>

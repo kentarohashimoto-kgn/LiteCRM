@@ -5,6 +5,7 @@ import { createMtgActionAction, updateMtgActionAction } from "@/server/actions";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { ACTION_STATUS, STATUS_LABEL, PRIORITY_LABEL, DEPARTMENTS, DEPT_LABEL } from "@/lib/exec-review";
 import { formatDateFull } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function ExecActionsPage() {
   const ws = await getWorkspaceLite();
@@ -33,7 +34,7 @@ export default async function ExecActionsPage() {
           <select name="owner_user_id" className="input"><option value="">担当者</option>{members.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
           <input name="due_date" type="date" className="input" title="期限" />
           <select name="priority" defaultValue="middle" className="input"><option value="high">High</option><option value="middle">Middle</option><option value="low">Low</option></select>
-          <button type="submit" className="btn-primary md:col-span-2">アクションを作成</button>
+          <SubmitButton className="btn-primary md:col-span-2" pendingLabel="保存中…">アクションを作成</SubmitButton>
         </form>
       </Section>
 
@@ -57,7 +58,7 @@ export default async function ExecActionsPage() {
                       <input type="hidden" name="id" value={a.id} />
                       <select name="status" defaultValue={a.status} className="rounded-lg border border-black/10 bg-white px-1.5 py-1 text-xs">{ACTION_STATUS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</select>
                       <input name="completion_comment" defaultValue={a.completion_comment ?? ""} placeholder="完了コメント" className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs w-40" />
-                      <button type="submit" className="btn-ghost text-xs py-1">更新</button>
+                      <SubmitButton className="btn-ghost text-xs py-1" pendingLabel="更新中…">更新</SubmitButton>
                     </form>
                   </td>
                 </tr>

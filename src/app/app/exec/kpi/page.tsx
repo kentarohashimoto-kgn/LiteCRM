@@ -5,6 +5,7 @@ import { PageHeader, Section } from "@/components/ui/primitives";
 import { PeriodSelect } from "@/components/exec/period-select";
 import { SALES_KPIS, KPI_LABEL, KPI_UNIT, EVALUATION_META, ACTION_STATUS } from "@/lib/exec-review";
 import { formatYen } from "@/lib/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 function fv(v: number, unit: "count" | "yen") { return unit === "yen" ? formatYen(v) : `${Math.round(v).toLocaleString("ja-JP")}件`; }
 function pct(v: number | null) { return v == null ? "—" : `${Math.round(v * 100)}%`; }
@@ -44,7 +45,7 @@ export default async function ExecKpiPage({ searchParams }: { searchParams: { mo
               })}
             </tbody>
           </table>
-          <button type="submit" className="btn-primary mt-3">目標を保存</button>
+          <SubmitButton className="btn-primary mt-3" pendingLabel="保存中…">目標を保存</SubmitButton>
         </form>
       </Section>
 
@@ -97,7 +98,7 @@ export default async function ExecKpiPage({ searchParams }: { searchParams: { mo
                     </div>
                     <input name="next_check_point" defaultValue={r.review?.next_check_point ?? ""} placeholder="次回MTGで確認すること" className="input text-sm" />
                     <input name="result_comment" defaultValue={r.review?.result_comment ?? ""} placeholder="実行結果（翌週入力）" className="input text-sm" />
-                    <button type="submit" className="btn-accent text-sm">振り返りを保存</button>
+                    <SubmitButton className="btn-accent text-sm" pendingLabel="保存中…">振り返りを保存</SubmitButton>
                   </form>
 
                   {/* アクション化 */}
@@ -113,7 +114,7 @@ export default async function ExecKpiPage({ searchParams }: { searchParams: { mo
                       <input name="due_date" type="date" className="input text-xs" />
                       <select name="priority" defaultValue="high" className="input text-xs"><option value="high">High</option><option value="middle">Middle</option><option value="low">Low</option></select>
                     </div>
-                    <button type="submit" className="btn-ghost text-sm">アクションを作成</button>
+                    <SubmitButton className="btn-ghost text-sm" pendingLabel="保存中…">アクションを作成</SubmitButton>
                   </form>
                 </div>
               )}

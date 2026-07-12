@@ -7,6 +7,7 @@ import { createOpportunityAction } from "@/server/actions";
 import { type SourceDetailOption } from "@/components/opportunities/source-select";
 import { OppCustomerSection } from "@/components/opportunities/opp-customer-section";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function NewOpportunityPage({ searchParams }: { searchParams: { error?: string } }) {
   const ws = await getWorkspaceLite();
@@ -96,7 +97,7 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
           <textarea name="notes" rows={3} className="input" />
         </div>
         <div className="flex items-center gap-2 pt-2">
-          <button type="submit" className="btn-primary">案件を作成</button>
+          <SubmitButton className="btn-primary" pendingLabel="作成中…">案件を作成</SubmitButton>
           <Link href="/app/opportunities" className="btn-ghost">キャンセル</Link>
         </div>
       </form>

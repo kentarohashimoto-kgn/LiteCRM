@@ -287,7 +287,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                   </div>
                 </div>
                 <MeetingTaskInputs />
-                <button type="submit" className="btn-accent">商談を登録</button>
+                <SubmitButton className="btn-accent" pendingLabel="登録中…">商談を登録</SubmitButton>
               </form>
             </details>
           </Section>
@@ -547,7 +547,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
-                <button type="submit" className="btn-ghost shrink-0">確定</button>
+                <SubmitButton className="btn-ghost shrink-0" pendingLabel="確定中…">確定</SubmitButton>
               </div>
               {o.campaign_estimated && (
                 <p className="text-[11px] text-ink/40 mt-1">作成日から自動推定。正しい展示会を選び直して確定すると確定値になります。</p>

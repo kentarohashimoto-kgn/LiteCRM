@@ -3,6 +3,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { getMembersLite } from "@/lib/data/workspace";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { createTalentAction, updateTalentAction, addTalentReviewAction } from "@/server/actions/hr";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -91,7 +92,7 @@ export default async function TalentsPage() {
           <div><label className="label">時給(円)</label><input name="hourly_rate" inputMode="numeric" className="input w-24 text-right" placeholder="5000" /></div>
           <div><label className="label">メール</label><input name="email" type="email" className="input" /></div>
           <div><label className="label">稼働開始日</label><input name="joined_on" type="date" className="input w-auto" /></div>
-          <button type="submit" className="btn-accent">追加</button>
+          <SubmitButton className="btn-accent" pendingLabel="追加中…">追加</SubmitButton>
         </form>
         <p className="text-xs text-ink/40 mt-2">※ 候補者ページで「入社・稼働」にすると自動でここに追加されます</p>
       </Section>
@@ -121,7 +122,7 @@ export default async function TalentsPage() {
                       {t.joined_on && <span className="text-xs text-ink/40 tabular-nums">{t.joined_on}〜{t.left_on ?? ""}</span>}
                       {latest && <span className="text-xs text-amber-600" title={`${latest.period} の総合評価`}>{stars(latest.overall)}</span>}
                       <span className="ml-auto" />
-                      <button type="submit" className="rounded-lg border border-black/10 px-2.5 py-1 text-xs hover:bg-black/[0.03]">保存</button>
+                      <SubmitButton className="rounded-lg border border-black/10 px-2.5 py-1 text-xs hover:bg-black/[0.03]" pendingLabel="保存中…">保存</SubmitButton>
                       {!t.left_on && <button name="op" value="leave" className="text-xs text-ink/45 hover:underline">退職・終了</button>}
                       <button name="op" value="delete" className="text-xs text-rose-500 hover:underline">削除</button>
                     </div>
@@ -194,7 +195,7 @@ export default async function TalentsPage() {
                       <div><label className="label">評価者</label><input name="reviewer" className="input w-28 text-xs" /></div>
                       <div className="min-w-[160px] flex-1"><label className="label">コメント</label><input name="comment" className="input text-xs" /></div>
                       <div className="min-w-[160px] flex-1"><label className="label">次期目標</label><input name="goals" className="input text-xs" /></div>
-                      <button type="submit" className="rounded-lg border border-black/10 px-3 py-1.5 text-xs hover:bg-black/[0.03]">記録</button>
+                      <SubmitButton className="rounded-lg border border-black/10 px-3 py-1.5 text-xs hover:bg-black/[0.03]" pendingLabel="記録中…">記録</SubmitButton>
                     </form>
                   </details>
                 </li>
