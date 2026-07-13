@@ -30,6 +30,7 @@ import { getTransitionsByAccount, TRANSITION_STATUS_LABEL, FOLLOWUP_STATUS_LABEL
 import { STAGES, FORECAST_CATEGORIES, DEAL_PHASES } from "@/lib/constants";
 import { formatYen, sum } from "@/lib/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { ContactLine } from "@/components/contacts/contact-line";
 
 const statusLabel: Record<string, string> = { prospect: "見込み", customer: "顧客", inactive: "休眠" };
 
@@ -281,14 +282,33 @@ export default async function AccountDetailPage({ params, searchParams }: { para
             {contacts.length === 0 ? (
               <p className="text-sm text-ink/40 py-2">担当者がいません</p>
             ) : (
-              <ul className="space-y-3">
-                {contacts.map((c) => (
-                  <li key={c.id} className="text-sm">
-                    <div className="font-medium">{c.name} <span className="text-xs text-ink/50">{c.title}</span></div>
-                    <div className="text-xs text-ink/50">{c.department} ・ {c.email}</div>
-                  </li>
-                ))}
-              </ul>
+              (() => {
+                // 各担当者がどの案件のアカウンター(窓口)かを表示
+                const accounterOf = new Map<string, { id: string; name: string }[]>();
+                for (const op of ws.opportunities.filter((x) => x.account_id === account.id)) {
+                  if (!op.contact_id) continue;
+                  (accounterOf.get(op.contact_id) ?? accounterOf.set(op.contact_id, []).get(op.contact_id)!).push({ id: op.id, name: op.name });
+                }
+                return (
+                  <ul className="space-y-3">
+                    {contacts.map((c) => {
+                      const of = accounterOf.get(c.id) ?? [];
+                      return (
+                        <li key={c.id}>
+                          <ContactLine c={c} isAccounter={of.length > 0} showEmail />
+                          {of.length > 0 && (
+                            <div className="mt-1 text-[11px] text-teal-deep">
+                              担当案件: {of.map((op, i) => (
+                                <span key={op.id}>{i > 0 && "、"}<Link href={`/app/opportunities/${op.id}`} className="hover:underline">{op.name}</Link></span>
+                              ))}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              })()
             )}
           </Section>
 
