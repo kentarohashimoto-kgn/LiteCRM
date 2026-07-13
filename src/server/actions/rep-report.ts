@@ -72,10 +72,11 @@ export async function saveRepForecastAction(formData: FormData): Promise<void> {
     redirect(`/app/reviews/rep?owner=${encodeURIComponent(backOwner)}&week=${encodeURIComponent(backWeek)}&${q}`);
   if (!oppId) back("error=save_failed");
 
-  const month = String(formData.get("rep_close_month") ?? "").trim(); // <input type="month"> は YYYY-MM
-  const amountRaw = String(formData.get("rep_amount_forecast") ?? "").replace(/[,、]/g, "").trim();
+  // 金額・成約予定は公式の案件情報へ集約(読みとして分離しない)
+  const month = String(formData.get("expected_close_month") ?? "").trim(); // <input type="month"> は YYYY-MM
+  const amountRaw = String(formData.get("amount") ?? "").replace(/[,、]/g, "").trim();
   const leftRaw = String(formData.get("rep_meetings_left") ?? "").trim();
-  const amount = amountRaw ? Number(amountRaw) : null;
+  const amount = amountRaw ? Number(amountRaw.replace(/[^\d.]/g, "")) : null;
   const left = leftRaw ? Number(leftRaw) : null;
   const note = String(formData.get("rep_status_note") ?? "").trim();
 
@@ -84,17 +85,16 @@ export async function saveRepForecastAction(formData: FormData): Promise<void> {
   const yomiRaw = String(formData.get("yomi") ?? "").trim();
   const yomi = YOMI_OPTIONS.some((o) => o.key === yomiRaw) ? yomiRaw : null;
 
+  const patch: Record<string, unknown> = {
+    rep_meetings_left: left != null && Number.isInteger(left) && left >= 0 ? left : null,
+    rep_status_note: note || null,
+  };
+  if (formData.has("amount")) patch.amount = amount != null && Number.isFinite(amount) && amount >= 0 ? amount : 0;
+  if (formData.has("expected_close_month")) patch.expected_close_date = /^\d{4}-\d{2}$/.test(month) ? `${month}-01` : null;
+  if (yomiProvided) patch.yomi = yomi;
+
   const sb = getSupabaseServer();
-  const up = await sb
-    .from("opportunities")
-    .update({
-      rep_close_month: /^\d{4}-\d{2}$/.test(month) ? month : null,
-      rep_amount_forecast: amount != null && Number.isFinite(amount) ? amount : null,
-      rep_meetings_left: left != null && Number.isInteger(left) && left >= 0 ? left : null,
-      rep_status_note: note || null,
-      ...(yomiProvided ? { yomi } : {}),
-    })
-    .eq("id", oppId);
+  const up = await sb.from("opportunities").update(patch).eq("id", oppId);
   if (up.error) back("error=save_failed");
 
   // 同時に入力された要因を、いま記録された履歴行と受注/失注分析(win_reason/lost_reason)へ反映
@@ -154,9 +154,12 @@ export type SaveRepOppResult = { ok: true } | { ok: false; error: string };
  */
 export async function saveRepOppFieldsAction(input: {
   oppId: string;
+  // 案件情報(公式フィールドに集約)
   yomi?: string | null;
-  repCloseMonth?: string | null;
-  repAmountForecast?: number | null;
+  amount?: number | null;
+  expectedCloseMonth?: string | null; // YYYY-MM → expected_close_date=月初
+  probability?: number | null; // 0-100
+  // 週報用
   repMeetingsLeft?: number | null;
   statusNote?: string | null;
   yomiReason?: string | null;
@@ -166,17 +169,23 @@ export async function saveRepOppFieldsAction(input: {
 
   const yomiProvided = input.yomi !== undefined;
   const yomi = yomiProvided ? (YOMI_OPTIONS.some((o) => o.key === input.yomi) ? input.yomi! : null) : undefined;
-  const month = (input.repCloseMonth ?? "").trim();
-  const amount = input.repAmountForecast;
   const left = input.repMeetingsLeft;
 
   const patch: Record<string, unknown> = {
-    rep_close_month: /^\d{4}-\d{2}$/.test(month) ? month : null,
-    rep_amount_forecast: amount != null && Number.isFinite(amount) ? amount : null,
     rep_meetings_left: left != null && Number.isInteger(left) && left >= 0 ? left : null,
     rep_status_note: (input.statusNote ?? "").trim() || null,
   };
   if (yomiProvided) patch.yomi = yomi;
+  // 金額・成約予定・確率は公式の案件情報へ直接反映(読みとして分離しない)
+  if (input.amount !== undefined) patch.amount = input.amount != null && Number.isFinite(input.amount) && input.amount >= 0 ? input.amount : 0;
+  if (input.expectedCloseMonth !== undefined) {
+    const m = (input.expectedCloseMonth ?? "").trim();
+    patch.expected_close_date = /^\d{4}-\d{2}$/.test(m) ? `${m}-01` : null;
+  }
+  if (input.probability !== undefined) {
+    const p = input.probability;
+    patch.probability = p != null && Number.isFinite(p) ? Math.min(100, Math.max(0, Math.round(p))) : null;
+  }
 
   const sb = getSupabaseServer();
   const up = await sb.from("opportunities").update(patch).eq("id", input.oppId);

@@ -16,7 +16,12 @@ const REASON_YOMI: Record<string, string> = {
   "7.オチ": "オチた要因を一言…",
 };
 
-type Editable = { yomi: string; repCloseMonth: string; repAmountForecast: string; repMeetingsLeft: string; statusNote: string; yomiReason: string };
+type Editable = {
+  // 案件情報(公式)
+  yomi: string; amount: string; expectedCloseMonth: string; probability: string;
+  // 週報用
+  repMeetingsLeft: string; statusNote: string; yomiReason: string;
+};
 
 /**
  * 週報の案件レビュー用サイドパネル(案A)。
@@ -55,8 +60,9 @@ export function RepOppDrawer({
       if (d) {
         setEdit({
           yomi: d.yomi ?? "",
-          repCloseMonth: d.repCloseMonth ?? "",
-          repAmountForecast: d.repAmountForecast != null ? String(d.repAmountForecast) : "",
+          amount: d.amount ? String(d.amount) : "",
+          expectedCloseMonth: d.expectedCloseDate ? d.expectedCloseDate.slice(0, 7) : "",
+          probability: d.probability != null ? String(d.probability) : "",
           repMeetingsLeft: d.repMeetingsLeft != null ? String(d.repMeetingsLeft) : "",
           statusNote: d.statusNote ?? "",
           yomiReason: "",
@@ -94,8 +100,9 @@ export function RepOppDrawer({
     const res = await saveRepOppFieldsAction({
       oppId: detail.id,
       yomi: edit.yomi || null,
-      repCloseMonth: edit.repCloseMonth || null,
-      repAmountForecast: edit.repAmountForecast ? Number(edit.repAmountForecast.replace(/[^\d]/g, "")) : null,
+      amount: edit.amount ? Number(edit.amount.replace(/[^\d]/g, "")) : 0,
+      expectedCloseMonth: edit.expectedCloseMonth || null,
+      probability: edit.probability !== "" ? Number(edit.probability.replace(/[^\d]/g, "")) : null,
       repMeetingsLeft: edit.repMeetingsLeft ? Number(edit.repMeetingsLeft) : null,
       statusNote: edit.statusNote || null,
       yomiReason: edit.yomiReason || null,
@@ -106,6 +113,7 @@ export function RepOppDrawer({
     setSavedTick(true);
     setTimeout(() => setSavedTick(false), 1400);
     if (thenNav && index < total - 1) onNav(1);
+    else load(detail.id); // 保存後にサマリーを最新化(次へ遷移する場合は次案件を読むので不要)
   };
 
   const set = (patch: Partial<Editable>) => setEdit((e) => (e ? { ...e, ...patch } : e));
@@ -141,32 +149,44 @@ export function RepOppDrawer({
           {!loading && detail && edit && (
             <>
               {/* 更新パネル(先頭・常時見える) */}
-              <div className="rounded-xl border border-teal-primary/20 bg-teal-light/25 p-3 space-y-2.5">
-                <div className="text-xs font-bold text-teal-deep">この案件を更新</div>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <label className="text-xs text-ink/60">ヨミ
-                    <select value={edit.yomi} onChange={(e) => set({ yomi: e.target.value })} className="input text-sm mt-0.5 w-full">
-                      <option value="">—</option>
-                      {YOMI_OPTIONS.map((y) => <option key={y.key} value={y.key}>{y.label}</option>)}
-                    </select>
-                  </label>
-                  <label className="text-xs text-ink/60">成約月(読み)
-                    <input type="month" value={edit.repCloseMonth} onChange={(e) => set({ repCloseMonth: e.target.value })} className="input text-sm mt-0.5 w-full" />
-                  </label>
-                  <label className="text-xs text-ink/60">売上見込(読み)
-                    <input inputMode="numeric" value={edit.repAmountForecast} onChange={(e) => set({ repAmountForecast: e.target.value })} placeholder="円" className="input text-sm mt-0.5 w-full text-right" />
-                  </label>
-                  <label className="text-xs text-ink/60">残商談(回)
-                    <input inputMode="numeric" value={edit.repMeetingsLeft} onChange={(e) => set({ repMeetingsLeft: e.target.value })} placeholder="回" className="input text-sm mt-0.5 w-full text-right" />
-                  </label>
+              <div className="rounded-xl border border-teal-primary/20 bg-teal-light/25 p-3 space-y-3">
+                {/* 案件情報(公式フィールドに反映) */}
+                <div>
+                  <div className="text-xs font-bold text-teal-deep mb-1.5">案件情報（案件に反映）</div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <label className="text-xs text-ink/60">ヨミ
+                      <select value={edit.yomi} onChange={(e) => set({ yomi: e.target.value })} className="input text-sm mt-0.5 w-full">
+                        <option value="">—</option>
+                        {YOMI_OPTIONS.map((y) => <option key={y.key} value={y.key}>{y.label}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-xs text-ink/60">金額(円)
+                      <input inputMode="numeric" value={edit.amount} onChange={(e) => set({ amount: e.target.value })} placeholder="円" className="input text-sm mt-0.5 w-full text-right" />
+                    </label>
+                    <label className="text-xs text-ink/60">成約予定(月)
+                      <input type="month" value={edit.expectedCloseMonth} onChange={(e) => set({ expectedCloseMonth: e.target.value })} className="input text-sm mt-0.5 w-full" />
+                    </label>
+                    <label className="text-xs text-ink/60">想定確率(%)
+                      <input inputMode="numeric" value={edit.probability} onChange={(e) => set({ probability: e.target.value })} placeholder="0〜100" className="input text-sm mt-0.5 w-full text-right" />
+                    </label>
+                  </div>
+                  {reasonPh && (
+                    <input value={edit.yomiReason} onChange={(e) => set({ yomiReason: e.target.value })} placeholder={reasonPh} maxLength={200}
+                      className="input text-sm w-full mt-2 border-accent-orange/50 bg-amber-50/50" />
+                  )}
                 </div>
-                {reasonPh && (
-                  <input value={edit.yomiReason} onChange={(e) => set({ yomiReason: e.target.value })} placeholder={reasonPh} maxLength={200}
-                    className="input text-sm w-full border-accent-orange/50 bg-amber-50/50" />
-                )}
-                <label className="text-xs text-ink/60 block">メモ(状況)
-                  <input value={edit.statusNote} onChange={(e) => set({ statusNote: e.target.value })} placeholder="状況を一言…" maxLength={120} className="input text-sm mt-0.5 w-full" />
-                </label>
+                {/* 週報用 */}
+                <div className="border-t border-teal-primary/15 pt-2.5">
+                  <div className="text-xs font-bold text-ink/50 mb-1.5">週報用</div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <label className="text-xs text-ink/60">残商談(回)
+                      <input inputMode="numeric" value={edit.repMeetingsLeft} onChange={(e) => set({ repMeetingsLeft: e.target.value })} placeholder="回" className="input text-sm mt-0.5 w-full text-right" />
+                    </label>
+                    <label className="text-xs text-ink/60">状況メモ
+                      <input value={edit.statusNote} onChange={(e) => set({ statusNote: e.target.value })} placeholder="状況を一言…" maxLength={120} className="input text-sm mt-0.5 w-full" />
+                    </label>
+                  </div>
+                </div>
                 <div className="flex items-center gap-2 pt-0.5">
                   <button onClick={() => save()} disabled={saving} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60">
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} 保存
@@ -181,11 +201,10 @@ export function RepOppDrawer({
                 </div>
               </div>
 
-              {/* 現況サマリー */}
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-lg bg-mist-soft/40 py-2"><div className="text-[10px] text-ink/45">金額</div><div className="text-sm font-semibold tabular-nums">{formatYen(detail.amount)}</div></div>
+              {/* 現況サマリー(参考) */}
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="rounded-lg bg-mist-soft/40 py-2"><div className="text-[10px] text-ink/45">Weighted(金額×確率)</div><div className="text-sm font-semibold tabular-nums">{formatYen(Math.round(detail.amount * ((detail.probability ?? 0) / 100)))}</div></div>
                 <div className="rounded-lg bg-mist-soft/40 py-2"><div className="text-[10px] text-ink/45">次回AC</div><div className="text-sm font-semibold">{detail.nextActionDate ? formatDate(detail.nextActionDate) : <span className="text-rose-500">未設定</span>}</div></div>
-                <div className="rounded-lg bg-mist-soft/40 py-2"><div className="text-[10px] text-ink/45">成約予定</div><div className="text-sm font-semibold">{detail.expectedCloseDate ? formatDate(detail.expectedCloseDate) : "—"}</div></div>
               </div>
               {detail.nextActionText && <p className="text-xs text-ink/60">次アクション: {detail.nextActionText}</p>}
 

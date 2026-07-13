@@ -103,8 +103,7 @@ export function RepOppTable({ opps, ownerId, weekStart }: { opps: RepReportOpp[]
             <SortHeader label="重要度" k="risk" sort={sort} onSort={onSort} />
             <SortHeader label="直近商談" k="lastActivity" sort={sort} onSort={onSort} />
             <th className="th">次回AC</th>
-            <th className="th">成約月(読み)</th>
-            <th className="th text-right">売上(読み)</th>
+            <th className="th">成約予定(月)</th>
             <th className="th text-right">残</th>
             <th className="th">メモ(状況)</th>
             <th className="th"></th>
@@ -163,16 +162,15 @@ export function RepOppTable({ opps, ownerId, weekStart }: { opps: RepReportOpp[]
                     );
                   })()}
                 </td>
-                <td className="td text-right">{formatYen(o.amount)}</td>
+                <td className="td text-right">
+                  <input type="text" inputMode="numeric" name="amount" form={fid} defaultValue={o.amount ? o.amount.toLocaleString("ja-JP") : ""} placeholder="円" className="w-[110px] rounded border border-black/10 px-1.5 py-1 text-xs text-right" />
+                </td>
                 <td className="td text-right text-ink/60">{formatYen(o.weighted)}</td>
                 <td className="td">{risk ? <span className={cn("pill text-[10px]", risk.cls)}>{risk.label}</span> : <span className="text-ink/25">—</span>}</td>
                 <td className="td text-ink/60">{o.lastActivityAt ? formatDate(o.lastActivityAt) : "—"}</td>
                 <td className="td text-ink/70">{o.nextActionDate ? formatDate(o.nextActionDate) : <span className="text-rose-500">未設定</span>}</td>
                 <td className="td">
-                  <input type="month" name="rep_close_month" form={fid} defaultValue={o.repCloseMonth ?? ""} className="w-[124px] rounded border border-black/10 px-1.5 py-1 text-xs" />
-                </td>
-                <td className="td text-right">
-                  <input type="number" name="rep_amount_forecast" form={fid} defaultValue={o.repAmountForecast ?? ""} placeholder="円" min={0} step={10000} className="w-[100px] rounded border border-black/10 px-1.5 py-1 text-xs text-right" />
+                  <input type="month" name="expected_close_month" form={fid} defaultValue={o.expectedClose ? o.expectedClose.slice(0, 7) : ""} className="w-[124px] rounded border border-black/10 px-1.5 py-1 text-xs" />
                 </td>
                 <td className="td text-right">
                   <input type="number" name="rep_meetings_left" form={fid} defaultValue={o.repMeetingsLeft ?? ""} placeholder="回" min={0} max={99} className="w-[48px] rounded border border-black/10 px-1.5 py-1 text-xs text-right" />
@@ -194,9 +192,9 @@ export function RepOppTable({ opps, ownerId, weekStart }: { opps: RepReportOpp[]
         </tbody>
       </table>
       <p className="mt-2 text-xs text-ink/45">
-        既定はヨミの高い順。列見出し（ヨミ／金額／重要度／直近商談）をクリックで並び替え。「読み」＝担当自身の予測。行ごとに保存できます。
+        既定はヨミの高い順。列見出し（ヨミ／金額／重要度／直近商談）をクリックで並び替え。金額・成約予定は案件情報にそのまま反映されます（Weightedも更新）。
         ヨミもここから変更でき、履歴に自動記録されます（受注・定期追い・オチに変えるときは要因を一言入れてください。成約/失注分析の元データになります）。
-        案件名クリックで内容を確認しながら更新できるサイドパネルが開きます。
+        案件名クリックで、確率など詳細を確認しながら更新できるサイドパネルが開きます。
       </p>
 
       <RepOppDrawer

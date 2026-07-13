@@ -210,6 +210,7 @@ export type RepOppDetail = {
   yomi: string | null;
   stage: string | null;
   amount: number;
+  probability: number | null;
   nextActionDate: string | null;
   nextActionText: string | null;
   expectedCloseDate: string | null;
@@ -230,7 +231,7 @@ export async function getRepOppDetail(oppId: string): Promise<RepOppDetail | nul
   const sb = getSupabaseServer();
   const { data: o, error } = await sb
     .from("opportunities")
-    .select("id,name,account_id,owner_user_id,contact_id,yomi,stage,amount,next_action_date,next_action_text,expected_close_date,pre_research,sales_strategy,notes,rep_close_month,rep_amount_forecast,rep_meetings_left,rep_status_note")
+    .select("id,name,account_id,owner_user_id,contact_id,yomi,stage,amount,probability,next_action_date,next_action_text,expected_close_date,pre_research,sales_strategy,notes,rep_close_month,rep_amount_forecast,rep_meetings_left,rep_status_note")
     .eq("id", oppId)
     .maybeSingle();
   if (error) throw new Error(`案件詳細の取得に失敗: ${error.message}`);
@@ -257,6 +258,7 @@ export async function getRepOppDetail(oppId: string): Promise<RepOppDetail | nul
     yomi: (o.yomi as string) ?? null,
     stage: (o.stage as string) ?? null,
     amount: Number(o.amount) || 0,
+    probability: o.probability != null ? Number(o.probability) : null,
     nextActionDate: (o.next_action_date as string) ?? null,
     nextActionText: (o.next_action_text as string) ?? null,
     expectedCloseDate: (o.expected_close_date as string) ?? null,
