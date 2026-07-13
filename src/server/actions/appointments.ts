@@ -160,22 +160,24 @@ export async function registerAppointmentAction(input: RegisterAppointmentInput)
       accountId = hit.id as string;
       accountName = hit.name as string;
     } else {
-      const { data: created, error } = await sb
-        .from("accounts")
-        .insert({
-          tenant_id: ctx.tenantId,
-          owner_user_id: input.ownerUserId,
-          name,
-          industry: lead?.industry ?? null,
-          employee_size: lead?.employee_size ?? null,
-          area: lead?.prefecture ?? null,
-          status: "prospect",
-        })
-        .select("id,name")
-        .single();
-      if (error || !created) return { ok: false, error: "顧客の作成に失敗しました: " + (error?.message ?? "") };
-      accountId = created.id as string;
-      accountName = created.name as string;
+      // IDを先に採番して RETURNING を使わない。
+      // RLSのINSERTは通っても、owner が他の営業担当のときは作成直後の行が
+      // 自分のSELECTポリシーで見えず INSERT...RETURNING が弾かれるため
+      // (内勤アポ獲得→外勤担当 の割り当てで発生)。
+      const newAccId = crypto.randomUUID();
+      const { error } = await sb.from("accounts").insert({
+        id: newAccId,
+        tenant_id: ctx.tenantId,
+        owner_user_id: input.ownerUserId,
+        name,
+        industry: lead?.industry ?? null,
+        employee_size: lead?.employee_size ?? null,
+        area: lead?.prefecture ?? null,
+        status: "prospect",
+      });
+      if (error) return { ok: false, error: "顧客の作成に失敗しました: " + error.message };
+      accountId = newAccId;
+      accountName = name;
     }
   } else {
     const { data: acc } = await sb.from("accounts").select("name").eq("id", accountId).maybeSingle();
@@ -219,9 +221,11 @@ export async function registerAppointmentAction(input: RegisterAppointmentInput)
     const { data: p } = await sb.from("products").select("name").eq("id", input.productId).maybeSingle();
     productName = (p?.name as string) ?? null;
   }
-  const { data: opp, error: oppErr } = await sb
+  const oppId = crypto.randomUUID(); // RETURNINGを避ける(上記アカウントと同理由)
+  const { error: oppErr } = await sb
     .from("opportunities")
     .insert({
+      id: oppId,
       tenant_id: ctx.tenantId,
       account_id: accountId,
       lead_id: lead?.id ?? null,
@@ -247,17 +251,15 @@ export async function registerAppointmentAction(input: RegisterAppointmentInput)
       appt_acquired_on: input.acquiredOn || new Date().toISOString().slice(0, 10),
       last_activity_at: new Date().toISOString(),
       campaign_estimated: false,
-    })
-    .select("id")
-    .single();
-  if (oppErr || !opp) return { ok: false, error: "案件の作成に失敗しました: " + (oppErr?.message ?? "") };
+    });
+  if (oppErr) return { ok: false, error: "案件の作成に失敗しました: " + oppErr.message };
 
   // 4.2) 商談(初回アポ)の枠を作成。案件だけでなく商談レコードも同時に作り、
   //      アポカレンダー/商談一覧に「予定の商談」として表示されるようにする。
   //      ヨミ=4.アポ のままなのでカレンダー上は「アポ(予定)」扱い(実施済みにはならない)。
   await sb.from("meetings").insert({
     tenant_id: ctx.tenantId,
-    opportunity_id: opp.id as string,
+    opportunity_id: oppId,
     account_id: accountId,
     owner_user_id: input.ownerUserId,
     title: "初回商談（アポ）",
@@ -287,7 +289,7 @@ export async function registerAppointmentAction(input: RegisterAppointmentInput)
         disposition: "appointment",
         status: "qualified",
         account_id: accountId,
-        converted_opportunity_id: opp.id as string,
+        converted_opportunity_id: oppId,
         converted_at: new Date().toISOString(),
       })
       .eq("id", lead.id);
@@ -296,5 +298,5 @@ export async function registerAppointmentAction(input: RegisterAppointmentInput)
   revalidatePath("/app/opportunities");
   revalidatePath("/app/leads");
   revalidatePath("/app/dashboard");
-  return { ok: true, opportunityId: opp.id as string, accountId, accountName };
+  return { ok: true, opportunityId: oppId, accountId, accountName };
 }
