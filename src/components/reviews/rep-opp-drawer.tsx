@@ -208,6 +208,15 @@ export function RepOppDrawer({
               </div>
               {detail.nextActionText && <p className="text-xs text-ink/60">次アクション: {detail.nextActionText}</p>}
 
+              {/* 案件基本情報(流入経路・流入詳細・商材) */}
+              <Sec title="案件基本情報">
+                <dl className="text-xs space-y-1">
+                  <Info label="流入経路" value={detail.leadSourceName} />
+                  <Info label="流入詳細" value={detail.sourceDetail} />
+                  <Info label="商材" value={detail.productName} />
+                </dl>
+              </Sec>
+
               {/* 担当者 */}
               {detail.contacts.length > 0 && (
                 <Sec title="担当者">
@@ -231,19 +240,25 @@ export function RepOppDrawer({
               {detail.salesStrategy && <Sec title="営業戦略"><p className="text-xs text-ink/75 whitespace-pre-wrap max-h-40 overflow-y-auto">{detail.salesStrategy}</p></Sec>}
               {detail.notes && <Sec title="メモ"><p className="text-xs text-ink/75 whitespace-pre-wrap">{detail.notes}</p></Sec>}
 
-              {/* 直近の商談 */}
+              {/* 直近の商談(議事録への導線つき) */}
               {detail.meetings.length > 0 && (
-                <Sec title={`直近の商談（${detail.meetings.length}）`}>
+                <Sec title={`直近の商談・議事録（${detail.meetings.length}）`}>
                   <ul className="space-y-2">
                     {detail.meetings.map((mt) => (
                       <li key={mt.id} className="rounded-lg border border-black/[0.05] p-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-medium text-ink/80">{mt.title || "商談"}</span>
-                          <span className="text-ink/45 tabular-nums">{mt.date ? formatDate(mt.date) : ""}</span>
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="font-medium text-ink/80 truncate">{mt.title || "商談"}</span>
+                          <span className="flex items-center gap-2 shrink-0">
+                            <span className="text-ink/45 tabular-nums">{mt.date ? formatDate(mt.date) : ""}</span>
+                            <Link href={`/app/opportunities/${detail.id}/meetings/${mt.id}`} target="_blank" className="inline-flex items-center gap-0.5 text-teal-deep hover:underline" title="議事録を別タブで開く">
+                              議事録 <ExternalLink size={11} />
+                            </Link>
+                          </span>
                         </div>
                         {(mt.aiSummary || mt.minutes) && (
                           <p className="mt-1 text-[11px] text-ink/60 whitespace-pre-wrap max-h-32 overflow-y-auto">{(mt.aiSummary || mt.minutes || "").slice(0, 600)}</p>
                         )}
+                        {!mt.aiSummary && !mt.minutes && <p className="mt-1 text-[11px] text-ink/40">議事録は未記入（リンクから記入できます）</p>}
                       </li>
                     ))}
                   </ul>
@@ -277,6 +292,15 @@ function Sec({ title, children }: { title: string; children: React.ReactNode }) 
     <div>
       <div className="text-xs font-bold text-ink/45 mb-1">{title}</div>
       {children}
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="flex gap-2">
+      <dt className="w-16 shrink-0 text-ink/45">{label}</dt>
+      <dd className={value ? "text-ink/75" : "text-ink/30"}>{value || "—"}</dd>
     </div>
   );
 }
