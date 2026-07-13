@@ -214,6 +214,9 @@ export type RepOppDetail = {
   nextActionDate: string | null;
   nextActionText: string | null;
   expectedCloseDate: string | null;
+  leadSourceName: string | null;
+  sourceDetail: string | null;
+  productName: string | null;
   preResearch: string | null;
   salesStrategy: string | null;
   notes: string | null;
@@ -231,19 +234,21 @@ export async function getRepOppDetail(oppId: string): Promise<RepOppDetail | nul
   const sb = getSupabaseServer();
   const { data: o, error } = await sb
     .from("opportunities")
-    .select("id,name,account_id,owner_user_id,contact_id,yomi,stage,amount,probability,next_action_date,next_action_text,expected_close_date,pre_research,sales_strategy,notes,rep_close_month,rep_amount_forecast,rep_meetings_left,rep_status_note")
+    .select("id,name,account_id,owner_user_id,contact_id,yomi,stage,amount,probability,next_action_date,next_action_text,expected_close_date,lead_source_id,source_detail,primary_product_id,pre_research,sales_strategy,notes,rep_close_month,rep_amount_forecast,rep_meetings_left,rep_status_note")
     .eq("id", oppId)
     .maybeSingle();
   if (error) throw new Error(`案件詳細の取得に失敗: ${error.message}`);
   if (!o) return null;
 
   const accountId = (o.account_id as string) ?? null;
-  const [accR, ownerR, contactsR, actR, mtgR] = await Promise.all([
+  const [accR, ownerR, contactsR, actR, mtgR, srcR, prodR] = await Promise.all([
     accountId ? sb.from("accounts").select("name").eq("id", accountId).maybeSingle() : Promise.resolve({ data: null }),
     o.owner_user_id ? sb.from("profiles").select("display_name,email").eq("id", o.owner_user_id).maybeSingle() : Promise.resolve({ data: null }),
     accountId ? sb.from("contacts").select("id,name,department,title,decision_role,email").eq("account_id", accountId) : Promise.resolve({ data: [] }),
     sb.from("activities").select("id,activity_type,title,body,activity_at").eq("opportunity_id", oppId).order("activity_at", { ascending: false }).limit(5),
     sb.from("meetings").select("id,title,meeting_date,ai_summary,minutes_detail").eq("opportunity_id", oppId).order("meeting_date", { ascending: false }).limit(5),
+    o.lead_source_id ? sb.from("lead_sources").select("name").eq("id", o.lead_source_id).maybeSingle() : Promise.resolve({ data: null }),
+    o.primary_product_id ? sb.from("products").select("name").eq("id", o.primary_product_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -262,6 +267,9 @@ export async function getRepOppDetail(oppId: string): Promise<RepOppDetail | nul
     nextActionDate: (o.next_action_date as string) ?? null,
     nextActionText: (o.next_action_text as string) ?? null,
     expectedCloseDate: (o.expected_close_date as string) ?? null,
+    leadSourceName: (srcR.data as any)?.name ?? null,
+    sourceDetail: (o.source_detail as string) ?? null,
+    productName: (prodR.data as any)?.name ?? null,
     preResearch: (o.pre_research as string) ?? null,
     salesStrategy: (o.sales_strategy as string) ?? null,
     notes: (o.notes as string) ?? null,
