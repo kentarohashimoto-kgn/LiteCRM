@@ -198,3 +198,81 @@ export async function getRepReport(ownerId: string, weekStart: string): Promise<
     narrative: (nar as RepNarrative) ?? null,
   };
 }
+
+// ===================== 週報サイドパネル(案件レビュー) =====================
+
+export type RepOppDetail = {
+  id: string;
+  name: string;
+  accountId: string | null;
+  accountName: string | null;
+  ownerName: string | null;
+  yomi: string | null;
+  stage: string | null;
+  amount: number;
+  nextActionDate: string | null;
+  nextActionText: string | null;
+  expectedCloseDate: string | null;
+  preResearch: string | null;
+  salesStrategy: string | null;
+  notes: string | null;
+  repCloseMonth: string | null;
+  repAmountForecast: number | null;
+  repMeetingsLeft: number | null;
+  statusNote: string | null;
+  contacts: { id: string; name: string; department: string | null; title: string | null; decisionRole: string | null; email: string | null; isAccounter: boolean }[];
+  activities: { id: string; type: string | null; title: string | null; body: string | null; at: string | null }[];
+  meetings: { id: string; title: string | null; date: string | null; aiSummary: string | null; minutes: string | null }[];
+};
+
+/** 週報サイドパネル用: 案件1件のレビュー情報(現在値＋事前リサーチ＋直近活動/商談＋担当者)。RLSは呼び出しユーザー準拠。 */
+export async function getRepOppDetail(oppId: string): Promise<RepOppDetail | null> {
+  const sb = getSupabaseServer();
+  const { data: o, error } = await sb
+    .from("opportunities")
+    .select("id,name,account_id,owner_user_id,contact_id,yomi,stage,amount,next_action_date,next_action_text,expected_close_date,pre_research,sales_strategy,notes,rep_close_month,rep_amount_forecast,rep_meetings_left,rep_status_note")
+    .eq("id", oppId)
+    .maybeSingle();
+  if (error) throw new Error(`案件詳細の取得に失敗: ${error.message}`);
+  if (!o) return null;
+
+  const accountId = (o.account_id as string) ?? null;
+  const [accR, ownerR, contactsR, actR, mtgR] = await Promise.all([
+    accountId ? sb.from("accounts").select("name").eq("id", accountId).maybeSingle() : Promise.resolve({ data: null }),
+    o.owner_user_id ? sb.from("profiles").select("display_name,email").eq("id", o.owner_user_id).maybeSingle() : Promise.resolve({ data: null }),
+    accountId ? sb.from("contacts").select("id,name,department,title,decision_role,email").eq("account_id", accountId) : Promise.resolve({ data: [] }),
+    sb.from("activities").select("id,activity_type,title,body,activity_at").eq("opportunity_id", oppId).order("activity_at", { ascending: false }).limit(5),
+    sb.from("meetings").select("id,title,meeting_date,ai_summary,minutes_detail").eq("opportunity_id", oppId).order("meeting_date", { ascending: false }).limit(5),
+  ]);
+
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const accounterId = (o.contact_id as string) ?? null;
+  const ownerProfile = ownerR.data as any;
+  return {
+    id: o.id as string,
+    name: (o.name as string) ?? "",
+    accountId,
+    accountName: (accR.data as any)?.name ?? null,
+    ownerName: ownerProfile ? (ownerProfile.display_name ?? ownerProfile.email ?? null) : null,
+    yomi: (o.yomi as string) ?? null,
+    stage: (o.stage as string) ?? null,
+    amount: Number(o.amount) || 0,
+    nextActionDate: (o.next_action_date as string) ?? null,
+    nextActionText: (o.next_action_text as string) ?? null,
+    expectedCloseDate: (o.expected_close_date as string) ?? null,
+    preResearch: (o.pre_research as string) ?? null,
+    salesStrategy: (o.sales_strategy as string) ?? null,
+    notes: (o.notes as string) ?? null,
+    repCloseMonth: (o.rep_close_month as string) ?? null,
+    repAmountForecast: o.rep_amount_forecast != null ? Number(o.rep_amount_forecast) : null,
+    repMeetingsLeft: o.rep_meetings_left != null ? Number(o.rep_meetings_left) : null,
+    statusNote: (o.rep_status_note as string) ?? null,
+    contacts: ((contactsR.data as any[]) ?? []).map((c) => ({
+      id: c.id, name: c.name ?? "", department: c.department ?? null, title: c.title ?? null,
+      decisionRole: c.decision_role ?? null, email: c.email ?? null, isAccounter: c.id === accounterId,
+    })),
+    activities: ((actR.data as any[]) ?? []).map((a) => ({ id: a.id, type: a.activity_type ?? null, title: a.title ?? null, body: a.body ?? null, at: a.activity_at ?? null })),
+    meetings: ((mtgR.data as any[]) ?? []).map((mt) => ({ id: mt.id, title: mt.title ?? null, date: mt.meeting_date ?? null, aiSummary: mt.ai_summary ?? null, minutes: mt.minutes_detail ?? null })),
+  };
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}

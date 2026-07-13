@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import { getRepReport } from "@/lib/data/rep-report";
+import { getRepReport, getRepOppDetail, type RepOppDetail } from "@/lib/data/rep-report";
 import { mondayJst } from "@/lib/data/weekly-snapshot";
 import { YOMI_OPTIONS } from "@/lib/constants";
 import { attachReasonToLatestYomiLog } from "@/server/actions/yomi";
@@ -134,4 +134,60 @@ export async function saveRepMonthlyTargetAction(formData: FormData): Promise<vo
   if (up.error) back("error=save_failed");
   revalidatePath("/app/reviews/rep");
   back("saved=target");
+}
+
+// ===================== 週報サイドパネル(クライアントから関数呼び出し) =====================
+
+/** サイドパネル用: 案件レビュー情報を取得(クライアントコンポーネントから呼ぶ)。 */
+export async function getRepOppDetailAction(oppId: string): Promise<RepOppDetail | null> {
+  await requireCtx();
+  if (!oppId) return null;
+  return getRepOppDetail(oppId);
+}
+
+export type SaveRepOppResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * サイドパネル用: 案件のヨミ＋担当の読み(成約月/売上/残商談)＋メモを保存。
+ * リダイレクトせず結果を返す(パネルを閉じずに連続更新するため)。
+ * ヨミ変更はDBトリガーが履歴記録し、要因(reason)は履歴＋受注/失注分析へ反映。
+ */
+export async function saveRepOppFieldsAction(input: {
+  oppId: string;
+  yomi?: string | null;
+  repCloseMonth?: string | null;
+  repAmountForecast?: number | null;
+  repMeetingsLeft?: number | null;
+  statusNote?: string | null;
+  yomiReason?: string | null;
+}): Promise<SaveRepOppResult> {
+  await requireCtx();
+  if (!input.oppId) return { ok: false, error: "案件が指定されていません" };
+
+  const yomiProvided = input.yomi !== undefined;
+  const yomi = yomiProvided ? (YOMI_OPTIONS.some((o) => o.key === input.yomi) ? input.yomi! : null) : undefined;
+  const month = (input.repCloseMonth ?? "").trim();
+  const amount = input.repAmountForecast;
+  const left = input.repMeetingsLeft;
+
+  const patch: Record<string, unknown> = {
+    rep_close_month: /^\d{4}-\d{2}$/.test(month) ? month : null,
+    rep_amount_forecast: amount != null && Number.isFinite(amount) ? amount : null,
+    rep_meetings_left: left != null && Number.isInteger(left) && left >= 0 ? left : null,
+    rep_status_note: (input.statusNote ?? "").trim() || null,
+  };
+  if (yomiProvided) patch.yomi = yomi;
+
+  const sb = getSupabaseServer();
+  const up = await sb.from("opportunities").update(patch).eq("id", input.oppId);
+  if (up.error) return { ok: false, error: up.error.message };
+
+  const reason = (input.yomiReason ?? "").trim();
+  if (yomiProvided && reason) {
+    await attachReasonToLatestYomiLog(input.oppId, yomi ?? null, reason);
+  }
+
+  revalidatePath("/app/reviews/rep");
+  revalidatePath("/app/reviews/yomi-history");
+  return { ok: true };
 }
