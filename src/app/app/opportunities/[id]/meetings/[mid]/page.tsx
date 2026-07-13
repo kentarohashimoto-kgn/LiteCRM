@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { getWorkspaceForOpportunity } from "@/lib/data/workspace";
+import { ContactLine } from "@/components/contacts/contact-line";
 import { getMeeting, getOpportunity, getContactsByAccount, getActivitiesByOpportunity, getUser, listMembers } from "@/lib/data/select";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { YomiBadge } from "@/components/ui/badges";
@@ -180,24 +181,33 @@ export default async function MeetingDetailPage({ params, searchParams }: { para
             )}
           </Section>
 
-          <Section title="顧客 / 担当者" className={entityBorder("account")}>
+          <Section title="顧客 / アカウンター" className={entityBorder("account")}>
             {opp?.account && (
               <div className="text-sm">
                 <Link href={`/app/accounts/${opp.account.id}`} className="font-semibold text-teal-deep hover:underline">{opp.account.name}</Link>
                 <div className="text-xs text-ink/50 mt-0.5">{opp.account.industry} ・ {opp.account.area}</div>
               </div>
             )}
-            {contacts.length > 0 && (
-              <ul className="mt-2.5 space-y-1.5">
-                {contacts.map((c) => (
-                  <li key={c.id} className="text-sm">
-                    <span className="font-medium">{c.name}</span>
-                    <span className="text-xs text-ink/50 ml-1">{c.title}</span>
-                    {c.email && <span className="block text-[11px] text-ink/40">{c.email}</span>}
-                  </li>
-                ))}
-              </ul>
-            )}
+            {(() => {
+              const accounterId = ws.opportunities.find((x) => x.id === opp?.id)?.contact_id ?? null;
+              const accounter = contacts.find((c) => c.id === accounterId) ?? null;
+              const others = contacts.filter((c) => c.id !== accounterId);
+              return (
+                <>
+                  {accounter && <div className="mt-2.5"><ContactLine c={accounter} isAccounter showEmail /></div>}
+                  {!accounter && contacts.length > 0 && (
+                    <p className="mt-2.5 text-[11px] text-ink/40">アカウンター未設定（案件詳細で設定できます）</p>
+                  )}
+                  {others.length > 0 && (
+                    <ul className="mt-2 space-y-2">
+                      {others.map((c) => (
+                        <li key={c.id}><ContactLine c={c} showEmail /></li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              );
+            })()}
           </Section>
 
           <Section title="直近の活動" className={entityBorder("activity")}>

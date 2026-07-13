@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { yomiToFields } from "@/lib/deal-import";
@@ -364,4 +365,27 @@ export async function bulkCreateTasksAction(input: {
   if (error) return { ok: false, created: 0, error: error.message };
   revalidatePath("/app/tasks");
   return { ok: true, created: rows.length };
+}
+
+/** 案件のアカウンター(顧客側の窓口担当者)を設定/変更する。 */
+export async function setOpportunityAccounterAction(formData: FormData): Promise<void> {
+  await requireCtx();
+  const oppId = String(formData.get("opp_id") ?? "").trim();
+  const contactId = String(formData.get("contact_id") ?? "").trim() || null;
+  if (!oppId) redirect(`/app/opportunities?error=save_failed`);
+  const sb = getSupabaseServer();
+  if (contactId) {
+    // 選択された担当者が同じ顧客に属することを確認(別顧客の担当者を紐づけない)
+    const [oppR, cR] = await Promise.all([
+      sb.from("opportunities").select("account_id").eq("id", oppId).maybeSingle(),
+      sb.from("contacts").select("account_id").eq("id", contactId).maybeSingle(),
+    ]);
+    if (oppR.error || cR.error || !oppR.data || !cR.data || (oppR.data as { account_id: string }).account_id !== (cR.data as { account_id: string }).account_id) {
+      redirect(`/app/opportunities/${oppId}?error=accounter_mismatch`);
+    }
+  }
+  const up = await sb.from("opportunities").update({ contact_id: contactId }).eq("id", oppId);
+  if (up.error) redirect(`/app/opportunities/${oppId}?error=save_failed`);
+  revalidatePath(`/app/opportunities/${oppId}`);
+  redirect(`/app/opportunities/${oppId}?saved=accounter`);
 }
