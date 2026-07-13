@@ -130,20 +130,20 @@ export async function createOpportunityAction(formData: FormData) {
       accountId = hit.id as string;
       accountName = hit.name as string;
     } else {
-      const { data: created, error: accErr } = await sb
-        .from("accounts")
-        .insert({
-          tenant_id: ctx.tenantId, owner_user_id: ownerUserId, name: companyName,
-          industry: lead?.industry ?? null, employee_size: lead?.employee_size ?? null,
-          area: lead?.prefecture ?? null, status: "prospect",
-        })
-        .select("id,name")
-        .single();
-      if (accErr || !created) {
-        redirect("/app/opportunities/new?error=" + encodeURIComponent("顧客の作成に失敗しました: " + (accErr?.message ?? "")));
+      // IDを先に採番して RETURNING を避ける(owner が他担当だと作成直後の行が
+      // 自分のSELECTポリシーで見えず INSERT...RETURNING が RLS で弾かれるため)。
+      const newAccId = crypto.randomUUID();
+      const { error: accErr } = await sb.from("accounts").insert({
+        id: newAccId,
+        tenant_id: ctx.tenantId, owner_user_id: ownerUserId, name: companyName,
+        industry: lead?.industry ?? null, employee_size: lead?.employee_size ?? null,
+        area: lead?.prefecture ?? null, status: "prospect",
+      });
+      if (accErr) {
+        redirect("/app/opportunities/new?error=" + encodeURIComponent("顧客の作成に失敗しました: " + accErr.message));
       }
-      accountId = created!.id as string;
-      accountName = created!.name as string;
+      accountId = newAccId;
+      accountName = companyName;
     }
   }
   if (!accountId) {
@@ -174,9 +174,11 @@ export async function createOpportunityAction(formData: FormData) {
   // 案件名: 未入力なら会社名で補完
   const oppName = (str(formData.get("name")) ?? companyName ?? accountName) || "案件";
 
-  const { data, error } = await sb
+  const newOppId = crypto.randomUUID(); // RETURNINGを避ける(上記アカウントと同理由)
+  const { error } = await sb
     .from("opportunities")
     .insert({
+      id: newOppId,
       tenant_id: ctx.tenantId,
       name: oppName,
       account_id: accountId,
@@ -199,31 +201,29 @@ export async function createOpportunityAction(formData: FormData) {
       last_activity_at: new Date().toISOString(),
       notes: str(formData.get("notes")) ?? (lead?.notes ? `リードメモ: ${lead.notes}` : undefined),
       status: yf.status,
-    })
-    .select("id")
-    .single();
+    });
 
-  if (error || !data) {
-    redirect("/app/opportunities?error=" + encodeURIComponent("作成に失敗しました: " + (error?.message ?? "")));
+  if (error) {
+    redirect("/app/opportunities?error=" + encodeURIComponent("作成に失敗しました: " + error.message));
   }
 
   // リード起点なら決着に更新(重複アプローチ防止・顧客へ紐付け)
   if (lead) {
     await sb
       .from("leads")
-      .update({ status: "qualified", account_id: accountId, converted_opportunity_id: data.id, converted_at: new Date().toISOString() })
+      .update({ status: "qualified", account_id: accountId, converted_opportunity_id: newOppId, converted_at: new Date().toISOString() })
       .eq("id", lead.id);
     revalidatePath("/app/leads");
   }
   await sb.from("stage_histories").insert({
     tenant_id: ctx.tenantId,
-    opportunity_id: data.id,
+    opportunity_id: newOppId,
     to_stage: stage,
     changed_by: ctx.userId,
     reason: "新規作成",
   });
   revalidatePath("/app/opportunities");
-  redirect(`/app/opportunities/${data.id}`);
+  redirect(`/app/opportunities/${newOppId}`);
 }
 
 export async function updateOpportunityAction(formData: FormData) {
