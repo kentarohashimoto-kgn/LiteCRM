@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { ArrowUpDown } from "lucide-react";
+import { ArrowUpDown, PanelRightOpen } from "lucide-react";
 import { formatYen, formatDate, cn } from "@/lib/utils";
 import { YOMI_OPTIONS } from "@/lib/constants";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { saveRepForecastAction } from "@/server/actions/rep-report";
+import { RepOppDrawer } from "@/components/reviews/rep-opp-drawer";
 import type { RepReportOpp } from "@/lib/data/rep-report";
 
 /** 要因の記入を求めるヨミ(受注/定期追い/オチ)。 */
@@ -73,6 +73,8 @@ export function RepOppTable({ opps, ownerId, weekStart }: { opps: RepReportOpp[]
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "yomi", asc: true });
   // 行ごとに選択中のヨミ(要因入力欄の出し分け用)
   const [yomiSel, setYomiSel] = useState<Record<string, string>>({});
+  // サイドパネル(案A): 表示中の並び順における位置
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   const onSort = (k: SortKey) =>
     setSort((p) => (p.key === k ? { key: k, asc: !p.asc } : { key: k, asc: k === "yomi" || k === "risk" }));
@@ -116,9 +118,15 @@ export function RepOppTable({ opps, ownerId, weekStart }: { opps: RepReportOpp[]
             return (
               <tr key={o.id} className={cn("border-t border-black/[0.04] hover:bg-teal-light/20 transition-colors", bg)}>
                 <td className="td">
-                  <Link href={`/app/opportunities/${o.id}`} className="hover:text-teal-deep">
-                    {o.account ? <span className="text-ink/50">{o.account}／</span> : null}{o.name}
-                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setOpenIndex(sorted.findIndex((x) => x.id === o.id))}
+                    className="text-left hover:text-teal-deep inline-flex items-start gap-1 group"
+                    title="クリックで内容を確認しながら更新(サイドパネル)"
+                  >
+                    <span>{o.account ? <span className="text-ink/50">{o.account}／</span> : null}{o.name}</span>
+                    <PanelRightOpen size={13} className="mt-0.5 shrink-0 text-ink/25 group-hover:text-teal-deep" />
+                  </button>
                 </td>
                 <td className="td">
                   {(() => {
@@ -188,7 +196,16 @@ export function RepOppTable({ opps, ownerId, weekStart }: { opps: RepReportOpp[]
       <p className="mt-2 text-xs text-ink/45">
         既定はヨミの高い順。列見出し（ヨミ／金額／重要度／直近商談）をクリックで並び替え。「読み」＝担当自身の予測。行ごとに保存できます。
         ヨミもここから変更でき、履歴に自動記録されます（受注・定期追い・オチに変えるときは要因を一言入れてください。成約/失注分析の元データになります）。
+        案件名クリックで内容を確認しながら更新できるサイドパネルが開きます。
       </p>
+
+      <RepOppDrawer
+        oppId={openIndex != null ? sorted[openIndex]?.id ?? null : null}
+        index={openIndex ?? 0}
+        total={sorted.length}
+        onClose={() => setOpenIndex(null)}
+        onNav={(dir) => setOpenIndex((i) => (i == null ? i : Math.min(sorted.length - 1, Math.max(0, i + dir))))}
+      />
     </div>
   );
 }
