@@ -121,21 +121,42 @@ export function CardImportForm({ members, currentUserId }: { members: { id: stri
             <span className="block text-xs text-ink/50 mt-0.5">名刺交換者: <span className="font-medium text-ink/70">{exchangerName}</span></span>
           </div>
           <div className="overflow-x-auto rounded-lg border border-black/[0.06]">
-            <table className="w-full text-xs">
+            <table className="text-xs" style={{ minWidth: 1600 }}>
               <thead className="border-b border-black/[0.06] bg-mist-soft/50">
                 <tr>
-                  <th className="th">会社名</th><th className="th">氏名</th><th className="th">役職</th><th className="th">メール</th><th className="th">交換日</th><th className="th">タグ</th>
+                  <th className="th whitespace-nowrap">名刺交換日</th>
+                  <th className="th">会社名</th>
+                  <th className="th">部署名</th>
+                  <th className="th">役職</th>
+                  <th className="th">氏名</th>
+                  <th className="th">e-mail</th>
+                  <th className="th whitespace-nowrap">郵便番号</th>
+                  <th className="th">住所</th>
+                  <th className="th whitespace-nowrap">TEL会社</th>
+                  <th className="th whitespace-nowrap">TEL部門</th>
+                  <th className="th whitespace-nowrap">TEL直通</th>
+                  <th className="th whitespace-nowrap">Fax</th>
+                  <th className="th whitespace-nowrap">携帯電話</th>
+                  <th className="th">URL</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/[0.04]">
                 {cards.slice(0, 8).map((c, i) => (
                   <tr key={i}>
-                    <td className="td">{c.company_name}</td>
-                    <td className="td">{c.full_name}</td>
-                    <td className="td">{c.title ?? ""}</td>
-                    <td className="td">{c.email ?? ""}</td>
-                    <td className="td">{c.exchanged_on ?? ""}</td>
-                    <td className="td">{(c.tags ?? []).slice(0, 2).join(", ")}</td>
+                    <td className="td whitespace-nowrap">{c.exchanged_on ?? ""}</td>
+                    <td className="td max-w-48"><div className="truncate" title={c.company_name}>{c.company_name}</div></td>
+                    <td className="td max-w-36"><div className="truncate" title={c.department ?? ""}>{c.department ?? ""}</div></td>
+                    <td className="td max-w-36"><div className="truncate" title={c.title ?? ""}>{c.title ?? ""}</div></td>
+                    <td className="td whitespace-nowrap">{c.full_name}</td>
+                    <td className="td max-w-48"><div className="truncate" title={c.email ?? ""}>{c.email ?? ""}</div></td>
+                    <td className="td whitespace-nowrap">{c.postal_code ?? ""}</td>
+                    <td className="td max-w-56"><div className="truncate" title={c.address ?? ""}>{c.address ?? ""}</div></td>
+                    <td className="td whitespace-nowrap">{c.tel_company ?? ""}</td>
+                    <td className="td whitespace-nowrap">{c.tel_department ?? ""}</td>
+                    <td className="td whitespace-nowrap">{c.tel_direct ?? ""}</td>
+                    <td className="td whitespace-nowrap">{c.fax ?? ""}</td>
+                    <td className="td whitespace-nowrap">{c.mobile_phone ?? ""}</td>
+                    <td className="td max-w-40"><div className="truncate" title={c.url ?? ""}>{c.url ?? ""}</div></td>
                   </tr>
                 ))}
               </tbody>

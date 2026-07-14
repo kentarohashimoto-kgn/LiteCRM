@@ -17,7 +17,7 @@ export interface CardListFilters {
 }
 
 const SELECT_COLS =
-  "id, tenant_id, owner_user_id, company_name, department, title, full_name, email, mobile_phone, tel_company, address, url, exchanged_on, eight_connected, rank, memo, tags, source, account_id, contact_id, match_type, matched_at, created_at, updated_at, accounts(id, name), contacts(id, name)";
+  "id, tenant_id, owner_user_id, company_name, department, title, full_name, email, postal_code, address, tel_company, tel_department, tel_direct, fax, mobile_phone, url, exchanged_on, eight_connected, rank, memo, tags, source, account_id, contact_id, match_type, matched_at, created_at, updated_at, accounts(id, name), contacts(id, name)";
 
 /** 一覧＋検索＋ページング。検索は 会社名/氏名/部署/役職/メール/メモ の部分一致。 */
 export async function queryBusinessCards(f: CardListFilters): Promise<{ rows: BusinessCardListRow[]; total: number }> {
