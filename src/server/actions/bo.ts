@@ -71,6 +71,50 @@ export async function toggleMilestoneAction(formData: FormData): Promise<void> {
   revalidatePath("/app/bo");
 }
 
+/** マイルストーンの完了日を設定/解除（チェックではなく完了日で管理）。日付を入れると完了、空にすると未完了に戻る。 */
+export async function setMilestoneCompletionAction(formData: FormData): Promise<void> {
+  await requireBoCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  const date = String(formData.get("completed_at") || "").trim();
+  const valid = /^\d{4}-\d{2}-\d{2}$/.test(date);
+  await sb
+    .from("subsidy_milestones")
+    .update(valid ? { status: "done", completed_at: date } : { status: "todo", completed_at: null })
+    .eq("id", id);
+  revalidatePath("/app/bo/subsidies");
+  revalidatePath("/app/bo");
+}
+
+/** 助成金案件に「やる事」を追加（定型3件のほかに任意で追加できる custom マイルストーン）。 */
+export async function addSubsidyMilestoneAction(formData: FormData): Promise<void> {
+  const ctx = await requireBoCtx();
+  const sb = getSupabaseServer();
+  const caseId = String(formData.get("case_id"));
+  const label = String(formData.get("label") || "").trim();
+  const due = String(formData.get("due_date") || "");
+  if (!caseId || !label || !due) return;
+  await sb.from("subsidy_milestones").insert({
+    tenant_id: ctx.tenantId,
+    case_id: caseId,
+    kind: "custom",
+    label,
+    due_date: due,
+  });
+  revalidatePath("/app/bo/subsidies");
+  revalidatePath("/app/bo");
+}
+
+/** 追加した「やる事」（custom）の削除。定型3件の誤削除を防ぐため custom のみ対象。 */
+export async function deleteSubsidyMilestoneAction(formData: FormData): Promise<void> {
+  await requireBoCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  await sb.from("subsidy_milestones").delete().eq("id", id).eq("kind", "custom");
+  revalidatePath("/app/bo/subsidies");
+  revalidatePath("/app/bo");
+}
+
 /** 助成金案件のステータス変更/削除。 */
 export async function updateSubsidyCaseAction(formData: FormData): Promise<void> {
   await requireBoCtx();

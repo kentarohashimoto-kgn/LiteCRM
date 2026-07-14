@@ -1,8 +1,9 @@
 import { requireBoCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
-import { createSubsidyCaseAction, toggleMilestoneAction, updateSubsidyCaseAction } from "@/server/actions/bo";
+import { createSubsidyCaseAction, updateSubsidyCaseAction, addSubsidyMilestoneAction } from "@/server/actions/bo";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { MilestoneRow } from "@/components/bo/milestone-row";
 
 export const dynamic = "force-dynamic";
 
@@ -106,30 +107,24 @@ export default async function SubsidiesPage() {
                 {c.subsidy_milestones
                   .slice()
                   .sort((a, b) => a.due_date.localeCompare(b.due_date))
-                  .map((m) => {
-                    const isOverdue = m.status === "todo" && m.due_date < today;
-                    return (
-                      <li key={m.id} className="flex items-center gap-2.5 text-sm">
-                        <form action={toggleMilestoneAction}>
-                          <input type="hidden" name="id" value={m.id} />
-                          <input type="hidden" name="done" value={m.status === "done" ? "0" : "1"} />
-                          <button
-                            type="submit"
-                            className={`h-4.5 w-4.5 h-[18px] w-[18px] rounded border flex items-center justify-center text-[11px] ${m.status === "done" ? "bg-teal-primary border-teal-primary text-white" : "border-black/20 bg-white"}`}
-                            aria-label={`${m.label} を${m.status === "done" ? "未完了" : "完了"}にする`}
-                          >
-                            {m.status === "done" ? "✓" : ""}
-                          </button>
-                        </form>
-                        <span className={m.status === "done" ? "line-through text-ink/40" : "text-ink/80"}>{m.label}</span>
-                        <span className={`text-xs tabular-nums ml-auto shrink-0 ${isOverdue ? "text-rose-600 font-semibold" : "text-ink/45"}`}>
-                          期日 {m.due_date}{isOverdue && " 超過"}
-                          {m.status === "done" && m.completed_at ? ` ・ ${m.completed_at} 完了` : ""}
-                        </span>
-                      </li>
-                    );
-                  })}
+                  .map((m) => (
+                    <MilestoneRow key={m.id} m={m} today={today} />
+                  ))}
               </ul>
+
+              {/* やる事を追加(定型3件のほかに業務を登録) */}
+              <form action={addSubsidyMilestoneAction} className="mt-2.5 flex items-end gap-2 flex-wrap border-t border-black/[0.05] pt-2.5">
+                <input type="hidden" name="case_id" value={c.id} />
+                <div>
+                  <label className="label text-[11px]">やる事を追加</label>
+                  <input name="label" required maxLength={120} placeholder="例: 交付申請書の提出" className="input py-1 text-sm w-64" />
+                </div>
+                <div>
+                  <label className="label text-[11px]">期日</label>
+                  <input name="due_date" type="date" required className="input py-1 text-sm" />
+                </div>
+                <SubmitButton className="btn-ghost text-xs" pendingLabel="追加中…">＋ 追加</SubmitButton>
+              </form>
             </div>
           );
         })}
