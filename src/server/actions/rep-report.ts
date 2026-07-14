@@ -200,3 +200,84 @@ export async function saveRepOppFieldsAction(input: {
   revalidatePath("/app/reviews/yomi-history");
   return { ok: true };
 }
+
+// ===================== 週報サイドパネル: 案件に紐づくタスク =====================
+
+export type OppTask = {
+  id: string;
+  title: string;
+  status: string;
+  dueDate: string | null;
+  priority: string | null;
+  assignedTo: string | null;
+};
+
+/** サイドパネル用: 案件に紐づくタスク一覧(未完了→完了、期日順)。 */
+export async function listOppTasksAction(oppId: string): Promise<OppTask[]> {
+  await requireCtx();
+  if (!oppId) return [];
+  const sb = getSupabaseServer();
+  const { data } = await sb
+    .from("tasks")
+    .select("id,title,status,due_date,priority,assigned_to")
+    .eq("opportunity_id", oppId)
+    .order("status", { ascending: true })
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .limit(50);
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  return ((data as any[]) ?? []).map((t) => ({
+    id: t.id as string,
+    title: (t.title as string) ?? "",
+    status: (t.status as string) ?? "todo",
+    dueDate: (t.due_date as string) ?? null,
+    priority: (t.priority as string) ?? null,
+    assignedTo: (t.assigned_to as string) ?? null,
+  }));
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
+
+export type AddOppTaskInput = {
+  oppId: string;
+  accountId?: string | null;
+  title: string;
+  assignedTo?: string | null;
+  dueDate?: string | null; // YYYY-MM-DD
+  priority?: string | null; // high/middle/low
+};
+export type AddOppTaskResult = { ok: true; task: OppTask } | { ok: false; error: string };
+
+/**
+ * サイドパネル用: 案件(と顧客)に紐づくタスクを1件作成し、作成結果を返す。
+ * 連続登録できるようリダイレクトしない。RETURNINGを避けるためUUIDを先行採番(RLS対策)。
+ */
+export async function addOppTaskAction(input: AddOppTaskInput): Promise<AddOppTaskResult> {
+  const ctx = await requireCtx();
+  if (!input.oppId) return { ok: false, error: "案件が指定されていません" };
+  const title = (input.title ?? "").trim();
+  if (!title) return { ok: false, error: "タスク名を入力してください" };
+
+  const id = crypto.randomUUID();
+  const priority = ["high", "middle", "low"].includes(input.priority ?? "") ? input.priority! : "middle";
+  const dueDate = (input.dueDate ?? "").trim() || null;
+  const assignedTo = (input.assignedTo ?? "").trim() || ctx.userId;
+
+  const sb = getSupabaseServer();
+  const { error } = await sb.from("tasks").insert({
+    id,
+    tenant_id: ctx.tenantId,
+    title,
+    opportunity_id: input.oppId,
+    account_id: input.accountId ?? null,
+    assigned_to: assignedTo,
+    created_by: ctx.userId,
+    due_date: dueDate,
+    priority,
+    status: "todo",
+    sort_order: 0,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/app/tasks", "layout");
+  revalidatePath("/app/reviews/rep");
+  return { ok: true, task: { id, title, status: "todo", dueDate, priority, assignedTo } };
+}

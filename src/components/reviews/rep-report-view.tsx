@@ -82,7 +82,7 @@ export function RepReportView({ report, weekStart }: { report: RepReport; weekSt
         {report.opps.length === 0 ? (
           <EmptyState message="進行中の担当案件がありません。" />
         ) : (
-          <RepOppTable opps={report.opps} ownerId={report.ownerId} weekStart={weekStart} />
+          <RepOppTable opps={report.opps} ownerId={report.ownerId} weekStart={weekStart} members={report.members} />
         )}
       </Section>
 
