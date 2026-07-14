@@ -76,5 +76,6 @@ export function toTaskVM(
     projectColor: proj?.color ?? null,
     accountName: acc?.name ?? null,
     labels: t.labels ?? [],
+    color: t.color ?? null,
   };
 }

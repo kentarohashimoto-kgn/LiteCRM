@@ -18,6 +18,8 @@ export interface TaskVM {
   projectColor?: string | null;
   accountName?: string | null;
   labels?: string[];
+  /** カード色（COLOR_KEYS のキー）。未設定は既定（優先度に応じた淡色）。 */
+  color?: string | null;
 }
 
 export interface UserVM {
