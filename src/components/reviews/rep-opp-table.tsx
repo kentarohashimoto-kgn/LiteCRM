@@ -68,7 +68,17 @@ function SortHeader({
   );
 }
 
-export function RepOppTable({ opps, ownerId, weekStart }: { opps: RepReportOpp[]; ownerId: string; weekStart: string }) {
+export function RepOppTable({
+  opps,
+  ownerId,
+  weekStart,
+  members,
+}: {
+  opps: RepReportOpp[];
+  ownerId: string;
+  weekStart: string;
+  members: { id: string; name: string }[];
+}) {
   // 既定はヨミの高い順(0.受注→9.調整中)
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "yomi", asc: true });
   // 行ごとに選択中のヨミ(要因入力欄の出し分け用)
@@ -201,6 +211,8 @@ export function RepOppTable({ opps, ownerId, weekStart }: { opps: RepReportOpp[]
         oppId={openIndex != null ? sorted[openIndex]?.id ?? null : null}
         index={openIndex ?? 0}
         total={sorted.length}
+        members={members}
+        defaultAssignee={ownerId}
         onClose={() => setOpenIndex(null)}
         onNav={(dir) => setOpenIndex((i) => (i == null ? i : Math.min(sorted.length - 1, Math.max(0, i + dir))))}
       />

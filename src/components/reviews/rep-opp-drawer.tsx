@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { X, ChevronLeft, ChevronRight, ExternalLink, Save, Loader2, CheckCircle2 } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, ExternalLink, Save, Loader2, CheckCircle2, Plus, Circle } from "lucide-react";
 import { YOMI_OPTIONS } from "@/lib/constants";
 import { formatYen, formatDate, cn } from "@/lib/utils";
-import { getRepOppDetailAction, saveRepOppFieldsAction } from "@/server/actions/rep-report";
+import { getRepOppDetailAction, saveRepOppFieldsAction, listOppTasksAction, addOppTaskAction, type OppTask } from "@/server/actions/rep-report";
 import type { RepOppDetail } from "@/lib/data/rep-report";
 
 const ROLE_LABEL: Record<string, string> = { decision_maker: "意思決定者", influencer: "影響者", user: "利用者", referrer: "紹介者" };
@@ -33,12 +33,16 @@ export function RepOppDrawer({
   oppId,
   index,
   total,
+  members,
+  defaultAssignee,
   onClose,
   onNav,
 }: {
   oppId: string | null;
   index: number; // 一覧内の位置(0-based)
   total: number;
+  members: { id: string; name: string }[];
+  defaultAssignee: string; // 既定の担当者(= 週報の営業担当)
   onClose: () => void;
   onNav: (dir: -1 | 1) => void;
 }) {
@@ -50,10 +54,24 @@ export function RepOppDrawer({
   const [savedTick, setSavedTick] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // この案件に紐づくタスク(連続登録)
+  const membersById = useRef(new Map(members.map((m) => [m.id, m.name])));
+  useEffect(() => { membersById.current = new Map(members.map((m) => [m.id, m.name])); }, [members]);
+  const [tasks, setTasks] = useState<OppTask[]>([]);
+  const [tTitle, setTTitle] = useState("");
+  const [tDue, setTDue] = useState("");
+  const [tPriority, setTPriority] = useState("middle");
+  const [tAssignee, setTAssignee] = useState(defaultAssignee);
+  const [tAdding, setTAdding] = useState(false);
+  const [tError, setTError] = useState<string | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+
   const load = useCallback(async (id: string) => {
     setLoading(true);
     setError(null);
     setSavedTick(false);
+    setTError(null);
+    setTTitle("");
     try {
       const d = await getRepOppDetailAction(id);
       setDetail(d);
@@ -68,6 +86,7 @@ export function RepOppDrawer({
           yomiReason: "",
         });
       }
+      listOppTasksAction(id).then(setTasks).catch(() => setTasks([]));
     } catch {
       setError("案件情報の取得に失敗しました。");
     } finally {
@@ -117,6 +136,29 @@ export function RepOppDrawer({
   };
 
   const set = (patch: Partial<Editable>) => setEdit((e) => (e ? { ...e, ...patch } : e));
+
+  // 案件に紐づくタスクを1件登録(担当/期日/優先度は保持して続けて登録できる)
+  const addTask = async () => {
+    if (!detail) return;
+    const title = tTitle.trim();
+    if (!title) return;
+    setTAdding(true);
+    setTError(null);
+    const res = await addOppTaskAction({
+      oppId: detail.id,
+      accountId: detail.accountId,
+      title,
+      assignedTo: tAssignee || null,
+      dueDate: tDue || null,
+      priority: tPriority,
+    });
+    setTAdding(false);
+    if (!res.ok) { setTError(res.error || "タスクの登録に失敗しました。"); return; }
+    setTasks((ls) => [res.task, ...ls]);
+    setTTitle("");
+    titleRef.current?.focus();
+  };
+  const openTaskCount = tasks.filter((t) => t.status !== "done").length;
 
   return (
     <div className="fixed inset-0 z-[80]" role="dialog" aria-modal="true">
@@ -207,6 +249,53 @@ export function RepOppDrawer({
                 <div className="rounded-lg bg-mist-soft/40 py-2"><div className="text-[10px] text-ink/45">次回AC</div><div className="text-sm font-semibold">{detail.nextActionDate ? formatDate(detail.nextActionDate) : <span className="text-rose-500">未設定</span>}</div></div>
               </div>
               {detail.nextActionText && <p className="text-xs text-ink/60">次アクション: {detail.nextActionText}</p>}
+
+              {/* この案件に紐づくタスク(連続登録) */}
+              <Sec title={`タスク（この案件）${openTaskCount ? ` ・ 未完了${openTaskCount}` : ""}`}>
+                <div className="rounded-xl border border-black/[0.06] bg-mist-soft/30 p-2.5 space-y-2">
+                  <input
+                    ref={titleRef}
+                    value={tTitle}
+                    onChange={(e) => setTTitle(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTask(); } }}
+                    placeholder="タスク名を入力して Enter（続けて複数登録できます）"
+                    className="input text-sm w-full"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select value={tAssignee} onChange={(e) => setTAssignee(e.target.value)} className="input text-xs py-1 w-auto" title="担当者">
+                      {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                    <input type="date" value={tDue} onChange={(e) => setTDue(e.target.value)} className="input text-xs py-1 w-auto" title="期日" />
+                    <select value={tPriority} onChange={(e) => setTPriority(e.target.value)} className="input text-xs py-1 w-auto" title="優先度">
+                      <option value="high">優先度: 高</option>
+                      <option value="middle">優先度: 中</option>
+                      <option value="low">優先度: 低</option>
+                    </select>
+                    <button onClick={addTask} disabled={tAdding || !tTitle.trim()} className="btn-primary text-xs inline-flex items-center gap-1 disabled:opacity-50">
+                      {tAdding ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} 追加
+                    </button>
+                    {tError && <span className="text-xs text-rose-600">{tError}</span>}
+                  </div>
+                </div>
+                {tasks.length > 0 ? (
+                  <ul className="mt-2 space-y-1">
+                    {tasks.map((t) => {
+                      const done = t.status === "done";
+                      return (
+                        <li key={t.id} className="flex items-center gap-2 text-xs rounded-md px-2 py-1 hover:bg-mist-soft/40">
+                          {done ? <CheckCircle2 size={13} className="text-emerald-500 shrink-0" /> : <Circle size={13} className="text-ink/30 shrink-0" />}
+                          <span className={cn("flex-1 truncate", done && "line-through text-ink/40")}>{t.title}</span>
+                          {t.priority === "high" && <span className="pill bg-rose-50 text-rose-600 text-[10px] shrink-0">高</span>}
+                          {t.assignedTo && <span className="text-ink/45 shrink-0">{membersById.current.get(t.assignedTo) ?? ""}</span>}
+                          {t.dueDate && <span className="text-ink/45 tabular-nums shrink-0">{formatDate(t.dueDate)}</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-xs text-ink/40">まだタスクはありません。上の入力から登録できます。</p>
+                )}
+              </Sec>
 
               {/* 案件基本情報(流入経路・流入詳細・商材) */}
               <Sec title="案件基本情報">
