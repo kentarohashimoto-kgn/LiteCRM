@@ -61,8 +61,13 @@ Check the 対応者 = `opportunities.owner_user_id` / `meetings.owner_user_id`
 
 ## 共有アセット / 定型
 
-- サービス事例（Canva）: `https://ai202504.my.canva.site/ai-20260602`
-  ※橋本が直近の客先メールで使っている標準リンク。**最新版か直近のSENTメールで確認**してから使う。
+- **資料の一元管理は `sales-email-kit/references/assets.md` を参照**（そこが master。
+  資料の増減・差し替えはそのファイルだけ更新すれば全メールに反映される）。
+- サービス事例（Canva）はフルURLをそのまま直貼り:
+  ```
+  ▼サービス事例
+  https://ai202504.my.canva.site/ai-20260602
+  ```
 - 橋本の署名:
   ```
   ──────────────────────
