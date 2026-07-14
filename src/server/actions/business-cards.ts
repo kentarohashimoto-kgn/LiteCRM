@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { cardDedupKey, type BusinessCardInput } from "@/lib/card-import";
+import { logAudit, clientIp } from "@/lib/audit-events";
 
 const LIST_PATH = "/app/business-cards";
 
@@ -88,13 +89,27 @@ export interface MatchCardsResult {
 
 /** CRMマッチング実行（メール→会社+氏名→会社名の優先順で自動連携）。 */
 export async function runCardMatchingAction(): Promise<MatchCardsResult> {
-  await requireCtx();
+  const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const { data, error } = await sb.rpc("match_business_cards");
   if (error) return { ok: false, email: 0, companyContact: 0, company: 0, error: `マッチングに失敗しました: ${error.message}` };
   const d = (data ?? {}) as { email?: number; company_contact?: number; company?: number };
+  await logAudit({
+    tenantId: ctx.tenantId, userId: ctx.userId, email: ctx.email,
+    action: "cards.match", meta: { email: d.email ?? 0, companyContact: d.company_contact ?? 0, company: d.company ?? 0 }, ip: clientIp(),
+  });
   revalidatePath(LIST_PATH);
   return { ok: true, email: d.email ?? 0, companyContact: d.company_contact ?? 0, company: d.company ?? 0 };
+}
+
+/** 名刺取込の完了時に1回だけ監査記録（チャンク単位ではなく取込全体を1件で残すため）。 */
+export async function logCardImportAudit(summary: { inserted: number; skipped: number; total: number }): Promise<void> {
+  const ctx = await requireCtx();
+  await logAudit({
+    tenantId: ctx.tenantId, userId: ctx.userId, email: ctx.email,
+    action: "cards.import", target: `新規${summary.inserted}/スキップ${summary.skipped}`,
+    meta: { inserted: summary.inserted, skipped: summary.skipped, total: summary.total }, ip: clientIp(),
+  });
 }
 
 /** 手動連携用の顧客検索（名前部分一致・上位10件）。 */
