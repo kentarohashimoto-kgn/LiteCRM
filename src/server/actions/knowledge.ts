@@ -76,15 +76,17 @@ export async function saveKnowledgeAction(fd: FormData): Promise<SaveKnowledgeRe
   let attachmentPatch: Record<string, unknown> = {};
   if (hasNewFile) {
     const admin = getSupabaseAdmin();
-    const safeName = file!.name.replace(/[\\/]/g, "_").slice(0, 150);
-    const path = `${ctx.tenantId}/knowledge/${entryId}/${randomUUID()}_${safeName}`;
+    // 表示用の元ファイル名(日本語も保持)。ストレージのキーはASCIIのみ許容のため別に生成する。
+    const displayName = file!.name.replace(/[\r\n\\/]+/g, " ").trim().slice(0, 200) || "file";
+    const ext = (displayName.match(/\.([A-Za-z0-9]{1,10})$/)?.[1] ?? "").toLowerCase();
+    const path = `${ctx.tenantId}/knowledge/${entryId}/${randomUUID()}${ext ? `.${ext}` : ""}`;
     const buf = Buffer.from(await file!.arrayBuffer());
     const { error: upErr } = await admin.storage.from(BUCKET).upload(path, buf, {
       contentType: file!.type || "application/octet-stream",
       upsert: false,
     });
     if (upErr) return { ok: false, error: "ファイルのアップロードに失敗しました" };
-    attachmentPatch = { attachment_path: path, attachment_name: safeName, attachment_type: file!.type || null, attachment_size: file!.size };
+    attachmentPatch = { attachment_path: path, attachment_name: displayName, attachment_type: file!.type || null, attachment_size: file!.size };
   } else if (removeAttachment) {
     attachmentPatch = { attachment_path: null, attachment_name: null, attachment_type: null, attachment_size: null };
   }
