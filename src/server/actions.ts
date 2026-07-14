@@ -11,6 +11,8 @@ import { yomiToFields, productToCategory, canonicalExhibition, type DealRow } fr
 import { exhibitionCoreName } from "@/lib/exhibition-label";
 import { parsePeriod, parseProbability, parseAmount, parseDateLoose } from "@/lib/revenue-forecast";
 import { ensureTransitionOnWon } from "@/server/transitions-util";
+import { logAudit, clientIp } from "@/lib/audit-events";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 function num(v: FormDataEntryValue | null): number | null {
   if (v == null || v === "") return null;
@@ -26,11 +28,35 @@ function str(v: FormDataEntryValue | null): string | null {
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
+  const ip = clientIp();
+
+  // CAPTCHA（Turnstile）検証。ロボット/自動化のログイン試行を抑止。未設定時はスキップ（段階導入）。
+  const captchaOk = await verifyTurnstile(String(formData.get("cf-turnstile-response") ?? ""), ip);
+  if (!captchaOk) {
+    redirect("/login?error=" + encodeURIComponent("自動化対策の認証に失敗しました。ページを更新してもう一度お試しください。"));
+  }
+
   const supabase = getSupabaseServer();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
     redirect("/login?error=" + encodeURIComponent("メールアドレスまたはパスワードが正しくありません"));
   }
+
+  // 監査ログ（ログイン成功）。テナントは所属から解決。
+  const uid = data.user?.id ?? null;
+  let tenantId: string | null = null;
+  if (uid) {
+    const { data: m } = await supabase
+      .from("memberships")
+      .select("tenant_id")
+      .eq("user_id", uid)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+    tenantId = (m?.tenant_id as string) ?? null;
+  }
+  await logAudit({ tenantId, userId: uid, email: data.user?.email ?? email, action: "login", ip });
+
   redirect("/app/dashboard");
 }
 
@@ -1505,6 +1531,12 @@ export async function exportLeadsCsvAction(
 
   const header = cols.map((c) => csvCell(EXPORT_FIELD_MAP[c].label)).join(",");
   const lines = out.map(({ r, eng }) => cols.map((c) => csvCell(exportValue(c, r, eng))).join(","));
+  // \u76E3\u67FB\u30ED\u30B0\uFF08\u30EA\u30FC\u30C9CSV\u66F8\u304D\u51FA\u3057\uFF1D\u500B\u4EBA\u60C5\u5831\u306E\u6301\u3061\u51FA\u3057\u306E\u305F\u3081\u8A18\u9332\uFF09
+  await logAudit({
+    tenantId: ctx.tenantId, userId: ctx.userId, email: ctx.email,
+    action: "leads.export_csv", target: `${out.length}\u4EF6`,
+    meta: { count: out.length, columns: cols.length, filters }, ip: clientIp(),
+  });
   return { csv: "\uFEFF" + [header, ...lines].join("\r\n"), count: out.length };
 }
 

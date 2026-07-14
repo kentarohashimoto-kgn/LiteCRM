@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { GitMerge, Trash2 } from "lucide-react";
+import { GitMerge, Trash2, ShieldCheck } from "lucide-react";
 import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Avatar } from "@/components/ui/primitives";
@@ -57,6 +57,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
             <Link href="/app/settings/trash" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
               <Trash2 size={15} /> ゴミ箱
             </Link>
+            {isAdmin && (
+              <Link href="/app/settings/audit" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
+                <ShieldCheck size={15} /> 監査ログ
+              </Link>
+            )}
           </div>
         }
       />

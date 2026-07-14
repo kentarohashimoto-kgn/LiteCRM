@@ -5,7 +5,7 @@ import Link from "next/link";
 import { FileSpreadsheet, Link2, Upload, UserCheck } from "lucide-react";
 import { decodeFileText, detectDelim, parseDelimited, uniquifyHeaders } from "@/lib/lead-import";
 import { dedupCards, findHeaderRowIndex, rowsToCardInputs, type BusinessCardInput } from "@/lib/card-import";
-import { importBusinessCardsAction, runCardMatchingAction, type MatchCardsResult } from "@/server/actions/business-cards";
+import { importBusinessCardsAction, runCardMatchingAction, logCardImportAudit, type MatchCardsResult } from "@/server/actions/business-cards";
 
 const CHUNK = 300;
 
@@ -67,6 +67,8 @@ export function CardImportForm({ members, currentUserId }: { members: { id: stri
         setInserted(ins);
         setSkipped(skp);
       }
+      // 取込全体を1件だけ監査記録（チャンクごとには残さない）
+      await logCardImportAudit({ inserted: ins, skipped: skp, total: cards.length });
       // 取込後にCRMマッチングを自動実行
       setMatch(await runCardMatchingAction());
       setPhase("done");

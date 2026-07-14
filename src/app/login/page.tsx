@@ -1,7 +1,9 @@
 import { signIn } from "@/server/actions";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
+import { TurnstileWidget } from "@/components/auth/turnstile-widget";
 
 export default function LoginPage({ searchParams }: { searchParams: { error?: string } }) {
+  const captchaSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   return (
     <div className="min-h-screen flex items-center justify-center bg-mist-soft p-6">
       <div className="w-full max-w-sm">
@@ -24,6 +26,7 @@ export default function LoginPage({ searchParams }: { searchParams: { error?: st
             <label className="label">パスワード</label>
             <input name="password" type="password" required autoComplete="current-password" className="input" placeholder="••••••••" />
           </div>
+          {captchaSiteKey && <TurnstileWidget siteKey={captchaSiteKey} />}
           <button type="submit" className="btn-primary w-full">ログイン</button>
         </form>
 
