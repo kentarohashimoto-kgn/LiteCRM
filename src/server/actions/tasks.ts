@@ -173,6 +173,12 @@ export interface TaskInput {
   description?: string | null;
   opportunity_id?: string | null;
   account_id?: string | null;
+  color?: string | null;
+}
+
+/** 優先度→並び順の帯（high=0/middle=1/low=2 を10万刻み。既定で高優先が上）。 */
+function priorityBase(priority?: string | null): number {
+  return (priority === "high" ? 0 : priority === "low" ? 2 : 1) * 100000;
 }
 
 export async function createProjectTaskAction(input: TaskInput) {
@@ -180,13 +186,14 @@ export async function createProjectTaskAction(input: TaskInput) {
   const sb = getSupabaseServer();
   const title = input.title.trim();
   if (!title) return;
-  let sort = 0;
+  // 既定は優先度の帯 + セクション内件数。高優先ほど上に来る（ドラッグで自由に上書き可）。
+  let sort = priorityBase(input.priority);
   if (input.section_id) {
     const { count } = await sb
       .from("tasks")
       .select("id", { count: "exact", head: true })
       .eq("section_id", input.section_id);
-    sort = count ?? 0;
+    sort += count ?? 0;
   }
   await sb.from("tasks").insert({
     tenant_id: ctx.tenantId,
@@ -201,6 +208,7 @@ export async function createProjectTaskAction(input: TaskInput) {
     description: input.description ?? null,
     opportunity_id: input.opportunity_id ?? null,
     account_id: input.account_id ?? null,
+    color: input.color ?? null,
     status: "todo",
     sort_order: sort,
   });
@@ -219,6 +227,7 @@ export async function updateTaskAction(id: string, patch: Partial<TaskInput>) {
   if (patch.description !== undefined) p.description = patch.description;
   if (patch.project_id !== undefined) p.project_id = patch.project_id;
   if (patch.section_id !== undefined) p.section_id = patch.section_id;
+  if (patch.color !== undefined) p.color = patch.color;
   if (Object.keys(p).length === 0) return;
   await sb.from("tasks").update(p).eq("id", id);
   touch();

@@ -732,6 +732,8 @@ export interface Task {
   start_date?: string;
   /** 自由ラベル（タグ）。ボードのグルーピング軸に使える。 */
   labels?: string[];
+  /** カード色（COLOR_KEYS のキー）。未設定は既定色。 */
+  color?: string | null;
 }
 
 /** プロジェクト参照権限（割当メンバー）。管理者のみ割当可能。 */

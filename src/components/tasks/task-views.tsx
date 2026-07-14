@@ -17,7 +17,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
-import { PRIORITY_META } from "@/lib/constants";
+import { PRIORITY_META, COLOR_KEYS } from "@/lib/constants";
 import { TaskCheckbox } from "./task-checkbox";
 import { NO_SECTION, isOverdue, relDue, sortTasks, type SectionVM, type TaskVM, type UserVM } from "./vm";
 import {
@@ -137,10 +137,30 @@ export function TaskViews(props: Props) {
   const [assignee, setAssignee] = useState<string>("all");
   const [hideDone, setHideDone] = useState(false);
 
+  // 「完了」セクション（プロジェクトのみ）。完了にしたら自動でここへ移す。
+  const doneSectionId = useMemo(
+    () => (groupMode === "section" ? sections.find((s) => /完了|done/i.test(s.name))?.id ?? null : null),
+    [groupMode, sections],
+  );
+
   /* ---- アクション（楽観 + サーバー） ---- */
   const toggle = (id: string, done: boolean) => {
-    setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, status: done ? "done" : "todo" } : t)));
+    const moveToDone = done && !!doneSectionId;
+    setTasks((ts) =>
+      ts.map((t) =>
+        t.id === id
+          ? { ...t, status: done ? "done" : "todo", ...(moveToDone ? { section_id: doneSectionId! } : {}) }
+          : t,
+      ),
+    );
     startTransition(() => toggleTaskDoneAction(id, done));
+    // 完了にしたら「完了」セクションへ自動移動（すでに完了列にいる場合は何もしない）
+    if (moveToDone) {
+      const cur = tasks.find((t) => t.id === id);
+      if (cur && cur.section_id !== doneSectionId) {
+        startTransition(() => updateTaskAction(id, { section_id: doneSectionId }));
+      }
+    }
   };
   const patch = (id: string, p: Partial<TaskInput>) => {
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, ...(p as Partial<TaskVM>) } : t)));
@@ -352,7 +372,7 @@ function ListRow({
 }) {
   const done = t.status === "done";
   return (
-    <li className={cn("group flex items-center gap-3 px-4 py-2.5 hover:bg-mist-soft/50 transition-colors", done && "animate-row-complete")}>
+    <li className={cn("group flex items-center gap-3 px-4 py-2.5 hover:bg-mist-soft/50 transition-colors", cardTint(t.color), done && "animate-row-complete")}>
       <TaskCheckbox done={done} onToggle={(next) => onToggle(t.id, next)} />
       <button type="button" onClick={() => onOpen(t.id)} className="min-w-0 flex-1 text-left">
         <span className={cn("text-sm", done ? "line-through text-ink/35" : "text-ink")}>{t.title}</span>
@@ -394,6 +414,8 @@ function BoardView(
 ) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
+  // ドロップ挿入位置(同一列の上下並び替え用): どのカードの前/後に入れるか
+  const [overCard, setOverCard] = useState<{ col: string; id: string; pos: "before" | "after" } | null>(null);
   const [group, setGroup] = useState<BoardGroup>("section");
   const [extraLabels, setExtraLabels] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState("");
@@ -404,23 +426,30 @@ function BoardView(
   const cols = boardCols(p.tasks, p.sections, gb, p.groupMode, p.today, extraLabels);
   const draggable = isProject;
 
+  const clearDrag = () => { setDragId(null); setOverCol(null); setOverCard(null); };
+
   const drop = (colKey: string) => {
-    if (!dragId || !draggable) return;
+    if (!dragId || !draggable) return clearDrag();
     if (gb === "priority") {
       p.onPatch(dragId, { priority: colKey === NO_PRI ? null : colKey });
     } else if (gb === "label") {
       p.onSetLabels(dragId, colKey === NO_LABEL ? [] : [colKey]);
     } else {
+      // セクション: 同一列内の上下並び替え＆列跨ぎ移動。挿入位置は overCard で決める。
       const col = cols.find((c) => c.key === colKey);
       if (col) {
         const sectionId = colKey === NO_SECTION ? null : colKey;
         const ids = col.tasks.filter((t) => t.id !== dragId).map((t) => t.id);
-        ids.push(dragId);
+        let insertAt = ids.length;
+        if (overCard && overCard.col === colKey) {
+          const idx = ids.indexOf(overCard.id);
+          if (idx >= 0) insertAt = overCard.pos === "before" ? idx : idx + 1;
+        }
+        ids.splice(insertAt, 0, dragId);
         p.onReorder(sectionId, ids);
       }
     }
-    setDragId(null);
-    setOverCol(null);
+    clearDrag();
   };
 
   const seedFor = (c: Column): Partial<TaskInput> => {
@@ -486,10 +515,16 @@ function BoardView(
                   user={p.usersById.get(t.assigned_to ?? "")}
                   draggable={draggable}
                   dragging={dragId === t.id}
+                  dropHint={overCard && overCard.col === c.key && overCard.id === t.id ? overCard.pos : null}
                   onToggle={p.onToggle}
                   onOpen={p.onOpen}
                   onDragStart={() => setDragId(t.id)}
-                  onDragEnd={() => setDragId(null)}
+                  onDragEnd={clearDrag}
+                  onDragOverCard={(pos) => {
+                    if (draggable && gb === "section" && dragId && dragId !== t.id) {
+                      setOverCard((v) => (v && v.col === c.key && v.id === t.id && v.pos === pos ? v : { col: c.key, id: t.id, pos }));
+                    }
+                  }}
                 />
               ))}
             </div>
@@ -513,20 +548,24 @@ function BoardCard({
   user,
   draggable,
   dragging,
+  dropHint,
   onToggle,
   onOpen,
   onDragStart,
   onDragEnd,
+  onDragOverCard,
 }: {
   t: TaskVM;
   today: string;
   user?: UserVM;
   draggable: boolean;
   dragging: boolean;
+  dropHint: "before" | "after" | null;
   onToggle: (id: string, done: boolean) => void;
   onOpen: (id: string) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
+  onDragOverCard: (pos: "before" | "after") => void;
 }) {
   const done = t.status === "done";
   return (
@@ -534,7 +573,20 @@ function BoardCard({
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className={cn("task-card", dragging && "opacity-40", done && "bg-mist-soft/60")}
+      onDragOver={(e) => {
+        if (!draggable) return;
+        e.preventDefault();
+        const r = e.currentTarget.getBoundingClientRect();
+        onDragOverCard(e.clientY < r.top + r.height / 2 ? "before" : "after");
+      }}
+      className={cn(
+        "task-card",
+        dragging && "opacity-40",
+        cardTint(t.color),
+        done && "bg-mist-soft/60",
+        dropHint === "before" && "shadow-[inset_0_3px_0_0_var(--tw-shadow-color)] shadow-teal-primary",
+        dropHint === "after" && "shadow-[inset_0_-3px_0_0_var(--tw-shadow-color)] shadow-teal-primary",
+      )}
     >
       <div className="flex items-start gap-2">
         <TaskCheckbox done={done} onToggle={(next) => onToggle(t.id, next)} size={18} />
@@ -828,6 +880,36 @@ function TaskDrawer({
             </div>
           </Field>
 
+          <Field label="色">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => onPatch(task.id, { color: null })}
+                className={cn(
+                  "h-6 w-6 rounded-full border flex items-center justify-center text-ink/40",
+                  !task.color ? "border-teal-primary ring-2 ring-teal-primary/30" : "border-black/15 hover:border-black/30",
+                )}
+                title="色なし"
+                aria-label="色なし"
+              >
+                <X size={12} />
+              </button>
+              {COLOR_KEYS.map((c) => {
+                const on = task.color === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => onPatch(task.id, { color: c.key })}
+                    className={cn("h-6 w-6 rounded-full border border-black/5 transition-transform hover:scale-110", c.bg, on && "ring-2 ring-offset-1 ring-ink/40")}
+                    title={c.label}
+                    aria-label={c.label}
+                  />
+                );
+              })}
+            </div>
+          </Field>
+
           <Field label="ラベル">
             <div className="flex flex-wrap items-center gap-1.5">
               {labels.map((l) => (
@@ -1008,4 +1090,19 @@ function dotClass(color?: string | null): string {
     slate: "bg-slate-400",
   };
   return map[color ?? "teal"] ?? "bg-teal-primary";
+}
+
+/** カード色（左アクセント＋淡い地色）。未設定は装飾なし。 */
+const CARD_TINT: Record<string, string> = {
+  teal: "border-l-4 border-l-teal-primary bg-teal-light/25",
+  orange: "border-l-4 border-l-accent-orange bg-orange-50/60",
+  violet: "border-l-4 border-l-violet-500 bg-violet-50/60",
+  rose: "border-l-4 border-l-rose-500 bg-rose-50/60",
+  amber: "border-l-4 border-l-amber-500 bg-amber-50/60",
+  sky: "border-l-4 border-l-sky-500 bg-sky-50/60",
+  lime: "border-l-4 border-l-lime-500 bg-lime-50/60",
+  slate: "border-l-4 border-l-slate-400 bg-slate-100/60",
+};
+function cardTint(color?: string | null): string {
+  return color ? CARD_TINT[color] ?? "" : "";
 }
