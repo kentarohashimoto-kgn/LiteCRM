@@ -97,16 +97,25 @@ export default async function BusinessCardsPage({
       </form>
 
       <div className="card overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full text-sm" style={{ minWidth: 1720 }}>
           <thead className="border-b border-black/[0.06]">
             <tr>
-              <th className="th">交換日</th>
+              <th className="th whitespace-nowrap">名刺交換日</th>
               <th className="th">会社名</th>
+              <th className="th">部署名</th>
+              <th className="th">役職</th>
               <th className="th">氏名</th>
-              <th className="th">部署 / 役職</th>
-              <th className="th">連絡先</th>
+              <th className="th">e-mail</th>
+              <th className="th whitespace-nowrap">郵便番号</th>
+              <th className="th">住所</th>
+              <th className="th whitespace-nowrap">TEL会社</th>
+              <th className="th whitespace-nowrap">TEL部門</th>
+              <th className="th whitespace-nowrap">TEL直通</th>
+              <th className="th whitespace-nowrap">Fax</th>
+              <th className="th whitespace-nowrap">携帯電話</th>
+              <th className="th">URL</th>
               <th className="th">タグ</th>
-              <th className="th">交換者</th>
+              <th className="th whitespace-nowrap">交換者</th>
               <th className="th">CRM連携</th>
             </tr>
           </thead>
@@ -114,23 +123,27 @@ export default async function BusinessCardsPage({
             {rows.map((c) => (
               <tr key={c.id} className="row-hover align-top">
                 <td className="td text-xs text-ink/60 whitespace-nowrap">{c.exchanged_on ?? "—"}</td>
-                <td className="td font-medium max-w-56">
-                  <div className="truncate" title={c.company_name}>{c.company_name || "—"}</div>
-                </td>
+                <td className="td font-medium max-w-52"><div className="truncate" title={c.company_name}>{c.company_name || "—"}</div></td>
+                <td className="td text-xs text-ink/70 max-w-40"><div className="truncate" title={c.department ?? ""}>{c.department || "—"}</div></td>
+                <td className="td text-xs text-ink/70 max-w-40"><div className="truncate" title={c.title ?? ""}>{c.title || "—"}</div></td>
                 <td className="td whitespace-nowrap">
                   {c.full_name || "—"}
                   {c.rank && <span className="ml-1.5 pill text-[10px]">{c.rank}</span>}
                 </td>
-                <td className="td text-xs text-ink/60 max-w-56">
-                  <div className="truncate" title={`${c.department ?? ""} ${c.title ?? ""}`}>
-                    {[c.department, c.title].filter(Boolean).join(" / ") || "—"}
-                  </div>
+                <td className="td text-xs text-ink/70 max-w-52"><div className="truncate" title={c.email ?? ""}>{c.email || "—"}</div></td>
+                <td className="td text-xs text-ink/60 whitespace-nowrap">{c.postal_code || "—"}</td>
+                <td className="td text-xs text-ink/60 max-w-64"><div className="truncate" title={c.address ?? ""}>{c.address || "—"}</div></td>
+                <td className="td text-xs text-ink/60 whitespace-nowrap">{c.tel_company || "—"}</td>
+                <td className="td text-xs text-ink/60 whitespace-nowrap">{c.tel_department || "—"}</td>
+                <td className="td text-xs text-ink/60 whitespace-nowrap">{c.tel_direct || "—"}</td>
+                <td className="td text-xs text-ink/60 whitespace-nowrap">{c.fax || "—"}</td>
+                <td className="td text-xs text-ink/60 whitespace-nowrap">{c.mobile_phone || "—"}</td>
+                <td className="td text-xs max-w-48">
+                  {c.url ? (
+                    <a href={/^https?:\/\//i.test(c.url) ? c.url : `https://${c.url}`} target="_blank" rel="noreferrer noopener" className="text-teal-deep hover:underline block truncate" title={c.url}>{c.url}</a>
+                  ) : "—"}
                 </td>
-                <td className="td text-xs text-ink/60">
-                  <div>{c.email ?? "—"}</div>
-                  <div>{c.mobile_phone ?? c.tel_company ?? ""}</div>
-                </td>
-                <td className="td max-w-44">
+                <td className="td max-w-40">
                   <div className="flex flex-wrap gap-1">
                     {c.tags.slice(0, 2).map((t) => (
                       <span key={t} className="pill text-[10px]" title={t}>{t.length > 14 ? t.slice(0, 14) + "…" : t}</span>
@@ -152,7 +165,7 @@ export default async function BusinessCardsPage({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="td text-center text-ink/40 py-10">
+                <td colSpan={17} className="td text-center text-ink/40 py-10">
                   {stats.total === 0 ? (
                     <span>
                       名刺がありません。<Link href="/app/business-cards/import" className="text-teal-deep hover:underline">Eightのエクスポート（CSV）を取込</Link>んでください。
