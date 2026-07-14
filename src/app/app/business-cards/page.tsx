@@ -3,7 +3,7 @@ import { Contact, Upload } from "lucide-react";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, LinkButton, Card } from "@/components/ui/primitives";
-import { queryBusinessCards, getCardStats, type CardListFilters } from "@/lib/data/business-cards";
+import { queryBusinessCards, getCardStats, getAccountIndustries, type CardListFilters } from "@/lib/data/business-cards";
 import { MatchRunButton } from "@/components/business-cards/match-run-button";
 import { CardLinkCell } from "@/components/business-cards/card-link-cell";
 
@@ -14,31 +14,57 @@ const PAGE_SIZE = 50;
 /**
  * 名刺情報一覧（組織共有）。
  * 個人が交換した名刺をテナント全員で閲覧・検索し、CRM顧客との連携状態を確認できる。
+ * 検索は2系統: ①ピンポイント（会社名・氏名で連絡先を引く） ②セグメント（条件で複数リストアップ）。
  */
 export default async function BusinessCardsPage({
   searchParams,
 }: {
-  searchParams: { q?: string; link?: string; page?: string };
+  searchParams: {
+    q?: string; link?: string; page?: string;
+    owner?: string; from?: string; to?: string; title?: string; industry?: string; address?: string; emp?: string;
+  };
 }) {
   await requireCtx();
+  const sp = searchParams;
+  const clean = (v?: string) => (v ?? "").trim() || undefined;
   const filters: CardListFilters = {
-    q: searchParams.q ?? "",
-    link: searchParams.link === "linked" || searchParams.link === "unlinked" ? searchParams.link : "all",
-    page: searchParams.page ? Math.max(1, parseInt(searchParams.page, 10) || 1) : 1,
+    q: sp.q ?? "",
+    link: sp.link === "linked" || sp.link === "unlinked" ? sp.link : "all",
+    ownerId: clean(sp.owner),
+    from: clean(sp.from),
+    to: clean(sp.to),
+    title: clean(sp.title),
+    address: clean(sp.address),
+    industry: clean(sp.industry),
+    employeeSize: clean(sp.emp),
+    page: sp.page ? Math.max(1, parseInt(sp.page, 10) || 1) : 1,
     pageSize: PAGE_SIZE,
   };
   const sb = getSupabaseServer();
-  const [{ rows, total }, stats, profilesR] = await Promise.all([
+  const [{ rows, total }, stats, profilesR, industries] = await Promise.all([
     queryBusinessCards(filters),
     getCardStats(),
     sb.from("profiles").select("id, display_name"),
+    getAccountIndustries(),
   ]);
-  const nameById = new Map((profilesR.data ?? []).map((p) => [p.id, p.display_name as string]));
+  const profiles = (profilesR.data ?? []) as { id: string; display_name: string | null }[];
+  const nameById = new Map(profiles.map((p) => [p.id, p.display_name as string]));
+  const exchangers = profiles
+    .filter((p) => p.display_name)
+    .sort((a, b) => (a.display_name ?? "").localeCompare(b.display_name ?? "", "ja"));
+  const segmentActive = !!(filters.ownerId || filters.from || filters.to || filters.title || filters.address || filters.industry || filters.employeeSize);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const qs = (page: number) => {
     const p = new URLSearchParams();
     if (filters.q) p.set("q", filters.q);
     if (filters.link !== "all") p.set("link", filters.link);
+    if (filters.ownerId) p.set("owner", filters.ownerId);
+    if (filters.from) p.set("from", filters.from);
+    if (filters.to) p.set("to", filters.to);
+    if (filters.title) p.set("title", filters.title);
+    if (filters.industry) p.set("industry", filters.industry);
+    if (filters.address) p.set("address", filters.address);
+    if (filters.employeeSize) p.set("emp", filters.employeeSize);
     if (page > 1) p.set("page", String(page));
     const s = p.toString();
     return s ? `?${s}` : "";
@@ -76,24 +102,79 @@ export default async function BusinessCardsPage({
         </Card>
       </div>
 
-      {/* 検索・絞り込み（GETフォーム） */}
-      <form method="GET" className="card card-pad mb-4 flex flex-wrap items-center gap-3">
-        <input
-          type="search"
-          name="q"
-          defaultValue={filters.q}
-          placeholder="会社名・氏名・部署・役職・メール・メモで検索"
-          className="flex-1 min-w-60 rounded-xl border border-black/10 px-3 py-2 text-sm"
-        />
-        <select name="link" defaultValue={filters.link} className="rounded-xl border border-black/10 px-3 py-2 text-sm">
-          <option value="all">すべて</option>
-          <option value="linked">連携済みのみ</option>
-          <option value="unlinked">未連携のみ</option>
-        </select>
-        <button type="submit" className="btn-primary">検索</button>
-        {(filters.q || filters.link !== "all") && (
-          <Link href="/app/business-cards" className="text-sm text-ink/50 hover:text-ink">クリア</Link>
-        )}
+      {/* 検索（1つのGETフォームに2系統: ピンポイント＋セグメント） */}
+      <form method="GET" className="card card-pad mb-4 space-y-4">
+        {/* ① ピンポイント: あの人の連絡先を引く */}
+        <div>
+          <div className="text-xs font-semibold text-ink/50 mb-1.5">ピンポイント検索（会社名・氏名で連絡先を引く）</div>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="search"
+              name="q"
+              defaultValue={filters.q}
+              placeholder="会社名・氏名・部署・役職・メール・メモ"
+              className="flex-1 min-w-60 rounded-xl border border-black/10 px-3 py-2 text-sm"
+            />
+            <select name="link" defaultValue={filters.link} className="rounded-xl border border-black/10 px-3 py-2 text-sm">
+              <option value="all">すべて</option>
+              <option value="linked">連携済みのみ</option>
+              <option value="unlinked">未連携のみ</option>
+            </select>
+            <button type="submit" className="btn-primary">検索</button>
+            {(filters.q || filters.link !== "all" || segmentActive) && (
+              <Link href="/app/business-cards" className="text-sm text-ink/50 hover:text-ink">クリア</Link>
+            )}
+          </div>
+        </div>
+
+        {/* ② セグメント: 条件で複数リストアップ */}
+        <details open={segmentActive} className="border-t border-black/[0.06] pt-3">
+          <summary className="cursor-pointer text-xs font-semibold text-ink/50 mb-1">
+            セグメント検索（条件で複数リストアップ）{segmentActive && <span className="ml-1.5 pill bg-teal-light text-teal-deep text-[10px]">適用中</span>}
+          </summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="block">
+              <span className="block text-[11px] text-ink/50 mb-1">交換者</span>
+              <select name="owner" defaultValue={filters.ownerId ?? ""} className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm">
+                <option value="">すべて</option>
+                {exchangers.map((p) => (
+                  <option key={p.id} value={p.id}>{p.display_name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="block text-[11px] text-ink/50 mb-1">名刺交換日（範囲）</span>
+              <div className="flex items-center gap-1.5">
+                <input type="date" name="from" defaultValue={filters.from ?? ""} className="w-full rounded-lg border border-black/10 px-2 py-2 text-sm" />
+                <span className="text-ink/40 text-xs">〜</span>
+                <input type="date" name="to" defaultValue={filters.to ?? ""} className="w-full rounded-lg border border-black/10 px-2 py-2 text-sm" />
+              </div>
+            </label>
+            <label className="block">
+              <span className="block text-[11px] text-ink/50 mb-1">役職</span>
+              <input name="title" defaultValue={filters.title ?? ""} placeholder="例: 部長 / 代表 / 情シス" className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm" />
+            </label>
+            <label className="block">
+              <span className="block text-[11px] text-ink/50 mb-1">業種（連携先の顧客）</span>
+              <input name="industry" defaultValue={filters.industry ?? ""} list="card-industries" placeholder="例: 製造 / 建設 / ISP" className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm" />
+              <datalist id="card-industries">
+                {industries.map((v) => <option key={v} value={v} />)}
+              </datalist>
+            </label>
+            <label className="block">
+              <span className="block text-[11px] text-ink/50 mb-1">住所</span>
+              <input name="address" defaultValue={filters.address ?? ""} placeholder="例: 東京都 / 大阪 / 名古屋市" className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm" />
+            </label>
+            <label className="block">
+              <span className="block text-[11px] text-ink/50 mb-1">従業員数（連携先の顧客）</span>
+              <input name="emp" defaultValue={filters.employeeSize ?? ""} placeholder="例: 1000 / 100〜300" className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm" />
+            </label>
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <button type="submit" className="btn-primary">この条件でリストアップ</button>
+            <span className="text-xs text-ink/45">業種・従業員数はCRM連携済みの名刺（顧客情報）が対象です。</span>
+          </div>
+        </details>
       </form>
 
       <div className="card overflow-x-auto">
