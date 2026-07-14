@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { FileSpreadsheet, Link2, Upload } from "lucide-react";
+import { FileSpreadsheet, Link2, Upload, UserCheck } from "lucide-react";
 import { decodeFileText, detectDelim, parseDelimited, uniquifyHeaders } from "@/lib/lead-import";
 import { dedupCards, findHeaderRowIndex, rowsToCardInputs, type BusinessCardInput } from "@/lib/card-import";
 import { importBusinessCardsAction, runCardMatchingAction, type MatchCardsResult } from "@/server/actions/business-cards";
@@ -15,8 +15,9 @@ type Phase = "select" | "preview" | "uploading" | "done" | "error";
  * Eight CSVの取込フォーム。ヘッダー行を自動検出して列マッピング不要で取り込む。
  * 取込完了後にCRMマッチングを自動実行する。
  */
-export function CardImportForm() {
+export function CardImportForm({ members, currentUserId }: { members: { id: string; name: string }[]; currentUserId: string }) {
   const [phase, setPhase] = useState<Phase>("select");
+  const [exchangerId, setExchangerId] = useState(currentUserId);
   const [fileName, setFileName] = useState("");
   const [cards, setCards] = useState<BusinessCardInput[]>([]);
   const [dupCount, setDupCount] = useState(0);
@@ -58,7 +59,7 @@ export function CardImportForm() {
     let skp = 0;
     try {
       for (let i = 0; i < cards.length; i += CHUNK) {
-        const r = await importBusinessCardsAction(cards.slice(i, i + CHUNK));
+        const r = await importBusinessCardsAction(cards.slice(i, i + CHUNK), exchangerId);
         if (!r.ok) throw new Error(r.error ?? "取込に失敗しました");
         ins += r.inserted;
         skp += r.skipped;
@@ -75,8 +76,32 @@ export function CardImportForm() {
     }
   };
 
+  const exchangerName = members.find((m) => m.id === exchangerId)?.name ?? "取込者";
+
   return (
     <div className="max-w-3xl space-y-4">
+      {/* 名刺交換者の選択（この取込で登録する全名刺に適用） */}
+      {(phase === "select" || phase === "preview" || phase === "error") && (
+        <div className="card card-pad flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink/70">
+            <UserCheck size={15} className="text-teal-primary" /> 名刺交換者
+          </span>
+          <select
+            value={exchangerId}
+            onChange={(e) => setExchangerId(e.target.value)}
+            className="rounded-lg border border-black/10 px-3 py-2 text-sm min-w-[200px]"
+          >
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+                {m.id === currentUserId ? "（自分）" : ""}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-ink/45">この取込で登録する名刺の交換者として記録されます。</span>
+        </div>
+      )}
+
       {(phase === "select" || phase === "error") && (
         <label className="card card-pad flex flex-col items-center justify-center gap-3 py-14 border-2 border-dashed border-black/10 cursor-pointer hover:border-teal-primary/40">
           <FileSpreadsheet size={32} className="text-ink/30" />
@@ -93,6 +118,7 @@ export function CardImportForm() {
           <div className="text-sm">
             <span className="font-medium">{fileName}</span> — 取込対象 <span className="font-bold text-teal-deep">{cards.length.toLocaleString()}</span> 件
             {dupCount > 0 && <span className="text-ink/50">（ファイル内重複 {dupCount}件を除外済み）</span>}
+            <span className="block text-xs text-ink/50 mt-0.5">名刺交換者: <span className="font-medium text-ink/70">{exchangerName}</span></span>
           </div>
           <div className="overflow-x-auto rounded-lg border border-black/[0.06]">
             <table className="w-full text-xs">

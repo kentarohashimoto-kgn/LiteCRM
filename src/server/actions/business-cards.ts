@@ -19,13 +19,22 @@ export interface ImportCardsResult {
 
 /**
  * 名刺の取込（クライアントでパース済みの行をチャンクで受け取る）。
- * owner_user_id は取込実行者＝名刺交換者。再取込は dedup_key で重複スキップ。
+ * owner_user_id は名刺交換者（未指定なら取込実行者）。再取込は dedup_key で重複スキップ。
  */
-export async function importBusinessCardsAction(rows: BusinessCardInput[]): Promise<ImportCardsResult> {
+export async function importBusinessCardsAction(rows: BusinessCardInput[], exchangerId?: string): Promise<ImportCardsResult> {
   const ctx = await requireCtx();
   if (!Array.isArray(rows) || rows.length === 0) return { ok: false, inserted: 0, skipped: 0, error: "取込対象がありません" };
   if (rows.length > 500) return { ok: false, inserted: 0, skipped: 0, error: "1回の取込は500件までです（分割して送信してください）" };
   const sb = getSupabaseServer();
+
+  // 名刺交換者(owner_user_id)。指定があり自テナントのメンバーなら採用、なければ取込者。
+  let ownerId = ctx.userId;
+  const wanted = (exchangerId ?? "").trim();
+  if (wanted && wanted !== ctx.userId) {
+    const { data: m } = await sb.from("memberships").select("user_id").eq("user_id", wanted).maybeSingle();
+    if (m) ownerId = wanted;
+  }
+
   const t = (v?: string) => {
     const s = (v ?? "").trim();
     return s === "" ? null : s.slice(0, 500);
@@ -34,7 +43,7 @@ export async function importBusinessCardsAction(rows: BusinessCardInput[]): Prom
     .filter((r) => (r.company_name ?? "").trim() !== "" || (r.full_name ?? "").trim() !== "")
     .map((r) => ({
       tenant_id: ctx.tenantId,
-      owner_user_id: ctx.userId,
+      owner_user_id: ownerId,
       company_name: (r.company_name ?? "").trim().slice(0, 300),
       department: t(r.department),
       title: t(r.title),
