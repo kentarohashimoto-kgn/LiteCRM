@@ -56,14 +56,57 @@ const FIXED_HEADERS: Record<string, keyof BusinessCardInput> = {
   メモ: "memo",
 };
 
+/** 表記ゆれ吸収のためのヘッダー別名（正規化後キー → フィールド）。 */
+const HEADER_ALIASES: [string, keyof BusinessCardInput][] = [
+  ["交換日", "exchanged_on"],
+  ["名刺交換", "exchanged_on"],
+  ["eメール", "email"],
+  ["mail", "email"],
+  ["メールアドレス", "email"],
+  ["ホームページ", "url"],
+  ["web", "url"],
+  ["携帯", "mobile_phone"],
+  ["会社tel", "tel_company"],
+  ["部門tel", "tel_department"],
+  ["直通tel", "tel_direct"],
+  ["電話", "tel_company"],
+];
+
+/**
+ * ヘッダー照合用の正規化。NFKC(全角→半角)・小文字化・空白除去・各種ハイフンの統一。
+ * これにより「ＴＥＬ会社」「e‑mail」「 URL 」等の表記ゆれも同じ列として扱える。
+ * ※カタカナ長音「ー」(メール等)は変換しない。
+ */
+function normHeader(h: string): string {
+  return h
+    .normalize("NFKC")
+    .replace(/[‐‑–—―−]/g, "-")
+    .replace(/[\s　]/g, "")
+    .toLowerCase();
+}
+
+/** 正規化ヘッダー → フィールドの索引（固定列＋別名）。 */
+const NORM_HEADERS: Record<string, keyof BusinessCardInput> = (() => {
+  const m: Record<string, keyof BusinessCardInput> = {};
+  for (const [k, v] of Object.entries(FIXED_HEADERS)) m[normHeader(k)] = v;
+  for (const [k, v] of HEADER_ALIASES) m[normHeader(k)] = v;
+  return m;
+})();
+
 /** タグ列として扱わない管理用フラグ列。 */
 const SKIP_TAG_HEADERS = new Set(["Eightでつながっている人", "再データ化中の名刺", "'?'を含んだデータ"]);
+
+const isNameHeader = (c: string) => {
+  const n = normHeader(c);
+  return n === normHeader("氏名") || n === normHeader("姓");
+};
+const isCompanyHeader = (c: string) => normHeader(c) === normHeader("会社名");
 
 /** パース済み2次元配列からヘッダー行のインデックスを検出（会社名＋氏名/姓がある行）。 */
 export function findHeaderRowIndex(rows: string[][]): number {
   for (let i = 0; i < Math.min(rows.length, 20); i++) {
-    const cells = rows[i].map((c) => c.trim());
-    if (cells.includes("会社名") && (cells.includes("氏名") || cells.includes("姓"))) return i;
+    const cells = rows[i];
+    if (cells.some(isCompanyHeader) && cells.some(isNameHeader)) return i;
   }
   return -1;
 }
@@ -82,14 +125,14 @@ export function rowsToCardInputs(headers: string[], rows: string[][]): BusinessC
   const out: BusinessCardInput[] = [];
   for (const row of rows) {
     // Eightは複数名刺帳をつなげたエクスポートで途中にヘッダー行が再登場することがある
-    if (row.includes("会社名") && (row.includes("氏名") || row.includes("姓"))) continue;
+    if (row.some(isCompanyHeader) && row.some(isNameHeader)) continue;
     const o: BusinessCardInput = { company_name: "", full_name: "" };
     const tags: string[] = [];
     for (let i = 0; i < headers.length && i < row.length; i++) {
       const h = headers[i].trim();
       const v = (row[i] ?? "").trim();
       if (!v) continue;
-      const key = FIXED_HEADERS[h];
+      const key = NORM_HEADERS[normHeader(h)];
       if (key) {
         if (key === "exchanged_on") o.exchanged_on = pdate(v);
         else (o as unknown as Record<string, unknown>)[key] = v.slice(0, 500);
