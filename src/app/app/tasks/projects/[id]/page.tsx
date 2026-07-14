@@ -110,6 +110,7 @@ export default async function ProjectDetailPage({
         groupMode="section"
         projectId={params.id}
         currentUserId={ws.ctx.userId}
+        filterMembers={projectMembers}
       />
     </div>
   );
