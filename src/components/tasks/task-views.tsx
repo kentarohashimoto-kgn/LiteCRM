@@ -14,6 +14,7 @@ import {
   Flag,
   Trash2,
   Link2,
+  Users,
 } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { PRIORITY_META } from "@/lib/constants";
@@ -30,6 +31,9 @@ import {
 } from "@/server/actions/tasks";
 
 type ViewKind = "list" | "board" | "calendar";
+
+/** 担当者フィルタ: 未割り当てを表す番兵。 */
+const UNASSIGNED = "__unassigned__";
 
 interface Props {
   initialTasks: TaskVM[];
@@ -127,6 +131,10 @@ export function TaskViews(props: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const openTask = tasks.find((t) => t.id === openId) ?? null;
 
+  // 絞り込み: 担当者 + 完了を隠すモード
+  const [assignee, setAssignee] = useState<string>("all");
+  const [hideDone, setHideDone] = useState(false);
+
   /* ---- アクション（楽観 + サーバー） ---- */
   const toggle = (id: string, done: boolean) => {
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, status: done ? "done" : "todo" } : t)));
@@ -177,7 +185,19 @@ export function TaskViews(props: Props) {
   };
 
   const allow = props.allowViews ?? (["list", "board", "calendar"] as ViewKind[]);
-  const openCount = tasks.filter((t) => t.status !== "done").length;
+
+  // 担当者で絞り込み → さらに「完了を隠す」で未完了のみに
+  const assigneeTasks = useMemo(() => {
+    if (assignee === "all") return tasks;
+    if (assignee === UNASSIGNED) return tasks.filter((t) => !t.assigned_to);
+    return tasks.filter((t) => t.assigned_to === assignee);
+  }, [tasks, assignee]);
+  const visibleTasks = useMemo(
+    () => (hideDone ? assigneeTasks.filter((t) => t.status !== "done") : assigneeTasks),
+    [assigneeTasks, hideDone],
+  );
+  const openCount = assigneeTasks.filter((t) => t.status !== "done").length;
+  const doneCount = assigneeTasks.length - openCount;
 
   return (
     <div>
@@ -199,14 +219,38 @@ export function TaskViews(props: Props) {
             </button>
           )}
         </div>
-        <span className="text-xs text-ink/45">
-          未完了 <span className="font-bold text-ink/70 tabular-nums">{openCount}</span> 件
-        </span>
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="inline-flex items-center gap-1.5">
+            <Users size={13} className="text-ink/40" />
+            <select
+              value={assignee}
+              onChange={(e) => setAssignee(e.target.value)}
+              className="rounded-lg border border-black/10 bg-white px-2 py-1.5 text-xs text-ink/70 outline-none focus:border-teal-primary"
+              title="担当者で絞り込み"
+            >
+              <option value="all">担当: 全員</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+              <option value={UNASSIGNED}>未割り当て</option>
+            </select>
+          </label>
+          <label className="inline-flex items-center gap-1.5 text-xs text-ink/60 cursor-pointer select-none" title="完了したタスクを非表示にします">
+            <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} className="accent-teal-primary" />
+            完了を隠す
+          </label>
+          <span className="text-xs text-ink/45">
+            未完了 <span className="font-bold text-ink/70 tabular-nums">{openCount}</span> 件
+            {!hideDone && doneCount > 0 && <span className="ml-1.5 text-ink/35">/ 完了 {doneCount}</span>}
+          </span>
+        </div>
       </div>
 
       {props.view === "board" ? (
         <BoardView
-          tasks={tasks}
+          tasks={visibleTasks}
           sections={sections}
           groupMode={groupMode}
           today={today}
@@ -221,10 +265,10 @@ export function TaskViews(props: Props) {
           currentUserId={currentUserId}
         />
       ) : props.view === "calendar" ? (
-        <CalendarView tasks={tasks} today={today} usersById={usersById} onToggle={toggle} onOpen={setOpenId} onCreate={create} projectId={projectId} currentUserId={currentUserId} />
+        <CalendarView tasks={visibleTasks} today={today} usersById={usersById} onToggle={toggle} onOpen={setOpenId} onCreate={create} projectId={projectId} currentUserId={currentUserId} />
       ) : (
         <ListView
-          tasks={tasks}
+          tasks={visibleTasks}
           sections={sections}
           groupMode={groupMode}
           today={today}
@@ -274,15 +318,17 @@ function ListView(p: CommonViewProps) {
               <ListRow key={t.id} t={t} today={p.today} user={p.usersById.get(t.assigned_to ?? "")} onToggle={p.onToggle} onOpen={p.onOpen} />
             ))}
           </ul>
-          <QuickAdd
-            seed={{
-              section_id: p.groupMode === "section" ? (g.sectionId ?? null) : null,
-              due_date: p.groupMode === "date" ? g.defaultDue : null,
-            }}
-            projectId={p.projectId}
-            currentUserId={p.currentUserId}
-            onCreate={p.onCreate}
-          />
+          {!g.isDone && (
+            <QuickAdd
+              seed={{
+                section_id: p.groupMode === "section" ? (g.sectionId ?? null) : null,
+                due_date: p.groupMode === "date" ? g.defaultDue : null,
+              }}
+              projectId={p.projectId}
+              currentUserId={p.currentUserId}
+              onCreate={p.onCreate}
+            />
+          )}
         </div>
       ))}
     </div>
@@ -336,6 +382,8 @@ function ListRow({
 type BoardGroup = "section" | "priority" | "label";
 const NO_PRI = "__nopri__";
 const NO_LABEL = "__nolabel__";
+/** 完了タスクをまとめる仮想列/グループ（section_id は保持したまま表示だけ集約）。 */
+const DONE_COL = "__done__";
 
 function BoardView(
   p: CommonViewProps & {
@@ -357,18 +405,30 @@ function BoardView(
   const draggable = isProject;
 
   const drop = (colKey: string) => {
-    if (!dragId || !draggable) return;
-    if (gb === "priority") {
-      p.onPatch(dragId, { priority: colKey === NO_PRI ? null : colKey });
-    } else if (gb === "label") {
-      p.onSetLabels(dragId, colKey === NO_LABEL ? [] : [colKey]);
+    if (!dragId || !draggable) {
+      setDragId(null);
+      setOverCol(null);
+      return;
+    }
+    const dragTask = p.tasks.find((t) => t.id === dragId);
+    if (colKey === DONE_COL) {
+      // 「完了」列にドロップ → 完了にする
+      p.onToggle(dragId, true);
     } else {
-      const col = cols.find((c) => c.key === colKey);
-      if (col) {
-        const sectionId = colKey === NO_SECTION ? null : colKey;
-        const ids = col.tasks.filter((t) => t.id !== dragId).map((t) => t.id);
-        ids.push(dragId);
-        p.onReorder(sectionId, ids);
+      // 完了カードを未完了の列へ戻す → 未完了に戻してから配置
+      if (dragTask?.status === "done") p.onToggle(dragId, false);
+      if (gb === "priority") {
+        p.onPatch(dragId, { priority: colKey === NO_PRI ? null : colKey });
+      } else if (gb === "label") {
+        p.onSetLabels(dragId, colKey === NO_LABEL ? [] : [colKey]);
+      } else {
+        const col = cols.find((c) => c.key === colKey);
+        if (col) {
+          const sectionId = colKey === NO_SECTION ? null : colKey;
+          const ids = col.tasks.filter((t) => t.id !== dragId).map((t) => t.id);
+          ids.push(dragId);
+          p.onReorder(sectionId, ids);
+        }
       }
     }
     setDragId(null);
@@ -445,13 +505,15 @@ function BoardView(
                 />
               ))}
             </div>
-            <QuickAdd
-              compact
-              seed={seedFor(c)}
-              projectId={p.projectId}
-              currentUserId={p.currentUserId}
-              onCreate={p.onCreate}
-            />
+            {!c.isDone && (
+              <QuickAdd
+                compact
+                seed={seedFor(c)}
+                projectId={p.projectId}
+                currentUserId={p.currentUserId}
+                onCreate={p.onCreate}
+              />
+            )}
           </div>
         ))}
       </div>
@@ -851,14 +913,22 @@ interface Group {
   tasks: TaskVM[];
   sectionId?: string | null;
   defaultDue?: string | null;
+  isDone?: boolean;
 }
 
 function groupTasks(tasks: TaskVM[], sections: SectionVM[], mode: "section" | "date", today: string): Group[] {
   if (mode === "section") {
     const cols = boardColumns(tasks, sections, mode, today);
-    return cols.map((c) => ({ key: c.key, title: c.title, dot: c.dot, tasks: c.tasks, sectionId: c.key === NO_SECTION ? null : c.key }));
+    return cols.map((c) => ({
+      key: c.key,
+      title: c.title,
+      dot: c.dot,
+      tasks: c.tasks,
+      sectionId: c.key === NO_SECTION || c.isDone ? null : c.key,
+      isDone: c.isDone,
+    }));
   }
-  return dateGroups(tasks, today).map((g) => ({ key: g.key, title: g.title, dot: g.dot, tasks: g.tasks, defaultDue: g.defaultDue }));
+  return dateGroups(tasks, today).map((g) => ({ key: g.key, title: g.title, dot: g.dot, tasks: g.tasks, defaultDue: g.defaultDue, isDone: g.key === "done" }));
 }
 
 interface Column {
@@ -867,23 +937,34 @@ interface Column {
   dot: string;
   tasks: TaskVM[];
   defaultDue?: string | null;
+  isDone?: boolean;
+}
+
+/** 完了タスクを末尾の「完了」列にまとめる（未完了の各列からは除外）。 */
+function withDoneColumn(cols: Column[], done: TaskVM[]): Column[] {
+  if (done.length > 0) {
+    cols.push({ key: DONE_COL, title: "完了", dot: "bg-emerald-400", tasks: done, isDone: true });
+  }
+  return cols;
 }
 
 function boardColumns(tasks: TaskVM[], sections: SectionVM[], mode: "section" | "date", today: string): Column[] {
   if (mode === "date") {
-    return dateGroups(tasks, today).map((g) => ({ key: g.key, title: g.title, dot: g.dot, tasks: g.tasks, defaultDue: g.defaultDue }));
+    return dateGroups(tasks, today).map((g) => ({ key: g.key, title: g.title, dot: g.dot, tasks: g.tasks, defaultDue: g.defaultDue, isDone: g.key === "done" }));
   }
+  const open = tasks.filter((t) => t.status !== "done");
+  const done = tasks.filter((t) => t.status === "done").sort(sortTasks);
   const cols: Column[] = sections.map((s) => ({
     key: s.id,
     title: s.name,
     dot: "bg-teal-primary",
-    tasks: tasks.filter((t) => t.section_id === s.id).sort(sortTasks),
+    tasks: open.filter((t) => t.section_id === s.id).sort(sortTasks),
   }));
-  const orphan = tasks.filter((t) => !t.section_id).sort(sortTasks);
+  const orphan = open.filter((t) => !t.section_id).sort(sortTasks);
   if (orphan.length > 0 || sections.length === 0) {
     cols.unshift({ key: NO_SECTION, title: "未分類", dot: "bg-slate-300", tasks: orphan });
   }
-  return cols;
+  return withDoneColumn(cols, done);
 }
 
 /** ボードのグルーピング軸に応じた列を返す（進捗/優先度/ラベル）。 */
@@ -897,27 +978,34 @@ function boardCols(
 ): Column[] {
   if (mode === "date" || group === "section") return boardColumns(tasks, sections, mode, today);
 
+  // 完了は各グルーピング軸でも末尾の「完了」列に集約（未完了のみで列を作る）。
+  const open = tasks.filter((t) => t.status !== "done");
+  const done = tasks.filter((t) => t.status === "done").sort(sortTasks);
+
   if (group === "priority") {
     const defs: { key: string; title: string; dot: string; match: (p?: string | null) => boolean }[] = [
       { key: "high", title: "高", dot: "bg-rose-500", match: (p) => p === "high" },
       { key: "middle", title: "中", dot: "bg-accent-orange", match: (p) => p === "middle" || p == null },
       { key: "low", title: "低", dot: "bg-teal-primary", match: (p) => p === "low" },
     ];
-    return defs.map((d) => ({ key: d.key, title: d.title, dot: d.dot, tasks: tasks.filter((t) => d.match(t.priority)).sort(sortTasks) }));
+    return withDoneColumn(
+      defs.map((d) => ({ key: d.key, title: d.title, dot: d.dot, tasks: open.filter((t) => d.match(t.priority)).sort(sortTasks) })),
+      done,
+    );
   }
 
   // label: 代表ラベル（先頭）で1列に配置。
   const used = new Set<string>();
-  for (const t of tasks) if (t.labels && t.labels.length) used.add(t.labels[0]);
+  for (const t of open) if (t.labels && t.labels.length) used.add(t.labels[0]);
   const labels = Array.from(new Set([...Array.from(used), ...extraLabels])).sort((a, b) => a.localeCompare(b, "ja"));
   const cols: Column[] = labels.map((l) => ({
     key: l,
     title: l,
     dot: "bg-violet-500",
-    tasks: tasks.filter((t) => (t.labels?.[0] ?? null) === l).sort(sortTasks),
+    tasks: open.filter((t) => (t.labels?.[0] ?? null) === l).sort(sortTasks),
   }));
-  cols.push({ key: NO_LABEL, title: "ラベルなし", dot: "bg-slate-300", tasks: tasks.filter((t) => !t.labels || t.labels.length === 0).sort(sortTasks) });
-  return cols;
+  cols.push({ key: NO_LABEL, title: "ラベルなし", dot: "bg-slate-300", tasks: open.filter((t) => !t.labels || t.labels.length === 0).sort(sortTasks) });
+  return withDoneColumn(cols, done);
 }
 
 function dateGroups(tasks: TaskVM[], today: string): (Column & { defaultDue: string | null })[] {
