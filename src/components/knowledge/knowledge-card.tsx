@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Trash2, Pencil, Link2, Paperclip, Download, ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Trash2, Pencil, Link2, Paperclip, Download, ExternalLink, X } from "lucide-react";
 import { formatDate, cn } from "@/lib/utils";
 import { deleteKnowledgeAction } from "@/server/actions/knowledge";
 import { KnowledgeEditor } from "@/components/knowledge/knowledge-editor";
@@ -16,6 +16,15 @@ const KIND_META: Record<KnowledgeKind, { label: string; cls: string }> = {
 
 export function KnowledgeCard({ entry }: { entry: KnowledgeEntry }) {
   const [editing, setEditing] = useState(false);
+  const [zoom, setZoom] = useState(false);
+  const isImage = !!entry.attachment_type && entry.attachment_type.startsWith("image/") && !!entry.attachment_url;
+
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") setZoom(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoom]);
 
   if (editing) {
     return (
@@ -72,21 +81,62 @@ export function KnowledgeCard({ entry }: { entry: KnowledgeEntry }) {
         </ul>
       )}
 
-      {/* 添付ファイル */}
+      {/* 添付: 画像はサムネイル(クリックで拡大)、それ以外はダウンロードリンク */}
       {e.attachment_name && (
-        <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-black/[0.06] bg-mist-soft/30 px-3 py-2">
-          <Paperclip size={14} className="text-ink/40 mt-0.5 shrink-0" />
-          <div className="min-w-0">
-            {e.attachment_url ? (
-              <a href={e.attachment_url} target="_blank" rel="noreferrer noopener" download className="text-sm text-teal-deep hover:underline inline-flex items-center gap-1">
-                {e.attachment_name}
-                <Download size={12} className="opacity-70" />
+        isImage ? (
+          <div className="mt-2.5">
+            <button type="button" onClick={() => setZoom(true)} className="block group" title="クリックで拡大">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={e.attachment_url!}
+                alt={e.attachment_note || e.attachment_name || "画像"}
+                className="max-h-44 max-w-[280px] rounded-lg border border-black/[0.08] object-cover group-hover:opacity-90 transition-opacity"
+              />
+            </button>
+            <div className="mt-1 flex items-center gap-2 text-xs text-ink/55">
+              <Paperclip size={12} className="text-ink/40" />
+              <span className="truncate">{e.attachment_note || e.attachment_name}</span>
+              <a href={e.attachment_url!} target="_blank" rel="noreferrer noopener" download className="text-teal-deep hover:underline inline-flex items-center gap-0.5 shrink-0">
+                <Download size={11} /> 保存
               </a>
-            ) : (
-              <span className="text-sm text-ink/70">{e.attachment_name}</span>
-            )}
-            {e.attachment_note && <div className="text-xs text-ink/55 mt-0.5">{e.attachment_note}</div>}
+            </div>
           </div>
+        ) : (
+          <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-black/[0.06] bg-mist-soft/30 px-3 py-2">
+            <Paperclip size={14} className="text-ink/40 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              {e.attachment_url ? (
+                <a href={e.attachment_url} target="_blank" rel="noreferrer noopener" download className="text-sm text-teal-deep hover:underline inline-flex items-center gap-1">
+                  {e.attachment_name}
+                  <Download size={12} className="opacity-70" />
+                </a>
+              ) : (
+                <span className="text-sm text-ink/70">{e.attachment_name}</span>
+              )}
+              {e.attachment_note && <div className="text-xs text-ink/55 mt-0.5">{e.attachment_note}</div>}
+            </div>
+          </div>
+        )
+      )}
+
+      {/* 画像拡大モーダル */}
+      {zoom && isImage && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-ink/70 backdrop-blur-sm p-6"
+          onClick={() => setZoom(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <button type="button" onClick={() => setZoom(false)} className="absolute top-4 right-4 rounded-full bg-white/90 p-2 text-ink/70 hover:text-ink shadow" aria-label="閉じる">
+            <X size={18} />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={e.attachment_url!}
+            alt={e.attachment_note || e.attachment_name || "画像"}
+            onClick={(ev) => ev.stopPropagation()}
+            className="max-h-[90vh] max-w-[92vw] rounded-lg shadow-2xl object-contain"
+          />
         </div>
       )}
 
