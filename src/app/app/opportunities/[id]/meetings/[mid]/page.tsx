@@ -8,6 +8,8 @@ import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { YomiBadge } from "@/components/ui/badges";
 import { updateMeetingAction } from "@/server/actions";
 import { AiSummaryButton } from "@/components/meetings/ai-summary-button";
+import { MeetingRecorder } from "@/components/meetings/meeting-recorder";
+import { listMeetingRecordings } from "@/lib/data/recordings";
 import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { ACTIVITY_TYPE_MAP, canReassignOwner, YOMI_OPTIONS } from "@/lib/constants";
@@ -34,6 +36,7 @@ export default async function MeetingDetailPage({ params, searchParams }: { para
   const recentActivities = opp ? getActivitiesByOpportunity(ws, opp.id).slice(0, 3) : [];
   const members = listMembers(ws).map(({ user }) => user);
   const canReassign = canReassignOwner(ws.ctx.role);
+  const recordings = await listMeetingRecordings(meeting.id);
 
   return (
     <div>
@@ -64,6 +67,17 @@ export default async function MeetingDetailPage({ params, searchParams }: { para
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         {/* 左: 商談メモの入力(商談中はここに書く) */}
         <div className="lg:col-span-2 space-y-5">
+          {/* 録音（ブラウザで録音→夜間に文字起こし・要約） */}
+          <Section title="録音（商談を録音 → 夜間に文字起こし・AI議事録）">
+            <MeetingRecorder
+              meetingId={meeting.id}
+              opportunityId={meeting.opportunity_id}
+              accountId={meeting.account?.id ?? null}
+              defaultTitle={meeting.title}
+              recordings={recordings}
+            />
+          </Section>
+
           <Section title="商談メモ（この画面のまま右の情報を参照できます）" className={entityBorder("meeting")} action={<EditTarget level="meeting" />}>
             <form action={updateMeetingAction} className="space-y-4">
               <input type="hidden" name="id" value={meeting.id} />
