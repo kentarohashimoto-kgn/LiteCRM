@@ -44,6 +44,7 @@ export function CardEditForm({ card }: { card: BusinessCard }) {
     url: card.url ?? "",
     exchanged_on: card.exchanged_on ?? "",
     memo: card.memo ?? "",
+    memo2: card.memo2 ?? "",
   });
 
   const set = (k: keyof CardEditInput, v: string) => setValues((p) => ({ ...p, [k]: v }));
@@ -79,6 +80,15 @@ export function CardEditForm({ card }: { card: BusinessCard }) {
             value={values.memo ?? ""}
             onChange={(e) => set("memo", e.target.value)}
             rows={3}
+            className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="block sm:col-span-2">
+          <span className="block text-[11px] text-ink/50 mb-1">メモ2（会社詳細情報: 事業内容・自社PRなど）</span>
+          <textarea
+            value={values.memo2 ?? ""}
+            onChange={(e) => set("memo2", e.target.value)}
+            rows={5}
             className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm"
           />
         </label>

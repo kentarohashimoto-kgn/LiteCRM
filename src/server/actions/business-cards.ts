@@ -183,6 +183,8 @@ export interface CardEditInput {
   url?: string;
   exchanged_on?: string; // YYYY-MM-DD
   memo?: string;
+  /** メモ2（会社詳細情報） */
+  memo2?: string;
 }
 
 /** 名刺の編集（変更履歴はDBの監査トリガーで自動記録）。 */
@@ -215,6 +217,7 @@ export async function updateBusinessCardAction(input: { cardId: string; fields: 
       url: t(f.url),
       exchanged_on: /^\d{4}-\d{2}-\d{2}$/.test(f.exchanged_on ?? "") ? f.exchanged_on : null,
       memo: t(f.memo) ? (f.memo ?? "").trim().slice(0, 2000) : null,
+      memo2: t(f.memo2) ? (f.memo2 ?? "").trim().slice(0, 4000) : null,
     })
     .eq("id", input.cardId);
   if (error) return { ok: false, error: `保存に失敗しました: ${error.message}` };
