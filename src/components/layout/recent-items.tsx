@@ -7,7 +7,7 @@ import { History } from "lucide-react";
 const KEY = "catorce.recent.v1";
 const MAX = 6;
 
-export interface RecentItem { href: string; label: string; kind: "案件" | "顧客" | "リード"; }
+export interface RecentItem { href: string; label: string; kind: "案件" | "顧客" | "リード" | "名刺"; }
 
 function read(): RecentItem[] {
   try { return JSON.parse(localStorage.getItem(KEY) ?? "[]") as RecentItem[]; } catch { return []; }

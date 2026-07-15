@@ -201,6 +201,10 @@ export interface BusinessCard {
   rank?: string | null;
   memo?: string | null;
   tags: string[];
+  /** アクション優先度（あとで対応する名刺のマークアップ） */
+  priority?: "high" | "medium" | "low" | null;
+  /** 任意タグ（Eight由来のイベントタグ tags とは別管理） */
+  user_tags?: string[];
   source: string;
   account_id?: UUID | null;
   contact_id?: UUID | null;
@@ -208,6 +212,16 @@ export interface BusinessCard {
   matched_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** 名刺の社内コメント。 */
+export interface BusinessCardComment {
+  id: UUID;
+  tenant_id: UUID;
+  card_id: UUID;
+  author_user_id: UUID;
+  body: string;
+  created_at: string;
 }
 
 export interface LeadSource {

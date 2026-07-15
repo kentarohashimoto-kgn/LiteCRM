@@ -2,7 +2,7 @@
  * 名刺情報の参照ヘルパー（RLSスコープ済みのサーバークライアントを使用）。
  */
 import { getSupabaseServer } from "@/lib/supabase/server";
-import type { BusinessCard } from "@/lib/types";
+import type { BusinessCard, BusinessCardComment } from "@/lib/types";
 
 export interface BusinessCardListRow extends BusinessCard {
   accounts: { id: string; name: string } | null;
@@ -20,12 +20,14 @@ export interface CardListFilters {
   address?: string; // 住所(部分一致)
   industry?: string; // 業種(連携先の顧客の業種・部分一致)
   employeeSize?: string; // 従業員数(連携先の顧客・部分一致)
+  priority?: "high" | "medium" | "low" | "none"; // アクション優先度(none=未設定)
+  tag?: string; // 任意タグ(完全一致)
   page: number;
   pageSize: number;
 }
 
 const SELECT_COLS =
-  "id, tenant_id, owner_user_id, company_name, department, title, full_name, email, postal_code, address, tel_company, tel_department, tel_direct, fax, mobile_phone, url, exchanged_on, eight_connected, rank, memo, tags, source, account_id, contact_id, match_type, matched_at, created_at, updated_at, accounts(id, name), contacts(id, name)";
+  "id, tenant_id, owner_user_id, company_name, department, title, full_name, email, postal_code, address, tel_company, tel_department, tel_direct, fax, mobile_phone, url, exchanged_on, eight_connected, rank, memo, tags, priority, user_tags, source, account_id, contact_id, match_type, matched_at, created_at, updated_at, accounts(id, name), contacts(id, name)";
 
 const likePattern = (v: string) => `%${v.trim().replace(/[%_,()]/g, (m) => "\\" + m)}%`;
 
@@ -59,6 +61,9 @@ export async function queryBusinessCards(f: CardListFilters): Promise<{ rows: Bu
   if (f.address?.trim()) q = q.ilike("address", likePattern(f.address));
   if (f.industry?.trim()) q = q.ilike("accounts.industry", likePattern(f.industry));
   if (f.employeeSize?.trim()) q = q.ilike("accounts.employee_size", likePattern(f.employeeSize));
+  if (f.priority === "none") q = q.is("priority", null);
+  else if (f.priority) q = q.eq("priority", f.priority);
+  if (f.tag?.trim()) q = q.contains("user_tags", [f.tag.trim()]);
 
   const from = (f.page - 1) * f.pageSize;
   const { data, count, error } = await q
@@ -95,6 +100,40 @@ export async function getCardStats(): Promise<{ total: number; linked: number; c
     sb.from("business_cards").select("id", { count: "exact", head: true }).not("contact_id", "is", null),
   ]);
   return { total: totalR.count ?? 0, linked: linkedR.count ?? 0, contactLinked: contactR.count ?? 0 };
+}
+
+/** 名刺詳細（連携先の顧客・担当者つき）。 */
+export async function getBusinessCard(id: string): Promise<BusinessCardListRow | null> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.from("business_cards").select(SELECT_COLS).eq("id", id).maybeSingle();
+  return (data as unknown as BusinessCardListRow) ?? null;
+}
+
+/** 名刺のコメント一覧（新しい順）。 */
+export async function getCardComments(cardId: string): Promise<BusinessCardComment[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb
+    .from("business_card_comments")
+    .select("id, tenant_id, card_id, author_user_id, body, created_at")
+    .eq("card_id", cardId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  return (data ?? []) as unknown as BusinessCardComment[];
+}
+
+/** テナント内で使われている任意タグの一覧（頻度順・入力補完用）。 */
+export async function getUserTagOptions(): Promise<string[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb
+    .from("business_cards")
+    .select("user_tags")
+    .not("user_tags", "eq", "{}")
+    .limit(2000);
+  const freq = new Map<string, number>();
+  for (const r of data ?? []) {
+    for (const t of ((r.user_tags as string[]) ?? [])) freq.set(t, (freq.get(t) ?? 0) + 1);
+  }
+  return [...freq.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t).slice(0, 100);
 }
 
 /** 顧客詳細ページ用: この顧客に連携された名刺。 */

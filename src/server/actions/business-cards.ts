@@ -161,3 +161,115 @@ export async function unlinkCardAction(input: { cardId: string }): Promise<{ ok:
   revalidatePath(LIST_PATH);
   return { ok: true };
 }
+
+// =====================================================================
+// 編集・優先度/タグ・コメント（0132）
+// =====================================================================
+
+/** 編集可能なフィールド（スキャン誤り修正）。dedup_key は再取込時の重複防止のため変更しない。 */
+export interface CardEditInput {
+  company_name: string;
+  department?: string;
+  title?: string;
+  full_name: string;
+  email?: string;
+  postal_code?: string;
+  address?: string;
+  tel_company?: string;
+  tel_department?: string;
+  tel_direct?: string;
+  fax?: string;
+  mobile_phone?: string;
+  url?: string;
+  exchanged_on?: string; // YYYY-MM-DD
+  memo?: string;
+}
+
+/** 名刺の編集（変更履歴はDBの監査トリガーで自動記録）。 */
+export async function updateBusinessCardAction(input: { cardId: string; fields: CardEditInput }): Promise<{ ok: boolean; error?: string }> {
+  await requireCtx();
+  const f = input.fields;
+  if (!(f.company_name ?? "").trim() && !(f.full_name ?? "").trim()) {
+    return { ok: false, error: "会社名か氏名のどちらかは必須です" };
+  }
+  const t = (v?: string) => {
+    const s = (v ?? "").trim();
+    return s === "" ? null : s.slice(0, 500);
+  };
+  const sb = getSupabaseServer();
+  const { error } = await sb
+    .from("business_cards")
+    .update({
+      company_name: (f.company_name ?? "").trim().slice(0, 300),
+      department: t(f.department),
+      title: t(f.title),
+      full_name: (f.full_name ?? "").trim().slice(0, 200),
+      email: t(f.email)?.toLowerCase() ?? null,
+      postal_code: t(f.postal_code),
+      address: t(f.address),
+      tel_company: t(f.tel_company),
+      tel_department: t(f.tel_department),
+      tel_direct: t(f.tel_direct),
+      fax: t(f.fax),
+      mobile_phone: t(f.mobile_phone),
+      url: t(f.url),
+      exchanged_on: /^\d{4}-\d{2}-\d{2}$/.test(f.exchanged_on ?? "") ? f.exchanged_on : null,
+      memo: t(f.memo) ? (f.memo ?? "").trim().slice(0, 2000) : null,
+    })
+    .eq("id", input.cardId);
+  if (error) return { ok: false, error: `保存に失敗しました: ${error.message}` };
+  revalidatePath(LIST_PATH);
+  revalidatePath(`${LIST_PATH}/${input.cardId}`);
+  return { ok: true };
+}
+
+/** アクション優先度の設定（null=解除）。一覧・詳細のどちらからでも呼べる。 */
+export async function setCardPriorityAction(input: { cardId: string; priority: "high" | "medium" | "low" | null }): Promise<{ ok: boolean; error?: string }> {
+  await requireCtx();
+  if (input.priority != null && !["high", "medium", "low"].includes(input.priority)) {
+    return { ok: false, error: "不正な優先度です" };
+  }
+  const sb = getSupabaseServer();
+  const { error } = await sb.from("business_cards").update({ priority: input.priority }).eq("id", input.cardId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(LIST_PATH);
+  return { ok: true };
+}
+
+/** 任意タグの更新（配列を丸ごと置き換え）。 */
+export async function updateCardTagsAction(input: { cardId: string; tags: string[] }): Promise<{ ok: boolean; error?: string }> {
+  await requireCtx();
+  const tags = [...new Set((input.tags ?? []).map((t) => t.trim().slice(0, 40)).filter(Boolean))].slice(0, 20);
+  const sb = getSupabaseServer();
+  const { error } = await sb.from("business_cards").update({ user_tags: tags }).eq("id", input.cardId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(LIST_PATH);
+  return { ok: true };
+}
+
+/** コメント投稿。 */
+export async function addCardCommentAction(input: { cardId: string; body: string }): Promise<{ ok: boolean; error?: string }> {
+  const ctx = await requireCtx();
+  const body = (input.body ?? "").trim();
+  if (!body) return { ok: false, error: "コメントが空です" };
+  const sb = getSupabaseServer();
+  const { error } = await sb.from("business_card_comments").insert({
+    tenant_id: ctx.tenantId,
+    card_id: input.cardId,
+    author_user_id: ctx.userId,
+    body: body.slice(0, 2000),
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`${LIST_PATH}/${input.cardId}`);
+  return { ok: true };
+}
+
+/** コメント削除（本人 or owner/admin。RLSでも担保）。 */
+export async function deleteCardCommentAction(input: { commentId: string; cardId: string }): Promise<{ ok: boolean; error?: string }> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { error } = await sb.from("business_card_comments").delete().eq("id", input.commentId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`${LIST_PATH}/${input.cardId}`);
+  return { ok: true };
+}

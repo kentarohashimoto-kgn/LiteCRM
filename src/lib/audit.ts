@@ -76,6 +76,24 @@ const FIELD_LABELS: Record<string, string> = {
   needs: "課題感",
   timing: "導入時期",
   budget_band: "予算",
+  // 名刺
+  full_name: "氏名",
+  department: "部署名",
+  title: "役職",
+  postal_code: "郵便番号",
+  address: "住所",
+  tel_company: "TEL会社",
+  tel_department: "TEL部門",
+  tel_direct: "TEL直通",
+  fax: "Fax",
+  url: "URL",
+  exchanged_on: "名刺交換日",
+  memo: "メモ",
+  priority: "優先度",
+  user_tags: "タグ",
+  contact_id: "担当者連携",
+  match_type: "一致種別",
+  matched_at: "連携日時",
 };
 
 const VALUE_MAPS: Record<string, Record<string, string>> = {
