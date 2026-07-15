@@ -7,6 +7,7 @@ import { queryBusinessCards, getCardStats, getAccountIndustries, type CardListFi
 import { MatchRunButton } from "@/components/business-cards/match-run-button";
 import { CardLinkCell } from "@/components/business-cards/card-link-cell";
 import { CardPrioritySelect } from "@/components/business-cards/card-priority-select";
+import { StickyGrid } from "@/components/ui/sticky-grid";
 
 export const dynamic = "force-dynamic";
 
@@ -196,13 +197,14 @@ export default async function BusinessCardsPage({
         </details>
       </form>
 
-      <div className="card overflow-x-auto">
+      <div className="card">
+        <StickyGrid freeze maxHeight="66vh">
         <table className="w-full text-sm" style={{ minWidth: 1800 }}>
           <thead className="border-b border-black/[0.06]">
             <tr>
+              <th className="th">会社名</th>
               <th className="th whitespace-nowrap">優先度</th>
               <th className="th whitespace-nowrap">名刺交換日</th>
-              <th className="th">会社名</th>
               <th className="th">部署名</th>
               <th className="th">役職</th>
               <th className="th">氏名</th>
@@ -223,11 +225,11 @@ export default async function BusinessCardsPage({
           <tbody className="divide-y divide-black/[0.04]">
             {rows.map((c) => (
               <tr key={c.id} className="row-hover align-top">
-                <td className="td whitespace-nowrap"><CardPrioritySelect cardId={c.id} priority={c.priority ?? null} /></td>
-                <td className="td text-xs text-ink/60 whitespace-nowrap">{c.exchanged_on ?? "—"}</td>
                 <td className="td font-medium max-w-52">
                   <Link href={`/app/business-cards/${c.id}`} className="block truncate text-teal-deep hover:underline" title={c.company_name}>{c.company_name || "—"}</Link>
                 </td>
+                <td className="td whitespace-nowrap"><CardPrioritySelect cardId={c.id} priority={c.priority ?? null} /></td>
+                <td className="td text-xs text-ink/60 whitespace-nowrap">{c.exchanged_on ?? "—"}</td>
                 <td className="td text-xs text-ink/70 max-w-40"><div className="truncate" title={c.department ?? ""}>{c.department || "—"}</div></td>
                 <td className="td text-xs text-ink/70 max-w-40"><div className="truncate" title={c.title ?? ""}>{c.title || "—"}</div></td>
                 <td className="td whitespace-nowrap">
@@ -285,6 +287,7 @@ export default async function BusinessCardsPage({
             )}
           </tbody>
         </table>
+        </StickyGrid>
       </div>
 
       {/* ページング */}

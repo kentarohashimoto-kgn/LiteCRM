@@ -20,6 +20,7 @@ import { YomiBadge, StageBadge } from "@/components/ui/badges";
 import { Avatar } from "@/components/ui/primitives";
 import { formatYen, formatDate, daysSince, cn } from "@/lib/utils";
 import { InlineYomi, InlineAmount, InlineNextDate, type OnEdited } from "./opp-inline";
+import { StickyGrid } from "@/components/ui/sticky-grid";
 
 interface Option { id: string; name: string; }
 type SortKey =
@@ -220,7 +221,7 @@ export function OppPaginatedTable({
     if (!el) return;
     const io = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && hasMore && !loading) load(offsetRef.current, false);
-    }, { rootMargin: "300px" });
+    }, { root: el.closest(".sticky-grid"), rootMargin: "300px" });
     io.observe(el);
     return () => io.disconnect();
   }, [hasMore, loading, load]);
@@ -314,7 +315,8 @@ export function OppPaginatedTable({
         </div>
       )}
 
-      <div className="card overflow-x-auto">
+      <div className="card">
+        <StickyGrid freeze2 maxHeight="66vh">
         <table className="w-full">
           <thead className="border-b border-black/[0.06]">
             <tr>
@@ -387,6 +389,7 @@ export function OppPaginatedTable({
           {loading && <span className="inline-flex items-center gap-2 text-xs text-ink/40"><Loader2 size={14} className="animate-spin" /> 読み込み中…</span>}
           {!loading && !hasMore && rows.length > 0 && <span className="text-[11px] text-ink/30">すべて表示しました</span>}
         </div>
+        </StickyGrid>
       </div>
     </div>
   );

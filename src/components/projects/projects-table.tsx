@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { StickyGrid } from "@/components/ui/sticky-grid";
 
 export interface ProjectRow {
   opportunityId: string;
@@ -89,7 +90,7 @@ export function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
   });
 
   return (
-    <div className="overflow-x-auto">
+    <StickyGrid freeze maxHeight="66vh">
       <table className="w-full text-sm tabular-nums" style={{ minWidth: 920 }}>
         <thead className="text-ink/40 text-xs bg-mist-soft/30">
           <tr>
@@ -167,7 +168,7 @@ export function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
           })}
         </tbody>
       </table>
-    </div>
+    </StickyGrid>
   );
 }
 

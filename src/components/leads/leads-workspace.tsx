@@ -10,6 +10,7 @@ import { setLeadDispositionAction, setLeadCallOwnerAction, setLeadFunnelStageAct
 import { parseDelimited, detectDelim, rowToRawInput, dedupLeads, LEAD_KINDS } from "@/lib/lead-import";
 import { FUNNEL_STAGES, FUNNEL_STAGE_MAP, FUNNEL_MAIN, nextFunnelStage, SQL_CRITERIA, NURTURE_CRITERIA } from "@/lib/lead-funnel";
 import { PromoteLeadButton } from "@/components/leads/promote-button";
+import { StickyGrid } from "@/components/ui/sticky-grid";
 import { cn, formatDateFull } from "@/lib/utils";
 import type { WsListRow, WsQueueRow, WsCompanyRow, WsAnalysisScope, WsAttr, LeadsFilters, CompaniesData, AnalysisData, FunnelData } from "@/lib/data/leads-workspace";
 
@@ -125,7 +126,8 @@ function LeadList({ list, filters, events }: { list: ListData; filters: LeadsFil
         <Sel value={filters.rank ?? ""} onChange={(v) => go({ rank: v, page: 1 })} ph="ランク" opts={["S", "A", "B", "C", "D"].map((x) => ({ id: x, name: x }))} />
         <span className="text-sm text-ink/50 ml-auto">{list.total}件</span>
       </div>
-      <div className="card overflow-x-auto">
+      <div className="card">
+        <StickyGrid freeze maxHeight="66vh">
         <table className="w-full">
           <thead className="border-b border-black/[0.06]">
             <tr>
@@ -176,6 +178,7 @@ function LeadList({ list, filters, events }: { list: ListData; filters: LeadsFil
             {list.rows.length === 0 && <tr><td colSpan={10} className="td text-center text-ink/40 py-8">該当するリードがありません</td></tr>}
           </tbody>
         </table>
+        </StickyGrid>
       </div>
       {pageCount > 1 && (
         <div className="flex items-center justify-center gap-3 text-sm">

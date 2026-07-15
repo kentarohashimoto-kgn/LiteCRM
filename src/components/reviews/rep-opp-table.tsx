@@ -7,6 +7,7 @@ import { YOMI_OPTIONS } from "@/lib/constants";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { saveRepForecastAction } from "@/server/actions/rep-report";
 import { RepOppDrawer } from "@/components/reviews/rep-opp-drawer";
+import { StickyGrid } from "@/components/ui/sticky-grid";
 import type { RepReportOpp } from "@/lib/data/rep-report";
 
 /** 要因の記入を求めるヨミ(受注/定期追い/オチ)。 */
@@ -102,7 +103,8 @@ export function RepOppTable({
   });
 
   return (
-    <div className="overflow-x-auto">
+    <div>
+      <StickyGrid freeze freezeLast maxHeight="64vh">
       <table className="w-full text-sm tabular-nums" style={{ minWidth: 1180 }}>
         <thead>
           <tr>
@@ -201,6 +203,7 @@ export function RepOppTable({
           })}
         </tbody>
       </table>
+      </StickyGrid>
       <p className="mt-2 text-xs text-ink/45">
         既定はヨミの高い順。列見出し（ヨミ／金額／重要度／直近商談）をクリックで並び替え。金額・成約予定は案件情報にそのまま反映されます（Weightedも更新）。
         ヨミもここから変更でき、履歴に自動記録されます（受注・定期追い・オチに変えるときは要因を一言入れてください。成約/失注分析の元データになります）。
