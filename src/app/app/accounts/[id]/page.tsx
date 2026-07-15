@@ -30,7 +30,7 @@ import { getCardsByAccount } from "@/lib/data/business-cards";
 import { CardMiniList } from "@/components/business-cards/card-mini-list";
 import { getTransitionsByAccount, TRANSITION_STATUS_LABEL, FOLLOWUP_STATUS_LABEL } from "@/lib/data/transitions";
 import { STAGES, FORECAST_CATEGORIES, DEAL_PHASES } from "@/lib/constants";
-import { formatYen, sum } from "@/lib/utils";
+import { formatYen, sum, formatDateFull } from "@/lib/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { ContactLine } from "@/components/contacts/contact-line";
 
@@ -99,6 +99,24 @@ export default async function AccountDetailPage({ params, searchParams }: { para
         title: `${o.name}（${formatYen(o.amount)}）`, href: `/app/opportunities/${o.id}`,
       })),
   ];
+
+  // 基本情報: この顧客の流入元・タイミングを案件詳細画面と同様に一目で把握できるようにする。
+  // 顧客自体は流入経路を持たないため、最初に作られた案件(入口)から流入情報を引く。
+  const oppsByCreated = [...opps].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const entryOpp = oppsByCreated[0];
+  const distinctSources = Array.from(
+    new Set(opps.map((o) => o.leadSource?.name).filter((n): n is string => !!n)),
+  );
+  const entryDetail = entryOpp?.source_detail || entryOpp?.campaign?.name || "";
+  // 初回接点日: 案件の初回商談日、なければ商談実績の最古日付
+  const firstMeetingDate =
+    opps.map((o) => o.first_meeting_date).filter((d): d is string => !!d).sort()[0] ??
+    meetings.map((m) => m.meeting_date).filter((d): d is string => !!d).sort()[0] ??
+    null;
+  // 最終商談日: 商談実績の最新日付
+  const meetingDatesSorted = meetings.map((m) => m.meeting_date).filter((d): d is string => !!d).sort();
+  const lastMeetingDate = meetingDatesSorted.length > 0 ? meetingDatesSorted[meetingDatesSorted.length - 1] : null;
+  const accountOwner = ws.usersById.get(account.owner_user_id ?? "");
 
   return (
     <div>
@@ -281,6 +299,18 @@ export default async function AccountDetailPage({ params, searchParams }: { para
         </div>
 
         <div className="space-y-5">
+          {/* 基本情報: 流入元・タイミング(案件詳細画面と同様に、この顧客の入口と時系列が一目で分かる) */}
+          <Section title="基本情報">
+            <dl className="space-y-2.5 text-sm">
+              <Row label="流入経路">{distinctSources.length > 0 ? distinctSources.join("、") : "—"}</Row>
+              <Row label="流入詳細（どの展示会・施策）">{entryDetail || "—"}</Row>
+              <Row label="担当営業">{accountOwner?.name ?? "—"}</Row>
+              <Row label="顧客登録日">{formatDateFull(account.created_at)}</Row>
+              <Row label="初回商談日">{formatDateFull(firstMeetingDate)}</Row>
+              <Row label="最終商談日">{formatDateFull(lastMeetingDate)}</Row>
+            </dl>
+          </Section>
+
           <Section title="担当者">
             {contacts.length === 0 ? (
               <p className="text-sm text-ink/40 py-2">担当者がいません</p>
@@ -338,6 +368,15 @@ export default async function AccountDetailPage({ params, searchParams }: { para
           </form>
         </details>
       </Card>
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-ink/45 text-xs">{label}</dt>
+      <dd className="text-ink/90 text-right">{children}</dd>
     </div>
   );
 }
