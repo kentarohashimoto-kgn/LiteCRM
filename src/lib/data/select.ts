@@ -33,6 +33,8 @@ export interface OppView extends Opportunity {
   leadSource?: LeadSource;
   campaign?: Campaign;
   weighted: number;
+  /** 次回ACの消化状況（case-tasks由来）。'open'=未完了 / 'done'=完了 / null=未設定。案件一覧RPCのみ供給。 */
+  next_action_status?: "open" | "done" | null;
 }
 
 export function getUser(ws: Workspace, id?: string): User | undefined {

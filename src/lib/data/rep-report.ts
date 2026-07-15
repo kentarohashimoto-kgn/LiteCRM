@@ -17,6 +17,9 @@ export type RepReportOpp = {
   amount: number;
   weighted: number;
   nextActionDate: string | null;
+  nextActionText: string | null;
+  /** 次回ACの消化状況（case-tasks由来）。'open'=未完了 / 'done'=完了 / null=未設定。 */
+  nextActionStatus: "open" | "done" | null;
   expectedClose: string | null;
   lastActivityAt: string | null; // 直近活動(≒直近商談日)
   riskLevel: string | null; // 重要度(risk_level)
@@ -149,6 +152,24 @@ export async function getRepReport(ownerId: string, weekStart: string): Promise<
     }
   }
 
+  // 次回ACの消化状況（case-tasks）: 対象案件に紐づく next_action タスクを集計。
+  // オープンなタスクがあれば未完了、無く完了タスクがあれば完了。
+  const naStatusById = new Map<string, "open" | "done">();
+  if (top.length) {
+    const { data: naTasks } = await sb
+      .from("tasks")
+      .select("opportunity_id,status")
+      .eq("origin", "next_action")
+      .in("opportunity_id", top.map((o) => o.id));
+    for (const t of (naTasks ?? []) as { opportunity_id: string | null; status: string | null }[]) {
+      if (!t.opportunity_id) continue;
+      const open = t.status !== "done";
+      const cur = naStatusById.get(t.opportunity_id);
+      if (open) naStatusById.set(t.opportunity_id, "open");
+      else if (cur !== "open") naStatusById.set(t.opportunity_id, "done");
+    }
+  }
+
   const opps: RepReportOpp[] = top.map((o) => {
     const ex = extraById.get(o.id);
     return {
@@ -159,6 +180,8 @@ export async function getRepReport(ownerId: string, weekStart: string): Promise<
       amount: o.amount,
       weighted: o.weighted,
       nextActionDate: o.next_action_date ?? null,
+      nextActionText: o.next_action_text ?? null,
+      nextActionStatus: o.next_action_date ? (naStatusById.get(o.id) ?? "open") : null,
       expectedClose: o.expected_close_date ?? null,
       lastActivityAt: ex?.last ?? null,
       riskLevel: ex?.risk ?? null,

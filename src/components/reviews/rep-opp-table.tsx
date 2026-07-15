@@ -8,6 +8,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { saveRepForecastAction } from "@/server/actions/rep-report";
 import { RepOppDrawer } from "@/components/reviews/rep-opp-drawer";
 import { StickyGrid } from "@/components/ui/sticky-grid";
+import { NextActionStatus } from "@/components/opportunities/next-action-status";
 import type { RepReportOpp } from "@/lib/data/rep-report";
 
 /** 要因の記入を求めるヨミ(受注/定期追い/オチ)。 */
@@ -180,7 +181,21 @@ export function RepOppTable({
                 <td className="td text-right text-ink/60">{formatYen(o.weighted)}</td>
                 <td className="td">{risk ? <span className={cn("pill text-[10px]", risk.cls)}>{risk.label}</span> : <span className="text-ink/25">—</span>}</td>
                 <td className="td text-ink/60">{o.lastActivityAt ? formatDate(o.lastActivityAt) : "—"}</td>
-                <td className="td text-ink/70">{o.nextActionDate ? formatDate(o.nextActionDate) : <span className="text-rose-500">未設定</span>}</td>
+                <td className="td text-ink/70">
+                  {o.nextActionDate ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <span>{formatDate(o.nextActionDate)}</span>
+                        <NextActionStatus status={o.nextActionStatus} date={o.nextActionDate} />
+                      </div>
+                      {o.nextActionText && (
+                        <div className="max-w-[160px] truncate text-[11px] text-ink/50" title={o.nextActionText}>{o.nextActionText}</div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-rose-500">未設定</span>
+                  )}
+                </td>
                 <td className="td">
                   <input type="month" name="expected_close_month" form={fid} defaultValue={o.expectedClose ? o.expectedClose.slice(0, 7) : ""} className="w-[124px] rounded border border-black/10 px-1.5 py-1 text-xs" />
                 </td>

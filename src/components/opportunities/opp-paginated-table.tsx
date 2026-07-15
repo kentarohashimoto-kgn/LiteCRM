@@ -21,6 +21,7 @@ import { Avatar } from "@/components/ui/primitives";
 import { formatYen, formatDate, daysSince, cn } from "@/lib/utils";
 import { InlineYomi, InlineAmount, InlineNextDate, type OnEdited } from "./opp-inline";
 import { StickyGrid } from "@/components/ui/sticky-grid";
+import { NextActionStatus } from "./next-action-status";
 
 interface Option { id: string; name: string; }
 type SortKey =
@@ -373,7 +374,15 @@ export function OppPaginatedTable({
                   </td>
                   <td className="td text-xs whitespace-nowrap">{o.last_meeting_date ? formatDate(o.last_meeting_date) : <span className="text-ink/25">—</span>}</td>
                   <td className="td text-xs">{formatDate(o.expected_close_date)}</td>
-                  <td className="td"><InlineNextDate opp={o} onEdited={applyEdit} /></td>
+                  <td className="td">
+                    <div className="space-y-1">
+                      <InlineNextDate opp={o} onEdited={applyEdit} />
+                      {o.next_action_text && (
+                        <div className="max-w-[180px] truncate text-[11px] text-ink/55" title={o.next_action_text}>{o.next_action_text}</div>
+                      )}
+                      <NextActionStatus status={o.next_action_status} date={o.next_action_date} />
+                    </div>
+                  </td>
                   <td className="td max-w-[220px]">{o.notes ? <span className="block truncate text-xs text-ink/55" title={o.notes}>{o.notes}</span> : <span className="text-ink/25 text-xs">—</span>}</td>
                   <td className="td"><span className={cn("text-xs", since != null && since >= 7 ? "text-rose-500 font-medium" : "text-ink/50")}>{since != null ? `${since}日前` : "—"}</span></td>
                 </tr>
