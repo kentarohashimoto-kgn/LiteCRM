@@ -200,6 +200,8 @@ export interface BusinessCard {
   eight_connected: boolean;
   rank?: string | null;
   memo?: string | null;
+  /** メモ2（会社詳細情報: 交流会名簿の事業内容・自社PRなど） */
+  memo2?: string | null;
   tags: string[];
   /** アクション優先度（あとで対応する名刺のマークアップ） */
   priority?: "high" | "medium" | "low" | null;

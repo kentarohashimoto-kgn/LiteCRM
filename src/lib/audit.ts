@@ -89,6 +89,7 @@ const FIELD_LABELS: Record<string, string> = {
   url: "URL",
   exchanged_on: "名刺交換日",
   memo: "メモ",
+  memo2: "メモ2(会社詳細)",
   priority: "優先度",
   user_tags: "タグ",
   contact_id: "担当者連携",

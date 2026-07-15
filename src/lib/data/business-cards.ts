@@ -27,7 +27,7 @@ export interface CardListFilters {
 }
 
 const SELECT_COLS =
-  "id, tenant_id, owner_user_id, company_name, department, title, full_name, email, postal_code, address, tel_company, tel_department, tel_direct, fax, mobile_phone, url, exchanged_on, eight_connected, rank, memo, tags, priority, user_tags, source, account_id, contact_id, match_type, matched_at, created_at, updated_at, accounts(id, name), contacts(id, name)";
+  "id, tenant_id, owner_user_id, company_name, department, title, full_name, email, postal_code, address, tel_company, tel_department, tel_direct, fax, mobile_phone, url, exchanged_on, eight_connected, rank, memo, memo2, tags, priority, user_tags, source, account_id, contact_id, match_type, matched_at, created_at, updated_at, accounts(id, name), contacts(id, name)";
 
 const likePattern = (v: string) => `%${v.trim().replace(/[%_,()]/g, (m) => "\\" + m)}%`;
 
@@ -47,7 +47,7 @@ export async function queryBusinessCards(f: CardListFilters): Promise<{ rows: Bu
   if (kw) {
     const esc = kw.replace(/[%_,()]/g, (m) => "\\" + m);
     q = q.or(
-      `company_name.ilike.%${esc}%,full_name.ilike.%${esc}%,department.ilike.%${esc}%,title.ilike.%${esc}%,email.ilike.%${esc}%,memo.ilike.%${esc}%`,
+      `company_name.ilike.%${esc}%,full_name.ilike.%${esc}%,department.ilike.%${esc}%,title.ilike.%${esc}%,email.ilike.%${esc}%,memo.ilike.%${esc}%,memo2.ilike.%${esc}%`,
     );
   }
   if (f.link === "linked") q = q.not("account_id", "is", null);
