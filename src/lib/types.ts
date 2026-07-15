@@ -750,6 +750,8 @@ export interface Task {
   labels?: string[];
   /** カード色（COLOR_KEYS のキー）。未設定は既定色。 */
   color?: string | null;
+  /** 参照URL（資料/ドキュメント/関連ページ等の任意リンク）。 */
+  url?: string | null;
 }
 
 /** プロジェクト参照権限（割当メンバー）。管理者のみ割当可能。 */
