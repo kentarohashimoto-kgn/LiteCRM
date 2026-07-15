@@ -14,6 +14,7 @@ import {
   Flag,
   Trash2,
   Link2,
+  ExternalLink,
   Users,
 } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
@@ -389,6 +390,18 @@ function ListRow({
         )}
       </button>
       <PriorityTag p={t.priority} />
+      {t.url && (
+        <a
+          href={t.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-ink/30 hover:text-teal-deep"
+          title="リンクを開く"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ExternalLink size={13} />
+        </a>
+      )}
       {t.opportunity_id && (
         <Link href={`/app/opportunities/${t.opportunity_id}`} className="text-ink/30 hover:text-teal-deep" title="関連案件を開く" onClick={(e) => e.stopPropagation()}>
           <Link2 size={13} />
@@ -617,6 +630,18 @@ function BoardCard({
       <div className="mt-2 flex items-center gap-2">
         <PriorityTag p={t.priority} />
         <DueChip due={t.due_date} today={today} />
+        {t.url && (
+          <a
+            href={t.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-ink/30 hover:text-teal-deep"
+            title="リンクを開く"
+          >
+            <ExternalLink size={13} />
+          </a>
+        )}
         <span className="ml-auto">
           <AvatarMini user={user} size={20} />
         </span>
@@ -808,8 +833,21 @@ function TaskDrawer({
   const done = task.status === "done";
   const [title, setTitle] = useState(task.title);
   useEffect(() => setTitle(task.title), [task.id, task.title]);
+  const [description, setDescription] = useState(task.description ?? "");
+  useEffect(() => setDescription(task.description ?? ""), [task.id, task.description]);
+  const [url, setUrl] = useState(task.url ?? "");
+  useEffect(() => setUrl(task.url ?? ""), [task.id, task.url]);
   const [labelInput, setLabelInput] = useState("");
   const labels = task.labels ?? [];
+
+  const saveDescription = () => {
+    const next = description.trim();
+    if (next !== (task.description ?? "")) onPatch(task.id, { description: next || null });
+  };
+  const saveUrl = () => {
+    const next = url.trim();
+    if (next !== (task.url ?? "")) onPatch(task.id, { url: next || null });
+  };
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal>
@@ -836,6 +874,43 @@ function TaskDrawer({
             onBlur={() => title.trim() && title !== task.title && onPatch(task.id, { title: title.trim() })}
             className={cn("w-full text-lg font-bold text-ink bg-transparent outline-none border-b border-transparent focus:border-teal-primary/40 pb-1", done && "line-through text-ink/40")}
           />
+
+          <Field label="説明">
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onBlur={saveDescription}
+              rows={3}
+              placeholder="このタスクの内容やメモを記入…"
+              className="input py-2 text-sm leading-relaxed resize-y min-h-[64px]"
+            />
+          </Field>
+
+          <Field label="URLリンク">
+            <input
+              type="url"
+              inputMode="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onBlur={saveUrl}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+              placeholder="https://…（資料や関連ページのリンク）"
+              className="input py-1.5 text-sm"
+            />
+            {task.url && (
+              <a
+                href={task.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1.5 inline-flex max-w-full items-center gap-1.5 text-xs text-teal-deep hover:underline"
+              >
+                <ExternalLink size={13} className="shrink-0" />
+                <span className="truncate">{task.url}</span>
+              </a>
+            )}
+          </Field>
 
           <Field label="担当">
             <select

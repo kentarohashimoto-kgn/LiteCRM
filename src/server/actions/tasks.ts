@@ -23,6 +23,16 @@ function n(v: FormDataEntryValue | null): number | null {
   return Number.isFinite(x) ? x : null;
 }
 
+/** 参照URLを正規化する。空文字は null、スキーム省略時は https:// を補う。 */
+function normalizeUrl(v: string | null | undefined): string | null {
+  const t = (v ?? "").trim();
+  if (t === "") return null;
+  if (/^https?:\/\//i.test(t)) return t;
+  // mailto: 等の他スキームはそのまま、ドメイン/パス直書きは https を補う。
+  if (/^[a-z][a-z0-9+.-]*:/i.test(t)) return t;
+  return `https://${t}`;
+}
+
 function touch() {
   // タスク領域はすべて動的描画。まとめて再検証する。
   revalidatePath("/app/tasks", "layout");
@@ -171,6 +181,7 @@ export interface TaskInput {
   start_date?: string | null;
   priority?: string | null;
   description?: string | null;
+  url?: string | null;
   opportunity_id?: string | null;
   account_id?: string | null;
   color?: string | null;
@@ -206,6 +217,7 @@ export async function createProjectTaskAction(input: TaskInput) {
     start_date: input.start_date ?? null,
     priority: input.priority ?? "middle",
     description: input.description ?? null,
+    url: normalizeUrl(input.url),
     opportunity_id: input.opportunity_id ?? null,
     account_id: input.account_id ?? null,
     color: input.color ?? null,
@@ -225,6 +237,7 @@ export async function updateTaskAction(id: string, patch: Partial<TaskInput>) {
   if (patch.start_date !== undefined) p.start_date = patch.start_date;
   if (patch.priority !== undefined) p.priority = patch.priority;
   if (patch.description !== undefined) p.description = patch.description;
+  if (patch.url !== undefined) p.url = normalizeUrl(patch.url);
   if (patch.project_id !== undefined) p.project_id = patch.project_id;
   if (patch.section_id !== undefined) p.section_id = patch.section_id;
   if (patch.color !== undefined) p.color = patch.color;

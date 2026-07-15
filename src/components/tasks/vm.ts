@@ -20,6 +20,10 @@ export interface TaskVM {
   labels?: string[];
   /** カード色（COLOR_KEYS のキー）。未設定は既定（優先度に応じた淡色）。 */
   color?: string | null;
+  /** タスクの説明（自由記述）。 */
+  description?: string | null;
+  /** 参照URL（資料/関連ページ等の任意リンク）。 */
+  url?: string | null;
 }
 
 export interface UserVM {

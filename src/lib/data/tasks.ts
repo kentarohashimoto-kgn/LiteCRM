@@ -77,5 +77,7 @@ export function toTaskVM(
     accountName: acc?.name ?? null,
     labels: t.labels ?? [],
     color: t.color ?? null,
+    description: t.description ?? null,
+    url: t.url ?? null,
   };
 }
