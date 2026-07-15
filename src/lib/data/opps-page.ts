@@ -29,6 +29,7 @@ export interface LeanOppRow {
   next_action_date: string | null;
   next_action_text: string | null;
   next_action_status: "open" | "done" | null;
+  next_action_task_id: string | null;
   notes: string | null;
   last_activity_at: string | null;
   risk_level: string | null;
@@ -72,6 +73,7 @@ export function leanToOppView(r: LeanOppRow): OppView {
     next_action_date: r.next_action_date ?? undefined,
     next_action_text: r.next_action_text ?? undefined,
     next_action_status: r.next_action_status ?? null,
+    next_action_task_id: r.next_action_task_id ?? null,
     notes: r.notes ?? undefined,
     last_activity_at: r.last_activity_at ?? undefined,
     risk_level: (r.risk_level ?? undefined) as OppView["risk_level"],
