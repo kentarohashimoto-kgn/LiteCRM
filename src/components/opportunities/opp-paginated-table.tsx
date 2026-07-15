@@ -22,6 +22,8 @@ import { formatYen, formatDate, daysSince, cn } from "@/lib/utils";
 import { InlineYomi, InlineAmount, InlineNextDate, type OnEdited } from "./opp-inline";
 import { StickyGrid } from "@/components/ui/sticky-grid";
 import { NextActionStatus } from "./next-action-status";
+import { TaskCheckbox } from "@/components/tasks/task-checkbox";
+import { toggleTaskDoneAction } from "@/server/actions/tasks";
 
 interface Option { id: string; name: string; }
 type SortKey =
@@ -235,6 +237,12 @@ export function OppPaginatedTable({
       return merged;
     }));
 
+  // 次回AC（case-tasks）を行から直接 完了/未完了 トグル。楽観更新 + サーバー反映。
+  function toggleNextAction(oppId: string, taskId: string, done: boolean) {
+    setRows((rs) => rs.map((r) => (r.id === oppId ? ({ ...r, next_action_status: done ? "done" : "open" } as OppView) : r)));
+    void toggleTaskDoneAction(taskId, done);
+  }
+
   function toggleSort(key: SortKey) {
     if (sort === key) setAsc((a) => !a);
     else { setSort(key); setAsc(ASC_FIRST.includes(key)); }
@@ -380,7 +388,18 @@ export function OppPaginatedTable({
                       {o.next_action_text && (
                         <div className="max-w-[180px] truncate text-[11px] text-ink/55" title={o.next_action_text}>{o.next_action_text}</div>
                       )}
-                      <NextActionStatus status={o.next_action_status} date={o.next_action_date} />
+                      {o.next_action_status && (
+                        <div className="flex items-center gap-1.5">
+                          {o.next_action_task_id && (
+                            <TaskCheckbox
+                              done={o.next_action_status === "done"}
+                              onToggle={(next) => toggleNextAction(o.id, o.next_action_task_id!, next)}
+                              size={16}
+                            />
+                          )}
+                          <NextActionStatus status={o.next_action_status} date={o.next_action_date} />
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td className="td max-w-[220px]">{o.notes ? <span className="block truncate text-xs text-ink/55" title={o.notes}>{o.notes}</span> : <span className="text-ink/25 text-xs">—</span>}</td>
