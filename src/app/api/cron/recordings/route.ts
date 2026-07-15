@@ -85,15 +85,11 @@ export async function GET(req: Request) {
   const oMap = new Map((oR.data ?? []).map((o: any) => [o.id, o.name])); /* eslint-disable-line @typescript-eslint/no-explicit-any */
   const aMap = new Map((aR.data ?? []).map((x: any) => [x.id, x.name])); /* eslint-disable-line @typescript-eslint/no-explicit-any */
 
+  // 音声DLはアプリ経由のプロキシで配信する（CCR実行環境は supabase.co へ直接到達できないため）。
+  const base = (process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin).replace(/\/$/, "");
   const items = [];
   for (const r of picked) {
-    let audioUrl: string | null = null;
-    try {
-      const { data: signed } = await admin.storage.from(BUCKET).createSignedUrl(r.storage_path, 3600);
-      audioUrl = signed?.signedUrl ?? null;
-    } catch {
-      audioUrl = null;
-    }
+    const audioUrl = `${base}/api/cron/recordings/audio?id=${encodeURIComponent(r.id)}`;
     const m = r.meeting_id ? mMap.get(r.meeting_id) : null;
     items.push({
       id: r.id,
