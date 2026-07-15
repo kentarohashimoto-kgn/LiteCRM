@@ -6,6 +6,7 @@ import { PageHeader, LinkButton, Card } from "@/components/ui/primitives";
 import { queryBusinessCards, getCardStats, getAccountIndustries, type CardListFilters } from "@/lib/data/business-cards";
 import { MatchRunButton } from "@/components/business-cards/match-run-button";
 import { CardLinkCell } from "@/components/business-cards/card-link-cell";
+import { CardPrioritySelect } from "@/components/business-cards/card-priority-select";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export default async function BusinessCardsPage({
 }: {
   searchParams: {
     q?: string; link?: string; page?: string;
-    owner?: string; from?: string; to?: string; title?: string; industry?: string; address?: string; emp?: string;
+    owner?: string; from?: string; to?: string; title?: string; industry?: string; address?: string; emp?: string; pri?: string; tag?: string;
   };
 }) {
   await requireCtx();
@@ -37,6 +38,8 @@ export default async function BusinessCardsPage({
     address: clean(sp.address),
     industry: clean(sp.industry),
     employeeSize: clean(sp.emp),
+    priority: ["high", "medium", "low", "none"].includes(sp.pri ?? "") ? (sp.pri as CardListFilters["priority"]) : undefined,
+    tag: clean(sp.tag),
     page: sp.page ? Math.max(1, parseInt(sp.page, 10) || 1) : 1,
     pageSize: PAGE_SIZE,
   };
@@ -52,7 +55,7 @@ export default async function BusinessCardsPage({
   const exchangers = profiles
     .filter((p) => p.display_name)
     .sort((a, b) => (a.display_name ?? "").localeCompare(b.display_name ?? "", "ja"));
-  const segmentActive = !!(filters.ownerId || filters.from || filters.to || filters.title || filters.address || filters.industry || filters.employeeSize);
+  const segmentActive = !!(filters.ownerId || filters.from || filters.to || filters.title || filters.address || filters.industry || filters.employeeSize || filters.priority || filters.tag);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const qs = (page: number) => {
     const p = new URLSearchParams();
@@ -65,6 +68,8 @@ export default async function BusinessCardsPage({
     if (filters.industry) p.set("industry", filters.industry);
     if (filters.address) p.set("address", filters.address);
     if (filters.employeeSize) p.set("emp", filters.employeeSize);
+    if (filters.priority) p.set("pri", filters.priority);
+    if (filters.tag) p.set("tag", filters.tag);
     if (page > 1) p.set("page", String(page));
     const s = p.toString();
     return s ? `?${s}` : "";
@@ -169,6 +174,20 @@ export default async function BusinessCardsPage({
               <span className="block text-[11px] text-ink/50 mb-1">従業員数（連携先の顧客）</span>
               <input name="emp" defaultValue={filters.employeeSize ?? ""} placeholder="例: 1000 / 100〜300" className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm" />
             </label>
+            <label className="block">
+              <span className="block text-[11px] text-ink/50 mb-1">アクション優先度</span>
+              <select name="pri" defaultValue={filters.priority ?? ""} className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm">
+                <option value="">すべて</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+                <option value="none">未設定</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="block text-[11px] text-ink/50 mb-1">アクションタグ</span>
+              <input name="tag" defaultValue={filters.tag ?? ""} placeholder="例: 要フォロー" className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm" />
+            </label>
           </div>
           <div className="mt-3 flex items-center gap-3">
             <button type="submit" className="btn-primary">この条件でリストアップ</button>
@@ -178,9 +197,10 @@ export default async function BusinessCardsPage({
       </form>
 
       <div className="card overflow-x-auto">
-        <table className="w-full text-sm" style={{ minWidth: 1720 }}>
+        <table className="w-full text-sm" style={{ minWidth: 1800 }}>
           <thead className="border-b border-black/[0.06]">
             <tr>
+              <th className="th whitespace-nowrap">優先度</th>
               <th className="th whitespace-nowrap">名刺交換日</th>
               <th className="th">会社名</th>
               <th className="th">部署名</th>
@@ -203,12 +223,15 @@ export default async function BusinessCardsPage({
           <tbody className="divide-y divide-black/[0.04]">
             {rows.map((c) => (
               <tr key={c.id} className="row-hover align-top">
+                <td className="td whitespace-nowrap"><CardPrioritySelect cardId={c.id} priority={c.priority ?? null} /></td>
                 <td className="td text-xs text-ink/60 whitespace-nowrap">{c.exchanged_on ?? "—"}</td>
-                <td className="td font-medium max-w-52"><div className="truncate" title={c.company_name}>{c.company_name || "—"}</div></td>
+                <td className="td font-medium max-w-52">
+                  <Link href={`/app/business-cards/${c.id}`} className="block truncate text-teal-deep hover:underline" title={c.company_name}>{c.company_name || "—"}</Link>
+                </td>
                 <td className="td text-xs text-ink/70 max-w-40"><div className="truncate" title={c.department ?? ""}>{c.department || "—"}</div></td>
                 <td className="td text-xs text-ink/70 max-w-40"><div className="truncate" title={c.title ?? ""}>{c.title || "—"}</div></td>
                 <td className="td whitespace-nowrap">
-                  {c.full_name || "—"}
+                  <Link href={`/app/business-cards/${c.id}`} className="text-teal-deep hover:underline">{c.full_name || "—"}</Link>
                   {c.rank && <span className="ml-1.5 pill text-[10px]">{c.rank}</span>}
                 </td>
                 <td className="td text-xs text-ink/70 max-w-52"><div className="truncate" title={c.email ?? ""}>{c.email || "—"}</div></td>
@@ -224,8 +247,11 @@ export default async function BusinessCardsPage({
                     <a href={/^https?:\/\//i.test(c.url) ? c.url : `https://${c.url}`} target="_blank" rel="noreferrer noopener" className="text-teal-deep hover:underline block truncate" title={c.url}>{c.url}</a>
                   ) : "—"}
                 </td>
-                <td className="td max-w-40">
+                <td className="td max-w-44">
                   <div className="flex flex-wrap gap-1">
+                    {(c.user_tags ?? []).slice(0, 3).map((t) => (
+                      <Link key={`u-${t}`} href={`/app/business-cards?tag=${encodeURIComponent(t)}`} className="rounded-full bg-accent-orange/10 text-accent-orange border border-accent-orange/20 px-1.5 py-0.5 text-[10px] hover:bg-accent-orange/20" title={`タグ「${t}」で絞り込む`}>{t.length > 12 ? t.slice(0, 12) + "…" : t}</Link>
+                    ))}
                     {c.tags.slice(0, 2).map((t) => (
                       <span key={t} className="pill text-[10px]" title={t}>{t.length > 14 ? t.slice(0, 14) + "…" : t}</span>
                     ))}
@@ -246,7 +272,7 @@ export default async function BusinessCardsPage({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={17} className="td text-center text-ink/40 py-10">
+                <td colSpan={18} className="td text-center text-ink/40 py-10">
                   {stats.total === 0 ? (
                     <span>
                       名刺がありません。<Link href="/app/business-cards/import" className="text-teal-deep hover:underline">Eightのエクスポート（CSV）を取込</Link>んでください。

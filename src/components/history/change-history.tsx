@@ -21,7 +21,7 @@ const KIND_LABEL: Record<string, { label: string; cls: string }> = {
  * B-1 変更履歴: audit_logs から「誰が・いつ・何を・どう変えたか」を時系列表示。
  * 案件/顧客の詳細ページに設置するサーバーコンポーネント。
  */
-export async function ChangeHistory({ table, recordId }: { table: "opportunities" | "accounts" | "leads"; recordId: string }) {
+export async function ChangeHistory({ table, recordId }: { table: "opportunities" | "accounts" | "leads" | "business_cards"; recordId: string }) {
   const sb = getSupabaseServer();
   const { data } = await sb
     .from("audit_logs")
