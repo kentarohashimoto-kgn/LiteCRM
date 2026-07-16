@@ -23,7 +23,7 @@ export interface AttachmentView {
  * C-3 ファイル添付: 対象(案件/顧客)の添付一覧＋署名URL。
  * メタデータの可視性はRLS、実体は非公開バケット(署名URLのみでアクセス)。
  */
-export async function listAttachments(targetType: "opportunity" | "account", targetId: string): Promise<AttachmentView[]> {
+export async function listAttachments(targetType: "opportunity" | "account" | "candidate", targetId: string): Promise<AttachmentView[]> {
   await requireCtx();
   const sb = getSupabaseServer();
   const { data } = await sb
@@ -54,41 +54,43 @@ export async function listAttachments(targetType: "opportunity" | "account", tar
   return rows.map(({ storage_path, ...r }) => ({ ...r, url: urls.get(storage_path) ?? null }));
 }
 
-/** ファイルをアップロードして対象に添付。 */
+/** ファイル(複数可)をアップロードして対象に添付。 */
 export async function uploadAttachmentAction(formData: FormData): Promise<void> {
   const ctx = await requireCtx();
-  const file = formData.get("file") as File | null;
-  const targetType = String(formData.get("target_type")) as "opportunity" | "account";
+  const files = formData.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
+  const targetType = String(formData.get("target_type")) as "opportunity" | "account" | "candidate";
   const targetId = String(formData.get("target_id"));
   const revalidate = String(formData.get("revalidate") || "");
-  if (!file || file.size === 0) return;
-  if (file.size > MAX_SIZE) return; // 10MB超はUI側の注意書きで案内
+  if (files.length === 0) return;
 
   const admin = getSupabaseAdmin();
-  const safeName = file.name.replace(/[\\/]/g, "_").slice(0, 150);
-  const path = `${ctx.tenantId}/${targetType}/${targetId}/${randomUUID()}_${safeName}`;
-  const buf = Buffer.from(await file.arrayBuffer());
-  const { error: upErr } = await admin.storage.from(BUCKET).upload(path, buf, {
-    contentType: file.type || "application/octet-stream",
-    upsert: false,
-  });
-  if (upErr) return;
-
-  // メタデータはユーザー権限で挿入(RLSが編集ロールを担保)
   const sb = getSupabaseServer();
-  const { error: insErr } = await sb.from("attachments").insert({
-    tenant_id: ctx.tenantId,
-    target_type: targetType,
-    target_id: targetId,
-    file_name: safeName,
-    storage_path: path,
-    content_type: file.type || null,
-    size_bytes: file.size,
-    uploaded_by: ctx.userId,
-  });
-  if (insErr) {
-    // メタ挿入に失敗したら実体も掃除
-    await admin.storage.from(BUCKET).remove([path]);
+  for (const file of files) {
+    if (file.size > MAX_SIZE) continue; // 10MB超はUI側の注意書きで案内。他ファイルは続行。
+    const safeName = file.name.replace(/[\\/]/g, "_").slice(0, 150);
+    const path = `${ctx.tenantId}/${targetType}/${targetId}/${randomUUID()}_${safeName}`;
+    const buf = Buffer.from(await file.arrayBuffer());
+    const { error: upErr } = await admin.storage.from(BUCKET).upload(path, buf, {
+      contentType: file.type || "application/octet-stream",
+      upsert: false,
+    });
+    if (upErr) continue;
+
+    // メタデータはユーザー権限で挿入(RLSが編集/HRロールを担保)
+    const { error: insErr } = await sb.from("attachments").insert({
+      tenant_id: ctx.tenantId,
+      target_type: targetType,
+      target_id: targetId,
+      file_name: safeName,
+      storage_path: path,
+      content_type: file.type || null,
+      size_bytes: file.size,
+      uploaded_by: ctx.userId,
+    });
+    if (insErr) {
+      // メタ挿入に失敗したら実体も掃除
+      await admin.storage.from(BUCKET).remove([path]);
+    }
   }
   if (revalidate) revalidatePath(revalidate);
 }
