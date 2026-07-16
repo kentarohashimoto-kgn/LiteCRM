@@ -215,8 +215,9 @@ export async function getRepReport(ownerId: string, weekStart: string): Promise<
     };
   });
 
-  // 月別ヨミモード: 今月〜2ヶ月先の成約計画。担当の読み(rep_close_month)を優先し、
-  // 未設定なら受注見込日(expected_close_date)の月でグルーピングする。
+  // 月別ヨミモード: 今月〜2ヶ月先の成約計画。受注見込日(expected_close_date)の月で
+  // グルーピングする(=サイドパネルの「成約予定(月)」で編集でき、変更が即座に列へ反映される)。
+  // 受注見込日が未設定の場合のみ、担当の読み(rep_close_month)で補完する。
   const planMonths = [0, 1, 2].map((i) => {
     const d = startOfMonth(addMonths(now, i));
     return {
@@ -226,8 +227,8 @@ export async function getRepReport(ownerId: string, weekStart: string): Promise<
     };
   });
   const planKeyOf = (o: RepReportOpp): string | null => {
-    if (o.repCloseMonth && /^\d{4}-\d{2}/.test(o.repCloseMonth)) return o.repCloseMonth.slice(0, 7);
     if (o.expectedClose) return o.expectedClose.slice(0, 7);
+    if (o.repCloseMonth && /^\d{4}-\d{2}/.test(o.repCloseMonth)) return o.repCloseMonth.slice(0, 7);
     return null;
   };
   // ヨミの並び順(受注に近い順)。先頭コードで判定。

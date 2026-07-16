@@ -66,7 +66,7 @@ export function RepOppSection({
           <RepOppTable opps={opps} ownerId={ownerId} weekStart={weekStart} members={members} />
         )
       ) : (
-        <RepMonthlyPlan plan={monthlyPlan} total={planTotal} />
+        <RepMonthlyPlan plan={monthlyPlan} total={planTotal} ownerId={ownerId} members={members} />
       )}
     </Section>
   );
