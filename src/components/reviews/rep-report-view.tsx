@@ -1,11 +1,11 @@
 import { User, Save, Target } from "lucide-react";
-import { Section, StatCard, EmptyState, ProgressBar } from "@/components/ui/primitives";
+import { Section, StatCard, ProgressBar } from "@/components/ui/primitives";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatYen, formatPercent, formatDate } from "@/lib/utils";
 import { saveRepReportAction, saveRepMonthlyTargetAction } from "@/server/actions/rep-report";
 import { RepTrendSummary } from "@/components/reviews/rep-trend-summary";
 import { RepFunnel } from "@/components/reviews/rep-funnel";
-import { RepOppTable } from "@/components/reviews/rep-opp-table";
+import { RepOppSection } from "@/components/reviews/rep-opp-section";
 import type { RepReport } from "@/lib/data/rep-report";
 
 export function RepReportView({ report, weekStart }: { report: RepReport; weekStart: string }) {
@@ -77,14 +77,14 @@ export function RepReportView({ report, weekStart }: { report: RepReport; weekSt
         </div>
       </Section>
 
-      {/* 担当案件リスト(ソート・背景色・1行メモ) */}
-      <Section title={`担当案件（進行中 ${report.opps.length}）`}>
-        {report.opps.length === 0 ? (
-          <EmptyState message="進行中の担当案件がありません。" />
-        ) : (
-          <RepOppTable opps={report.opps} ownerId={report.ownerId} weekStart={weekStart} members={report.members} />
-        )}
-      </Section>
+      {/* 担当案件: 「一覧」/「月別ヨミ(成約計画)」の2モード切替 */}
+      <RepOppSection
+        opps={report.opps}
+        ownerId={report.ownerId}
+        weekStart={weekStart}
+        members={report.members}
+        monthlyPlan={report.monthlyPlan}
+      />
 
       {/* ナラティブ入力(保存時に上部サマリーもスナップショット) */}
       <Section title="週次コメント（型に沿って記入）">

@@ -40,6 +40,27 @@ export type RepNarrative = {
 export type FunnelBucket = { code: string; label: string; count: number; amount: number };
 export type TrendPoint = { label: string; target: number; actual: number };
 
+/** 月別ヨミモード: その月に成約予定の案件1件分。 */
+export type MonthPlanOpp = {
+  id: string;
+  account: string | null;
+  name: string;
+  yomi: string | null;
+  amount: number; // 担当の読み額(rep_amount_forecast)があれば優先、なければ案件金額
+  weighted: number;
+};
+
+/** 月別ヨミモード: 1ヶ月分の成約計画(合計＋対象案件)。 */
+export type MonthPlan = {
+  monthKey: string; // 'YYYY-MM'
+  label: string; // '7月'
+  isCurrent: boolean;
+  total: number; // 売上見込(amount合計)
+  weighted: number; // 重み付き合計
+  count: number;
+  opps: MonthPlanOpp[];
+};
+
 export type RepReport = {
   members: { id: string; name: string }[];
   ownerId: string;
@@ -51,6 +72,8 @@ export type RepReport = {
   trendMonthly: TrendPoint[];
   trendWeekly: TrendPoint[];
   opps: RepReportOpp[];
+  /** 今月〜2ヶ月先の成約計画(月別ヨミモード用)。 */
+  monthlyPlan: MonthPlan[];
   narrative: RepNarrative | null;
 };
 
@@ -192,6 +215,50 @@ export async function getRepReport(ownerId: string, weekStart: string): Promise<
     };
   });
 
+  // 月別ヨミモード: 今月〜2ヶ月先の成約計画。担当の読み(rep_close_month)を優先し、
+  // 未設定なら受注見込日(expected_close_date)の月でグルーピングする。
+  const planMonths = [0, 1, 2].map((i) => {
+    const d = startOfMonth(addMonths(now, i));
+    return {
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      label: `${d.getMonth() + 1}月`,
+      isCurrent: i === 0,
+    };
+  });
+  const planKeyOf = (o: RepReportOpp): string | null => {
+    if (o.repCloseMonth && /^\d{4}-\d{2}/.test(o.repCloseMonth)) return o.repCloseMonth.slice(0, 7);
+    if (o.expectedClose) return o.expectedClose.slice(0, 7);
+    return null;
+  };
+  // ヨミの並び順(受注に近い順)。先頭コードで判定。
+  const yomiRank = (y: string | null): number => {
+    const c = (y ?? "").charAt(0);
+    const n = parseInt(c, 10);
+    return Number.isNaN(n) ? 99 : n;
+  };
+  const monthlyPlan: MonthPlan[] = planMonths.map((pm) => {
+    const rows = opps
+      .filter((o) => planKeyOf(o) === pm.key)
+      .map((o): MonthPlanOpp => ({
+        id: o.id,
+        account: o.account,
+        name: o.name,
+        yomi: o.yomi,
+        amount: o.repAmountForecast ?? o.amount,
+        weighted: o.weighted,
+      }))
+      .sort((a, b) => yomiRank(a.yomi) - yomiRank(b.yomi) || b.amount - a.amount);
+    return {
+      monthKey: pm.key,
+      label: pm.label,
+      isCurrent: pm.isCurrent,
+      total: sum(rows, (r) => r.amount),
+      weighted: sum(rows, (r) => r.weighted),
+      count: rows.length,
+      opps: rows,
+    };
+  });
+
   const { data: nar } = await sb
     .from("weekly_rep_reports")
     .select("last_week_comment,next_week_plan,month_ahead_plan,note")
@@ -218,6 +285,7 @@ export async function getRepReport(ownerId: string, weekStart: string): Promise<
     trendMonthly,
     trendWeekly,
     opps,
+    monthlyPlan,
     narrative: (nar as RepNarrative) ?? null,
   };
 }
