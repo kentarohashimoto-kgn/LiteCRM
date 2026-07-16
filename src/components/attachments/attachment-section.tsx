@@ -21,17 +21,19 @@ export async function AttachmentSection({
   targetType,
   targetId,
   revalidatePath,
+  emptyHint,
 }: {
-  targetType: "opportunity" | "account";
+  targetType: "opportunity" | "account" | "candidate";
   targetId: string;
   revalidatePath: string;
+  emptyHint?: string;
 }) {
   const files = await listAttachments(targetType, targetId);
 
   return (
     <Section title={`添付ファイル（${files.length}）`}>
       {files.length === 0 ? (
-        <p className="text-sm text-ink/40 py-2">提案書・見積・名刺画像などを添付できます（10MBまで）</p>
+        <p className="text-sm text-ink/40 py-2">{emptyHint ?? "提案書・見積・名刺画像などを添付できます"}（10MBまで／複数選択可）</p>
       ) : (
         <ul className="space-y-2 mb-3">
           {files.map((f) => (
@@ -60,7 +62,7 @@ export async function AttachmentSection({
         <input type="hidden" name="target_type" value={targetType} />
         <input type="hidden" name="target_id" value={targetId} />
         <input type="hidden" name="revalidate" value={revalidatePath} />
-        <input type="file" name="file" required className="text-sm text-ink/60 file:mr-2 file:rounded-lg file:border-0 file:bg-teal-light file:px-3 file:py-1.5 file:text-sm file:text-teal-deep file:cursor-pointer" />
+        <input type="file" name="file" multiple required className="text-sm text-ink/60 file:mr-2 file:rounded-lg file:border-0 file:bg-teal-light file:px-3 file:py-1.5 file:text-sm file:text-teal-deep file:cursor-pointer" />
         <button type="submit" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
           <Upload size={14} /> アップロード
         </button>
