@@ -22,8 +22,10 @@ export default async function MyTasksPage({ searchParams }: { searchParams: { vi
   const projectsById = new Map(hub.projects.map((p) => [p.id, p]));
   const members = listMembers(ws).map(({ user }) => ({ id: user.id, name: user.name, avatarColor: user.avatarColor }));
 
+  // サブタスクも自分担当なら表示する（親が他人担当でも自分の作業として見える）
+  const tasksById = new Map(ws.tasks.map((t) => [t.id, t]));
   const filtered = ws.tasks.filter((t) => (scope === "mine" ? t.assigned_to === me : true));
-  const vms = filtered.map((t) => toTaskVM(t, projectsById, ws.accountsById));
+  const vms = filtered.map((t) => toTaskVM(t, projectsById, ws.accountsById, tasksById));
 
   return (
     <div>

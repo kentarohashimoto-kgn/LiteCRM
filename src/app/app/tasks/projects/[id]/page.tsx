@@ -33,7 +33,8 @@ export default async function ProjectDetailPage({
   const projectsById = new Map(hub.projects.map((p) => [p.id, p]));
 
   const tasks = ws.tasks.filter((t) => t.project_id === params.id);
-  const vms = tasks.map((t) => toTaskVM(t, projectsById, ws.accountsById));
+  const tasksById = new Map(tasks.map((t) => [t.id, t]));
+  const vms = tasks.map((t) => toTaskVM(t, projectsById, ws.accountsById, tasksById));
   const done = tasks.filter((t) => t.status === "done").length;
   const total = tasks.length;
 

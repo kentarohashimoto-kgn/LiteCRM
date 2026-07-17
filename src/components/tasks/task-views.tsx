@@ -17,8 +17,11 @@ import {
   Link2,
   ExternalLink,
   Users,
+  Repeat,
+  CornerDownRight,
 } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
+import { recurrenceSummary, type Recurrence, type RecurrenceFreq } from "@/lib/recurrence";
 import { PRIORITY_META, COLOR_KEYS } from "@/lib/constants";
 import { TaskCheckbox } from "./task-checkbox";
 import { TimelineView } from "./timeline-view";
@@ -125,7 +128,10 @@ export function TaskViews(props: Props) {
   const sig = useMemo(
     () =>
       props.initialTasks
-        .map((t) => `${t.id}:${t.status}:${t.section_id}:${t.sort_order}:${t.title}:${t.due_date}:${t.start_date}:${t.assigned_to}:${t.priority}:${t.is_milestone ? 1 : 0}`)
+        .map(
+          (t) =>
+            `${t.id}:${t.status}:${t.section_id}:${t.sort_order}:${t.title}:${t.due_date}:${t.start_date}:${t.assigned_to}:${t.priority}:${t.is_milestone ? 1 : 0}:${t.parent_task_id ?? ""}:${t.recurrence ? recurrenceSummary(t.recurrence) : ""}`,
+        )
         .join("|"),
     [props.initialTasks],
   );
@@ -151,9 +157,10 @@ export function TaskViews(props: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const openTask = tasks.find((t) => t.id === openId) ?? null;
 
-  // 絞り込み: 担当者 + 完了を隠すモード
+  // 絞り込み: 担当者 + 完了を隠すモード + サブタスク表示（プロジェクトのみ）
   const [assignee, setAssignee] = useState<string>("all");
   const [hideDone, setHideDone] = useState(false);
+  const [showSubs, setShowSubs] = useState(false);
 
   // 「完了」セクション（プロジェクトのみ）。完了にしたら自動でここへ移す。
   const doneSectionId = useMemo(
@@ -163,8 +170,9 @@ export function TaskViews(props: Props) {
 
   /* ---- アクション（楽観 + サーバー） ---- */
   const toggle = (id: string, done: boolean) => {
-    // 先行タスクが未完了のまま完了しようとしたら確認（ブロックはしない）
+    let completeSubtasks = false;
     if (done) {
+      // 先行タスクが未完了のまま完了しようとしたら確認（ブロックはしない）
       const openPreds = deps
         .filter((d) => d.successor_task_id === id)
         .map((d) => tasks.find((t) => t.id === d.predecessor_task_id))
@@ -172,16 +180,24 @@ export function TaskViews(props: Props) {
       if (openPreds.length > 0 && !window.confirm(`先行タスクが未完了です（${openPreds.map((t) => t.title).join(" / ")}）。完了にしますか？`)) {
         return;
       }
+      // 未完了サブタスクが残る親の完了は確認し、まとめて完了も選べるようにする
+      const openKids = tasks.filter((t) => t.parent_task_id === id && t.status !== "done");
+      if (openKids.length > 0) {
+        if (!window.confirm(`未完了のサブタスクが${openKids.length}件あります。親タスクを完了にしますか？`)) return;
+        completeSubtasks = window.confirm("未完了のサブタスクもまとめて完了にしますか？");
+      }
     }
     const moveToDone = done && !!doneSectionId;
     setTasks((ts) =>
       ts.map((t) =>
         t.id === id
           ? { ...t, status: done ? "done" : "todo", ...(moveToDone ? { section_id: doneSectionId! } : {}) }
-          : t,
+          : completeSubtasks && t.parent_task_id === id
+            ? { ...t, status: "done" }
+            : t,
       ),
     );
-    startTransition(() => toggleTaskDoneAction(id, done));
+    startTransition(() => toggleTaskDoneAction(id, done, { completeSubtasks }));
     // 完了にしたら「完了」セクションへ自動移動（すでに完了列にいる場合は何もしない）
     if (moveToDone) {
       const cur = tasks.find((t) => t.id === id);
@@ -195,7 +211,9 @@ export function TaskViews(props: Props) {
     startTransition(() => updateTaskAction(id, p));
   };
   const remove = (id: string) => {
-    setTasks((ts) => ts.filter((t) => t.id !== id));
+    const kids = tasks.filter((t) => t.parent_task_id === id);
+    if (kids.length > 0 && !window.confirm(`サブタスク${kids.length}件も一緒に削除されます。削除しますか？`)) return;
+    setTasks((ts) => ts.filter((t) => t.id !== id && t.parent_task_id !== id));
     setOpenId(null);
     startTransition(() => deleteTaskAction(id));
   };
@@ -209,6 +227,7 @@ export function TaskViews(props: Props) {
       assigned_to: input.assigned_to ?? currentUserId,
       section_id: input.section_id ?? null,
       project_id: input.project_id ?? projectId ?? null,
+      parent_task_id: input.parent_task_id ?? null,
       sort_order: 9999,
     };
     setTasks((ts) => [...ts, temp]);
@@ -261,10 +280,29 @@ export function TaskViews(props: Props) {
     if (assignee === UNASSIGNED) return tasks.filter((t) => !t.assigned_to);
     return tasks.filter((t) => t.assigned_to === assignee);
   }, [tasks, assignee]);
-  const visibleTasks = useMemo(
-    () => (hideDone ? assigneeTasks.filter((t) => t.status !== "done") : assigneeTasks),
-    [assigneeTasks, hideDone],
-  );
+  // サブタスク進捗（済n/全m）。楽観状態の tasks 全体から数える。
+  const subCounts = useMemo(() => {
+    const m = new Map<string, { done: number; total: number }>();
+    for (const t of tasks) {
+      if (!t.parent_task_id) continue;
+      const c = m.get(t.parent_task_id) ?? { done: 0, total: 0 };
+      c.total += 1;
+      if (t.status === "done") c.done += 1;
+      m.set(t.parent_task_id, c);
+    }
+    return m;
+  }, [tasks]);
+  const hasSubs = subCounts.size > 0;
+
+  const visibleTasks = useMemo(() => {
+    let ts = hideDone ? assigneeTasks.filter((t) => t.status !== "done") : assigneeTasks;
+    // プロジェクト表示ではサブタスクを既定で畳む（マイタスクでは自分担当分を常に表示）
+    if (groupMode === "section" && !showSubs) ts = ts.filter((t) => !t.parent_task_id);
+    return ts.map((t) => {
+      const c = subCounts.get(t.id);
+      return c ? { ...t, subDone: c.done, subTotal: c.total } : t;
+    });
+  }, [assigneeTasks, hideDone, groupMode, showSubs, subCounts]);
   const openCount = assigneeTasks.filter((t) => t.status !== "done").length;
   const doneCount = assigneeTasks.length - openCount;
 
@@ -315,6 +353,12 @@ export function TaskViews(props: Props) {
             <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} className="accent-teal-primary" />
             完了を隠す
           </label>
+          {groupMode === "section" && hasSubs && (
+            <label className="inline-flex items-center gap-1.5 text-xs text-ink/60 cursor-pointer select-none" title="サブタスクを一覧にも表示します">
+              <input type="checkbox" checked={showSubs} onChange={(e) => setShowSubs(e.target.checked)} className="accent-teal-primary" />
+              サブタスクを表示
+            </label>
+          )}
           <span className="text-xs text-ink/45">
             未完了 <span className="font-bold text-ink/70 tabular-nums">{openCount}</span> 件
             {!hideDone && doneCount > 0 && <span className="ml-1.5 text-ink/35">/ 完了 {doneCount}</span>}
@@ -382,6 +426,8 @@ export function TaskViews(props: Props) {
           onDelete={remove}
           onAddDep={addDep}
           onRemoveDep={removeDep}
+          onCreate={create}
+          onOpen={setOpenId}
         />
       )}
     </div>
@@ -451,8 +497,16 @@ function ListRow({
     <li className={cn("group flex items-center gap-3 px-4 py-2.5 hover:bg-mist-soft/50 transition-colors", cardTint(t.color), done && "animate-row-complete")}>
       <TaskCheckbox done={done} onToggle={(next) => onToggle(t.id, next)} />
       <button type="button" onClick={() => onOpen(t.id)} className="min-w-0 flex-1 text-left">
+        {t.parent_task_id && <CornerDownRight size={12} className="mr-1 inline text-ink/30" />}
         {t.is_milestone && <span className="mr-1.5 inline-block h-2 w-2 rotate-45 bg-amber-500" title="マイルストーン" />}
         <span className={cn("text-sm", done ? "line-through text-ink/35" : "text-ink")}>{t.title}</span>
+        {t.parentTitle && <span className="ml-1.5 text-[10px] text-ink/35">↳ {t.parentTitle}</span>}
+        {t.recurrence && (
+          <span className="ml-1.5 inline-flex" title={recurrenceSummary(t.recurrence)}>
+            <Repeat size={11} className="inline text-teal-deep/60" />
+          </span>
+        )}
+        {t.subTotal ? <span className="ml-1.5 pill bg-mist-soft text-ink/50 text-[10px]">済{t.subDone}/全{t.subTotal}</span> : null}
         {(t.projectName || t.accountName) && (
           <span className="ml-2 text-[11px] text-ink/40">
             {t.projectName && (
@@ -684,6 +738,16 @@ function BoardCard({
             {t.is_milestone && <span className="mr-1.5 inline-block h-2 w-2 rotate-45 bg-amber-500" title="マイルストーン" />}
             {t.title}
           </div>
+          {(t.recurrence || t.subTotal) && (
+            <div className="mt-1 flex items-center gap-2">
+              {t.recurrence && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] text-teal-deep/70">
+                  <Repeat size={10} /> {recurrenceSummary(t.recurrence)}
+                </span>
+              )}
+              {t.subTotal ? <span className="text-[10px] text-ink/45">済{t.subDone}/全{t.subTotal}</span> : null}
+            </div>
+          )}
         </button>
       </div>
       {(t.projectName || t.accountName) && (
@@ -903,6 +967,8 @@ function TaskDrawer({
   onDelete,
   onAddDep,
   onRemoveDep,
+  onCreate,
+  onOpen,
 }: {
   task: TaskVM;
   users: UserVM[];
@@ -916,6 +982,8 @@ function TaskDrawer({
   onDelete: (id: string) => void;
   onAddDep: (predecessorId: string, successorId: string) => void;
   onRemoveDep: (id: string) => void;
+  onCreate: (input: TaskInput) => void;
+  onOpen: (id: string) => void;
 }) {
   const done = task.status === "done";
   const [title, setTitle] = useState(task.title);
@@ -1050,6 +1118,13 @@ function TaskDrawer({
             </button>
           </Field>
 
+          <RecurrenceEditor task={task} onPatch={onPatch} />
+
+          {/* サブタスクは1階層のみ。自身がサブタスクの場合は出さない。 */}
+          {!task.parent_task_id && (
+            <SubtaskEditor task={task} allTasks={allTasks} onCreate={onCreate} onToggle={onToggle} onOpen={onOpen} />
+          )}
+
           {task.project_id && (
             <DependencyEditor task={task} allTasks={allTasks} deps={deps} onAddDep={onAddDep} onRemoveDep={onRemoveDep} />
           )}
@@ -1154,6 +1229,213 @@ function TaskDrawer({
         </div>
       </div>
     </div>
+  );
+}
+
+/** サブタスクの編集（F-202）。チェックリスト形式でインライン追加・完了・削除。1階層のみ。 */
+function SubtaskEditor({
+  task,
+  allTasks,
+  onCreate,
+  onToggle,
+  onOpen,
+}: {
+  task: TaskVM;
+  allTasks: TaskVM[];
+  onCreate: (input: TaskInput) => void;
+  onToggle: (id: string, done: boolean) => void;
+  onOpen: (id: string) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const subs = allTasks.filter((t) => t.parent_task_id === task.id).sort(sortTasks);
+  const doneN = subs.filter((t) => t.status === "done").length;
+
+  const add = () => {
+    const t = title.trim();
+    if (!t) return;
+    onCreate({
+      title: t,
+      parent_task_id: task.id,
+      project_id: task.project_id ?? null,
+      section_id: task.section_id ?? null,
+      assigned_to: task.assigned_to ?? null,
+      priority: "middle",
+    });
+    setTitle("");
+  };
+
+  return (
+    <Field label={`サブタスク${subs.length ? `（済${doneN}/全${subs.length}）` : ""}`}>
+      <ul className="space-y-1">
+        {subs.map((s) => {
+          const d = s.status === "done";
+          return (
+            <li key={s.id} className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-mist-soft/50">
+              <TaskCheckbox done={d} onToggle={(next) => onToggle(s.id, next)} size={16} />
+              <button type="button" onClick={() => onOpen(s.id)} className={cn("min-w-0 flex-1 truncate text-left text-xs", d ? "line-through text-ink/35" : "text-ink/80")}>
+                {s.title}
+              </button>
+              {s.due_date && <span className="text-[10px] text-ink/35 tabular-nums whitespace-nowrap">{s.due_date.slice(5)}</span>}
+            </li>
+          );
+        })}
+      </ul>
+      <div className="mt-1 flex items-center gap-1.5">
+        <Plus size={14} className="text-ink/30" />
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          onBlur={add}
+          placeholder="サブタスクを追加し Enter"
+          className="input py-1 text-xs"
+        />
+      </div>
+    </Field>
+  );
+}
+
+const FREQ_LABEL: Record<RecurrenceFreq, string> = { daily: "毎日", weekly: "毎週", monthly: "毎月", yearly: "毎年" };
+const DOW = ["日", "月", "火", "水", "木", "金", "土"];
+
+/** 繰り返しルールの編集（F-202）。完了時に次回タスクを生成する（Asana方式）。 */
+function RecurrenceEditor({ task, onPatch }: { task: TaskVM; onPatch: (id: string, p: Partial<TaskInput>) => void }) {
+  const r = task.recurrence ?? null;
+  const set = (next: Recurrence | null) => onPatch(task.id, { recurrence: next });
+  const update = (patch: Partial<Recurrence>) => set({ ...(r ?? { freq: "weekly" }), ...patch } as Recurrence);
+
+  if (!r) {
+    return (
+      <Field label="繰り返し">
+        <button
+          type="button"
+          onClick={() => set({ freq: "weekly", interval: 1, weekdays: task.due_date ? [new Date(task.due_date + "T00:00:00").getDay()] : [1] })}
+          className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-2.5 py-1.5 text-xs font-semibold text-ink/50 hover:bg-mist-soft"
+        >
+          <Repeat size={12} /> 繰り返しを設定
+        </button>
+        {!task.due_date && <p className="mt-1 text-[10px] text-ink/40">※ 繰り返しの生成には期日が必要です</p>}
+      </Field>
+    );
+  }
+
+  const weekdays = r.weekdays ?? [];
+  const toggleWd = (d: number) => update({ weekdays: weekdays.includes(d) ? weekdays.filter((x) => x !== d) : [...weekdays, d].sort() });
+
+  return (
+    <Field label="繰り返し">
+      <div className="rounded-xl border border-teal-primary/30 bg-teal-light/20 p-2.5 space-y-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-ink/50">間隔</span>
+          <input
+            type="number"
+            min={1}
+            value={r.interval ?? 1}
+            onChange={(e) => update({ interval: Math.max(1, Number(e.target.value) || 1) })}
+            className="w-14 rounded-md border border-black/10 px-1.5 py-1 text-xs"
+          />
+          <select value={r.freq} onChange={(e) => update({ freq: e.target.value as RecurrenceFreq })} className="rounded-md border border-black/10 px-1.5 py-1 text-xs">
+            {(["daily", "weekly", "monthly", "yearly"] as RecurrenceFreq[]).map((f) => (
+              <option key={f} value={f}>
+                {FREQ_LABEL[f]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {r.freq === "daily" && (
+          <label className="flex items-center gap-1.5 text-xs text-ink/60">
+            <input type="checkbox" checked={!!r.weekdaysOnly} onChange={(e) => update({ weekdaysOnly: e.target.checked })} className="accent-teal-primary" />
+            平日のみ（土日をスキップ）
+          </label>
+        )}
+
+        {r.freq === "weekly" && (
+          <div className="flex gap-1">
+            {DOW.map((label, d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => toggleWd(d)}
+                className={cn("h-6 w-6 rounded-md text-[11px] font-semibold", weekdays.includes(d) ? "bg-teal-primary text-white" : "bg-white text-ink/50 border border-black/10")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {r.freq === "monthly" && (
+          <div className="space-y-1.5">
+            <select value={r.monthlyMode ?? "day"} onChange={(e) => update({ monthlyMode: e.target.value as Recurrence["monthlyMode"] })} className="w-full rounded-md border border-black/10 px-1.5 py-1 text-xs">
+              <option value="day">日付で指定（毎月○日）</option>
+              <option value="nth">曜日で指定（第○×曜）</option>
+              <option value="last">月末</option>
+            </select>
+            {(r.monthlyMode ?? "day") === "day" && (
+              <div className="flex items-center gap-1.5 text-xs text-ink/60">
+                毎月
+                <input type="number" min={1} max={31} value={r.monthDay ?? (task.due_date ? new Date(task.due_date + "T00:00:00").getDate() : 1)} onChange={(e) => update({ monthDay: Math.min(31, Math.max(1, Number(e.target.value) || 1)) })} className="w-14 rounded-md border border-black/10 px-1.5 py-1 text-xs" />
+                日
+              </div>
+            )}
+            {r.monthlyMode === "nth" && (
+              <div className="flex items-center gap-1.5 text-xs text-ink/60">
+                第
+                <select value={r.nth ?? 1} onChange={(e) => update({ nth: Number(e.target.value) })} className="rounded-md border border-black/10 px-1.5 py-1 text-xs">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+                <select value={r.nthWeekday ?? 1} onChange={(e) => update({ nthWeekday: Number(e.target.value) })} className="rounded-md border border-black/10 px-1.5 py-1 text-xs">
+                  {DOW.map((label, d) => (
+                    <option key={d} value={d}>{label}</option>
+                  ))}
+                </select>
+                曜
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center gap-1.5 text-xs text-ink/60">
+          <span className="text-[10px] text-ink/50">終了</span>
+          <select
+            value={r.ends?.kind ?? "none"}
+            onChange={(e) => {
+              const k = e.target.value;
+              update({ ends: k === "on_date" ? { kind: "on_date", date: task.due_date ?? "" } : k === "count" ? { kind: "count", value: 10 } : { kind: "none" } });
+            }}
+            className="rounded-md border border-black/10 px-1.5 py-1 text-xs"
+          >
+            <option value="none">なし</option>
+            <option value="on_date">指定日まで</option>
+            <option value="count">回数</option>
+          </select>
+          {r.ends?.kind === "on_date" && (
+            <input type="date" value={r.ends.date} onChange={(e) => update({ ends: { kind: "on_date", date: e.target.value } })} className="rounded-md border border-black/10 px-1.5 py-1 text-xs" />
+          )}
+          {r.ends?.kind === "count" && (
+            <>
+              <input type="number" min={1} value={r.ends.value} onChange={(e) => update({ ends: { kind: "count", value: Math.max(1, Number(e.target.value) || 1), done: r.ends?.kind === "count" ? r.ends.done : undefined } })} className="w-14 rounded-md border border-black/10 px-1.5 py-1 text-xs" />
+              回
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-[11px] font-semibold text-teal-deep">{recurrenceSummary(r)}</span>
+          <button type="button" onClick={() => set(null)} className="text-[11px] text-rose-500 hover:text-rose-600">
+            解除
+          </button>
+        </div>
+      </div>
+    </Field>
   );
 }
 

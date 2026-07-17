@@ -57,6 +57,7 @@ export function toTaskVM(
   t: Task,
   projectsById: Map<string, TaskProject>,
   accountsById: Map<string, Account>,
+  tasksById?: Map<string, Task>,
 ): TaskVM {
   const proj = t.project_id ? projectsById.get(t.project_id) : undefined;
   const acc = t.account_id ? accountsById.get(t.account_id) : undefined;
@@ -80,5 +81,8 @@ export function toTaskVM(
     description: t.description ?? null,
     url: t.url ?? null,
     is_milestone: t.is_milestone ?? false,
+    parent_task_id: t.parent_task_id ?? null,
+    parentTitle: t.parent_task_id ? (tasksById?.get(t.parent_task_id)?.title ?? null) : null,
+    recurrence: t.recurrence ?? null,
   };
 }

@@ -754,6 +754,12 @@ export interface Task {
   url?: string | null;
   /** マイルストーン（期日の一点イベント。タイムラインで◆表示）。 */
   is_milestone?: boolean;
+  /** サブタスクの親（1階層のみ）。 */
+  parent_task_id?: UUID | null;
+  /** 繰り返しルール（jsonb）。null=繰り返しなし。 */
+  recurrence?: import("./recurrence").Recurrence | null;
+  /** 繰り返し系列の起点タスク。 */
+  recurrence_source_id?: UUID | null;
 }
 
 /** タスク依存関係（先行→後続。v1はFS型のみ・同一プロジェクト内）。 */
