@@ -185,6 +185,7 @@ export interface TaskInput {
   opportunity_id?: string | null;
   account_id?: string | null;
   color?: string | null;
+  is_milestone?: boolean;
 }
 
 /** 優先度→並び順の帯（high=0/middle=1/low=2 を10万刻み。既定で高優先が上）。 */
@@ -241,6 +242,7 @@ export async function updateTaskAction(id: string, patch: Partial<TaskInput>) {
   if (patch.project_id !== undefined) p.project_id = patch.project_id;
   if (patch.section_id !== undefined) p.section_id = patch.section_id;
   if (patch.color !== undefined) p.color = patch.color;
+  if (patch.is_milestone !== undefined) p.is_milestone = !!patch.is_milestone;
   if (Object.keys(p).length === 0) return;
   await sb.from("tasks").update(p).eq("id", id);
   touch();
@@ -294,6 +296,38 @@ export async function setTaskLabelsAction(id: string, labels: string[]) {
   const sb = getSupabaseServer();
   const clean = Array.from(new Set(labels.map((l) => l.trim()).filter(Boolean))).slice(0, 20);
   await sb.from("tasks").update({ labels: clean }).eq("id", id);
+  touch();
+}
+
+/* ==================== 依存関係（F-201 タイムライン） ==================== */
+
+/**
+ * 先行→後続の依存を追加する。同一プロジェクト検証と循環検出はRPC側で行う
+ * （invoker権限のためRLS準拠）。エラー文言はそのままUIに表示できる日本語。
+ */
+export async function addTaskDependencyAction(
+  predecessorId: string,
+  successorId: string,
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { data, error } = await sb.rpc("add_task_dependency", {
+    p_predecessor: predecessorId,
+    p_successor: successorId,
+  });
+  if (error) {
+    // Postgres例外の "P0001: メッセージ" からメッセージ部のみ取り出す
+    const msg = error.message.replace(/^[A-Z0-9]+:\s*/, "");
+    return { ok: false, error: msg };
+  }
+  touch();
+  return { ok: true, id: (data as string | null) ?? undefined };
+}
+
+export async function removeTaskDependencyAction(id: string) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("task_dependencies").delete().eq("id", id);
   touch();
 }
 

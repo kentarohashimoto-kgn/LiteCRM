@@ -7,6 +7,7 @@ import {
   List,
   LayoutGrid,
   CalendarDays,
+  GanttChart,
   Plus,
   ChevronLeft,
   ChevronRight,
@@ -20,7 +21,8 @@ import {
 import { cn, initials } from "@/lib/utils";
 import { PRIORITY_META, COLOR_KEYS } from "@/lib/constants";
 import { TaskCheckbox } from "./task-checkbox";
-import { NO_SECTION, isOverdue, relDue, sortTasks, type SectionVM, type TaskVM, type UserVM } from "./vm";
+import { TimelineView } from "./timeline-view";
+import { NO_SECTION, isOverdue, relDue, sortTasks, type DepVM, type SectionVM, type TaskVM, type UserVM } from "./vm";
 import {
   toggleTaskDoneAction,
   reorderTasksAction,
@@ -28,10 +30,12 @@ import {
   updateTaskAction,
   deleteTaskAction,
   setTaskLabelsAction,
+  addTaskDependencyAction,
+  removeTaskDependencyAction,
   type TaskInput,
 } from "@/server/actions/tasks";
 
-type ViewKind = "list" | "board" | "calendar";
+type ViewKind = "list" | "board" | "calendar" | "timeline";
 
 /** 担当者フィルタ: 未割り当てを表す番兵。 */
 const UNASSIGNED = "__unassigned__";
@@ -46,10 +50,12 @@ interface Props {
   groupMode: "section" | "date";
   projectId?: string;
   currentUserId: string;
-  /** 表示できるビュー。省略時は全ビュー。 */
+  /** 表示できるビュー。省略時は list/board/calendar（タイムラインはプロジェクトのみ）。 */
   allowViews?: ViewKind[];
   /** 担当者フィルタの選択肢（省略時は users 全員）。プロジェクトでは参照メンバーのみを渡す。 */
   filterMembers?: UserVM[];
+  /** 依存関係（F-201）。タイムラインを許可するプロジェクトで渡す。 */
+  deps?: DepVM[];
 }
 
 /* ---------- 小物 ---------- */
@@ -119,7 +125,7 @@ export function TaskViews(props: Props) {
   const sig = useMemo(
     () =>
       props.initialTasks
-        .map((t) => `${t.id}:${t.status}:${t.section_id}:${t.sort_order}:${t.title}:${t.due_date}:${t.assigned_to}:${t.priority}`)
+        .map((t) => `${t.id}:${t.status}:${t.section_id}:${t.sort_order}:${t.title}:${t.due_date}:${t.start_date}:${t.assigned_to}:${t.priority}:${t.is_milestone ? 1 : 0}`)
         .join("|"),
     [props.initialTasks],
   );
@@ -130,6 +136,17 @@ export function TaskViews(props: Props) {
       setTasks(props.initialTasks);
     }
   }, [sig, props.initialTasks]);
+
+  // 依存関係（F-201）。楽観状態。サーバーデータが変わったら同期する。
+  const [deps, setDeps] = useState<DepVM[]>(props.deps ?? []);
+  const depSig = useMemo(() => (props.deps ?? []).map((d) => d.id).join("|"), [props.deps]);
+  const lastDepSig = useRef(depSig);
+  useEffect(() => {
+    if (lastDepSig.current !== depSig) {
+      lastDepSig.current = depSig;
+      setDeps(props.deps ?? []);
+    }
+  }, [depSig, props.deps]);
 
   const [openId, setOpenId] = useState<string | null>(null);
   const openTask = tasks.find((t) => t.id === openId) ?? null;
@@ -146,6 +163,16 @@ export function TaskViews(props: Props) {
 
   /* ---- アクション（楽観 + サーバー） ---- */
   const toggle = (id: string, done: boolean) => {
+    // 先行タスクが未完了のまま完了しようとしたら確認（ブロックはしない）
+    if (done) {
+      const openPreds = deps
+        .filter((d) => d.successor_task_id === id)
+        .map((d) => tasks.find((t) => t.id === d.predecessor_task_id))
+        .filter((t): t is TaskVM => !!t && t.status !== "done");
+      if (openPreds.length > 0 && !window.confirm(`先行タスクが未完了です（${openPreds.map((t) => t.title).join(" / ")}）。完了にしますか？`)) {
+        return;
+      }
+    }
     const moveToDone = done && !!doneSectionId;
     setTasks((ts) =>
       ts.map((t) =>
@@ -200,6 +227,23 @@ export function TaskViews(props: Props) {
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, labels } : t)));
     startTransition(() => setTaskLabelsAction(id, labels));
   };
+  const addDep = (predecessorId: string, successorId: string) => {
+    if (deps.some((d) => d.predecessor_task_id === predecessorId && d.successor_task_id === successorId)) return;
+    const temp: DepVM = { id: `temp-${predecessorId}-${successorId}`, predecessor_task_id: predecessorId, successor_task_id: successorId };
+    setDeps((ds) => [...ds, temp]);
+    void addTaskDependencyAction(predecessorId, successorId).then((res) => {
+      if (!res.ok) {
+        setDeps((ds) => ds.filter((d) => d.id !== temp.id));
+        window.alert(res.error ?? "依存関係を追加できませんでした");
+      } else if (res.id) {
+        setDeps((ds) => ds.map((d) => (d.id === temp.id ? { ...d, id: res.id! } : d)));
+      }
+    });
+  };
+  const removeDep = (id: string) => {
+    setDeps((ds) => ds.filter((d) => d.id !== id));
+    startTransition(() => removeTaskDependencyAction(id));
+  };
 
   const setView = (v: ViewKind) => {
     const p = new URLSearchParams(params.toString());
@@ -241,6 +285,11 @@ export function TaskViews(props: Props) {
           {allow.includes("calendar") && (
             <button type="button" onClick={() => setView("calendar")} className={cn("seg", props.view === "calendar" ? "seg-on" : "seg-off")}>
               <CalendarDays size={15} /> カレンダー
+            </button>
+          )}
+          {allow.includes("timeline") && (
+            <button type="button" onClick={() => setView("timeline")} className={cn("seg", props.view === "timeline" ? "seg-on" : "seg-off")}>
+              <GanttChart size={15} /> タイムライン
             </button>
           )}
         </div>
@@ -291,6 +340,19 @@ export function TaskViews(props: Props) {
         />
       ) : props.view === "calendar" ? (
         <CalendarView tasks={visibleTasks} today={today} usersById={usersById} onToggle={toggle} onOpen={setOpenId} onCreate={create} projectId={projectId} currentUserId={currentUserId} />
+      ) : props.view === "timeline" && allow.includes("timeline") ? (
+        <TimelineView
+          tasks={visibleTasks}
+          sections={sections}
+          deps={deps}
+          today={today}
+          usersById={usersById}
+          onToggle={toggle}
+          onOpen={setOpenId}
+          onPatch={patch}
+          onAddDep={addDep}
+          onRemoveDep={removeDep}
+        />
       ) : (
         <ListView
           tasks={visibleTasks}
@@ -307,7 +369,20 @@ export function TaskViews(props: Props) {
       )}
 
       {openTask && (
-        <TaskDrawer task={openTask} users={users} today={today} onClose={() => setOpenId(null)} onPatch={patch} onSetLabels={setLabels} onToggle={toggle} onDelete={remove} />
+        <TaskDrawer
+          task={openTask}
+          users={users}
+          today={today}
+          allTasks={tasks}
+          deps={deps}
+          onClose={() => setOpenId(null)}
+          onPatch={patch}
+          onSetLabels={setLabels}
+          onToggle={toggle}
+          onDelete={remove}
+          onAddDep={addDep}
+          onRemoveDep={removeDep}
+        />
       )}
     </div>
   );
@@ -376,6 +451,7 @@ function ListRow({
     <li className={cn("group flex items-center gap-3 px-4 py-2.5 hover:bg-mist-soft/50 transition-colors", cardTint(t.color), done && "animate-row-complete")}>
       <TaskCheckbox done={done} onToggle={(next) => onToggle(t.id, next)} />
       <button type="button" onClick={() => onOpen(t.id)} className="min-w-0 flex-1 text-left">
+        {t.is_milestone && <span className="mr-1.5 inline-block h-2 w-2 rotate-45 bg-amber-500" title="マイルストーン" />}
         <span className={cn("text-sm", done ? "line-through text-ink/35" : "text-ink")}>{t.title}</span>
         {(t.projectName || t.accountName) && (
           <span className="ml-2 text-[11px] text-ink/40">
@@ -604,7 +680,10 @@ function BoardCard({
       <div className="flex items-start gap-2">
         <TaskCheckbox done={done} onToggle={(next) => onToggle(t.id, next)} size={18} />
         <button type="button" onClick={() => onOpen(t.id)} className="min-w-0 flex-1 text-left">
-          <div className={cn("text-[13px] leading-snug", done ? "line-through text-ink/35" : "text-ink")}>{t.title}</div>
+          <div className={cn("text-[13px] leading-snug", done ? "line-through text-ink/35" : "text-ink")}>
+            {t.is_milestone && <span className="mr-1.5 inline-block h-2 w-2 rotate-45 bg-amber-500" title="マイルストーン" />}
+            {t.title}
+          </div>
         </button>
       </div>
       {(t.projectName || t.accountName) && (
@@ -721,7 +800,7 @@ function CalendarView(p: Omit<CommonViewProps, "sections" | "groupMode">) {
                       )}
                       title={t.title}
                     >
-                      {t.title}
+                      {t.is_milestone ? `◆ ${t.title}` : t.title}
                     </button>
                   );
                 })}
@@ -815,20 +894,28 @@ function TaskDrawer({
   task,
   users,
   today,
+  allTasks,
+  deps,
   onClose,
   onPatch,
   onSetLabels,
   onToggle,
   onDelete,
+  onAddDep,
+  onRemoveDep,
 }: {
   task: TaskVM;
   users: UserVM[];
   today: string;
+  allTasks: TaskVM[];
+  deps: DepVM[];
   onClose: () => void;
   onPatch: (id: string, p: Partial<TaskInput>) => void;
   onSetLabels: (id: string, labels: string[]) => void;
   onToggle: (id: string, done: boolean) => void;
   onDelete: (id: string) => void;
+  onAddDep: (predecessorId: string, successorId: string) => void;
+  onRemoveDep: (id: string) => void;
 }) {
   const done = task.status === "done";
   const [title, setTitle] = useState(task.title);
@@ -929,12 +1016,43 @@ function TaskDrawer({
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="開始日">
-              <input type="date" value={task.start_date ?? ""} onChange={(e) => onPatch(task.id, { start_date: e.target.value || null })} className="input py-1.5" />
+              <input
+                type="date"
+                value={task.start_date ?? ""}
+                disabled={!!task.is_milestone}
+                onChange={(e) => onPatch(task.id, { start_date: e.target.value || null })}
+                className="input py-1.5 disabled:opacity-40"
+              />
             </Field>
             <Field label="期日">
               <input type="date" value={task.due_date ?? ""} onChange={(e) => onPatch(task.id, { due_date: e.target.value || null })} className="input py-1.5" />
             </Field>
           </div>
+
+          <Field label="マイルストーン">
+            <button
+              type="button"
+              onClick={() =>
+                onPatch(
+                  task.id,
+                  task.is_milestone
+                    ? { is_milestone: false }
+                    : { is_milestone: true, start_date: null, due_date: task.due_date ?? today },
+                )
+              }
+              className={cn(
+                "inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                task.is_milestone ? "border-amber-400 bg-amber-50 text-amber-700" : "border-black/10 text-ink/50 hover:bg-mist-soft",
+              )}
+            >
+              <span className={cn("inline-block h-2 w-2 rotate-45", task.is_milestone ? "bg-amber-500" : "bg-ink/25")} />
+              {task.is_milestone ? "マイルストーン（期日の一点イベント）" : "マイルストーンにする"}
+            </button>
+          </Field>
+
+          {task.project_id && (
+            <DependencyEditor task={task} allTasks={allTasks} deps={deps} onAddDep={onAddDep} onRemoveDep={onRemoveDep} />
+          )}
 
           <Field label="優先度">
             <div className="flex gap-1.5">
@@ -1036,6 +1154,96 @@ function TaskDrawer({
         </div>
       </div>
     </div>
+  );
+}
+
+/** 依存関係の編集（F-201）。先行/後続の一覧と追加・削除。同一プロジェクト内のみ。 */
+function DependencyEditor({
+  task,
+  allTasks,
+  deps,
+  onAddDep,
+  onRemoveDep,
+}: {
+  task: TaskVM;
+  allTasks: TaskVM[];
+  deps: DepVM[];
+  onAddDep: (predecessorId: string, successorId: string) => void;
+  onRemoveDep: (id: string) => void;
+}) {
+  const byId = new Map(allTasks.map((t) => [t.id, t]));
+  const preds = deps.filter((d) => d.successor_task_id === task.id);
+  const succs = deps.filter((d) => d.predecessor_task_id === task.id);
+  const linked = new Set([task.id, ...preds.map((d) => d.predecessor_task_id), ...succs.map((d) => d.successor_task_id)]);
+  const candidates = allTasks.filter((t) => t.project_id === task.project_id && !linked.has(t.id));
+
+  // 日程矛盾の警告: 未完了の先行タスクの終了より前に自分が開始する
+  const myStart = task.start_date ?? task.due_date;
+  const warn =
+    task.status !== "done" &&
+    !!myStart &&
+    preds.some((d) => {
+      const pt = byId.get(d.predecessor_task_id);
+      const pEnd = pt?.due_date ?? pt?.start_date;
+      return pt && pt.status !== "done" && !!pEnd && myStart < pEnd;
+    });
+
+  const row = (d: DepVM, otherId: string) => {
+    const t = byId.get(otherId);
+    if (!t) return null;
+    return (
+      <li key={d.id} className="flex items-center gap-2 rounded-lg bg-mist-soft/60 px-2.5 py-1.5">
+        <span className={cn("min-w-0 flex-1 truncate text-xs", t.status === "done" ? "line-through text-ink/35" : "text-ink/80")}>{t.title}</span>
+        <span className="text-[10px] text-ink/35 tabular-nums whitespace-nowrap">{t.due_date ?? "期日なし"}</span>
+        <button type="button" onClick={() => onRemoveDep(d.id)} className="text-ink/30 hover:text-rose-500" title="依存を削除">
+          <X size={13} />
+        </button>
+      </li>
+    );
+  };
+
+  return (
+    <Field label="依存関係">
+      {warn && (
+        <div className="mb-2 rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] text-rose-600">
+          日程が矛盾しています（未完了の先行タスクより前に開始する予定です）
+        </div>
+      )}
+      <div className="space-y-2">
+        <div>
+          <div className="mb-1 text-[10px] font-semibold text-ink/40">先行タスク（これが終わってから着手）</div>
+          <ul className="space-y-1">{preds.map((d) => row(d, d.predecessor_task_id))}</ul>
+          <select
+            value=""
+            onChange={(e) => e.target.value && onAddDep(e.target.value, task.id)}
+            className="mt-1 w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-xs text-ink/60 outline-none focus:border-teal-primary"
+          >
+            <option value="">＋ 先行タスクを追加…</option>
+            {candidates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.title}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className="mb-1 text-[10px] font-semibold text-ink/40">後続タスク（これの完了を待つ）</div>
+          <ul className="space-y-1">{succs.map((d) => row(d, d.successor_task_id))}</ul>
+          <select
+            value=""
+            onChange={(e) => e.target.value && onAddDep(task.id, e.target.value)}
+            className="mt-1 w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-xs text-ink/60 outline-none focus:border-teal-primary"
+          >
+            <option value="">＋ 後続タスクを追加…</option>
+            {candidates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.title}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </Field>
   );
 }
 

@@ -24,6 +24,15 @@ export interface TaskVM {
   description?: string | null;
   /** 参照URL（資料/関連ページ等の任意リンク）。 */
   url?: string | null;
+  /** マイルストーン（期日の一点イベント。タイムラインで◆表示）。 */
+  is_milestone?: boolean;
+}
+
+/** 依存関係（先行→後続）のクライアント境界用ビューモデル。 */
+export interface DepVM {
+  id: string;
+  predecessor_task_id: string;
+  successor_task_id: string;
 }
 
 export interface UserVM {

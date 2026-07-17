@@ -79,5 +79,6 @@ export function toTaskVM(
     color: t.color ?? null,
     description: t.description ?? null,
     url: t.url ?? null,
+    is_milestone: t.is_milestone ?? false,
   };
 }
