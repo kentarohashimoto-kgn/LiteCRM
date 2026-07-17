@@ -19,12 +19,14 @@ import {
   Users,
   Repeat,
   CornerDownRight,
+  MessageSquare,
 } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { recurrenceSummary, type Recurrence, type RecurrenceFreq } from "@/lib/recurrence";
 import { PRIORITY_META, COLOR_KEYS } from "@/lib/constants";
 import { TaskCheckbox } from "./task-checkbox";
 import { TimelineView } from "./timeline-view";
+import { TaskComments } from "./task-comments";
 import { NO_SECTION, isOverdue, relDue, sortTasks, type DepVM, type SectionVM, type TaskVM, type UserVM } from "./vm";
 import {
   toggleTaskDoneAction,
@@ -59,6 +61,10 @@ interface Props {
   filterMembers?: UserVM[];
   /** 依存関係（F-201）。タイムラインを許可するプロジェクトで渡す。 */
   deps?: DepVM[];
+  /** タスクごとのコメント数（F-203。💬バッジ表示用）。 */
+  commentCounts?: Record<string, number>;
+  /** コメント削除の権限（本人以外の削除は管理者のみ）。 */
+  isAdmin?: boolean;
 }
 
 /* ---------- 小物 ---------- */
@@ -156,6 +162,19 @@ export function TaskViews(props: Props) {
 
   const [openId, setOpenId] = useState<string | null>(null);
   const openTask = tasks.find((t) => t.id === openId) ?? null;
+
+  // コメント数（F-203）。初期値はサーバー、投稿/削除で楽観的に上書き。
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>(props.commentCounts ?? {});
+  useEffect(() => setCommentCounts(props.commentCounts ?? {}), [props.commentCounts]);
+  const onCommentCountChange = (id: string, count: number) => setCommentCounts((m) => ({ ...m, [id]: count }));
+
+  // 通知ディープリンク（?task=...）で該当タスクの詳細を自動で開く
+  useEffect(() => {
+    const t = params.get("task");
+    if (t && tasks.some((x) => x.id === t)) setOpenId(t);
+    // 初回のみ（tasksは楽観更新で変わるため依存に含めない）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 絞り込み: 担当者 + 完了を隠すモード + サブタスク表示（プロジェクトのみ）
   const [assignee, setAssignee] = useState<string>("all");
@@ -300,9 +319,11 @@ export function TaskViews(props: Props) {
     if (groupMode === "section" && !showSubs) ts = ts.filter((t) => !t.parent_task_id);
     return ts.map((t) => {
       const c = subCounts.get(t.id);
-      return c ? { ...t, subDone: c.done, subTotal: c.total } : t;
+      const cc = commentCounts[t.id];
+      if (!c && !cc) return t;
+      return { ...t, ...(c ? { subDone: c.done, subTotal: c.total } : {}), ...(cc ? { commentCount: cc } : {}) };
     });
-  }, [assigneeTasks, hideDone, groupMode, showSubs, subCounts]);
+  }, [assigneeTasks, hideDone, groupMode, showSubs, subCounts, commentCounts]);
   const openCount = assigneeTasks.filter((t) => t.status !== "done").length;
   const doneCount = assigneeTasks.length - openCount;
 
@@ -428,6 +449,9 @@ export function TaskViews(props: Props) {
           onRemoveDep={removeDep}
           onCreate={create}
           onOpen={setOpenId}
+          currentUserId={currentUserId}
+          isAdmin={props.isAdmin ?? false}
+          onCommentCountChange={onCommentCountChange}
         />
       )}
     </div>
@@ -507,6 +531,12 @@ function ListRow({
           </span>
         )}
         {t.subTotal ? <span className="ml-1.5 pill bg-mist-soft text-ink/50 text-[10px]">済{t.subDone}/全{t.subTotal}</span> : null}
+        {t.commentCount ? (
+          <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-ink/40">
+            <MessageSquare size={10} />
+            {t.commentCount}
+          </span>
+        ) : null}
         {(t.projectName || t.accountName) && (
           <span className="ml-2 text-[11px] text-ink/40">
             {t.projectName && (
@@ -738,7 +768,7 @@ function BoardCard({
             {t.is_milestone && <span className="mr-1.5 inline-block h-2 w-2 rotate-45 bg-amber-500" title="マイルストーン" />}
             {t.title}
           </div>
-          {(t.recurrence || t.subTotal) && (
+          {(t.recurrence || t.subTotal || t.commentCount) && (
             <div className="mt-1 flex items-center gap-2">
               {t.recurrence && (
                 <span className="inline-flex items-center gap-0.5 text-[10px] text-teal-deep/70">
@@ -746,6 +776,11 @@ function BoardCard({
                 </span>
               )}
               {t.subTotal ? <span className="text-[10px] text-ink/45">済{t.subDone}/全{t.subTotal}</span> : null}
+              {t.commentCount ? (
+                <span className="inline-flex items-center gap-0.5 text-[10px] text-ink/40">
+                  <MessageSquare size={10} /> {t.commentCount}
+                </span>
+              ) : null}
             </div>
           )}
         </button>
@@ -969,6 +1004,9 @@ function TaskDrawer({
   onRemoveDep,
   onCreate,
   onOpen,
+  currentUserId,
+  isAdmin,
+  onCommentCountChange,
 }: {
   task: TaskVM;
   users: UserVM[];
@@ -984,6 +1022,9 @@ function TaskDrawer({
   onRemoveDep: (id: string) => void;
   onCreate: (input: TaskInput) => void;
   onOpen: (id: string) => void;
+  currentUserId: string;
+  isAdmin: boolean;
+  onCommentCountChange: (id: string, count: number) => void;
 }) {
   const done = task.status === "done";
   const [title, setTitle] = useState(task.title);
@@ -1210,6 +1251,13 @@ function TaskDrawer({
               <Link2 size={14} /> 関連案件を開く
             </Link>
           )}
+
+          <div className="border-t border-black/[0.06] pt-4">
+            <div className="label mb-2 flex items-center gap-1.5">
+              <MessageSquare size={13} className="text-ink/40" /> コメント
+            </div>
+            <TaskComments taskId={task.id} members={users} currentUserId={currentUserId} isAdmin={isAdmin} onCountChange={onCommentCountChange} />
+          </div>
 
           <div className="text-[11px] text-ink/40">
             {relDue(task.due_date, today).label}

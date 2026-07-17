@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Users, User as UserIcon } from "lucide-react";
 import { getWorkspaceLite } from "@/lib/data/workspace";
+import { getSupabaseServer } from "@/lib/supabase/server";
 import { listMembers } from "@/lib/data/select";
 import { getTaskHub, toTaskVM } from "@/lib/data/tasks";
 import { PageHeader } from "@/components/ui/primitives";
@@ -27,6 +28,16 @@ export default async function MyTasksPage({ searchParams }: { searchParams: { vi
   const filtered = ws.tasks.filter((t) => (scope === "mine" ? t.assigned_to === me : true));
   const vms = filtered.map((t) => toTaskVM(t, projectsById, ws.accountsById, tasksById));
 
+  // コメント数（F-203。💬バッジ用）
+  const taskIds = filtered.map((t) => t.id);
+  const sb = getSupabaseServer();
+  const { data: commentRows } = taskIds.length
+    ? await sb.from("task_comments").select("task_id").in("task_id", taskIds)
+    : { data: [] };
+  const commentCounts: Record<string, number> = {};
+  for (const r of (commentRows ?? []) as { task_id: string }[]) commentCounts[r.task_id] = (commentCounts[r.task_id] ?? 0) + 1;
+  const isAdmin = ["owner", "admin"].includes(ws.ctx.role);
+
   return (
     <div>
       <PageHeader
@@ -42,6 +53,8 @@ export default async function MyTasksPage({ searchParams }: { searchParams: { vi
         view={view}
         groupMode="date"
         currentUserId={me}
+        commentCounts={commentCounts}
+        isAdmin={isAdmin}
       />
     </div>
   );

@@ -35,6 +35,8 @@ export interface TaskVM {
   /** サブタスク進捗（表示用に親タスクへ付与する派生値）。 */
   subDone?: number;
   subTotal?: number;
+  /** コメント数（F-203。表示用の派生値）。 */
+  commentCount?: number;
 }
 
 /** 依存関係（先行→後続）のクライアント境界用ビューモデル。 */

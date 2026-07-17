@@ -56,6 +56,13 @@ export default async function ProjectDetailPage({
     : { data: [] };
   const deps = (depRows ?? []) as { id: string; predecessor_task_id: string; successor_task_id: string }[];
 
+  // コメント数（F-203。💬バッジ用）
+  const { data: commentRows } = taskIds.length
+    ? await sb.from("task_comments").select("task_id").in("task_id", taskIds)
+    : { data: [] };
+  const commentCounts: Record<string, number> = {};
+  for (const r of (commentRows ?? []) as { task_id: string }[]) commentCounts[r.task_id] = (commentCounts[r.task_id] ?? 0) + 1;
+
   // 次のマイルストーン（未完了で期日が近いもの。全超過なら最も期日の遅い超過分）
   const milestones = vms
     .filter((t) => t.is_milestone && t.status !== "done" && t.due_date)
@@ -141,6 +148,8 @@ export default async function ProjectDetailPage({
         filterMembers={projectMembers}
         allowViews={["list", "board", "calendar", "timeline"]}
         deps={deps}
+        commentCounts={commentCounts}
+        isAdmin={isAdmin}
       />
     </div>
   );

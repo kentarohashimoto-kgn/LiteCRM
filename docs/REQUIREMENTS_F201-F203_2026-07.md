@@ -1,5 +1,10 @@
 # タスク管理 強化要件書（F-201 / F-202 / F-203）2026-07
 
+> **実装状況（2026-07）**: F-201 / F-202 / F-203 いずれも実装済み。
+> マイグレーション 0139（依存/マイルストーン）・0140（サブタスク/繰り返し）・0141（コメント）。
+> 主なファイル: `src/components/tasks/timeline-view.tsx`（タイムライン）、`src/lib/recurrence.ts`＋`tests/recurrence.test.ts`（繰り返し）、`src/components/tasks/task-comments.tsx`（コメント）、`src/server/actions/tasks.ts`・`comments.ts`（サーバー処理）。
+
+
 > **目的**: Asana等からの乗り換え時に最も指摘される欠落機能を埋め、タスクモジュール（0096「Asana型」刷新）を実運用で完結できる水準にする。
 > **対象**:
 > | ID | 機能 | 現状 | 規模 | 背景 |
