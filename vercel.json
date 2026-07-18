@@ -8,6 +8,18 @@
     {
       "path": "/api/cron/xray-snapshot",
       "schedule": "30 15 * * *"
+    },
+    {
+      "path": "/api/cron/automation",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/sequences",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/inbound-sync",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

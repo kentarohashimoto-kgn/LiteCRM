@@ -40,6 +40,8 @@ import {
   NotebookPen,
   Timer,
   ArrowRightLeft,
+  Workflow,
+  Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME, canManageProjects } from "@/lib/constants";
@@ -75,6 +77,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/accounts", label: "顧客", icon: Building2 },
       { href: "/app/contacts", label: "担当者", icon: Users },
       { href: "/app/business-cards", label: "名刺情報", icon: Contact },
+      { href: "/app/email/templates", label: "メール", icon: Mail },
       { href: "/app/leads", label: "リード", icon: Sparkles },
       { href: "/app/srank", label: "Sランク攻略", icon: Star },
       { href: "/app/nurture", label: "既存顧客深耕", icon: TrendingUp },
@@ -95,6 +98,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
       { href: "/app/reviews/snapshots", label: "週報スナップショット", icon: History },
       { href: "/app/content", label: "記事ネタ・ブログ", icon: PenLine },
       { href: "/app/exec/batch", label: "AIバッチ運用", icon: Bot },
+      { href: "/app/automation", label: "ワークフロー自動化", icon: Workflow },
     ],
   },
   {
