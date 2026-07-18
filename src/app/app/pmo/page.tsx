@@ -33,11 +33,11 @@ const SEVERITY_STYLE: Record<PmoAlert["severity"], { label: string; cls: string 
  * 振り返りPDCA / 未来の段取り / 案件・PJ管理 / 経営俯瞰を支援する。
  */
 export default async function PmoPage({ searchParams }: { searchParams: { report?: string } }) {
-  await requireCtx();
+  const ctx = await requireCtx();
   const sb = getSupabaseServer();
 
   const [input, reportsRes] = await Promise.all([
-    gatherPmoInput(),
+    gatherPmoInput(sb, ctx.tenantId),
     sb
       .from("pmo_reports")
       .select("id, mode, title, report_md, model, created_at")

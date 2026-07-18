@@ -1,14 +1,31 @@
-/** AI-PMO: CRM横断データ収集(サーバー専用データ層)。 */
-import { getSupabaseServer } from "@/lib/supabase/server";
+/**
+ * AI-PMO: CRM横断データ収集とレポート生成コア(サーバー専用データ層)。
+ * 画面/Server Action(RLSクライアント)と夜間cron(service role)の両方から使うため、
+ * Supabaseクライアントと tenant_id を引数で受け取る。
+ */
+import Anthropic from "@anthropic-ai/sdk";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  PMO_MODE_MAP,
+  PMO_SYSTEM_PROMPT,
+  buildPmoDigest,
+  detectPmoAlerts,
+  isActiveYomi,
+  pmoModeInstruction,
   type PmoInput,
   type PmoMeetingRow,
+  type PmoMode,
   type PmoMonthRow,
   type PmoOppRow,
   type PmoProjectRow,
   type PmoTaskRow,
-  isActiveYomi,
 } from "@/lib/pmo";
+
+export const PMO_MODEL = "claude-opus-4-8";
+
+// createServerClient(@supabase/ssr) と createClient(service role) の両方を受ける
+// ため、スキーマ型は既定のままにする。
+type Db = SupabaseClient;
 
 /** JSTの今日(YYYY-MM-DD)。 */
 export function jstToday(): string {
@@ -26,11 +43,11 @@ function addMonthsKey(base: Date, n: number): string {
 }
 
 /**
- * AI-PMOの入力データをCRM横断で収集する(RLSスコープ)。
- * 画面のルールベースアラート表示と、AIレポート生成の両方で使う。
+ * AI-PMOの入力データをCRM横断で収集する。
+ * tenant_id は常に明示フィルタする(RLSクライアントでは冗長だが無害、
+ * service role では必須。daily-digest cron と同じ方針)。
  */
-export async function gatherPmoInput(): Promise<PmoInput> {
-  const sb = getSupabaseServer();
+export async function gatherPmoInput(sb: Db, tenantId: string): Promise<PmoInput> {
   const today = jstToday();
   const now = new Date(today + "T00:00:00Z");
   const d90 = new Date(now.getTime() - 90 * 86400_000).toISOString();
@@ -43,30 +60,35 @@ export async function gatherPmoInput(): Promise<PmoInput> {
       .select(
         "id, name, status, yomi, stage, amount, probability, expected_close_date, expected_revenue_month, next_action_date, next_action_text, last_activity_at, first_meeting_date, appointment_at, owner_user_id, is_project_managed, risk_level, competitor, updated_at, accounts(name)",
       )
+      .eq("tenant_id", tenantId)
       .is("deleted_at", null)
       .or(`status.eq.open,updated_at.gte.${d90}`)
       .limit(800),
     sb
       .from("tasks")
       .select("id, title, status, due_date, priority, assigned_to, opportunity_id, completed_at")
+      .eq("tenant_id", tenantId)
       .or(`status.in.(todo,overdue),completed_at.gte.${d30}`)
       .limit(500),
     sb
       .from("meetings")
       .select("id, title, meeting_date, opportunity_id, summary, ai_summary, next_action_date, next_action_text, opportunities(name)")
+      .eq("tenant_id", tenantId)
       .gte("meeting_date", d45)
       .order("meeting_date", { ascending: false })
       .limit(120),
     sb
       .from("project_plans")
       .select("id, opportunity_id, status, priority, start_month, end_month, opportunities(name, accounts(name))")
+      .eq("tenant_id", tenantId)
       .limit(120),
     sb
       .from("project_weekly_reports")
       .select("plan_id, week_start, status, progress_pct, planned_mm, actual_mm, blockers")
+      .eq("tenant_id", tenantId)
       .order("week_start", { ascending: false })
       .limit(400),
-    sb.from("sales_targets").select("target_month, target_amount"),
+    sb.from("sales_targets").select("target_month, target_amount").eq("tenant_id", tenantId),
     sb.from("profiles").select("id, display_name, email"),
   ]);
 
@@ -141,4 +163,96 @@ export async function gatherPmoInput(): Promise<PmoInput> {
   }
 
   return { opps, tasks, meetings, projects, months, today };
+}
+
+// ---------------------------------------------------------------------------
+// レポート生成コア(Server Action と夜間cronで共有)
+// ---------------------------------------------------------------------------
+
+export type GeneratePmoResult = { ok: boolean; reportId?: string; error?: string };
+
+/**
+ * CRMデータ収集 → ヌケモレ検知 → Claude呼び出し → pmo_reports 保存。
+ * createdBy は手動生成時のユーザーID。夜間バッチは null(無人実行)。
+ */
+export async function generateAndSavePmoReport(opts: {
+  sb: Db;
+  tenantId: string;
+  mode: PmoMode;
+  memo?: string;
+  createdBy?: string | null;
+  trigger?: "manual" | "nightly";
+}): Promise<GeneratePmoResult> {
+  const modeDef = PMO_MODE_MAP[opts.mode];
+  if (!modeDef) return { ok: false, error: "不正なモードです" };
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { ok: false, error: "ANTHROPIC_API_KEY が未設定です。Vercelの環境変数に設定するとAI-PMOが使えます。" };
+  }
+  const trigger = opts.trigger ?? "manual";
+
+  const data = await gatherPmoInput(opts.sb, opts.tenantId);
+  const alerts = detectPmoAlerts(data);
+  const digest = buildPmoDigest(data, alerts);
+
+  const memo = (opts.memo ?? "").trim().slice(0, 2000);
+  const userPrompt =
+    pmoModeInstruction(opts.mode, data.today) +
+    (memo ? `\n\n# 依頼者からの補足・関心事\n${memo}` : "") +
+    "\n\n---CRMデータここから---\n" +
+    digest.slice(0, 150_000) +
+    "\n---CRMデータここまで---";
+
+  const client = new Anthropic();
+  let text = "";
+  try {
+    const response = await client.messages.create({
+      model: PMO_MODEL,
+      max_tokens: 12000,
+      thinking: { type: "adaptive" },
+      system: PMO_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userPrompt }],
+    });
+    if (response.stop_reason === "refusal") {
+      return { ok: false, error: "AIがレポートを生成できませんでした。再試行してください。" };
+    }
+    for (const block of response.content) {
+      if (block.type === "text") text += block.text;
+    }
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError) return { ok: false, error: "APIキーが無効です" };
+    if (e instanceof Anthropic.RateLimitError) return { ok: false, error: "APIのレート制限中です。少し待って再試行してください" };
+    if (e instanceof Anthropic.APIError) return { ok: false, error: `AIレポート生成に失敗しました(${e.status})` };
+    return { ok: false, error: "AIレポート生成に失敗しました(ネットワークエラー)" };
+  }
+  if (!text.trim()) return { ok: false, error: "レポートが空でした。再試行してください" };
+
+  const { data: inserted, error } = await opts.sb
+    .from("pmo_reports")
+    .insert({
+      tenant_id: opts.tenantId,
+      mode: opts.mode,
+      title: `${modeDef.label}（${data.today}${trigger === "nightly" ? " 夜間バッチ" : ""}）`,
+      report_md: text.trim(),
+      alerts: alerts.slice(0, 80),
+      digest: {
+        today: data.today,
+        trigger,
+        counts: {
+          open_opps: data.opps.filter((o) => o.status === "open").length,
+          tasks: data.tasks.length,
+          meetings: data.meetings.length,
+          projects: data.projects.length,
+          alerts: alerts.length,
+        },
+        months: data.months,
+        memo: memo || null,
+      },
+      model: PMO_MODEL,
+      created_by: opts.createdBy ?? null,
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: "レポートの保存に失敗しました" };
+
+  return { ok: true, reportId: (inserted as { id: string }).id };
 }

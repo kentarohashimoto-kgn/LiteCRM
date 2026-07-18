@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/inbound-sync",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/pmo-nightly",
+      "schedule": "0 16 * * *"
     }
   ]
 }
