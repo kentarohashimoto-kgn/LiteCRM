@@ -123,6 +123,7 @@ function NewProjectButton({ members, portfolios }: { members: { id: string; name
               <option value="board">ボード</option>
               <option value="list">リスト</option>
               <option value="calendar">カレンダー</option>
+              <option value="timeline">タイムライン</option>
             </select>
           </div>
         </div>

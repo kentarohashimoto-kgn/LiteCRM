@@ -33,7 +33,8 @@ export default async function ProjectDetailPage({
   const projectsById = new Map(hub.projects.map((p) => [p.id, p]));
 
   const tasks = ws.tasks.filter((t) => t.project_id === params.id);
-  const vms = tasks.map((t) => toTaskVM(t, projectsById, ws.accountsById));
+  const tasksById = new Map(tasks.map((t) => [t.id, t]));
+  const vms = tasks.map((t) => toTaskVM(t, projectsById, ws.accountsById, tasksById));
   const done = tasks.filter((t) => t.status === "done").length;
   const total = tasks.length;
 
@@ -48,7 +49,28 @@ export default async function ProjectDetailPage({
   const projectMembers = members.filter((m) => memberIds.has(m.id));
   const isAdmin = ["owner", "admin"].includes(ws.ctx.role);
 
-  const view: TaskViewKind = ["list", "board", "calendar"].includes(searchParams.view ?? "")
+  // 依存関係（F-201）。同一プロジェクト内に限定しているため successor 側の in で十分。
+  const taskIds = tasks.map((t) => t.id);
+  const { data: depRows } = taskIds.length
+    ? await sb.from("task_dependencies").select("id, predecessor_task_id, successor_task_id").in("successor_task_id", taskIds)
+    : { data: [] };
+  const deps = (depRows ?? []) as { id: string; predecessor_task_id: string; successor_task_id: string }[];
+
+  // コメント数（F-203。💬バッジ用）
+  const { data: commentRows } = taskIds.length
+    ? await sb.from("task_comments").select("task_id").in("task_id", taskIds)
+    : { data: [] };
+  const commentCounts: Record<string, number> = {};
+  for (const r of (commentRows ?? []) as { task_id: string }[]) commentCounts[r.task_id] = (commentCounts[r.task_id] ?? 0) + 1;
+
+  // 次のマイルストーン（未完了で期日が近いもの。全超過なら最も期日の遅い超過分）
+  const milestones = vms
+    .filter((t) => t.is_milestone && t.status !== "done" && t.due_date)
+    .sort((a, b) => (a.due_date! < b.due_date! ? -1 : 1));
+  const nextMilestone = milestones.find((t) => t.due_date! >= today) ?? milestones[milestones.length - 1] ?? null;
+  const msDiff = nextMilestone ? Math.round((new Date(nextMilestone.due_date! + "T00:00:00").getTime() - new Date(today + "T00:00:00").getTime()) / 86400000) : 0;
+
+  const view: TaskViewKind = ["list", "board", "calendar", "timeline"].includes(searchParams.view ?? "")
     ? (searchParams.view as TaskViewKind)
     : project.default_view;
 
@@ -70,6 +92,19 @@ export default async function ProjectDetailPage({
           )}
         </div>
         <div className="ml-auto flex items-center gap-4">
+          {nextMilestone && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold",
+                msDiff < 0 ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-700",
+              )}
+              title={`次のマイルストーン: ${nextMilestone.title}（${nextMilestone.due_date}）`}
+            >
+              <span className={cn("inline-block h-2 w-2 rotate-45", msDiff < 0 ? "bg-rose-500" : "bg-amber-500")} />
+              <span className="max-w-[180px] truncate">{nextMilestone.title}</span>
+              <span className="tabular-nums">{msDiff < 0 ? `${-msDiff}日超過` : msDiff === 0 ? "今日" : `残${msDiff}日`}</span>
+            </span>
+          )}
           {(project.start_date || project.due_date) && (
             <span className="inline-flex items-center gap-1 text-xs text-ink/45">
               <CalendarRange size={13} />
@@ -111,6 +146,10 @@ export default async function ProjectDetailPage({
         projectId={params.id}
         currentUserId={ws.ctx.userId}
         filterMembers={projectMembers}
+        allowViews={["list", "board", "calendar", "timeline"]}
+        deps={deps}
+        commentCounts={commentCounts}
+        isAdmin={isAdmin}
       />
     </div>
   );

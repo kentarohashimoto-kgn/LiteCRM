@@ -752,6 +752,26 @@ export interface Task {
   color?: string | null;
   /** 参照URL（資料/ドキュメント/関連ページ等の任意リンク）。 */
   url?: string | null;
+  /** マイルストーン（期日の一点イベント。タイムラインで◆表示）。 */
+  is_milestone?: boolean;
+  /** サブタスクの親（1階層のみ）。 */
+  parent_task_id?: UUID | null;
+  /** 繰り返しルール（jsonb）。null=繰り返しなし。 */
+  recurrence?: import("./recurrence").Recurrence | null;
+  /** 繰り返し系列の起点タスク。 */
+  recurrence_source_id?: UUID | null;
+}
+
+/** タスク依存関係（先行→後続。v1はFS型のみ・同一プロジェクト内）。 */
+export interface TaskDependency {
+  id: UUID;
+  tenant_id: UUID;
+  predecessor_task_id: UUID;
+  successor_task_id: UUID;
+  dep_type: string;
+  lag_days?: number;
+  created_by?: UUID;
+  created_at?: string;
 }
 
 /** プロジェクト参照権限（割当メンバー）。管理者のみ割当可能。 */
@@ -765,7 +785,7 @@ export interface TaskProjectMember {
 }
 
 /** タスクビューの表示形式。 */
-export type TaskViewKind = "list" | "board" | "calendar";
+export type TaskViewKind = "list" | "board" | "calendar" | "timeline";
 /** UIカラーキー（プロジェクト/ポートフォリオの識別色）。 */
 export type ColorKey = "teal" | "orange" | "violet" | "rose" | "amber" | "sky" | "lime" | "slate";
 /** ゴールの進捗ステータス。 */

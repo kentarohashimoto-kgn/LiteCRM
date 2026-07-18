@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import type { ColorKey, GoalStatus, TaskViewKind } from "@/lib/types";
+import { addDaysIso, advanceEnds, diffDaysIso, nextOccurrence, type Recurrence } from "@/lib/recurrence";
+import type { ColorKey, GoalStatus, Task, TaskViewKind } from "@/lib/types";
 
 /* ---------------------------------------------------------------------
  * Asana型タスク機能のサーバーアクション。
@@ -185,6 +186,9 @@ export interface TaskInput {
   opportunity_id?: string | null;
   account_id?: string | null;
   color?: string | null;
+  is_milestone?: boolean;
+  parent_task_id?: string | null;
+  recurrence?: Recurrence | null;
 }
 
 /** 優先度→並び順の帯（high=0/middle=1/low=2 を10万刻み。既定で高優先が上）。 */
@@ -221,6 +225,7 @@ export async function createProjectTaskAction(input: TaskInput) {
     opportunity_id: input.opportunity_id ?? null,
     account_id: input.account_id ?? null,
     color: input.color ?? null,
+    parent_task_id: input.parent_task_id ?? null,
     status: "todo",
     sort_order: sort,
   });
@@ -241,19 +246,110 @@ export async function updateTaskAction(id: string, patch: Partial<TaskInput>) {
   if (patch.project_id !== undefined) p.project_id = patch.project_id;
   if (patch.section_id !== undefined) p.section_id = patch.section_id;
   if (patch.color !== undefined) p.color = patch.color;
+  if (patch.is_milestone !== undefined) p.is_milestone = !!patch.is_milestone;
+  if (patch.parent_task_id !== undefined) p.parent_task_id = patch.parent_task_id;
+  if (patch.recurrence !== undefined) p.recurrence = patch.recurrence;
   if (Object.keys(p).length === 0) return;
   await sb.from("tasks").update(p).eq("id", id);
   touch();
 }
 
-export async function toggleTaskDoneAction(id: string, done: boolean) {
+export async function toggleTaskDoneAction(id: string, done: boolean, opts?: { completeSubtasks?: boolean }) {
   await requireCtx();
   const sb = getSupabaseServer();
   await sb
     .from("tasks")
     .update({ status: done ? "done" : "todo", completed_at: done ? new Date().toISOString() : null })
     .eq("id", id);
+  if (done && opts?.completeSubtasks) {
+    await sb
+      .from("tasks")
+      .update({ status: "done", completed_at: new Date().toISOString() })
+      .eq("parent_task_id", id)
+      .neq("status", "done");
+  }
+  if (done) await generateNextRecurrence(id);
   touch();
+}
+
+/**
+ * F-202 繰り返し: 完了したタスクにルールがあれば次回タスクを1件生成する（Asana方式）。
+ * ルールは次回タスクへ引き継ぎ、元タスクからは外す（完了取り消し→再完了での二重生成を防ぐ）。
+ * サブタスクは未完了状態で複製する。コメント・完了状態はコピーしない。
+ */
+async function generateNextRecurrence(taskId: string) {
+  const sb = getSupabaseServer();
+  const { data } = await sb.from("tasks").select("*").eq("id", taskId).maybeSingle();
+  const t = data as Task | null;
+  if (!t?.recurrence || !t.due_date) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const nextDue = nextOccurrence(t.recurrence, t.due_date, today);
+  if (!nextDue) {
+    // 終了条件に到達: ルールを外して系列を終える
+    await sb.from("tasks").update({ recurrence: null }).eq("id", taskId);
+    return;
+  }
+  const shift = diffDaysIso(t.due_date, nextDue);
+
+  const { data: created } = await sb
+    .from("tasks")
+    .insert({
+      tenant_id: t.tenant_id,
+      title: t.title,
+      description: t.description ?? null,
+      project_id: t.project_id ?? null,
+      section_id: t.section_id ?? null,
+      assigned_to: t.assigned_to,
+      created_by: t.created_by,
+      due_date: nextDue,
+      start_date: t.start_date ? addDaysIso(t.start_date, shift) : null,
+      priority: t.priority ?? "middle",
+      labels: t.labels ?? [],
+      color: t.color ?? null,
+      url: t.url ?? null,
+      opportunity_id: t.opportunity_id ?? null,
+      account_id: t.account_id ?? null,
+      is_milestone: t.is_milestone ?? false,
+      sort_order: t.sort_order ?? 0,
+      status: "todo",
+      recurrence: advanceEnds(t.recurrence),
+      recurrence_source_id: t.recurrence_source_id ?? t.id,
+    })
+    .select("id")
+    .maybeSingle();
+  const newId = (created as { id: string } | null)?.id;
+
+  // ルールは次回タスクへ移動（元タスクからは外す）
+  await sb.from("tasks").update({ recurrence: null }).eq("id", taskId);
+
+  // サブタスクを未完了状態で複製（期日は親と同じ日数だけシフト）
+  if (newId) {
+    const { data: subRows } = await sb.from("tasks").select("*").eq("parent_task_id", taskId);
+    const subs = (subRows ?? []) as Task[];
+    if (subs.length > 0) {
+      await sb.from("tasks").insert(
+        subs.map((s) => ({
+          tenant_id: s.tenant_id,
+          title: s.title,
+          description: s.description ?? null,
+          project_id: s.project_id ?? null,
+          section_id: s.section_id ?? null,
+          assigned_to: s.assigned_to,
+          created_by: s.created_by,
+          due_date: s.due_date ? addDaysIso(s.due_date, shift) : null,
+          start_date: s.start_date ? addDaysIso(s.start_date, shift) : null,
+          priority: s.priority ?? "middle",
+          labels: s.labels ?? [],
+          color: s.color ?? null,
+          url: s.url ?? null,
+          sort_order: s.sort_order ?? 0,
+          status: "todo",
+          parent_task_id: newId,
+        })),
+      );
+    }
+  }
 }
 
 /** ボード/リストのドラッグ移動。section_id と並び順を更新する。 */
@@ -294,6 +390,38 @@ export async function setTaskLabelsAction(id: string, labels: string[]) {
   const sb = getSupabaseServer();
   const clean = Array.from(new Set(labels.map((l) => l.trim()).filter(Boolean))).slice(0, 20);
   await sb.from("tasks").update({ labels: clean }).eq("id", id);
+  touch();
+}
+
+/* ==================== 依存関係（F-201 タイムライン） ==================== */
+
+/**
+ * 先行→後続の依存を追加する。同一プロジェクト検証と循環検出はRPC側で行う
+ * （invoker権限のためRLS準拠）。エラー文言はそのままUIに表示できる日本語。
+ */
+export async function addTaskDependencyAction(
+  predecessorId: string,
+  successorId: string,
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { data, error } = await sb.rpc("add_task_dependency", {
+    p_predecessor: predecessorId,
+    p_successor: successorId,
+  });
+  if (error) {
+    // Postgres例外の "P0001: メッセージ" からメッセージ部のみ取り出す
+    const msg = error.message.replace(/^[A-Z0-9]+:\s*/, "");
+    return { ok: false, error: msg };
+  }
+  touch();
+  return { ok: true, id: (data as string | null) ?? undefined };
+}
+
+export async function removeTaskDependencyAction(id: string) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  await sb.from("task_dependencies").delete().eq("id", id);
   touch();
 }
 

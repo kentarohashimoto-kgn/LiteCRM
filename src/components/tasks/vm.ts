@@ -24,6 +24,26 @@ export interface TaskVM {
   description?: string | null;
   /** 参照URL（資料/関連ページ等の任意リンク）。 */
   url?: string | null;
+  /** マイルストーン（期日の一点イベント。タイムラインで◆表示）。 */
+  is_milestone?: boolean;
+  /** サブタスクの親（1階層のみ）。 */
+  parent_task_id?: string | null;
+  /** 親タスクのタイトル（サブタスクの表示用パンくず）。 */
+  parentTitle?: string | null;
+  /** 繰り返しルール。null=繰り返しなし。 */
+  recurrence?: import("@/lib/recurrence").Recurrence | null;
+  /** サブタスク進捗（表示用に親タスクへ付与する派生値）。 */
+  subDone?: number;
+  subTotal?: number;
+  /** コメント数（F-203。表示用の派生値）。 */
+  commentCount?: number;
+}
+
+/** 依存関係（先行→後続）のクライアント境界用ビューモデル。 */
+export interface DepVM {
+  id: string;
+  predecessor_task_id: string;
+  successor_task_id: string;
 }
 
 export interface UserVM {
