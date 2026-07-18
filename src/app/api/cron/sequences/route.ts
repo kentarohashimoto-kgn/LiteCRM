@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { checkBearer } from "@/lib/secure-compare";
 import { decryptSecret, mailCredSecretConfigured } from "@/lib/crypto-mail";
 import { deliverTrackedEmail } from "@/lib/mail-deliver";
+import { refreshAccessToken } from "@/lib/google-oauth";
 import { renderEmailTemplate } from "@/lib/email";
 import { addDays, jstToday, evalStop, type SequenceStep, type StopOn } from "@/lib/sequences";
 
@@ -52,7 +53,7 @@ export async function GET(req: Request) {
     accIds.length ? admin.from("accounts").select("id, name").in("id", accIds) : Promise.resolve({ data: [] as never[] }),
     contactIds.length ? admin.from("contacts").select("id, name").in("id", contactIds) : Promise.resolve({ data: [] as never[] }),
     admin.from("profiles").select("id, display_name, email").in("id", userIds),
-    admin.from("user_mail_accounts").select("user_id, smtp_host, smtp_port, smtp_secure, smtp_username, smtp_password_enc, from_email, from_name, bcc_self, status").in("user_id", userIds),
+    admin.from("user_mail_accounts").select("user_id, auth_method, smtp_host, smtp_port, smtp_secure, smtp_username, smtp_password_enc, oauth_refresh_token_enc, oauth_email, from_email, from_name, bcc_self, status").in("user_id", userIds),
   ]);
 
   const seqMap = new Map((seqR.data ?? []).map((s) => [s.id as string, s]));
@@ -118,18 +119,9 @@ export async function GET(req: Request) {
         opportunity: (opp?.name as string) ?? null,
         sender: profMap.get(e.enrolled_by as string) ?? "",
       };
-      let password = "";
-      try { password = decryptSecret(acc.smtp_password_enc as string); }
-      catch { skipped++; continue; }
-
-      const res = await deliverTrackedEmail(admin, {
+      const common = {
         tenantId: e.tenant_id as string,
         loggedBy: e.enrolled_by as string,
-        account: {
-          host: acc.smtp_host as string, port: acc.smtp_port as number, secure: acc.smtp_secure as boolean,
-          username: acc.smtp_username as string, password,
-          fromEmail: acc.from_email as string, fromName: acc.from_name as string | null,
-        },
         bccSelf: acc.bcc_self as boolean,
         to: e.to_addr as string,
         subject: renderEmailTemplate((tpl.subject_tmpl as string) ?? "", vars),
@@ -142,7 +134,20 @@ export async function GET(req: Request) {
         sequenceStep: stepIdx,
         createActivity: true,
         baseUrl,
-      });
+      };
+
+      let res;
+      if (acc.auth_method === "google_oauth") {
+        let token = "";
+        try { const t = await refreshAccessToken(decryptSecret(acc.oauth_refresh_token_enc as string)); if (!t.ok) { skipped++; continue; } token = t.accessToken; }
+        catch { skipped++; continue; }
+        res = await deliverTrackedEmail(admin, { ...common, from: { email: (acc.oauth_email as string) || (acc.from_email as string), name: acc.from_name as string | null }, authMethod: "google_oauth", oauthAccessToken: token });
+      } else {
+        let password = "";
+        try { password = decryptSecret(acc.smtp_password_enc as string); }
+        catch { skipped++; continue; }
+        res = await deliverTrackedEmail(admin, { ...common, from: { email: acc.from_email as string, name: acc.from_name as string | null }, authMethod: "smtp", smtp: { host: acc.smtp_host as string, port: acc.smtp_port as number, secure: acc.smtp_secure as boolean, username: acc.smtp_username as string, password, fromEmail: acc.from_email as string, fromName: acc.from_name as string | null } });
+      }
       if (!res.ok) {
         // 送信失敗は停止(無限リトライを避ける・UIで原因を確認)
         await admin.from("sequence_enrollments").update({ status: "stopped", stopped_reason: `送信失敗: ${res.error.slice(0, 120)}` }).eq("id", e.id);

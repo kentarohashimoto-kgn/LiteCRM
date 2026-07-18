@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { checkBearer } from "@/lib/secure-compare";
 import { decryptSecret, mailCredSecretConfigured } from "@/lib/crypto-mail";
-import { fetchNewInbound } from "@/lib/mail-imap";
+import { fetchNewInbound, type InboundMessage } from "@/lib/mail-imap";
+import { listInboundGmail } from "@/lib/gmail-api";
+import { refreshAccessToken } from "@/lib/google-oauth";
 import { MAIL_PROVIDER_MAP } from "@/lib/email";
 import {
   extractEmail,
@@ -37,7 +39,7 @@ export async function GET(req: Request) {
 
   const { data: accts } = await admin
     .from("user_mail_accounts")
-    .select("id, tenant_id, user_id, provider, from_email, imap_host, imap_port, smtp_secure, smtp_username, smtp_password_enc, imap_last_uid, status, inbound_enabled")
+    .select("id, tenant_id, user_id, provider, auth_method, from_email, imap_host, imap_port, smtp_secure, smtp_username, smtp_password_enc, oauth_refresh_token_enc, imap_last_uid, inbound_last_run_at, status, inbound_enabled")
     .eq("inbound_enabled", true)
     .eq("status", "active");
   const accounts = (accts ?? []).filter((a) => enabledTenants.has(a.tenant_id as string));
@@ -49,20 +51,27 @@ export async function GET(req: Request) {
     const tenantId = a.tenant_id as string;
     const userId = a.user_id as string;
     const provider = (a.provider as string) ?? "other";
-    const preset = MAIL_PROVIDER_MAP[provider];
-    const host = (a.imap_host as string) || preset?.imapHost || "";
-    const port = (a.imap_port as number) || 993;
-    if (!host) { accountErrors++; continue; }
+    const isOAuth = a.auth_method === "google_oauth";
 
-    let password = "";
-    try { password = decryptSecret(a.smtp_password_enc as string); }
-    catch { await admin.from("user_mail_accounts").update({ inbound_last_error: "資格情報の復号に失敗", inbound_last_run_at: new Date().toISOString() }).eq("id", a.id); accountErrors++; continue; }
+    // 受信取得: OAuth=Gmail API / それ以外=IMAP。どちらも {ok, messages} を返す。
+    let res: { ok: true; messages: InboundMessage[]; highestUid?: number } | { ok: false; error: string };
+    if (isOAuth) {
+      let token = "";
+      try { const t = await refreshAccessToken(decryptSecret(a.oauth_refresh_token_enc as string)); if (!t.ok) { await admin.from("user_mail_accounts").update({ inbound_last_error: `Googleトークン更新失敗: ${t.error.slice(0, 200)}`, inbound_last_run_at: new Date().toISOString() }).eq("id", a.id); accountErrors++; continue; } token = t.accessToken; }
+      catch { await admin.from("user_mail_accounts").update({ inbound_last_error: "Google認証情報の復号に失敗", inbound_last_run_at: new Date().toISOString() }).eq("id", a.id); accountErrors++; continue; }
+      const lastRun = a.inbound_last_run_at ? new Date(a.inbound_last_run_at as string).getTime() : Date.now() - 24 * 3600 * 1000;
+      const afterUnix = Math.floor((lastRun - 120000) / 1000); // 2分バッファ(冪等でカバー)
+      res = await listInboundGmail(token, afterUnix, 30);
+    } else {
+      const preset = MAIL_PROVIDER_MAP[provider];
+      const host = (a.imap_host as string) || preset?.imapHost || "";
+      if (!host) { accountErrors++; continue; }
+      let password = "";
+      try { password = decryptSecret(a.smtp_password_enc as string); }
+      catch { await admin.from("user_mail_accounts").update({ inbound_last_error: "資格情報の復号に失敗", inbound_last_run_at: new Date().toISOString() }).eq("id", a.id); accountErrors++; continue; }
+      res = await fetchNewInbound({ host, port: (a.imap_port as number) || 993, secure: true, username: a.smtp_username as string, password }, (a.imap_last_uid as number) ?? 0, 30);
+    }
 
-    const res = await fetchNewInbound(
-      { host, port, secure: true, username: a.smtp_username as string, password },
-      (a.imap_last_uid as number) ?? 0,
-      30,
-    );
     if (!res.ok) {
       await admin.from("user_mail_accounts").update({ inbound_last_error: res.error.slice(0, 300), inbound_last_run_at: new Date().toISOString() }).eq("id", a.id);
       accountErrors++;
@@ -145,7 +154,7 @@ export async function GET(req: Request) {
         to_addrs: [a.from_email as string],
         contact_id: contactId, account_id: accountId, opportunity_id: oppId,
         activity_id: activityId,
-        source: "imap_sync", status: "received",
+        source: isOAuth ? "gmail_sync" : "imap_sync", status: "received",
         smtp_message_id: normId, in_reply_to: normalizeMessageId(m.inReplyTo),
         provider_link: providerSearchLink(provider, m.messageId),
         sent_at: sentAt, logged_by: userId,
@@ -166,10 +175,9 @@ export async function GET(req: Request) {
       }
     }
 
-    await admin.from("user_mail_accounts").update({
-      imap_last_uid: Math.max(res.highestUid, (a.imap_last_uid as number) ?? 0),
-      inbound_last_error: null, inbound_last_run_at: new Date().toISOString(),
-    }).eq("id", a.id);
+    const posUpdate: Record<string, unknown> = { inbound_last_error: null, inbound_last_run_at: new Date().toISOString() };
+    if (!isOAuth && res.highestUid !== undefined) posUpdate.imap_last_uid = Math.max(res.highestUid, (a.imap_last_uid as number) ?? 0);
+    await admin.from("user_mail_accounts").update(posUpdate).eq("id", a.id);
   }
 
   try {

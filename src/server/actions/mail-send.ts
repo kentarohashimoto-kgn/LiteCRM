@@ -6,6 +6,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { decryptSecret, mailCredSecretConfigured } from "@/lib/crypto-mail";
 import { isValidEmail } from "@/lib/email";
 import { deliverTrackedEmail } from "@/lib/mail-deliver";
+import { refreshAccessToken } from "@/lib/google-oauth";
 
 const SEND_ROLES = ["owner", "admin", "sales_manager", "sales_rep", "external_sales", "partner"];
 
@@ -21,7 +22,7 @@ export interface SendEmailInput {
 export type SendEmailResult = { ok: true; id: string } | { ok: false; error: string };
 
 /**
- * WO-22 本人アカウント(SMTP)からメールを送信し、開封/クリック計測を仕込む(F-101b/c)。
+ * WO-22/25 本人アカウント(SMTP or Gmail API)からメール送信し、開封/クリック計測を仕込む。
  * 送信ボタンが人の関所。実配信・記録は共通コア deliverTrackedEmail に委譲。
  */
 export async function sendEmailViaSmtpAction(input: SendEmailInput): Promise<SendEmailResult> {
@@ -34,46 +35,44 @@ export async function sendEmailViaSmtpAction(input: SendEmailInput): Promise<Sen
   const sb = getSupabaseServer();
   const { data: acc } = await sb
     .from("user_mail_accounts")
-    .select("smtp_host, smtp_port, smtp_secure, smtp_username, smtp_password_enc, from_email, from_name, bcc_self, status")
+    .select("auth_method, smtp_host, smtp_port, smtp_secure, smtp_username, smtp_password_enc, oauth_refresh_token_enc, oauth_email, from_email, from_name, bcc_self, status")
     .eq("user_id", ctx.userId)
     .maybeSingle();
-  if (!acc || acc.status !== "active") {
-    return { ok: false, error: "送信メールアカウントが未接続です。[メール設定]から接続してください。" };
-  }
+  if (!acc || acc.status !== "active") return { ok: false, error: "送信メールアカウントが未接続です。[メール設定]から接続してください。" };
 
-  let password = "";
-  try {
-    password = decryptSecret(acc.smtp_password_enc as string);
-  } catch {
-    return { ok: false, error: "送信資格情報の復号に失敗しました。管理者に連絡してください。" };
-  }
-
-  const res = await deliverTrackedEmail(sb, {
-    tenantId: ctx.tenantId,
-    loggedBy: ctx.userId,
-    account: {
-      host: acc.smtp_host as string,
-      port: acc.smtp_port as number,
-      secure: acc.smtp_secure as boolean,
-      username: acc.smtp_username as string,
-      password,
-      fromEmail: acc.from_email as string,
-      fromName: acc.from_name as string | null,
-    },
+  const common = {
+    tenantId: ctx.tenantId, loggedBy: ctx.userId,
     bccSelf: acc.bcc_self as boolean,
-    to: input.toAddr,
-    subject: input.subject,
-    body: input.body,
-    contactId: input.contactId,
-    accountId: input.accountId,
-    opportunityId: input.opportunityId,
-    templateId: input.templateId,
-    createActivity: true,
-    baseUrl: process.env.NEXT_PUBLIC_APP_URL || "",
-  });
+    to: input.toAddr, subject: input.subject, body: input.body,
+    contactId: input.contactId, accountId: input.accountId, opportunityId: input.opportunityId, templateId: input.templateId,
+    createActivity: true, baseUrl: process.env.NEXT_PUBLIC_APP_URL || "",
+  };
+
+  let res;
+  if (acc.auth_method === "google_oauth") {
+    let refresh = "";
+    try { refresh = decryptSecret(acc.oauth_refresh_token_enc as string); }
+    catch { return { ok: false, error: "Google認証情報の復号に失敗しました。" }; }
+    const tok = await refreshAccessToken(refresh);
+    if (!tok.ok) return { ok: false, error: "Googleトークンの更新に失敗しました（再接続してください）: " + tok.error };
+    res = await deliverTrackedEmail(sb, {
+      ...common,
+      from: { email: (acc.oauth_email as string) || (acc.from_email as string), name: acc.from_name as string | null },
+      authMethod: "google_oauth", oauthAccessToken: tok.accessToken,
+    });
+  } else {
+    let password = "";
+    try { password = decryptSecret(acc.smtp_password_enc as string); }
+    catch { return { ok: false, error: "送信資格情報の復号に失敗しました。" }; }
+    res = await deliverTrackedEmail(sb, {
+      ...common,
+      from: { email: acc.from_email as string, name: acc.from_name as string | null },
+      authMethod: "smtp",
+      smtp: { host: acc.smtp_host as string, port: acc.smtp_port as number, secure: acc.smtp_secure as boolean, username: acc.smtp_username as string, password, fromEmail: acc.from_email as string, fromName: acc.from_name as string | null },
+    });
+  }
 
   if (!res.ok) return { ok: false, error: "送信に失敗しました: " + res.error };
-
   if (input.opportunityId) revalidatePath(`/app/opportunities/${input.opportunityId}`);
   revalidatePath("/app/email/history");
   revalidatePath("/app/activities");

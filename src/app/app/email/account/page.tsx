@@ -3,6 +3,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { ActionNotice } from "@/components/ui/action-notice";
 import { mailCredSecretConfigured } from "@/lib/crypto-mail";
+import { googleOAuthConfigured } from "@/lib/google-oauth";
 import { MailAccountForm } from "@/components/email/mail-account-form";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,8 @@ export interface MailAccountView {
   inbound_enabled: boolean;
   inbound_last_run_at: string | null;
   inbound_last_error: string | null;
+  auth_method: string;
+  oauth_email: string | null;
 }
 
 /**
@@ -33,10 +36,11 @@ export default async function MailAccountPage({ searchParams }: { searchParams: 
   const sb = getSupabaseServer();
   const { data } = await sb
     .from("user_mail_accounts")
-    .select("provider, from_email, from_name, smtp_host, smtp_port, smtp_secure, smtp_username, bcc_self, verified_at, imap_host, imap_port, inbound_enabled, inbound_last_run_at, inbound_last_error")
+    .select("provider, from_email, from_name, smtp_host, smtp_port, smtp_secure, smtp_username, bcc_self, verified_at, imap_host, imap_port, inbound_enabled, inbound_last_run_at, inbound_last_error, auth_method, oauth_email")
     .maybeSingle();
   const account = (data as MailAccountView | null) ?? null;
   const secretReady = mailCredSecretConfigured();
+  const googleReady = googleOAuthConfigured();
 
   return (
     <div>
@@ -52,14 +56,19 @@ export default async function MailAccountPage({ searchParams }: { searchParams: 
           connected: "接続テストに成功し、保存しました。メール作成画面から送信できます。",
           verified: "接続テストに成功しました。",
           disconnected: "接続を解除しました。",
+          google_connected: "Googleアカウントに接続しました。送受信（開封/クリック計測・返信自動停止）が有効です。",
         }}
         errorMessages={{
           forbidden: "メール送信の権限がありません。",
           invalid: "必須項目(送信元メール・SMTPホスト・ポート)を入力してください。",
           need_password: "アプリパスワードを入力してください。",
           no_secret: "サーバーに MAIL_CRED_SECRET が未設定です。管理者に設定を依頼してください。",
+          no_google: "サーバーに GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET が未設定です。管理者に依頼してください。",
           no_account: "接続済みアカウントがありません。",
           save_failed: "保存に失敗しました。",
+          google_state: "接続の検証に失敗しました（時間をおいて再度お試しください）。",
+          google_denied: "Google側で接続が許可されませんでした。",
+          google_exchange: `Google認証に失敗しました${searchParams.detail ? `: ${decodeURIComponent(searchParams.detail)}` : ""}。`,
           unverified: `保存しましたが接続テストに失敗しました${searchParams.detail ? `: ${decodeURIComponent(searchParams.detail)}` : ""}。ホスト/ポート/アプリパスワードをご確認ください。`,
         }}
       />
@@ -70,7 +79,25 @@ export default async function MailAccountPage({ searchParams }: { searchParams: 
         </div>
       )}
 
-      <Section title="接続設定">
+      {/* GWS向け: Googleワンクリック接続(OAuth) */}
+      {googleReady && account?.auth_method !== "google_oauth" && (
+        <div className="mb-5 rounded-xl border border-teal-200 bg-teal-50/40 p-4">
+          <p className="text-sm font-semibold text-ink/90 mb-1">Google Workspace の方（推奨）</p>
+          <p className="text-xs text-ink/55 mb-3">
+            Googleでワンクリック接続すると、アプリパスワード不要で送受信・開封/クリック計測・返信自動停止まで有効になります（社内アプリのためGoogleの外部審査は不要）。
+          </p>
+          <a href="/api/oauth/google/start" className="btn-accent inline-flex items-center gap-1 text-sm">Googleアカウントで接続</a>
+        </div>
+      )}
+
+      {account?.auth_method === "google_oauth" && (
+        <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+          Google接続中: <b>{account.oauth_email}</b>（送受信・計測・返信自動停止が有効）。切り替える場合は下のフォームで別方式を保存するか、
+          <a href="/api/oauth/google/start" className="underline ml-1">再接続</a>してください。
+        </div>
+      )}
+
+      <Section title={account?.auth_method === "google_oauth" ? "SMTP接続に切り替える場合（任意）" : "SMTP接続（Zoho / その他）"}>
         <MailAccountForm account={account} disabled={!secretReady} />
       </Section>
     </div>

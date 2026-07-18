@@ -22,6 +22,7 @@ export interface SendInput {
   text: string;
   html: string;
   bcc?: string | null;
+  messageId?: string; // 指定すると送信メールの Message-ID に使う(返信照合の鍵)
 }
 
 export type SendResult = { ok: true; messageId: string } | { ok: false; error: string };
@@ -59,8 +60,9 @@ export async function sendMail(acc: SmtpAccount, input: SendInput): Promise<Send
       subject: input.subject,
       text: input.text,
       html: input.html,
+      messageId: input.messageId,
     });
-    return { ok: true, messageId: info.messageId };
+    return { ok: true, messageId: input.messageId || info.messageId };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
