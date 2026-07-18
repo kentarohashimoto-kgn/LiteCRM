@@ -8,10 +8,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   PMO_MODE_MAP,
   PMO_SYSTEM_PROMPT,
+  buildChannelDigest,
   buildPmoDigest,
   detectPmoAlerts,
   isActiveYomi,
   pmoModeInstruction,
+  type PmoChannels,
   type PmoInput,
   type PmoMeetingRow,
   type PmoMode,
@@ -165,6 +167,29 @@ export async function gatherPmoInput(sb: Db, tenantId: string): Promise<PmoInput
   return { opps, tasks, meetings, projects, months, today };
 }
 
+/**
+ * 流入元分析(営業分析モード)用のデータ収集。
+ * 流入元別の月次受注・アポ推移(直近12ヶ月)とオープンパイプラインを集約する。
+ * ページ描画では使わず、レポート生成時のみ呼ぶ(軽いが余計な負荷を画面に載せない)。
+ */
+export async function gatherPmoChannels(sb: Db, tenantId: string): Promise<PmoChannels> {
+  const { data, error } = await sb.rpc("pmo_channel_stats", { p_tenant: tenantId });
+  if (error || !data) {
+    // RPC未整備の環境でも落とさない(セクションは空になる)。
+    return { wonByMonth: [], apptByMonth: [], open: [] };
+  }
+  const d = data as {
+    won_by_month?: { month: string; source: string; won_amt: number; won_cnt: number }[];
+    appt_by_month?: { month: string; source: string; appt_cnt: number }[];
+    open_by_source?: { source: string; open_cnt: number; open_amt: number; weighted: number }[];
+  };
+  return {
+    wonByMonth: (d.won_by_month ?? []).map((r) => ({ month: r.month, source: r.source, wonAmt: Number(r.won_amt), wonCnt: Number(r.won_cnt) })),
+    apptByMonth: (d.appt_by_month ?? []).map((r) => ({ month: r.month, source: r.source, apptCnt: Number(r.appt_cnt) })),
+    open: (d.open_by_source ?? []).map((r) => ({ source: r.source, openCnt: Number(r.open_cnt), openAmt: Number(r.open_amt), weighted: Number(r.weighted) })),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // レポート生成コア(Server Action と夜間cronで共有)
 // ---------------------------------------------------------------------------
@@ -192,7 +217,13 @@ export async function generateAndSavePmoReport(opts: {
 
   const data = await gatherPmoInput(opts.sb, opts.tenantId);
   const alerts = detectPmoAlerts(data);
-  const digest = buildPmoDigest(data, alerts);
+  // 営業分析モードは流入元別の月次成果を追加で収集して digest に含める。
+  let channelDigest = "";
+  if (opts.mode === "sales") {
+    const channels = await gatherPmoChannels(opts.sb, opts.tenantId);
+    channelDigest = "\n\n" + buildChannelDigest(channels);
+  }
+  const digest = buildPmoDigest(data, alerts) + channelDigest;
 
   const memo = (opts.memo ?? "").trim().slice(0, 2000);
   const userPrompt =

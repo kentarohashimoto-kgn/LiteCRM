@@ -101,6 +101,32 @@ export type PmoInput = {
 };
 
 // ---------------------------------------------------------------------------
+// 流入元分析(営業分析モード用)
+// ---------------------------------------------------------------------------
+
+export type PmoChannelMonthly = { month: string; source: string; wonAmt: number; wonCnt: number };
+export type PmoChannelApptMonthly = { month: string; source: string; apptCnt: number };
+export type PmoChannelOpen = { source: string; openCnt: number; openAmt: number; weighted: number };
+
+export type PmoChannels = {
+  wonByMonth: PmoChannelMonthly[];
+  apptByMonth: PmoChannelApptMonthly[];
+  open: PmoChannelOpen[];
+};
+
+/**
+ * 流入元強化のための月次投資(サブスク/顧問料)。ROI・投資回収の評価に使う。
+ * ※ 金額は経営から共有された固定値。将来は設定画面で編集可能にする。
+ * source は成果を紐づける流入元名(lead_sources.name)。null は紐付けが未確定。
+ */
+export const PMO_CHANNEL_INVESTMENTS: { name: string; monthly: number; source: string | null; note: string }[] = [
+  { name: "パートナープロップ", monthly: 200000, source: "パートナー", note: "パートナー経由リード獲得支援" },
+  { name: "BT（ビジネスタンク）", monthly: 400000, source: "BT", note: "経営者アポ獲得サービス" },
+  { name: "ラフメイカー", monthly: 250000, source: null, note: "リード獲得支援（成果を紐づける流入元は要確認）" },
+  { name: "山田顧問", monthly: 450000, source: null, note: "営業顧問（成果を紐づける流入元は要確認）" },
+];
+
+// ---------------------------------------------------------------------------
 // ルールベースのヌケモレ検知(コウモリの目・決定的)
 // ---------------------------------------------------------------------------
 
@@ -301,6 +327,69 @@ function line(parts: (string | null | undefined)[]): string {
   return parts.filter(Boolean).join(" / ");
 }
 
+/** 万円整数の文字列(グラフ用の簡易表記)。 */
+function man(n: number): string {
+  return Math.round(n / 10000).toLocaleString();
+}
+
+/**
+ * 流入元分析(営業分析モード)用のダイジェスト。
+ * 流入元別の月次受注・アポ推移、オープンパイプライン、月次投資(ROI評価用)を
+ * コンパクトなテキストにする。
+ */
+export function buildChannelDigest(ch: PmoChannels): string {
+  const months = Array.from(new Set([...ch.wonByMonth.map((r) => r.month), ...ch.apptByMonth.map((r) => r.month)])).sort();
+  const sources = Array.from(
+    new Set([...ch.wonByMonth.map((r) => r.source), ...ch.apptByMonth.map((r) => r.source), ...ch.open.map((r) => r.source)]),
+  );
+
+  const wonAt = new Map(ch.wonByMonth.map((r) => [`${r.source}|${r.month}`, r.wonAmt]));
+  const apptAt = new Map(ch.apptByMonth.map((r) => [`${r.source}|${r.month}`, r.apptCnt]));
+
+  const sections: string[] = [];
+
+  sections.push(
+    `# 流入元別 月次受注額（万円, 直近12ヶ月）\n対象月: ${months.join(" ")}\n` +
+      sources
+        .map((s) => {
+          const cells = months.map((m) => man(wonAt.get(`${s}|${m}`) ?? 0));
+          const total = months.reduce((sum, m) => sum + (wonAt.get(`${s}|${m}`) ?? 0), 0);
+          return `- ${s}: ${cells.join(" / ")}  （TTM計 ${man(total)}万円）`;
+        })
+        .join("\n"),
+  );
+
+  sections.push(
+    `# 流入元別 月次アポ数（初回商談, 直近12ヶ月）\n` +
+      sources
+        .map((s) => {
+          const cells = months.map((m) => String(apptAt.get(`${s}|${m}`) ?? 0));
+          const total = months.reduce((sum, m) => sum + (apptAt.get(`${s}|${m}`) ?? 0), 0);
+          return `- ${s}: ${cells.join(" / ")}  （TTM計 ${total}件）`;
+        })
+        .join("\n"),
+  );
+
+  sections.push(
+    `# 流入元別 現在のオープンパイプライン\n` +
+      ch.open
+        .map((o) => `- ${o.source}: ${o.openCnt}件 / 総額${man(o.openAmt)}万円 / ヨミ加重${man(o.weighted)}万円`)
+        .join("\n"),
+  );
+
+  const totalMonthly = PMO_CHANNEL_INVESTMENTS.reduce((s, i) => s + i.monthly, 0);
+  sections.push(
+    `# 流入元強化への月次投資（ROI・投資回収の評価対象）\n` +
+      PMO_CHANNEL_INVESTMENTS.map(
+        (i) => `- ${i.name}: 月${man(i.monthly)}万円（年${man(i.monthly * 12)}万円） → 紐づく流入元: ${i.source ?? "★要確認"} ／ ${i.note}`,
+      ).join("\n") +
+      `\n合計: 月${man(totalMonthly)}万円（年${man(totalMonthly * 12)}万円）` +
+      `\n※粗利率の目安70%で投資回収を評価すること。受注額×0.7が粗利。`,
+  );
+
+  return sections.join("\n\n");
+}
+
 /** CRM横断データをAIプロンプト用のコンパクトなテキストにする。 */
 export function buildPmoDigest(input: PmoInput, alerts: PmoAlert[]): string {
   const openOpps = input.opps
@@ -403,7 +492,7 @@ export function buildPmoDigest(input: PmoInput, alerts: PmoAlert[]): string {
 // AIプロンプト(モード定義)
 // ---------------------------------------------------------------------------
 
-export type PmoMode = "retrospective" | "planning" | "project" | "executive";
+export type PmoMode = "retrospective" | "planning" | "project" | "executive" | "sales";
 
 export const PMO_MODES: { key: PmoMode; label: string; desc: string; emoji: string }[] = [
   {
@@ -429,6 +518,12 @@ export const PMO_MODES: { key: PmoMode; label: string; desc: string; emoji: stri
     label: "経営俯瞰",
     desc: "目標と実績・パイプライン・トレンドから経営全体を分析し、優先すべき経営アクションを提言する。",
     emoji: "🦅",
+  },
+  {
+    key: "sales",
+    label: "営業分析（流入元）",
+    desc: "展示会・BT・パートナー等の流入元別に成果が右肩上がりか、強化投資(パートナープロップ/BT/ラフメイカー/山田顧問)を回収できているか、どこに対策を打つべきかを分析する。",
+    emoji: "📈",
   },
 ];
 
@@ -490,6 +585,17 @@ export function pmoModeInstruction(mode: PmoMode, today: string): string {
         "## ギャップと打ち手\n- 目標との差分を埋める具体策(インパクト見積りつき)\n" +
         "## 死角の点検(コウモリの目)\n- 数字に表れていないリスク・楽観バイアスの指摘\n" +
         "## 経営アクション提言\n- 今月やるべき意思決定を優先度順に最大5つ"
+      );
+    case "sales":
+      return (
+        `今日は${today}です。以下のCRMデータ（特に流入元別の月次推移・パイプライン・強化投資）をもとに「営業分析（流入元）」レポートを作成してください。\n` +
+        "この分析の主眼は『流入元ごとに成果が右肩上がりか』『流入元強化への投資を回収できているか』『どこに対策を打つべきか』です。\n" +
+        "構成:\n" +
+        "## 流入元サマリー(鳥の目)\n- 流入元別の受注・アポ・パイプラインの全体像を、貢献度の大きい順に3〜6行で\n" +
+        "## 右肩上がり判定(魚の目)\n- 主要流入元(展示会/自社営業/パートナー/BT/紹介/ライトアップ等)ごとに、月次受注・アポの推移から【伸びている / 横ばい / 失速】を判定し根拠となる数字を示す。アポは伸びているのに受注が伸びない等の『詰まり』も指摘\n" +
+        "## 投資回収(ROI)評価(虫の目)\n- 投資している流入元ごとに『年間投資額 vs 直近12ヶ月の受注(粗利70%換算)』でペイバックを評価し、回収できている/できていないを断定。★要確認の投資(ラフメイカー/山田顧問)は紐づく流入元が不明な点自体を課題として指摘\n" +
+        "## どこに対策を打つべきか(コウモリの目)\n- 費用対効果が悪い/失速している流入元を名指しで挙げ、『増やす・維持・改善・撤退(止める)』の判断と、その理由・具体的な打ち手を「誰が・何を・いつまでに」で示す。順調に見える流入元の隠れたリスクも逆視点で点検\n" +
+        "## 次の一手(優先度順)\n- 流入元戦略として今月着手すべきことを最大5つ、インパクト順に"
       );
   }
 }
