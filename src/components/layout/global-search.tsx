@@ -22,6 +22,16 @@ export function GlobalSearch() {
   const boxRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // モバイルは幅が足りないためプレースホルダーを短縮
+  const [placeholder, setPlaceholder] = useState("顧客・案件・リードを検索（/ でフォーカス）");
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setPlaceholder(mq.matches ? "検索" : "顧客・案件・リードを検索（/ でフォーカス）");
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   useEffect(() => {
     if (!q.trim()) { setHits([]); return; }
@@ -72,7 +82,7 @@ export function GlobalSearch() {
         value={q}
         onFocus={() => setOpen(true)}
         onChange={(e) => { setQ(e.target.value); setOpen(true); }}
-        placeholder="顧客・案件・リードを検索（/ でフォーカス）"
+        placeholder={placeholder}
         className="w-full rounded-xl border border-black/10 bg-mist-soft/50 pl-9 pr-3 py-1.5 text-sm outline-none focus:border-teal-primary focus:bg-white transition-colors"
       />
       {open && q.trim() && (

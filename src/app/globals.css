@@ -171,6 +171,78 @@
   }
 }
 
+/* ===== モバイルモード（md未満: ボトムナビ＋タッチ最適化） =====
+ * レスポンシブ(グリッド折返し)だけでは補えない部分をここで補正する:
+ * - iOS Safari のフォーム自動ズーム防止(16px未満のフォントで発生)
+ * - タップターゲットの最低サイズ確保(約44px)
+ * - ノッチ/ホームバー端末の安全領域(safe-area)
+ * - テーブル・ボードの慣性スクロール
+ */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ドロワーのスライドイン */
+@keyframes drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-drawer-in { animation: drawer-in 0.22s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-drawer-in { animation: none; }
+}
+
+@media (max-width: 767px) {
+  /* iOSの自動ズーム防止: 入力系は16px以上にする */
+  .input,
+  select,
+  textarea,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+    font-size: 16px;
+  }
+
+  /* タップしやすい操作系(指のサイズ約44pxを確保) */
+  .btn {
+    min-height: 44px;
+  }
+  .input {
+    min-height: 44px;
+  }
+  .nav-link {
+    @apply py-3 text-[15px];
+  }
+  .seg {
+    @apply py-2;
+  }
+  .task-check {
+    @apply h-6 w-6;
+  }
+
+  /* 余白は詰めて1画面の情報量を確保 */
+  .card-pad {
+    @apply p-4;
+  }
+
+  /* テーブルは画面内スクロール＋慣性スクロール。ボトムナビ分を差し引く */
+  .sticky-grid {
+    max-height: var(--sticky-grid-h, 62dvh);
+    -webkit-overflow-scrolling: touch;
+  }
+  .sticky-grid-topbar {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ボード列は画面幅に収めてスワイプで横移動しやすく */
+  .task-col {
+    width: min(18rem, 82vw);
+  }
+
+  /* モバイルではホバーが効かないため、行タップの反応を明示 */
+  .row-hover:active {
+    @apply bg-teal-light/40;
+  }
+}
+
 /* ===== タスク完了の演出（達成感を出しアクションを促す） ===== */
 @keyframes task-check-pop {
   0% { transform: scale(0.6); }

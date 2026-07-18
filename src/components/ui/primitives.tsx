@@ -43,9 +43,9 @@ export function PageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 mb-5">
-      <div>
-        <h1 className="text-xl font-bold text-ink">{title}</h1>
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 mb-4 md:mb-5">
+      <div className="min-w-0">
+        <h1 className="text-lg md:text-xl font-bold text-ink">{title}</h1>
         {subtitle && <p className="text-sm text-ink/50 mt-0.5">{subtitle}</p>}
       </div>
       {action}
