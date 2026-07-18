@@ -190,6 +190,51 @@ export async function gatherPmoChannels(sb: Db, tenantId: string): Promise<PmoCh
   };
 }
 
+/**
+ * カトルセ(社内)からのフィードバック収集。
+ * 直近のレポートコメントを集め、次回の生成プロンプトへ「反映すべき指示」として渡す。
+ * これにより人間の指摘・方針が次回の夜間分析に織り込まれる(フィードバックループ)。
+ */
+export async function gatherPmoFeedback(sb: Db, tenantId: string): Promise<string> {
+  const since = new Date(Date.now() - 60 * 86400_000).toISOString();
+  const { data } = await sb
+    .from("pmo_report_comments")
+    .select("body, created_at, created_by, pmo_reports(mode, title)")
+    .eq("tenant_id", tenantId)
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(30);
+  const rows = (data ?? []) as unknown as {
+    body: string;
+    created_at: string;
+    created_by: string | null;
+    pmo_reports: { mode: string; title: string } | null;
+  }[];
+  if (rows.length === 0) return "";
+
+  // 著者名を解決
+  const ids = Array.from(new Set(rows.map((r) => r.created_by).filter((x): x is string => !!x)));
+  const nameOf = new Map<string, string>();
+  if (ids.length) {
+    const { data: profs } = await sb.from("profiles").select("id, display_name, email").in("id", ids);
+    for (const p of (profs ?? []) as { id: string; display_name: string | null; email: string | null }[]) {
+      nameOf.set(p.id, p.display_name ?? p.email ?? "—");
+    }
+  }
+
+  const lines = rows.map((r) => {
+    const mode = r.pmo_reports?.mode ? (PMO_MODE_MAP[r.pmo_reports.mode]?.label ?? r.pmo_reports.mode) : "レポート";
+    const who = r.created_by ? (nameOf.get(r.created_by) ?? "社内") : "社内";
+    const when = r.created_at.slice(0, 10);
+    return `- [${when} / ${mode}へのコメント / ${who}] ${r.body.replace(/\s+/g, " ").slice(0, 500)}`;
+  });
+  return (
+    `# カトルセ(社内)からのフィードバック（直近のコメント — 今回の分析で必ず反映すること）\n` +
+    `以下は前回までのレポートに対する社内の指摘・方針です。これらを踏まえ、指摘に応答し、方針に沿って分析してください。\n` +
+    lines.join("\n")
+  );
+}
+
 // ---------------------------------------------------------------------------
 // レポート生成コア(Server Action と夜間cronで共有)
 // ---------------------------------------------------------------------------
@@ -223,12 +268,15 @@ export async function generateAndSavePmoReport(opts: {
     const channels = await gatherPmoChannels(opts.sb, opts.tenantId);
     channelDigest = "\n\n" + buildChannelDigest(channels);
   }
+  // 前回までの社内コメントをフィードバックとして取り込む(人間→AIのループ)。
+  const feedback = await gatherPmoFeedback(opts.sb, opts.tenantId);
   const digest = buildPmoDigest(data, alerts) + channelDigest;
 
   const memo = (opts.memo ?? "").trim().slice(0, 2000);
   const userPrompt =
     pmoModeInstruction(opts.mode, data.today) +
     (memo ? `\n\n# 依頼者からの補足・関心事\n${memo}` : "") +
+    (feedback ? `\n\n${feedback}` : "") +
     "\n\n---CRMデータここから---\n" +
     digest.slice(0, 150_000) +
     "\n---CRMデータここまで---";

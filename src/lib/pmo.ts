@@ -123,7 +123,7 @@ export const PMO_CHANNEL_INVESTMENTS: { name: string; monthly: number; source: s
   { name: "パートナープロップ", monthly: 200000, source: "パートナー", note: "パートナー経由リード獲得支援" },
   { name: "BT（ビジネスタンク）", monthly: 400000, source: "BT", note: "経営者アポ獲得サービス" },
   { name: "ラフメイカー", monthly: 250000, source: null, note: "リード獲得支援（成果を紐づける流入元は要確認）" },
-  { name: "山田顧問", monthly: 450000, source: null, note: "営業顧問（成果を紐づける流入元は要確認）" },
+  { name: "山田顧問", monthly: 450000, source: "山田顧問", note: "営業顧問（伊藤忠テクノ・CTCエスピー等の成果。CTCSPは協業拡大予定）" },
 ];
 
 // ---------------------------------------------------------------------------

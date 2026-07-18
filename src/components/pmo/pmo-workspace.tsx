@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Bird, Bug, ChevronRight, FileText, Fish, Moon, Sparkles } from "lucide-react";
+import { AlertTriangle, Bird, Bug, ChevronRight, FileText, Fish, MessageSquare, Moon, Sparkles } from "lucide-react";
 import { cn, formatDateFull } from "@/lib/utils";
 import { PMO_MODE_MAP } from "@/lib/pmo";
 import { MarkdownLite } from "@/components/pmo/markdown-lite";
 import { PmoReportGenerator } from "@/components/pmo/report-generator";
 import { DeleteReportButton } from "@/components/pmo/delete-report-button";
+import { PmoReportComments, type PmoCommentLite } from "@/components/pmo/report-comments";
 
 export type PmoReportLite = {
   id: string;
@@ -17,6 +18,7 @@ export type PmoReportLite = {
   model: string | null;
   created_at: string;
   trigger: string | null;
+  comments: PmoCommentLite[];
 };
 
 export type PmoAlertLite = {
@@ -159,6 +161,12 @@ export function PmoWorkspace({
                           </div>
                           <div className="text-[11px] text-ink/40 mt-0.5 flex items-center gap-1.5">
                             <span>{formatDateFull(r.created_at)}</span>
+                            {r.comments.length > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-teal-deep">
+                                <MessageSquare size={11} />
+                                {r.comments.length}
+                              </span>
+                            )}
                           </div>
                         </div>
                         {r.trigger === "nightly" && <span className="pill bg-indigo-50 text-indigo-600 shrink-0 text-[10px]">夜間</span>}
@@ -190,6 +198,7 @@ export function PmoWorkspace({
                   </div>
                   <div className="p-5 max-h-[55vh] lg:max-h-[68vh] overflow-y-auto">
                     <MarkdownLite text={selected.report_md} />
+                    <PmoReportComments reportId={selected.id} comments={selected.comments} />
                   </div>
                 </>
               ) : (

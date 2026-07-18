@@ -37,3 +37,37 @@ export async function deletePmoReportAction(input: { reportId: string }): Promis
   revalidatePath("/app/pmo");
   return { ok: true };
 }
+
+/**
+ * レポートへのカトルセ(社内)コメントを追加。
+ * このコメントは次回の夜間バッチ生成時にAIへフィードバックされる。
+ */
+export async function addPmoCommentAction(input: {
+  reportId: string;
+  body: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const ctx = await requireCtx();
+  const body = input.body.trim();
+  if (!body) return { ok: false, error: "コメントを入力してください" };
+  if (body.length > 4000) return { ok: false, error: "コメントが長すぎます(4000字まで)" };
+  const sb = getSupabaseServer();
+  const { error } = await sb.from("pmo_report_comments").insert({
+    tenant_id: ctx.tenantId,
+    report_id: input.reportId,
+    body,
+    created_by: ctx.userId,
+  });
+  if (error) return { ok: false, error: "コメントの保存に失敗しました" };
+  revalidatePath("/app/pmo");
+  return { ok: true };
+}
+
+/** コメント削除(自分のコメント or owner/admin)。 */
+export async function deletePmoCommentAction(input: { commentId: string }): Promise<{ ok: boolean; error?: string }> {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const { error } = await sb.from("pmo_report_comments").delete().eq("id", input.commentId);
+  if (error) return { ok: false, error: "削除に失敗しました" };
+  revalidatePath("/app/pmo");
+  return { ok: true };
+}

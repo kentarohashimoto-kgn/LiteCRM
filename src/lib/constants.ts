@@ -278,6 +278,7 @@ export const CATORCE_LEAD_SOURCES: { name: string; description: string }[] = [
   { name: "Facebook", description: "Facebook営業/DM" },
   { name: "LinkedIn", description: "LinkedIn経由" },
   { name: "メルマガ", description: "メール配信経由" },
+  { name: "山田顧問", description: "山田顧問経由の紹介・協業案件" },
   { name: "その他", description: "その他" },
 ];
 

@@ -39,6 +39,39 @@ export default async function PmoPage() {
   ]);
   const alerts = detectPmoAlerts(input);
   const reports = (reportsRes.data ?? []) as ReportRow[];
+
+  // 各レポートのコメントを取得（著者名解決・新しい順）。
+  const reportIds = reports.map((r) => r.id);
+  const commentsByReport = new Map<string, { id: string; body: string; authorName: string; createdAt: string; canDelete: boolean }[]>();
+  if (reportIds.length) {
+    const { data: cData } = await sb
+      .from("pmo_report_comments")
+      .select("id, report_id, body, created_at, created_by")
+      .in("report_id", reportIds)
+      .order("created_at", { ascending: false });
+    const cRows = (cData ?? []) as { id: string; report_id: string; body: string; created_at: string; created_by: string | null }[];
+    const authorIds = Array.from(new Set(cRows.map((c) => c.created_by).filter((x): x is string => !!x)));
+    const nameOf = new Map<string, string>();
+    if (authorIds.length) {
+      const { data: profs } = await sb.from("profiles").select("id, display_name, email").in("id", authorIds);
+      for (const p of (profs ?? []) as { id: string; display_name: string | null; email: string | null }[]) {
+        nameOf.set(p.id, p.display_name ?? p.email ?? "—");
+      }
+    }
+    const canModerate = ctx.role === "owner" || ctx.role === "admin";
+    for (const c of cRows) {
+      const list = commentsByReport.get(c.report_id) ?? [];
+      list.push({
+        id: c.id,
+        body: c.body,
+        authorName: c.created_by ? (nameOf.get(c.created_by) ?? "社内") : "社内",
+        createdAt: c.created_at,
+        canDelete: canModerate || c.created_by === ctx.userId,
+      });
+      commentsByReport.set(c.report_id, list);
+    }
+  }
+
   const reportsLite: PmoReportLite[] = reports.map((r) => ({
     id: r.id,
     mode: r.mode,
@@ -47,6 +80,7 @@ export default async function PmoPage() {
     model: r.model,
     created_at: r.created_at,
     trigger: r.digest?.trigger ?? null,
+    comments: commentsByReport.get(r.id) ?? [],
   }));
 
   const openOpps = input.opps.filter((o) => o.status === "open" && isActiveYomi(o.yomi));
