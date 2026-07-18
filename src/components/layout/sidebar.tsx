@@ -42,6 +42,7 @@ import {
   ArrowRightLeft,
   Workflow,
   Mail,
+  Telescope,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME, canManageProjects } from "@/lib/constants";
@@ -88,6 +89,7 @@ const groups: { heading: string; items: { href: string; label: string; icon: Rea
   {
     heading: "分析・レビュー",
     items: [
+      { href: "/app/pmo", label: "AI-PMO", icon: Telescope },
       { href: "/app/analytics/xray", label: "営業レントゲン", icon: ScanLine },
       { href: "/app/analytics", label: "分析ハブ", icon: Gauge },
       { href: "/app/analytics/winloss", label: "失注/成約分析", icon: Scale },
