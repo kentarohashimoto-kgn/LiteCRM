@@ -16,6 +16,7 @@ create index if not exists idx_tasks_parent on public.tasks(parent_task_id);
 create or replace function public.enforce_single_level_subtask()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   if new.parent_task_id is not null then
