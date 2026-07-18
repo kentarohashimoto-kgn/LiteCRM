@@ -19,7 +19,18 @@ type ReportRow = {
   report_md: string;
   model: string | null;
   created_at: string;
+  digest: { trigger?: string } | null;
 };
+
+/** 生成種別バッジ(夜間バッチ / 手動)。 */
+function triggerBadge(digest: ReportRow["digest"]) {
+  const nightly = digest?.trigger === "nightly";
+  return (
+    <span className={cn("pill shrink-0", nightly ? "bg-indigo-50 text-indigo-600" : "bg-teal-light text-teal-deep")}>
+      {nightly ? "夜間バッチ" : "手動生成"}
+    </span>
+  );
+}
 
 const SEVERITY_STYLE: Record<PmoAlert["severity"], { label: string; cls: string }> = {
   high: { label: "重要", cls: "bg-rose-50 text-rose-600" },
@@ -40,9 +51,9 @@ export default async function PmoPage({ searchParams }: { searchParams: { report
     gatherPmoInput(sb, ctx.tenantId),
     sb
       .from("pmo_reports")
-      .select("id, mode, title, report_md, model, created_at")
+      .select("id, mode, title, report_md, model, created_at, digest")
       .order("created_at", { ascending: false })
-      .limit(20),
+      .limit(50),
   ]);
   const alerts = detectPmoAlerts(input);
   const reports = (reportsRes.data ?? []) as ReportRow[];
@@ -121,12 +132,50 @@ export default async function PmoPage({ searchParams }: { searchParams: { report
           {alerts.length > 40 && <p className="text-xs text-ink/40 mt-2">他 {alerts.length - 40} 件。AIレポート生成で全件を精査できます。</p>}
         </Section>
 
+        <Section
+          title={`実行済みレポート一覧（${reports.length}件）`}
+          icon={<History size={16} className="text-ink/40" />}
+          action={<span className="text-[11px] text-ink/35">行を選ぶと下に詳細が表示されます</span>}
+        >
+          {reports.length === 0 ? (
+            <EmptyState message="まだレポートがありません。上のモードを選んで最初のレポートを生成するか、夜間バッチの生成をお待ちください。" />
+          ) : (
+            <ul className="divide-y divide-black/[0.04]">
+              {reports.map((r) => {
+                const active = selected?.id === r.id;
+                return (
+                  <li key={r.id}>
+                    <Link
+                      href={`/app/pmo?report=${r.id}`}
+                      className={cn(
+                        "flex items-center gap-3 py-2.5 px-2 -mx-2 rounded-lg transition-colors",
+                        active ? "bg-teal-light/50" : "hover:bg-black/[0.02]",
+                      )}
+                    >
+                      <span className="text-lg shrink-0">{PMO_MODE_MAP[r.mode]?.emoji ?? "📋"}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className={cn("text-sm truncate", active ? "font-semibold text-teal-deep" : "text-ink/85")}>
+                          {PMO_MODE_MAP[r.mode]?.label ?? r.mode}
+                        </div>
+                        <div className="text-[11px] text-ink/40 mt-0.5">{formatDateFull(r.created_at)}</div>
+                      </div>
+                      {triggerBadge(r.digest)}
+                      {active && <span className="pill bg-teal-deep text-white shrink-0">表示中</span>}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Section>
+
         {selected ? (
           <Section
-            title={selected.title}
+            title={`${PMO_MODE_MAP[selected.mode]?.label ?? "レポート"} 詳細`}
             icon={<span>{PMO_MODE_MAP[selected.mode]?.emoji ?? "📋"}</span>}
             action={
               <div className="flex items-center gap-3">
+                {triggerBadge(selected.digest)}
                 <span className="text-[11px] text-ink/35">
                   生成: {formatDateFull(selected.created_at)}
                   {selected.model ? ` ・ ${selected.model}` : ""}
@@ -138,29 +187,8 @@ export default async function PmoPage({ searchParams }: { searchParams: { report
             <MarkdownLite text={selected.report_md} />
           </Section>
         ) : (
-          <Section title="AI-PMOレポート" icon={<Sparkles size={16} className="text-teal-deep" />}>
-            <EmptyState message="まだレポートがありません。上のモードを選んで最初のレポートを生成してください。" />
-          </Section>
-        )}
-
-        {reports.length > 1 && (
-          <Section title="レポート履歴" icon={<History size={16} className="text-ink/40" />}>
-            <ul className="divide-y divide-black/[0.04]">
-              {reports.map((r) => (
-                <li key={r.id} className="py-2 flex items-center justify-between gap-3">
-                  <Link
-                    href={`/app/pmo?report=${r.id}`}
-                    className={cn(
-                      "text-sm hover:text-teal-deep min-w-0 truncate",
-                      selected?.id === r.id ? "font-semibold text-teal-deep" : "text-ink/80",
-                    )}
-                  >
-                    {PMO_MODE_MAP[r.mode]?.emoji ?? "📋"} {r.title}
-                  </Link>
-                  <span className="text-[11px] text-ink/35 shrink-0">{formatDateFull(r.created_at)}</span>
-                </li>
-              ))}
-            </ul>
+          <Section title="AI-PMOレポート 詳細" icon={<Sparkles size={16} className="text-teal-deep" />}>
+            <EmptyState message="一覧からレポートを選ぶと、ここに詳細が表示されます。" />
           </Section>
         )}
       </div>
