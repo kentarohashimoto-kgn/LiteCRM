@@ -29,10 +29,10 @@ export function QuickAdd() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded-xl bg-teal-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-teal-deep transition-colors"
+        className="inline-flex items-center gap-1 rounded-xl bg-teal-primary px-2.5 sm:px-3 py-1.5 text-sm font-semibold text-white hover:bg-teal-deep transition-colors"
         title="クイック追加"
       >
-        <Plus size={16} /> 追加
+        <Plus size={16} /> <span className="hidden sm:inline">追加</span>
       </button>
       {open && (
         <div className="absolute right-0 z-30 mt-1.5 w-56 rounded-xl border border-black/10 bg-white shadow-lg p-1.5">
