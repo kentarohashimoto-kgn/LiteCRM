@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, ExternalLink, Check } from "lucide-react";
+import { Mail, ExternalLink, Check, Send } from "lucide-react";
+import Link from "next/link";
 import { renderEmailTemplate, buildGmailComposeUrl, EMAIL_CATEGORY_LABEL, isValidEmail } from "@/lib/email";
 import {
   searchContactsWithEmailAction,
   logEmailAction,
   type ContactPick,
 } from "@/server/actions/email";
+import { sendEmailViaSmtpAction } from "@/server/actions/mail-send";
 import { searchOpportunitiesAction, type PickOption } from "@/server/actions/activities";
 import type { EmailTemplate } from "@/app/app/email/templates/page";
 
@@ -20,7 +22,7 @@ export interface ComposerInitial {
   company?: string | null;
 }
 
-export function EmailComposer({ templates, initial }: { templates: EmailTemplate[]; initial: ComposerInitial }) {
+export function EmailComposer({ templates, initial, hasMailAccount }: { templates: EmailTemplate[]; initial: ComposerInitial; hasMailAccount: boolean }) {
   const router = useRouter();
   const [contact, setContact] = useState<ContactPick | null>(
     initial.contact ? { id: initial.contact.id, name: initial.contact.name, email: initial.contact.email, account_id: initial.accountId ?? null, account_name: initial.company ?? null } : null,
@@ -35,6 +37,8 @@ export function EmailComposer({ templates, initial }: { templates: EmailTemplate
   const [saving, setSaving] = useState(false);
   const [logged, setLogged] = useState(false);
   const [opened, setOpened] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const company = contact?.account_name ?? initial.company ?? null;
@@ -61,6 +65,25 @@ export function EmailComposer({ templates, initial }: { templates: EmailTemplate
   }
 
   const gmailUrl = buildGmailComposeUrl({ to: toAddr, subject, body });
+
+  async function onSend() {
+    setError(null);
+    if (!isValidEmail(toAddr)) { setError("宛先メールアドレスを正しく入力してください"); return; }
+    if (!subject.trim() && !body.trim()) { setError("件名または本文を入力してください"); return; }
+    setSending(true);
+    const res = await sendEmailViaSmtpAction({
+      contactId: contact?.id ?? null,
+      accountId: contact?.account_id ?? initial.accountId ?? null,
+      opportunityId: opportunity?.id ?? null,
+      templateId,
+      toAddr,
+      subject,
+      body,
+    });
+    setSending(false);
+    if (res.ok) { setSent(true); setLogged(true); router.refresh(); }
+    else setError(res.error);
+  }
 
   async function onLog() {
     setError(null);
@@ -116,26 +139,39 @@ export function EmailComposer({ templates, initial }: { templates: EmailTemplate
         <textarea value={body} onChange={(e) => { setBody(e.target.value); setLogged(false); }} rows={12} className="input text-sm" />
       </div>
 
-      {error && <p className="text-sm text-rose-600">{error}</p>}
+      {error && <p className="text-sm text-rose-600 whitespace-pre-wrap">{error}</p>}
+      {sent && <p className="text-sm text-emerald-700 inline-flex items-center gap-1"><Check size={14} /> 送信しました。開封・クリックは送信履歴で確認できます。</p>}
 
-      <div className="flex flex-wrap items-center gap-2 pt-1">
-        <a
-          href={gmailUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => setOpened(true)}
-          className="btn-accent inline-flex items-center gap-1 text-sm"
-        >
-          <ExternalLink size={14} /> Gmailで開く
-        </a>
-        <button onClick={onLog} disabled={saving || logged} className="btn-primary inline-flex items-center gap-1 text-sm disabled:opacity-60">
-          {logged ? <><Check size={14} /> 記録済み</> : <><Mail size={14} /> {saving ? "記録中…" : "記録する"}</>}
-        </button>
-        {opened && !logged && <span className="text-xs text-ink/45">送信したら「記録する」でタイムラインに残せます。</span>}
-      </div>
-      <p className="text-xs text-ink/40">
-        「Gmailで開く」は Gmail の作成画面を新しいタブで開きます（送信はご自身で確認のうえ実施）。「記録する」で活動タイムライン（メール）と案件に紐づきます。
-      </p>
+      {hasMailAccount ? (
+        <>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <button onClick={onSend} disabled={sending || sent} className="btn-accent inline-flex items-center gap-1 text-sm disabled:opacity-60">
+              <Send size={14} /> {sent ? "送信済み" : sending ? "送信中…" : "送信する（計測あり）"}
+            </button>
+            <a href={gmailUrl} target="_blank" rel="noopener noreferrer" onClick={() => setOpened(true)} className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/60">
+              <ExternalLink size={14} /> かわりにGmailで開く
+            </a>
+          </div>
+          <p className="text-xs text-ink/40">
+            「送信する」はご自身のメールアカウント経由で送信し、開封（近似）とリンククリック（どの資料か）を計測します。送信控えはご自身の[送信済み]にも残ります。
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <a href={gmailUrl} target="_blank" rel="noopener noreferrer" onClick={() => setOpened(true)} className="btn-accent inline-flex items-center gap-1 text-sm">
+              <ExternalLink size={14} /> Gmailで開く
+            </a>
+            <button onClick={onLog} disabled={saving || logged} className="btn-primary inline-flex items-center gap-1 text-sm disabled:opacity-60">
+              {logged ? <><Check size={14} /> 記録済み</> : <><Mail size={14} /> {saving ? "記録中…" : "記録する"}</>}
+            </button>
+            {opened && !logged && <span className="text-xs text-ink/45">送信したら「記録する」でタイムラインに残せます。</span>}
+          </div>
+          <p className="text-xs text-ink/40">
+            開封・クリックを計測して送りたい場合は <Link href="/app/email/account" className="text-teal-700 underline">メール送信アカウントを接続</Link> してください（GWS/Zoho対応）。未接続時は「Gmailで開く」→「記録する」の手動フローになります。
+          </p>
+        </>
+      )}
     </div>
   );
 }

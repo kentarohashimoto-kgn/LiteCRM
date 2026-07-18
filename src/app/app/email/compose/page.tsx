@@ -14,12 +14,14 @@ export default async function EmailComposePage({ searchParams }: { searchParams:
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
 
-  const [tplR, meR] = await Promise.all([
+  const [tplR, meR, acctR] = await Promise.all([
     sb.from("email_templates").select("id, name, category, subject_tmpl, body_tmpl").order("category").order("name"),
     sb.from("profiles").select("display_name, email").eq("id", ctx.userId).maybeSingle(),
+    sb.from("user_mail_accounts").select("status, verified_at").maybeSingle(),
   ]);
   const templates = (tplR.data ?? []) as EmailTemplate[];
   const senderName = (meR.data?.display_name as string) || (meR.data?.email as string) || "";
+  const hasMailAccount = acctR.data?.status === "active";
 
   const initial: ComposerInitial = { senderName };
 
@@ -68,7 +70,7 @@ export default async function EmailComposePage({ searchParams }: { searchParams:
         title="メールを作成"
         subtitle="定型文を選ぶと変数が自動で差し込まれます。「Gmailで開く」で送信画面が開き、内容を確認して送信。「記録する」でタイムラインに残ります。"
       />
-      <EmailComposer templates={templates} initial={initial} />
+      <EmailComposer templates={templates} initial={initial} hasMailAccount={hasMailAccount} />
     </div>
   );
 }

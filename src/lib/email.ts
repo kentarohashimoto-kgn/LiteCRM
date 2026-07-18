@@ -68,3 +68,44 @@ export function isValidEmail(addr: string | null | undefined): boolean {
   if (!addr) return false;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr.trim());
 }
+
+/** メール送信プロバイダ(SMTP)。GWS/Zoho は既定のSMTP設定を持つ。 */
+export interface MailProviderPreset {
+  key: string;
+  label: string;
+  host: string;
+  port: number;
+  secure: boolean; // true=SSL(465)
+  help: string;
+}
+
+export const MAIL_PROVIDERS: MailProviderPreset[] = [
+  {
+    key: "gws",
+    label: "Google Workspace / Gmail",
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    help: "2段階認証を有効化し「アプリ パスワード」を発行して入力してください。送信控えは自動でGmailの[送信済み]に残ります。",
+  },
+  {
+    key: "zoho",
+    label: "Zoho Mail",
+    host: "smtp.zoho.com",
+    port: 465,
+    secure: true,
+    help: "Zohoで「アプリ固有パスワード」を発行して入力してください。日本DCは smtp.zoho.jp の場合があります。[設定→メール→送信(SMTP)の控えを保存]を有効にすると[送信済み]に残ります。",
+  },
+  {
+    key: "other",
+    label: "その他(手動設定)",
+    host: "",
+    port: 465,
+    secure: true,
+    help: "SMTPホスト/ポート/ユーザー名/パスワードを手動で設定します。",
+  },
+];
+
+export const MAIL_PROVIDER_MAP: Record<string, MailProviderPreset> = Object.fromEntries(
+  MAIL_PROVIDERS.map((p) => [p.key, p]),
+);

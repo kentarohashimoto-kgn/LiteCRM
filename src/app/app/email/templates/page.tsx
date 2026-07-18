@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PenSquare } from "lucide-react";
+import { PenSquare, History, Plug } from "lucide-react";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section } from "@/components/ui/primitives";
@@ -54,9 +54,15 @@ export default async function EmailTemplatesPage({ searchParams }: { searchParam
         }}
       />
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Link href="/app/email/compose" className="btn-accent inline-flex items-center gap-1 text-sm">
           <PenSquare size={14} /> メールを作成する
+        </Link>
+        <Link href="/app/email/history" className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/70">
+          <History size={14} /> 送信履歴
+        </Link>
+        <Link href="/app/email/account" className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/70">
+          <Plug size={14} /> メール送信アカウント接続
         </Link>
       </div>
 
