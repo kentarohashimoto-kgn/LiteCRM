@@ -11,7 +11,13 @@ import { generatePmoReportAction } from "@/server/actions/pmo";
  * AI-PMOレポート生成UI: 4モード(振り返り/段取り/PJ管理/経営俯瞰)から選び、
  * 補足メモを添えてベテランPMアドバイザーのレポートを生成する。
  */
-export function PmoReportGenerator({ hasApiKey }: { hasApiKey: boolean }) {
+export function PmoReportGenerator({
+  hasApiKey,
+  onGenerated,
+}: {
+  hasApiKey: boolean;
+  onGenerated?: (reportId: string) => void;
+}) {
   const router = useRouter();
   const [mode, setMode] = useState<PmoMode>("retrospective");
   const [memo, setMemo] = useState("");
@@ -26,8 +32,11 @@ export function PmoReportGenerator({ hasApiKey }: { hasApiKey: boolean }) {
         setError(res.error ?? "失敗しました");
         return;
       }
-      if (res.reportId) router.replace(`/app/pmo?report=${res.reportId}`);
+      // サーバーコンポーネントを再取得して新レポートを一覧へ反映。
       router.refresh();
+      // 呼び出し側(ワークスペース)があれば選択を委譲(ページ遷移しない)。
+      if (res.reportId && onGenerated) onGenerated(res.reportId);
+      else if (res.reportId) router.replace(`/app/pmo?report=${res.reportId}`);
     });
   };
 

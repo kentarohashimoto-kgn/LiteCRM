@@ -6,7 +6,7 @@ import { Loader2, Trash2 } from "lucide-react";
 import { deletePmoReportAction } from "@/server/actions/pmo";
 
 /** レポート削除ボタン(owner/adminのみRLSで実際に削除できる)。 */
-export function DeleteReportButton({ reportId }: { reportId: string }) {
+export function DeleteReportButton({ reportId, onDeleted }: { reportId: string; onDeleted?: () => void }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -18,8 +18,9 @@ export function DeleteReportButton({ reportId }: { reportId: string }) {
         alert(res.error ?? "削除に失敗しました");
         return;
       }
-      router.replace("/app/pmo");
+      onDeleted?.();
       router.refresh();
+      if (!onDeleted) router.replace("/app/pmo");
     });
   };
 
