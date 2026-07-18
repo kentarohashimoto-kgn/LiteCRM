@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/automation",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/sequences",
+      "schedule": "0 0 * * *"
     }
   ]
 }
