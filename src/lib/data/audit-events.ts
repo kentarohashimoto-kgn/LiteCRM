@@ -30,6 +30,19 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "accounts.merge": "顧客名寄せ",
   "cards.import": "名刺取込",
   "cards.match": "名刺CRMマッチング",
+  // メール連携(F-101)の機微操作
+  "mail.account.connect": "メール送信アカウント接続(SMTP)",
+  "mail.account.google_connect": "メール送信アカウント接続(Google)",
+  "mail.account.disconnect": "メール送信アカウント解除",
+  "mail.send": "メール送信",
+  // ワークフロー自動化(F-102)
+  "automation.rule.create": "自動化ルール作成",
+  "automation.rule.toggle": "自動化ルール 有効/停止",
+  "automation.rule.delete": "自動化ルール削除",
+  // メールシーケンス(F-101b)
+  "sequence.create": "シーケンス作成/更新",
+  "sequence.enroll": "シーケンス投入",
+  "sequence.stop": "シーケンス停止",
 };
 
 export function auditActionLabel(a: string): string {

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PenSquare, History, Plug, Repeat } from "lucide-react";
+import { PenSquare, History, Plug, Repeat, BarChart3 } from "lucide-react";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section } from "@/components/ui/primitives";
@@ -60,6 +60,9 @@ export default async function EmailTemplatesPage({ searchParams }: { searchParam
         </Link>
         <Link href="/app/email/sequences" className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/70">
           <Repeat size={14} /> シーケンス
+        </Link>
+        <Link href="/app/email/analytics" className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/70">
+          <BarChart3 size={14} /> 成果ダッシュボード
         </Link>
         <Link href="/app/email/history" className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/70">
           <History size={14} /> 送信履歴

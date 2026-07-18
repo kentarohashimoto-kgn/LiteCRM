@@ -7,6 +7,7 @@ import { decryptSecret, mailCredSecretConfigured } from "@/lib/crypto-mail";
 import { isValidEmail } from "@/lib/email";
 import { deliverTrackedEmail } from "@/lib/mail-deliver";
 import { refreshAccessToken } from "@/lib/google-oauth";
+import { logAudit, clientIp } from "@/lib/audit-events";
 
 const SEND_ROLES = ["owner", "admin", "sales_manager", "sales_rep", "external_sales", "partner"];
 
@@ -73,6 +74,7 @@ export async function sendEmailViaSmtpAction(input: SendEmailInput): Promise<Sen
   }
 
   if (!res.ok) return { ok: false, error: "送信に失敗しました: " + res.error };
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.send", target: input.toAddr, meta: { via: acc.auth_method, opportunity_id: input.opportunityId }, ip: clientIp() });
   if (input.opportunityId) revalidatePath(`/app/opportunities/${input.opportunityId}`);
   revalidatePath("/app/email/history");
   revalidatePath("/app/activities");

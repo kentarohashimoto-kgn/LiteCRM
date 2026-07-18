@@ -3,6 +3,7 @@ import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { exchangeCode, fetchGoogleEmail, verifyOAuthState } from "@/lib/google-oauth";
 import { encryptSecret, mailCredSecretConfigured } from "@/lib/crypto-mail";
+import { logAudit, clientIp } from "@/lib/audit-events";
 
 export const dynamic = "force-dynamic";
 
@@ -44,5 +45,6 @@ export async function GET(req: Request) {
     : await sb.from("user_mail_accounts").insert(row);
   if (res.error) return back(`error=save_failed&detail=${encodeURIComponent(res.error.message.slice(0, 120))}`);
 
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.account.google_connect", target: email, meta: { provider: "gws" }, ip: clientIp() });
   return back("saved=google_connected");
 }

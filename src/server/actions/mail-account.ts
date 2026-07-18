@@ -7,6 +7,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { encryptSecret, decryptSecret, mailCredSecretConfigured } from "@/lib/crypto-mail";
 import { verifySmtp } from "@/lib/mail-smtp";
 import { MAIL_PROVIDER_MAP } from "@/lib/email";
+import { logAudit, clientIp } from "@/lib/audit-events";
 
 const SEND_ROLES = ["owner", "admin", "sales_manager", "sales_rep", "external_sales", "partner"];
 
@@ -84,6 +85,8 @@ export async function saveMailAccountAction(formData: FormData): Promise<void> {
     : await sb.from("user_mail_accounts").insert(row).select("id");
   if (up.error) back("error=save_failed");
 
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.account.connect", target: fromEmail, meta: { provider, verified, inbound: inboundEnabled }, ip: clientIp() });
+
   revalidatePath("/app/email/account");
   if (verified) back("saved=connected");
   back(`error=unverified&detail=${encodeURIComponent(verifyErr.slice(0, 120))}`);
@@ -128,6 +131,7 @@ export async function disconnectMailAccountAction(): Promise<void> {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   await sb.from("user_mail_accounts").delete().eq("user_id", ctx.userId);
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.account.disconnect", ip: clientIp() });
   revalidatePath("/app/email/account");
   redirect("/app/email/account?saved=disconnected");
 }
