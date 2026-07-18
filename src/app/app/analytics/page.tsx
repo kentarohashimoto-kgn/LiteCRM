@@ -18,9 +18,8 @@ const GROUPS: { title: string; items: { href: string; label: string; desc: strin
   {
     title: "展示会",
     items: [
-      { href: "/app/analytics/exhibition-roi", label: "展示会（時系列/主催/テーマ）", desc: "YYYYMM時系列・主催会社・テーマ別", icon: Presentation },
-      { href: "/app/analytics/exhibitions", label: "展示会分析", desc: "集客・成果の基本集計", icon: Presentation },
-      { href: "/app/analytics/exhibition-select", label: "展示会選定", desc: "出展候補の比較", icon: Presentation },
+      // S2-3: 展示会3画面はタブで行き来できるハブに統合。入口は1つに絞る。
+      { href: "/app/analytics/exhibitions", label: "展示会ハブ", desc: "基本集計・時系列/主催/テーマ・出展選定をタブで切替", icon: Presentation },
     ],
   },
   {
@@ -33,7 +32,7 @@ const GROUPS: { title: string; items: { href: string; label: string; desc: strin
   {
     title: "パイプライン・失注",
     items: [
-      { href: "/app/analytics/lost", label: "失注分析", desc: "理由別・競合別・月別に「なぜ負けたか」", icon: ThumbsDown },
+      { href: "/app/analytics/winloss", label: "失注/成約分析", desc: "理由・競合・カテゴリ・月別に「なぜ勝てたか/負けたか」", icon: ThumbsDown },
       { href: "/app/analytics/stage-flow", label: "ステージ滞留分析", desc: "滞留日数・リードタイム・放置案件", icon: Hourglass },
     ],
   },

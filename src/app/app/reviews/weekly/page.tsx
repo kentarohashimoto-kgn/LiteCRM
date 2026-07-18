@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CalendarCheck, TrendingUp, AlertTriangle, Target, Pause } from "lucide-react";
 import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getSupabaseServer } from "@/lib/supabase/server";
@@ -58,6 +59,12 @@ export default async function WeeklyReviewPage() {
       <PageHeader
         title="週次レビュー"
         subtitle="「確認」で終わらせない。今週の打ち手を決めるための会議画面です。"
+        action={
+          <div className="flex items-center gap-3 text-xs font-semibold">
+            <Link href="/app/reviews/yomi-history" className="text-teal-primary hover:underline">ヨミ変更履歴 →</Link>
+            <Link href="/app/reviews/snapshots" className="text-teal-primary hover:underline">週報スナップショット →</Link>
+          </div>
+        }
       />
 
       {/* 着地見込み */}

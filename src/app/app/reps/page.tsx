@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getWorkspaceLite } from "@/lib/data/workspace";
 import { listOpportunities, listMembers, listAccounts, listRepTargets } from "@/lib/data/select";
 import { PageHeader } from "@/components/ui/primitives";
+import { SubTabs } from "@/components/ui/sub-tabs";
+import { REP_TABS } from "@/components/reviews/rep-nav";
 import { formatYen, startOfMonth, addMonths, monthKey } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +43,7 @@ export default async function RepsPage() {
   return (
     <div>
       <PageHeader title="営業ビュー" subtitle="営業ごとの担当顧客・案件・見込み・次月目標。名前をクリックで個人ダッシュボードへ。" />
+      <SubTabs tabs={REP_TABS} />
       <div className="card overflow-x-auto">
         <table className="w-full">
           <thead className="border-b border-black/[0.06]">

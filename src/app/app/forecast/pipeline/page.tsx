@@ -1,6 +1,8 @@
 import { listRevenueForecasts, getForecastYears } from "@/lib/data/revenue-forecast";
 import { saveRevenueForecastAction, deleteRevenueForecastAction } from "@/server/actions";
 import { PageHeader, Card, Section } from "@/components/ui/primitives";
+import { SubTabs } from "@/components/ui/sub-tabs";
+import { FORECAST_TABS } from "@/components/forecast/forecast-nav";
 import { FyTabs } from "@/components/dashboard/fy-tabs";
 import { SimpleBar } from "@/components/charts/forecast-chart";
 import { RevenueForecastImport } from "@/components/forecast/revenue-forecast-import";
@@ -53,6 +55,7 @@ export default async function ForecastPipelinePage({ searchParams }: { searchPar
         subtitle="案件ごとに期間・売上・確度を入力すると、確度で加重した月次の受注見込みが算出され、年度の着地計画になります。"
         action={<FyTabs years={years} selected={fy} currentFy={currentFy} />}
       />
+      <SubTabs tabs={FORECAST_TABS} />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card><div className="text-xs text-ink/50">見込件数</div><div className="text-2xl font-bold mt-1">{rows.length}</div></Card>

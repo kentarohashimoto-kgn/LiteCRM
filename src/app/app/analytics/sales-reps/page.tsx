@@ -3,6 +3,8 @@ import { getWorkspaceLite } from "@/lib/data/workspace";
 import { listOpportunities, listMembers, listRepTargets } from "@/lib/data/select";
 import { repMetrics } from "@/lib/analytics";
 import { PageHeader } from "@/components/ui/primitives";
+import { SubTabs } from "@/components/ui/sub-tabs";
+import { REP_TABS } from "@/components/reviews/rep-nav";
 import { RepAnalysis, type RepRow } from "@/components/analytics/rep-analysis";
 import { monthKey, startOfMonth, addMonths } from "@/lib/utils";
 
@@ -77,6 +79,7 @@ export default async function SalesRepAnalyticsPage() {
         subtitle="担当者別の行動量・受注率・単価・放置案件と、月別推移・目標・ステータスを管理します。"
         action={<Link href="/app/targets?scope=rep" className="text-xs font-semibold text-teal-primary hover:underline">月別目標を設定 →</Link>}
       />
+      <SubTabs tabs={REP_TABS} />
       <RepAnalysis rows={rows} />
     </div>
   );

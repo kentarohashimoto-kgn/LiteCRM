@@ -5,6 +5,8 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { listOpportunities, listCampaignsByChannel } from "@/lib/data/select";
 import { campaignMetrics, campaignTotals, type CampaignMetric, type CampaignLiveStat } from "@/lib/analytics";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
+import { SubTabs } from "@/components/ui/sub-tabs";
+import { EXHIBITION_TABS } from "@/components/analytics/exhibition-nav";
 import { ExhibitionChart } from "@/components/charts/exhibition-chart";
 import { EditableName } from "@/components/analytics/editable-name";
 import { formatYen, formatPercent, formatDateFull, toJstDate } from "@/lib/utils";
@@ -83,6 +85,7 @@ export default async function ExhibitionAnalyticsPage() {
         title="展示会分析"
         subtitle="最重点のリード獲得施策。展示会ごとのリード→アポ→成約→売上とCPL/CPA/CPO/ROIを分析します。"
       />
+      <SubTabs tabs={EXHIBITION_TABS} />
 
       {/* 累計KPI(実施済み) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

@@ -1,6 +1,8 @@
 import { getExhibitionBreakdown, getExhibitionDealRoi } from "@/lib/data/exhibition-analysis";
 import { saveExhibitionEventAction, saveDealDetailCostAction } from "@/server/actions";
 import { PageHeader, Card, Section } from "@/components/ui/primitives";
+import { SubTabs } from "@/components/ui/sub-tabs";
+import { EXHIBITION_TABS } from "@/components/analytics/exhibition-nav";
 import { ExhibitionChart } from "@/components/charts/exhibition-chart";
 import { DealCostImport } from "@/components/analytics/deal-cost-import";
 import { trendOf, groupBy, exhibitionLabel, fmtYm, TREND_LABEL, TREND_COLOR, type ExhibitionRow } from "@/lib/exhibition-analysis";
@@ -47,6 +49,7 @@ export default async function ExhibitionRoiPage() {
         title="展示会分析（時系列・主催・テーマ）"
         subtitle="リード取込の展示会別データ(YYYYMM_展示会名)を時系列で集計。右肩上がり傾向か、主催会社・テーマでばらつきが無いかを分析します。"
       />
+      <SubTabs tabs={EXHIBITION_TABS} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card><div className="text-xs text-ink/50">展示会数</div><div className="text-2xl font-bold mt-1">{rows.length}</div></Card>
