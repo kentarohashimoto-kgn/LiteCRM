@@ -79,6 +79,33 @@ export function MailAccountForm({ account, disabled }: { account: MailAccountVie
           自分にBCC（送信控えを確実に自分のメールに残す）
         </label>
 
+        {/* 受信取込(IMAP) */}
+        <div className="rounded-lg border border-black/[0.06] bg-mist-soft/20 p-3 space-y-2 mt-1">
+          <label className="flex items-center gap-1.5 text-sm font-medium text-ink/80">
+            <input type="checkbox" name="inbound_enabled" defaultChecked={account?.inbound_enabled ?? false} disabled={disabled} />
+            受信も取り込む（返信でシーケンス自動停止・返信をタイムラインに記録）
+          </label>
+          <p className="text-[11px] text-ink/50">
+            送信と同じアプリパスワードで受信（IMAP）も動きます。取り込むのは「自分の送信への返信」と「登録済み取引先からのメール」のみ。無関係なメールは保存しません（抜粋＋リンクのみ保持）。
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-ink/60 mb-1">IMAPホスト</label>
+              <input name="imap_host" defaultValue={account?.imap_host ?? preset?.imapHost ?? ""} placeholder={preset?.imapHost || "imap.example.com"} className="input text-sm" disabled={disabled} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink/60 mb-1">ポート</label>
+              <input name="imap_port" type="number" defaultValue={account?.imap_port ?? preset?.imapPort ?? 993} className="input text-sm" disabled={disabled} />
+            </div>
+          </div>
+          {account?.inbound_enabled && (
+            <p className="text-[11px] text-ink/50">
+              最終取得: {account.inbound_last_run_at ? new Date(account.inbound_last_run_at).toLocaleString("ja-JP") : "未実行"}
+              {account.inbound_last_error && <span className="text-rose-600"> ／ エラー: {account.inbound_last_error}</span>}
+            </p>
+          )}
+        </div>
+
         <div className="flex items-center gap-2 pt-1">
           <SubmitButton className="btn-accent inline-flex items-center gap-1 text-sm" pendingLabel="接続テスト中…">
             <Plug size={14} /> 保存して接続テスト

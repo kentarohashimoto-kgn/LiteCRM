@@ -110,7 +110,8 @@ export async function deliverTrackedEmail(sb: SupabaseClient, p: DeliverParams):
     await sb.from("email_messages").update({ status: "failed", error_text: sent.error.slice(0, 500) }).eq("id", messageId);
     return { ok: false, error: sent.error, id: messageId };
   }
-  await sb.from("email_messages").update({ status: "sent" }).eq("id", messageId);
+  // 送信時の RFC Message-Id を保存(受信同期WO-24で返信照合に使う)
+  await sb.from("email_messages").update({ status: "sent", smtp_message_id: sent.messageId || null }).eq("id", messageId);
 
   // タイムラインの鮮度
   if (p.opportunityId) await sb.from("opportunities").update({ last_activity_at: now }).eq("id", p.opportunityId);

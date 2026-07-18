@@ -17,6 +17,11 @@ export interface MailAccountView {
   smtp_username: string;
   bcc_self: boolean;
   verified_at: string | null;
+  imap_host: string | null;
+  imap_port: number;
+  inbound_enabled: boolean;
+  inbound_last_run_at: string | null;
+  inbound_last_error: string | null;
 }
 
 /**
@@ -28,7 +33,7 @@ export default async function MailAccountPage({ searchParams }: { searchParams: 
   const sb = getSupabaseServer();
   const { data } = await sb
     .from("user_mail_accounts")
-    .select("provider, from_email, from_name, smtp_host, smtp_port, smtp_secure, smtp_username, bcc_self, verified_at")
+    .select("provider, from_email, from_name, smtp_host, smtp_port, smtp_secure, smtp_username, bcc_self, verified_at, imap_host, imap_port, inbound_enabled, inbound_last_run_at, inbound_last_error")
     .maybeSingle();
   const account = (data as MailAccountView | null) ?? null;
   const secretReady = mailCredSecretConfigured();

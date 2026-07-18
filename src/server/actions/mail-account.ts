@@ -30,6 +30,9 @@ export async function saveMailAccountAction(formData: FormData): Promise<void> {
   const username = (String(formData.get("smtp_username") ?? "").trim() || fromEmail).trim();
   const password = String(formData.get("smtp_password") ?? "");
   const bccSelf = String(formData.get("bcc_self") ?? "") === "on";
+  const imapHost = (String(formData.get("imap_host") ?? "").trim() || preset?.imapHost || "").trim();
+  const imapPort = parseInt(String(formData.get("imap_port") ?? "") || String(preset?.imapPort ?? 993), 10);
+  const inboundEnabled = String(formData.get("inbound_enabled") ?? "") === "on";
 
   if (!fromEmail || !host || !port) back("error=invalid");
 
@@ -69,6 +72,9 @@ export async function saveMailAccountAction(formData: FormData): Promise<void> {
     smtp_username: username,
     smtp_password_enc: passwordEnc!,
     bcc_self: bccSelf,
+    imap_host: imapHost || null,
+    imap_port: Number.isFinite(imapPort) ? imapPort : 993,
+    inbound_enabled: inboundEnabled,
     status: "active",
     verified_at: verified ? new Date().toISOString() : null,
   };

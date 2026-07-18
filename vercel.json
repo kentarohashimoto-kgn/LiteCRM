@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/sequences",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/inbound-sync",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

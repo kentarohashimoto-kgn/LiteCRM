@@ -69,13 +69,15 @@ export function isValidEmail(addr: string | null | undefined): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr.trim());
 }
 
-/** メール送信プロバイダ(SMTP)。GWS/Zoho は既定のSMTP設定を持つ。 */
+/** メール送信/受信プロバイダ。GWS/Zoho は既定のSMTP/IMAP設定を持つ。 */
 export interface MailProviderPreset {
   key: string;
   label: string;
   host: string;
   port: number;
   secure: boolean; // true=SSL(465)
+  imapHost: string;
+  imapPort: number;
   help: string;
 }
 
@@ -86,7 +88,9 @@ export const MAIL_PROVIDERS: MailProviderPreset[] = [
     host: "smtp.gmail.com",
     port: 465,
     secure: true,
-    help: "2段階認証を有効化し「アプリ パスワード」を発行して入力してください。送信控えは自動でGmailの[送信済み]に残ります。",
+    imapHost: "imap.gmail.com",
+    imapPort: 993,
+    help: "2段階認証を有効化し「アプリ パスワード」を発行して入力してください。送信控えは自動でGmailの[送信済み]に残ります。受信取込も同じアプリパスワードで動きます。",
   },
   {
     key: "zoho",
@@ -94,7 +98,9 @@ export const MAIL_PROVIDERS: MailProviderPreset[] = [
     host: "smtp.zoho.com",
     port: 465,
     secure: true,
-    help: "Zohoで「アプリ固有パスワード」を発行して入力してください。日本DCは smtp.zoho.jp の場合があります。[設定→メール→送信(SMTP)の控えを保存]を有効にすると[送信済み]に残ります。",
+    imapHost: "imap.zoho.com",
+    imapPort: 993,
+    help: "Zohoで「アプリ固有パスワード」を発行して入力してください。日本DCは smtp.zoho.jp / imap.zoho.jp の場合があります。[設定→メール→送信(SMTP)の控えを保存]を有効にすると[送信済み]に残ります。",
   },
   {
     key: "other",
@@ -102,7 +108,9 @@ export const MAIL_PROVIDERS: MailProviderPreset[] = [
     host: "",
     port: 465,
     secure: true,
-    help: "SMTPホスト/ポート/ユーザー名/パスワードを手動で設定します。",
+    imapHost: "",
+    imapPort: 993,
+    help: "SMTP/IMAPホスト/ポート/ユーザー名/パスワードを手動で設定します。",
   },
 ];
 
