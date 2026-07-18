@@ -58,15 +58,41 @@ export interface YomiCondition {
   from_in?: string[];
   /** 'down'=転落時のみ / 'up'=前進時のみ / 'any'|未指定=方向を問わない。 */
   direction?: "down" | "up" | "any";
+  /** 案件金額の下限(円)。省略時は金額を問わない。 */
+  amount_gte?: number;
 }
 
-/** ヨミ変更イベントが condition にマッチするか(AND結合)。 */
+/** ヨミ変更イベントが condition にマッチするか(AND結合)。金額は別途 meetsAmount で判定。 */
 export function matchesYomiCondition(ev: YomiChangeEvent, cond: YomiCondition | null | undefined): boolean {
   const c = cond ?? {};
   if (c.to_in && c.to_in.length && !(ev.to_yomi && c.to_in.includes(ev.to_yomi))) return false;
   if (c.from_in && c.from_in.length && !(ev.from_yomi && c.from_in.includes(ev.from_yomi))) return false;
   if (c.direction === "down" && !isYomiDowngrade(ev.from_yomi, ev.to_yomi)) return false;
   if (c.direction === "up" && !(isYomiDowngrade(ev.to_yomi, ev.from_yomi))) return false;
+  return true;
+}
+
+/** 金額しきい値(amount_gte)を満たすか。未指定なら常に true。 */
+export function meetsAmount(amount: number | null | undefined, min: number | null | undefined): boolean {
+  if (min === null || min === undefined) return true;
+  return (amount ?? 0) >= min;
+}
+
+// ---- ステージ変更トリガー ----
+export interface StageChangeEvent {
+  from_stage: string | null;
+  to_stage: string | null;
+}
+export interface StageCondition {
+  to_in?: string[];
+  from_in?: string[];
+  amount_gte?: number;
+}
+/** ステージ変更イベントが condition にマッチするか(AND結合・金額は meetsAmount)。 */
+export function matchesStageCondition(ev: StageChangeEvent, cond: StageCondition | null | undefined): boolean {
+  const c = cond ?? {};
+  if (c.to_in && c.to_in.length && !(ev.to_stage && c.to_in.includes(ev.to_stage))) return false;
+  if (c.from_in && c.from_in.length && !(ev.from_stage && c.from_in.includes(ev.from_stage))) return false;
   return true;
 }
 
@@ -139,6 +165,49 @@ export const AUTOMATION_RECIPES: AutomationRecipe[] = [
       { type: "slack_notify", template: ":tada: *{account}* を受注！（担当 {owner}） {from_yomi} → *{to_yomi}*" },
     ],
   },
+  {
+    key: "high_value_lost",
+    name: "高額案件（≥500万）の失注 → 本部へ通知",
+    description: "500万円以上の案件が 7.オチ になった時に、Slack と担当への通知で本部が気づけます。",
+    trigger_type: "yomi_changed",
+    condition_json: { to_in: ["7.オチ"], amount_gte: 5000000 },
+    action_json: [
+      { type: "slack_notify", template: ":rotating_light: 高額失注: *{account}*（{amount}円・担当 {owner}）が {to_yomi} に。要因の確認を。" },
+      { type: "app_notify", to: "owner", title: "高額案件が失注", body: "{account}（{amount}円）が {to_yomi}" },
+    ],
+  },
+  {
+    key: "stage_reach_proposal",
+    name: "提案済に到達 → フォロータスク自動起票",
+    description: "ステージが「提案済」になった時に、担当者へ提案後フォローのタスクを自動で起票します。",
+    trigger_type: "stage_changed",
+    condition_json: { to_in: ["proposal_sent"] },
+    action_json: [
+      { type: "create_task", title: "提案後フォロー: {account}", due_in_days: 3, assign: "owner" },
+    ],
+  },
+  {
+    key: "ac_overdue",
+    name: "次回AC 3日超過 → 担当へ催促",
+    description: "次回アクション予定日を3日以上過ぎた案件について、担当者へアプリ内通知と催促タスクを出します。",
+    trigger_type: "next_action_overdue",
+    condition_json: { overdue_days_gte: 3 },
+    action_json: [
+      { type: "app_notify", to: "owner", title: "次回ACが超過しています", body: "{account}: 次回AC {next_action_date} が超過" },
+      { type: "create_task", title: "次回AC超過のリカバリ: {account}", due_in_days: 1, assign: "owner" },
+    ],
+  },
+  {
+    key: "stale_proposal",
+    name: "提案済のまま7日無活動 → フォロータスク",
+    description: "提案済ステージのまま7日間活動が無い案件に、フォロータスクを自動起票します。",
+    trigger_type: "no_activity_days",
+    condition_json: { days_gte: 7, stage_in: ["proposal_sent", "internal_review"] },
+    action_json: [
+      { type: "app_notify", to: "owner", title: "提案後フォローが滞っています", body: "{account}: 7日間 活動がありません" },
+      { type: "create_task", title: "提案後フォロー(滞留): {account}", due_in_days: 1, assign: "owner" },
+    ],
+  },
 ];
 
 export const RECIPE_MAP: Record<string, AutomationRecipe> = Object.fromEntries(
@@ -146,4 +215,9 @@ export const RECIPE_MAP: Record<string, AutomationRecipe> = Object.fromEntries(
 );
 
 /** cron が実装済みで実際に発火するトリガー種別(UIの注意書きに使う)。 */
-export const IMPLEMENTED_TRIGGERS = new Set(["yomi_changed"]);
+export const IMPLEMENTED_TRIGGERS = new Set([
+  "yomi_changed",
+  "stage_changed",
+  "next_action_overdue",
+  "no_activity_days",
+]);

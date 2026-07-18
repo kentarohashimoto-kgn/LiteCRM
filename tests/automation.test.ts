@@ -6,9 +6,12 @@ import { describe, expect, it } from "vitest";
 import {
   isYomiDowngrade,
   matchesYomiCondition,
+  matchesStageCondition,
+  meetsAmount,
   renderTemplate,
   AUTOMATION_RECIPES,
   RECIPE_MAP,
+  IMPLEMENTED_TRIGGERS,
 } from "@/lib/automation";
 
 describe("isYomiDowngrade (ヨミ転落判定)", () => {
@@ -67,6 +70,41 @@ describe("renderTemplate (テンプレ差し込み)", () => {
   });
   it("未知の変数は捏造せずそのまま残す", () => {
     expect(renderTemplate("{unknown} と {account}", { account: "A社" })).toBe("{unknown} と A社");
+  });
+});
+
+describe("matchesStageCondition", () => {
+  it("to_in にマッチ", () => {
+    expect(matchesStageCondition({ from_stage: "meeting_done", to_stage: "proposal_sent" }, { to_in: ["proposal_sent"] })).toBe(true);
+  });
+  it("to_in 外はマッチしない", () => {
+    expect(matchesStageCondition({ from_stage: "meeting_done", to_stage: "won" }, { to_in: ["proposal_sent"] })).toBe(false);
+  });
+  it("from_in を尊重", () => {
+    expect(matchesStageCondition({ from_stage: "won", to_stage: "proposal_sent" }, { to_in: ["proposal_sent"], from_in: ["meeting_done"] })).toBe(false);
+  });
+});
+
+describe("meetsAmount", () => {
+  it("未指定は常に true", () => {
+    expect(meetsAmount(100, undefined)).toBe(true);
+    expect(meetsAmount(null, undefined)).toBe(true);
+  });
+  it("しきい値以上/未満", () => {
+    expect(meetsAmount(5_000_000, 5_000_000)).toBe(true);
+    expect(meetsAmount(4_999_999, 5_000_000)).toBe(false);
+    expect(meetsAmount(null, 1)).toBe(false);
+  });
+});
+
+describe("IMPLEMENTED_TRIGGERS (WO-19で拡張)", () => {
+  it("4トリガーが実装済み", () => {
+    for (const t of ["yomi_changed", "stage_changed", "next_action_overdue", "no_activity_days"]) {
+      expect(IMPLEMENTED_TRIGGERS.has(t)).toBe(true);
+    }
+  });
+  it("全レシピのトリガーは実装済みトリガーに含まれる", () => {
+    for (const r of AUTOMATION_RECIPES) expect(IMPLEMENTED_TRIGGERS.has(r.trigger_type)).toBe(true);
   });
 });
 
