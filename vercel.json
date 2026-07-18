@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/xray-snapshot",
       "schedule": "30 15 * * *"
+    },
+    {
+      "path": "/api/cron/automation",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
