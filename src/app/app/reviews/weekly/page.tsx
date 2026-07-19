@@ -60,7 +60,7 @@ export default async function WeeklyReviewPage() {
         title="週次レビュー"
         subtitle="「確認」で終わらせない。今週の打ち手を決めるための会議画面です。"
         action={
-          <div className="flex items-center gap-3 text-xs font-semibold">
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs font-semibold">
             <Link href="/app/reviews/yomi-history" className="text-teal-primary hover:underline">ヨミ変更履歴 →</Link>
             <Link href="/app/reviews/snapshots" className="text-teal-primary hover:underline">週報スナップショット →</Link>
           </div>

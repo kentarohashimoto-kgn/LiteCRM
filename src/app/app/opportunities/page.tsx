@@ -37,7 +37,7 @@ export default async function OpportunitiesPage() {
         title="案件"
         subtitle="顧客 › 案件 › 商談。一覧はスクロールで追加読込。ヨミ・金額・次アクションはその場編集できます。"
         action={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5">
             <Link href="/app/checklist" className="text-xs font-semibold text-teal-primary hover:underline">商談チェック →</Link>
             <LinkButton href="/app/opportunities/new" variant="accent">
               <Plus size={16} /> 案件を作成

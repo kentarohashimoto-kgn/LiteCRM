@@ -30,7 +30,7 @@ export default async function RepReportPage({
         title="営業マン別 週報"
         subtitle="担当ごとの目標・実績・見込み・案件を自動集計。先週の差分と来週/1ヶ月先の予定を型に沿って記入します。"
         action={
-          <div className="flex items-center gap-3 text-xs font-semibold">
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs font-semibold">
             <Link href="/app/reviews/yomi-history" className="text-teal-primary hover:underline">ヨミ変更履歴 →</Link>
             <Link href="/app/reviews/snapshots" className="text-teal-primary hover:underline">週報スナップショット →</Link>
           </div>
