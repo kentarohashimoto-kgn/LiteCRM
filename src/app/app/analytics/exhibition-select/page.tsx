@@ -1,6 +1,8 @@
 import { listExhibitionCandidates } from "@/lib/data/exhibition";
 import { saveExhibitionCandidateAction, setExhibitionStatusAction, setExhibitionDecisionAction, deleteExhibitionCandidateAction } from "@/server/actions";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
+import { SubTabs } from "@/components/ui/sub-tabs";
+import { EXHIBITION_TABS } from "@/components/analytics/exhibition-nav";
 import { EXH_STATUS, EXH_STATUS_LABEL, EXH_DECISION, EXH_DECISION_LABEL, THEME_FIT, EXH_RANK_COLOR } from "@/lib/exhibition";
 import { formatYen, formatDateFull, cn } from "@/lib/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -18,6 +20,7 @@ export default async function ExhibitionSelectPage() {
   return (
     <div>
       <PageHeader title="展示会選定" subtitle="候補を登録すると、想定リード・テーマ相性・ROI・リード単価・日程の詰まりから自動でスコア／ランクを算出。色分けを見て幹部が最終決定します。" />
+      <SubTabs tabs={EXHIBITION_TABS} />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
         <Card><div className="text-xs text-ink/50">検討中の候補</div><div className="text-2xl font-bold mt-1">{active.length}</div></Card>

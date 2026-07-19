@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireCtx } from "@/lib/session";
 import { PageHeader } from "@/components/ui/primitives";
 import { listKnowledge, filterKnowledge } from "@/lib/data/knowledge";
@@ -29,6 +30,12 @@ export default async function KnowledgePage({
       <PageHeader
         title="ノウハウ・事例"
         subtitle="商談で得たノウハウ・成約/失注理由・刺さる事例を蓄積し、必要なときに検索して引き出します。"
+        action={
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs font-semibold">
+            <Link href="/app/playbooks" className="text-teal-primary hover:underline">カトルセの型 →</Link>
+            <Link href="/app/content" className="text-teal-primary hover:underline">記事ネタ・ブログ →</Link>
+          </div>
+        }
       />
       <KnowledgeView entries={entries} counts={counts} q={q} kind={kind} />
     </div>

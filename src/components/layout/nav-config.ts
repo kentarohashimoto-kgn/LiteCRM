@@ -24,15 +24,9 @@ import {
   FolderKanban,
   Bot,
   Inbox,
-  History,
   Lightbulb,
-  Swords,
-  PenLine,
-  Scale,
-  ClipboardCheck,
   NotebookPen,
   Timer,
-  ArrowRightLeft,
   Workflow,
   Mail,
   Telescope,
@@ -50,6 +44,10 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+// IA再編(docs/IA_MENU_REORG_PLAN_2026-07.md STEP 1):
+// メニューから外した画面は削除していない。各ハブ/親ページのリンクから到達できる。
+//   商談チェック→案件一覧ヘッダ / 失注・成約分析→分析ハブ / ヨミ変更履歴・週報スナップショット→週次レビュー・週報
+//   Sランク攻略・既存顧客深耕→顧客一覧ヘッダ / カトルセの型・記事ネタ→ノウハウ・事例
 const groups: NavGroup[] = [
   {
     heading: "ホーム",
@@ -57,7 +55,6 @@ const groups: NavGroup[] = [
       { href: "/app/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
       { href: "/app/today", label: "今日のアポ・AC", icon: Sun },
       { href: "/app/review", label: "AI確認キュー", icon: Inbox },
-      { href: "/app/checklist", label: "商談チェック", icon: ClipboardCheck },
       { href: "/app/tasks", label: "タスク", icon: CheckSquare },
       { href: "/app/activities", label: "活動履歴", icon: ActivityIcon },
     ],
@@ -81,27 +78,23 @@ const groups: NavGroup[] = [
       { href: "/app/business-cards", label: "名刺情報", icon: Contact },
       { href: "/app/email/templates", label: "メール", icon: Mail },
       { href: "/app/leads", label: "リード", icon: Sparkles },
-      { href: "/app/srank", label: "Sランク攻略", icon: Star },
-      { href: "/app/nurture", label: "既存顧客深耕", icon: TrendingUp },
       { href: "/app/knowledge", label: "ノウハウ・事例", icon: Lightbulb },
-      { href: "/app/playbooks", label: "カトルセの型", icon: Swords },
     ],
   },
   {
-    heading: "分析・レビュー",
+    heading: "分析",
     items: [
       { href: "/app/pmo", label: "AI-PMO", icon: Telescope },
       { href: "/app/analytics/xray", label: "営業レントゲン", icon: ScanLine },
       { href: "/app/analytics", label: "分析ハブ", icon: Gauge },
-      { href: "/app/analytics/winloss", label: "失注/成約分析", icon: Scale },
       { href: "/app/exec", label: "経営レビュー", icon: Presentation },
+    ],
+  },
+  {
+    heading: "レビュー",
+    items: [
       { href: "/app/reviews/weekly", label: "週次レビュー", icon: CalendarCheck },
       { href: "/app/reviews/rep", label: "営業マン別週報", icon: NotebookPen },
-      { href: "/app/reviews/yomi-history", label: "ヨミ変更履歴", icon: ArrowRightLeft },
-      { href: "/app/reviews/snapshots", label: "週報スナップショット", icon: History },
-      { href: "/app/content", label: "記事ネタ・ブログ", icon: PenLine },
-      { href: "/app/exec/batch", label: "AIバッチ運用", icon: Bot },
-      { href: "/app/automation", label: "ワークフロー自動化", icon: Workflow },
     ],
   },
   {
@@ -109,6 +102,8 @@ const groups: NavGroup[] = [
     items: [
       { href: "/app/settings", label: "設定", icon: Settings },
       { href: "/app/opportunities/import", label: "データ取込", icon: ClipboardList },
+      { href: "/app/exec/batch", label: "AIバッチ運用", icon: Bot },
+      { href: "/app/automation", label: "ワークフロー自動化", icon: Workflow },
     ],
   },
 ];

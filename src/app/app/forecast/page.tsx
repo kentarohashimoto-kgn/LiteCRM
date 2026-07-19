@@ -5,6 +5,8 @@ import { getSalesTargets, listOpportunities } from "@/lib/data/select";
 import { getLeadMetrics } from "@/lib/data/leads";
 import type { BillingSchedule } from "@/lib/types";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
+import { SubTabs } from "@/components/ui/sub-tabs";
+import { FORECAST_TABS } from "@/components/forecast/forecast-nav";
 import { ForecastChart } from "@/components/charts/forecast-chart";
 import { ForecastTabs, type WonRow, type PipelineRow, type InputRow } from "@/components/forecast/forecast-tabs";
 import { buildSubscriptionForecast } from "@/lib/subscription";
@@ -251,6 +253,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: { f
         }
       />
 
+      <SubTabs tabs={FORECAST_TABS} />
       <ForecastTabs monthly={monthly} won={wonRows} pipeline={pipelineRows} inputs={inputRows} subMonthly={subMonthly} subs={subs} />
     </div>
   );

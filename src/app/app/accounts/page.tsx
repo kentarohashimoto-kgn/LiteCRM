@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { requireCtx } from "@/lib/session";
@@ -32,7 +33,13 @@ export default async function AccountsPage() {
       <PageHeader
         title="顧客"
         subtitle="累積売上の高い順で追客優先度を可視化。スクロールで追加読込。エリア・業種・担当営業で絞り込み。"
-        action={<LinkButton href="/app/accounts/new" variant="accent"><Plus size={16} /> 顧客を追加</LinkButton>}
+        action={
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5">
+            <Link href="/app/srank" className="text-xs font-semibold text-teal-primary hover:underline">Sランク攻略 →</Link>
+            <Link href="/app/nurture" className="text-xs font-semibold text-teal-primary hover:underline">既存顧客深耕 →</Link>
+            <LinkButton href="/app/accounts/new" variant="accent"><Plus size={16} /> 顧客を追加</LinkButton>
+          </div>
+        }
       />
       <AccountsPaginatedTable
         initialRows={page.rows}
