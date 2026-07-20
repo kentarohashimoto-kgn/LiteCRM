@@ -31,28 +31,36 @@ export const getCtxOrNull = cache(async (): Promise<Ctx | null> => {
   const user = session?.user;
   if (!user) return null;
 
-  // プレゼンモード: Cookie が立っていて、かつデモテナントに参加している場合は
-  // デモテナントの membership を採用する(全画面が無改修でダミーデータに切り替わる)。
-  const presentationOn = cookies().get(PRESENTATION_COOKIE)?.value === "1";
-  if (presentationOn) {
-    const { data: demo } = await supabase
-      .from("memberships")
-      .select("tenant_id, role, tenants!inner(is_demo)")
+  // プレゼンモード: Cookie がヒント。実際の可否は presentation_sessions(DB)を真とする。
+  // これにより RLS(current_tenant_ids)とアプリの判定が食い違わない。
+  const presentationHint = cookies().get(PRESENTATION_COOKIE)?.value === "1";
+  if (presentationHint) {
+    const { data: sess } = await supabase
+      .from("presentation_sessions")
+      .select("expires_at")
       .eq("user_id", user.id)
-      .eq("status", "active")
-      .eq("tenants.is_demo", true)
-      .limit(1)
       .maybeSingle();
-    if (demo) {
-      return {
-        userId: user.id,
-        role: demo.role as Role,
-        tenantId: demo.tenant_id as string,
-        email: user.email ?? "",
-        isPresentation: true,
-      };
+    const active = sess?.expires_at ? new Date(sess.expires_at as string) > new Date() : false;
+    if (active) {
+      const { data: demo } = await supabase
+        .from("memberships")
+        .select("tenant_id, role, tenants!inner(is_demo)")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .eq("tenants.is_demo", true)
+        .limit(1)
+        .maybeSingle();
+      if (demo) {
+        return {
+          userId: user.id,
+          role: demo.role as Role,
+          tenantId: demo.tenant_id as string,
+          email: user.email ?? "",
+          isPresentation: true,
+        };
+      }
     }
-    // Cookie は立っているがデモ未参加 → 通常テナントにフォールバック。
+    // セッション無効 or デモ未参加 → 通常テナントにフォールバック。
   }
 
   // 通常モード: デモテナントは明示的に除外する。
