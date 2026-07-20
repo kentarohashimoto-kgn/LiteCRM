@@ -28,6 +28,7 @@ export type SendEmailResult = { ok: true; id: string } | { ok: false; error: str
  */
 export async function sendEmailViaSmtpAction(input: SendEmailInput): Promise<SendEmailResult> {
   const ctx = await requireCtx();
+  if (ctx.isPresentation) return { ok: false, error: "プレゼンモード中はメール送信できません（デモ用データのため実送信を抑止しています）。" };
   if (!SEND_ROLES.includes(ctx.role)) return { ok: false, error: "送信権限がありません" };
   if (!mailCredSecretConfigured()) return { ok: false, error: "サーバーに MAIL_CRED_SECRET が未設定です（管理者に連絡してください）" };
   if (!isValidEmail(input.toAddr)) return { ok: false, error: "宛先メールアドレスが正しくありません" };

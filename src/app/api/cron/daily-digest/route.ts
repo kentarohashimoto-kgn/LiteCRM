@@ -113,7 +113,7 @@ export async function GET(req: Request) {
   let notified = 0;
   if (owners.length > 0) {
     try {
-      const { data: tenant } = await admin.from("tenants").select("id").limit(1).maybeSingle();
+      const { data: tenant } = await admin.from("tenants").select("id").eq("is_demo", false).limit(1).maybeSingle();
       if (tenant) {
         const rows = owners
           .filter(([uid]) => uid)
@@ -147,7 +147,7 @@ export async function GET(req: Request) {
   try {
     const in3 = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString().slice(0, 10);
     const [{ data: tenant }, msR, taskR, fuR, boMembersR] = await Promise.all([
-      admin.from("tenants").select("id").limit(1).maybeSingle(),
+      admin.from("tenants").select("id").eq("is_demo", false).limit(1).maybeSingle(),
       admin
         .from("subsidy_milestones")
         .select("label, due_date, subsidy_cases(account_name, training_name, assignee_user_id, status)")

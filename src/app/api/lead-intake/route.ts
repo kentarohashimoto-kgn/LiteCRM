@@ -64,7 +64,8 @@ export async function POST(req: Request) {
   }
 
   const admin = getSupabaseAdmin();
-  const { data: tenant } = await admin.from("tenants").select("id").limit(1).maybeSingle();
+  // 実テナントのみ。デモテナントに実リードが流入するのを防ぐ。
+  const { data: tenant } = await admin.from("tenants").select("id").eq("is_demo", false).limit(1).maybeSingle();
   if (!tenant) {
     return NextResponse.json({ ok: false, error: "no tenant" }, { status: 500, headers: CORS_HEADERS });
   }

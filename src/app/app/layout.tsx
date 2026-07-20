@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { PresentationBanner } from "@/components/layout/presentation-mode";
 import { requireCtx } from "@/lib/session";
 import { FeedbackOverlay } from "@/components/ui/feedback-overlay";
 
@@ -11,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen bg-mist-soft">
       <Sidebar role={ctx.role} />
       <div className="flex-1 min-w-0 flex flex-col">
+        {ctx.isPresentation && <PresentationBanner />}
         <Topbar />
         {/* モバイルはボトムナビの高さ分だけ下余白を確保 */}
         <main className="flex-1 w-full min-w-0 p-4 pb-24 md:p-6">{children}</main>

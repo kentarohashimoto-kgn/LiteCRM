@@ -1,13 +1,19 @@
 import { cache } from "react";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import type { Role } from "@/lib/types";
+
+/** プレゼンモード判定に使う Cookie 名。値が "1" のときデモテナントで動作する。 */
+export const PRESENTATION_COOKIE = "catorce_presentation";
 
 export interface Ctx {
   userId: string;
   role: Role;
   tenantId: string;
   email: string;
+  /** プレゼンモード(デモテナントで動作中)なら true。バナー表示・送信抑止に使う。 */
+  isPresentation: boolean;
 }
 
 /**
@@ -25,11 +31,38 @@ export const getCtxOrNull = cache(async (): Promise<Ctx | null> => {
   const user = session?.user;
   if (!user) return null;
 
+  // プレゼンモード: Cookie が立っていて、かつデモテナントに参加している場合は
+  // デモテナントの membership を採用する(全画面が無改修でダミーデータに切り替わる)。
+  const presentationOn = cookies().get(PRESENTATION_COOKIE)?.value === "1";
+  if (presentationOn) {
+    const { data: demo } = await supabase
+      .from("memberships")
+      .select("tenant_id, role, tenants!inner(is_demo)")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .eq("tenants.is_demo", true)
+      .limit(1)
+      .maybeSingle();
+    if (demo) {
+      return {
+        userId: user.id,
+        role: demo.role as Role,
+        tenantId: demo.tenant_id as string,
+        email: user.email ?? "",
+        isPresentation: true,
+      };
+    }
+    // Cookie は立っているがデモ未参加 → 通常テナントにフォールバック。
+  }
+
+  // 通常モード: デモテナントは明示的に除外する。
+  // (単一の実テナントでも .limit(1) の非決定性でデモを掴まないための安全策)
   const { data: membership } = await supabase
     .from("memberships")
-    .select("tenant_id, role")
+    .select("tenant_id, role, tenants!inner(is_demo)")
     .eq("user_id", user.id)
     .eq("status", "active")
+    .eq("tenants.is_demo", false)
     .limit(1)
     .maybeSingle();
 
@@ -40,6 +73,7 @@ export const getCtxOrNull = cache(async (): Promise<Ctx | null> => {
     role: membership.role as Role,
     tenantId: membership.tenant_id as string,
     email: user.email ?? "",
+    isPresentation: false,
   };
 });
 
