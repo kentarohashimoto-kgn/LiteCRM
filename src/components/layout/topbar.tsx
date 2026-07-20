@@ -3,6 +3,7 @@ import { Avatar } from "@/components/ui/primitives";
 import { QuickAdd } from "@/components/layout/quick-add";
 import { GlobalSearch } from "@/components/layout/global-search";
 import { NotificationBell } from "@/components/layout/notification-bell";
+import { PresentationToggleButton } from "@/components/layout/presentation-mode";
 import { signOut } from "@/server/actions";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
@@ -25,11 +26,14 @@ export async function Topbar() {
   return (
     <header className="sticky top-0 z-10 flex items-center justify-between gap-2 md:gap-4 border-b border-black/[0.05] bg-white/80 backdrop-blur px-3 md:px-6 py-2.5 md:py-3">
       <div className="flex items-center gap-3 text-sm flex-1 min-w-0">
-        <span className="font-semibold text-ink shrink-0 hidden lg:inline">株式会社カトルセ</span>
+        <span className="font-semibold text-ink shrink-0 hidden lg:inline">
+          {ctx.isPresentation ? "株式会社アークサイド（デモ）" : "株式会社カトルセ"}
+        </span>
         <span className="pill bg-teal-light text-teal-deep shrink-0 hidden lg:inline">{ROLE_MAP[ctx.role]?.label ?? ctx.role}</span>
         <GlobalSearch />
       </div>
       <div className="flex items-center gap-2.5 md:gap-4">
+        {!ctx.isPresentation && <PresentationToggleButton />}
         <QuickAdd />
         <NotificationBell initialUnread={unread ?? 0} />
         <div className="flex items-center gap-2">

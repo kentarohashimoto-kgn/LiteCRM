@@ -29,7 +29,8 @@ export async function GET(req: Request) {
   const cmpStart = new Date(Date.UTC(y, m - 2, 1));
   const label = `${prevStart.getUTCFullYear()}年${prevStart.getUTCMonth() + 1}月 月次診断`;
 
-  const { data: tenants } = await admin.from("tenants").select("id");
+  // デモテナントは診断対象外(AI呼び出しの無駄・ダミーデータの診断を避ける)。
+  const { data: tenants } = await admin.from("tenants").select("id").eq("is_demo", false);
   const results: Record<string, string> = {};
 
   for (const t of tenants ?? []) {
