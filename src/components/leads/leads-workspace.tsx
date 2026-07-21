@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Phone, List, Building2, BarChart3, History, Trash2, Upload, ChevronLeft, ChevronRight, Download, Filter } from "lucide-react";
+import { Search, Phone, List, Building2, BarChart3, History, Trash2, Upload, ChevronLeft, ChevronRight, Download, Filter, Inbox } from "lucide-react";
 import { DownloadPanel } from "@/components/leads/download-panel";
 import { LEAD_DISPOSITIONS, LEAD_DISPOSITION_MAP } from "@/lib/constants";
 import { setLeadDispositionAction, setLeadCallOwnerAction, setLeadFunnelStageAction, deleteImportBatchAction, setAcquirerAliasAction, upsertLeadsBatchAction, recomputeEngagementAction } from "@/server/actions";
@@ -24,7 +24,7 @@ export interface BatchRow {
   config: Record<string, unknown>;
 }
 export interface AliasRow { raw: string; name: string }
-export type LeadsTab = "list" | "funnel" | "queue" | "company" | "analysis" | "download" | "batches";
+export type LeadsTab = "list" | "inquiries" | "funnel" | "queue" | "company" | "analysis" | "download" | "batches";
 interface ListData { rows: WsListRow[]; total: number; page: number; pageSize: number }
 interface QueueData { rows: WsQueueRow[]; total: number }
 interface PresetRow { id: string; name: string; columns: string[] }
@@ -74,6 +74,7 @@ export function LeadsWorkspace({
     <div className="space-y-4">
       <div className="inline-flex rounded-xl border border-black/10 bg-white p-0.5 flex-wrap">
         <TabLink active={tab === "list"} tab="list" icon={<List size={15} />} label="リード一覧" />
+        <TabLink active={tab === "inquiries"} tab="inquiries" icon={<Inbox size={15} />} label="HP問合せ" />
         <TabLink active={tab === "funnel"} tab="funnel" icon={<Filter size={15} />} label="ファネル" />
         <TabLink active={tab === "queue"} tab="queue" icon={<Phone size={15} />} label="架電キュー" />
         <TabLink active={tab === "company"} tab="company" icon={<Building2 size={15} />} label="企業ビュー" />
@@ -82,6 +83,7 @@ export function LeadsWorkspace({
         <TabLink active={tab === "batches"} tab="batches" icon={<History size={15} />} label="取込履歴" />
       </div>
       {tab === "list" && list && <LeadList list={list} filters={filters} events={events} />}
+      {tab === "inquiries" && list && <LeadList list={list} filters={filters} events={events} tabKey="inquiries" />}
       {tab === "funnel" && funnel && <FunnelView funnel={funnel} />}
       {tab === "queue" && queue && <CallQueue queue={queue} />}
       {tab === "company" && company && <CompanyView companies={company} />}
@@ -93,14 +95,17 @@ export function LeadsWorkspace({
 }
 
 // ============ リード一覧(サーバー側フィルタ＋ページング) ============
-function LeadList({ list, filters, events }: { list: ListData; filters: LeadsFilters; events: string[] }) {
+// tabKey="inquiries" のときは「HP問合せ」タブとして、Webフォーム由来(HP問合せ・資料請求)に
+// 絞った一覧を表示する(絞り込み自体はサーバー側で sourceIn により適用済み)。
+function LeadList({ list, filters, events, tabKey = "list" }: { list: ListData; filters: LeadsFilters; events: string[]; tabKey?: LeadsTab }) {
   const router = useRouter();
   const [q, setQ] = useState(filters.q ?? "");
+  const isInquiries = tabKey === "inquiries";
 
   const go = (next: Partial<LeadsFilters>) => {
     const f = { ...filters, ...next };
     const p = new URLSearchParams();
-    p.set("tab", "list");
+    p.set("tab", tabKey);
     if (f.q) p.set("q", f.q);
     if (f.event) p.set("ev", f.event);
     if (f.disposition) p.set("disp", f.disposition);
@@ -113,6 +118,12 @@ function LeadList({ list, filters, events }: { list: ListData; filters: LeadsFil
 
   return (
     <div className="space-y-3">
+      {isInquiries && (
+        <p className="text-sm text-ink/60 px-1">
+          HPの問い合わせフォーム（<b>HP問合せ</b>・<b>資料請求</b>）から届いた新規問合せだけを分離表示しています。
+          不要な営業問合せは「決着」を<b>対象外</b>に、有効な問合せは右端の<b>案件化</b>で商談化してください。
+        </p>
+      )}
       <div className="card card-pad flex flex-wrap items-center gap-2">
         <form
           onSubmit={(e) => { e.preventDefault(); go({ q, page: 1 }); }}
