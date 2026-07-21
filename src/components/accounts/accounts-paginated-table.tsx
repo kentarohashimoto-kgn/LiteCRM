@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, ChevronDown, X, RotateCcw } from "lucide-react";
 import { ACCOUNT_RANKS, ACCOUNT_FOCUS } from "@/lib/constants";
 import { fetchAccountsPageAction, setAccountFieldAction } from "@/server/actions/accounts";
 import type { AccountPageRow, AccountPageFilter } from "@/lib/data/accounts-page";
@@ -27,14 +27,28 @@ export function AccountsPaginatedTable({
   industries: string[];
 }) {
   const [q, setQ] = useState("");
-  const [rank, setRank] = useState("");
-  const [focus, setFocus] = useState("");
-  const [area, setArea] = useState("");
-  const [industry, setIndustry] = useState("");
-  const [owner, setOwner] = useState("");
+  // 各絞り込みは複数選択(OR)。空配列は絞り込みなし。
+  const [rank, setRank] = useState<string[]>([]);
+  const [focus, setFocus] = useState<string[]>([]);
+  const [area, setArea] = useState<string[]>([]);
+  const [industry, setIndustry] = useState<string[]>([]);
+  const [owner, setOwner] = useState<string[]>([]);
   const [active, setActive] = useState("");
   const [sort, setSort] = useState<SortKey>("revenue");
   const [asc, setAsc] = useState(false);
+
+  const hasActiveFilters =
+    q.trim() !== "" || rank.length > 0 || focus.length > 0 || area.length > 0 || industry.length > 0 || owner.length > 0 || active !== "";
+
+  function resetFilters() {
+    setQ("");
+    setRank([]);
+    setFocus([]);
+    setArea([]);
+    setIndustry([]);
+    setOwner([]);
+    setActive("");
+  }
 
   const [rows, setRows] = useState<AccountPageRow[]>(initialRows);
   const [total, setTotal] = useState(initialTotal);
@@ -45,11 +59,11 @@ export function AccountsPaginatedTable({
   const filter: AccountPageFilter = useMemo(
     () => ({
       q: q.trim() || undefined,
-      rank: rank || undefined,
-      focus: focus || undefined,
-      area: area || undefined,
-      industry: industry || undefined,
-      owner: owner || undefined,
+      rank: rank.length ? rank : undefined,
+      focus: focus.length ? focus : undefined,
+      area: area.length ? area : undefined,
+      industry: industry.length ? industry : undefined,
+      owner: owner.length ? owner : undefined,
       active: active || undefined,
     }),
     [q, rank, focus, area, industry, owner, active],
@@ -125,16 +139,24 @@ export function AccountsPaginatedTable({
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="会社名で検索" className="input pl-9" />
         </div>
-        <Sel value={rank} onChange={setRank} placeholder="ランク" options={ACCOUNT_RANKS.map((r) => ({ id: r.key, name: r.key }))} />
-        <Sel value={focus} onChange={setFocus} placeholder="重点" options={ACCOUNT_FOCUS.map((f) => ({ id: f.key, name: f.label }))} />
-        <Sel value={area} onChange={setArea} placeholder="エリア" options={areas.map((a) => ({ id: a, name: a }))} />
-        <Sel value={industry} onChange={setIndustry} placeholder="業種" options={industries.map((i) => ({ id: i, name: i }))} />
-        {owners.length > 0 && <Sel value={owner} onChange={setOwner} placeholder="担当営業" options={[{ id: "__none", name: "未割当" }, ...owners]} />}
+        <MultiSelect selected={rank} onChange={setRank} placeholder="ランク" options={ACCOUNT_RANKS.map((r) => ({ id: r.key, name: r.key }))} />
+        <MultiSelect selected={focus} onChange={setFocus} placeholder="重点" options={ACCOUNT_FOCUS.map((f) => ({ id: f.key, name: f.label }))} />
+        <MultiSelect selected={area} onChange={setArea} placeholder="エリア" options={areas.map((a) => ({ id: a, name: a }))} />
+        <MultiSelect selected={industry} onChange={setIndustry} placeholder="業種" options={industries.map((i) => ({ id: i, name: i }))} />
+        {owners.length > 0 && <MultiSelect selected={owner} onChange={setOwner} placeholder="担当営業" options={[{ id: "__none", name: "未割当" }, ...owners]} />}
         <select value={active} onChange={(e) => setActive(e.target.value)} className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-primary">
           <option value="">状況：すべて</option>
           <option value="active">アクティブのみ</option>
           <option value="inactive">非アクティブのみ</option>
         </select>
+        <button
+          type="button"
+          onClick={resetFilters}
+          disabled={!hasActiveFilters}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm text-ink/60 hover:bg-black/[0.03] disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <RotateCcw size={14} /> 絞り込みをリセット
+        </button>
       </div>
 
       <div className="flex items-center gap-4 text-sm text-ink/60 px-1">
@@ -211,12 +233,106 @@ export function AccountsPaginatedTable({
   );
 }
 
-function Sel({ value, onChange, placeholder, options }: { value: string; onChange: (v: string) => void; placeholder: string; options: Option[] }) {
+/**
+ * 1つのプルダウンで複数選択できる絞り込み。ボタンを押すとチェックボックス一覧が開き、
+ * 選んだ項目は OR で絞り込まれる。外側クリック・Escで閉じる。
+ */
+function MultiSelect({
+  selected,
+  onChange,
+  placeholder,
+  options,
+}: {
+  selected: string[];
+  onChange: (v: string[]) => void;
+  placeholder: string;
+  options: Option[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  function toggle(id: string) {
+    onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+  }
+
+  const nameOf = (id: string) => options.find((o) => o.id === id)?.name ?? id;
+  const label =
+    selected.length === 0
+      ? `${placeholder}：すべて`
+      : selected.length <= 2
+        ? `${placeholder}：${selected.map(nameOf).join("・")}`
+        : `${placeholder}：${nameOf(selected[0])} 他${selected.length - 1}件`;
+
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-primary">
-      <option value="">{placeholder}：すべて</option>
-      {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-    </select>
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-xl border bg-white px-3 py-1.5 text-sm outline-none",
+          selected.length > 0 ? "border-teal-primary text-teal-deep" : "border-black/10 text-ink/70",
+        )}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="max-w-[180px] truncate">{label}</span>
+        {selected.length > 0 && (
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label={`${placeholder}の選択をクリア`}
+            onClick={(e) => { e.stopPropagation(); onChange([]); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); onChange([]); } }}
+            className="text-ink/40 hover:text-rose-500"
+          >
+            <X size={13} />
+          </span>
+        )}
+        <ChevronDown size={14} className="text-ink/40" />
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 max-h-72 w-56 overflow-auto rounded-xl border border-black/10 bg-white p-1 shadow-lg" role="listbox">
+          {options.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-ink/40">選択肢がありません</div>
+          ) : (
+            options.map((o) => {
+              const on = selected.includes(o.id);
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => toggle(o.id)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-black/[0.04]"
+                  role="option"
+                  aria-selected={on}
+                >
+                  <span className={cn("flex h-4 w-4 shrink-0 items-center justify-center rounded border", on ? "border-teal-primary bg-teal-primary text-white" : "border-black/20")}>
+                    {on && <span className="text-[10px] leading-none">✓</span>}
+                  </span>
+                  <span className="min-w-0 truncate text-ink/80">{o.name}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

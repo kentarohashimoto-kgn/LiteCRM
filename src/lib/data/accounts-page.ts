@@ -22,10 +22,11 @@ export interface AccountsPage {
 
 export interface AccountPageFilter {
   q?: string;
-  rank?: string;
-  focus?: string;
-  area?: string;
-  industry?: string;
-  owner?: string;
+  // rank / focus / area / industry / owner は複数選択(OR)。単一文字列も後方互換で可。
+  rank?: string[] | string;
+  focus?: string[] | string;
+  area?: string[] | string;
+  industry?: string[] | string;
+  owner?: string[] | string;
   active?: string;
 }
