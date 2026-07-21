@@ -54,10 +54,17 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
   if (f.event) qy = qy.eq("raw_event", f.event);
   if (f.disposition) qy = qy.eq("disposition", f.disposition);
   if (f.rank) qy = qy.eq("rank", f.rank);
-  const { data, count } = await qy
-    .order("priority_score", { ascending: false, nullsFirst: false })
-    .order("id")
-    .range(start, start + LIST_PAGE - 1);
+  // 並べ替え。f.sort 指定時はそのカラムで(HP問合せタブ用)、無ければ優先度降順(既定)。
+  const SORT_COLS: Record<string, string> = {
+    date: "created_at", media: "inquiry_media", detail: "raw_event", tags: "inquiry_tags", disposition: "disposition",
+  };
+  const sortCol = f.sort ? SORT_COLS[f.sort] : undefined;
+  if (sortCol) {
+    qy = qy.order(sortCol, { ascending: f.dir === "asc", nullsFirst: false }).order("id");
+  } else {
+    qy = qy.order("priority_score", { ascending: false, nullsFirst: false }).order("id");
+  }
+  const { data, count } = await qy.range(start, start + LIST_PAGE - 1);
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const list = (data ?? []) as any[];
   // エンゲージメント(person_engagement)をメールで突き合わせ
