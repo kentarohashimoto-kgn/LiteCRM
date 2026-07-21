@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { sendSystemMail } from "@/lib/mail-system";
+import { isRecaptchaEnabled, verifyRecaptcha } from "@/lib/recaptcha";
 import { buildClientAutoReply, buildInternalNotify, type InquiryFields } from "@/lib/inquiry-emails";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +65,16 @@ export async function POST(req: Request) {
   // ハニーポット: botが埋めがちな隠し欄。埋まっていたら成功を装って捨てる
   if ((body.website ?? "").trim() !== "") {
     return NextResponse.json({ ok: true }, { headers: CORS_HEADERS });
+  }
+
+  // reCAPTCHA検証(RECAPTCHA_SECRET 設定時のみ有効)。人間性を確認できなければ拒否。
+  if (isRecaptchaEnabled()) {
+    const captcha = (body["g-recaptcha-response"] ?? body.recaptcha ?? body.recaptchaToken ?? body.captcha ?? "").trim();
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+    const verdict = await verifyRecaptcha(captcha, ip);
+    if (!verdict.ok) {
+      return NextResponse.json({ ok: false, error: "recaptcha failed" }, { status: 400, headers: CORS_HEADERS });
+    }
   }
 
   const company = (body.company ?? "").trim().slice(0, 200);
