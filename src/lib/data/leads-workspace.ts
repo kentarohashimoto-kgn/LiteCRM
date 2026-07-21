@@ -38,7 +38,7 @@ export interface WsAnalysisScope {
 export interface CompaniesData { rows: WsCompanyRow[]; total: number; multi: number }
 export interface AnalysisData { events: string[]; scopes: Record<string, WsAnalysisScope>; rawAcquirers: string[] }
 
-export interface LeadsFilters { q?: string; event?: string; disposition?: string; rank?: string; page?: number }
+export interface LeadsFilters { q?: string; event?: string; disposition?: string; rank?: string; page?: number; sourceIn?: string[] }
 
 export function roleBucket(t: string): string {
   if (/社長|代表|CEO|会長/.test(t)) return "経営者";

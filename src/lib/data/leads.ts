@@ -49,6 +49,7 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
   let qy = sb.from("leads").select(LIST_COLS, { count: "exact" });
   const q = (f.q ?? "").replace(/[,%_()]/g, " ").trim();
   if (q) qy = qy.or(`company_name.ilike.%${q}%,contact_name.ilike.%${q}%`);
+  if (f.sourceIn && f.sourceIn.length) qy = qy.in("raw_event", f.sourceIn);
   if (f.event) qy = qy.eq("raw_event", f.event);
   if (f.disposition) qy = qy.eq("disposition", f.disposition);
   if (f.rank) qy = qy.eq("rank", f.rank);

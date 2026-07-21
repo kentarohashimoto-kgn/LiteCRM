@@ -19,20 +19,26 @@ export default async function LeadsPage({
 }: {
   searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; page?: string; scored?: string };
 }) {
-  const tab = (["list", "funnel", "queue", "company", "analysis", "download", "batches"].includes(searchParams.tab ?? "")
+  const tab = (["list", "inquiries", "funnel", "queue", "company", "analysis", "download", "batches"].includes(searchParams.tab ?? "")
     ? searchParams.tab
     : "list") as LeadsTab;
 
+  // 問い合わせフォーム由来(Webフォーム)の流入元。専用「HP問合せ」タブで分離表示する。
+  const WEB_INQUIRY_SOURCES = ["HP問合せ", "資料請求"];
+  // 「HP問合せ」タブ内のサブ絞り込み(流入元)。許可された値のみ受け付ける。
+  const inquirySub = WEB_INQUIRY_SOURCES.includes(searchParams.ev ?? "") ? (searchParams.ev as string) : "";
+
   const filters = {
     q: searchParams.q ?? "",
-    event: searchParams.ev ?? "",
+    event: tab === "inquiries" ? inquirySub : searchParams.ev ?? "",
     disposition: searchParams.disp ?? "",
     rank: searchParams.rank ?? "",
     page: searchParams.page ? Math.max(1, parseInt(searchParams.page, 10) || 1) : 1,
+    sourceIn: tab === "inquiries" ? WEB_INQUIRY_SOURCES : undefined,
   };
 
   // アクティブなタブに必要なデータだけ取得する(全件ロードを避ける)。
-  const list = tab === "list" ? await queryLeadList(filters) : undefined;
+  const list = tab === "list" || tab === "inquiries" ? await queryLeadList(filters) : undefined;
   const queue = tab === "queue" ? await queryCallQueue() : undefined;
   // 集計タブはSQL集計RPC(行を転送しない)。別名(エイリアス)の適用もSQL側で実施
   const company = tab === "company" ? await getLeadsCompanies() : undefined;
@@ -40,7 +46,7 @@ export default async function LeadsPage({
   const aliasRows = tab === "analysis" ? await getAcquirerAliases() : [];
   const aliases = aliasRows.map((a) => ({ raw: a.raw, name: a.display_name ?? "" }));
   const analysis = tab === "analysis" ? await getLeadsAnalysis() : undefined;
-  const events = tab === "list" || tab === "download" ? await getLeadEvents() : [];
+  const events = tab === "list" || tab === "download" ? await getLeadEvents() : tab === "inquiries" ? WEB_INQUIRY_SOURCES : [];
   const presets = tab === "download" ? (await getExportPresets()).map((p) => ({ id: p.id, name: p.name, columns: p.columns })) : [];
   const batchRows = tab === "batches" ? await getLeadImportBatches() : [];
   const batches = batchRows.map((b) => ({
