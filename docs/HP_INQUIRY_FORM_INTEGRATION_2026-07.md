@@ -212,7 +212,9 @@ curl -i -X POST "https://<CRM_BASE_URL>/api/lead-intake" \
 
 ### 6.3 スパム対策
 - **ハニーポット**: `website` という隠し欄を必ずフォームに置いてください。人間は空のまま、botは埋めがち。値があるとCRMは登録せず成功を装って破棄します。
-- 追加でHP側に **Google reCAPTCHA / Cloudflare Turnstile** を入れるとより堅牢です（任意）。
+- **reCAPTCHA(推奨・対応済み)**: HP側で Google reCAPTCHA を入れ、取得したトークンを送信時に **`g-recaptcha-response`**（または `recaptcha` / `recaptchaToken`）フィールドで一緒にPOSTしてください。CRM側は `RECAPTCHA_SECRET`（シークレットキー）を設定するとサーバーでこのトークンを検証し、**人間性を確認できない送信を拒否**します（v3のスコアは既定0.5で足切り、v2チェックボックスも可）。
+  - **重要**: `RECAPTCHA_SECRET` を設定すると、**この エンドポイントに投げる全フォーム**が reCAPTCHA トークンを送る必要があります（未送信は 400 で拒否）。reCAPTCHA を入れていないフォームがある場合は、先に全フォームへ導入してから `RECAPTCHA_SECRET` を設定してください。
+  - サイトキー（公開）はHP側、シークレットキーはCRM側の環境変数（非公開）に置きます。
 - CRMのリード画面で、営業スパム等は後述のトリアージで**「対象外」**に落とせます。
 
 ### 6.4 バリデーション
