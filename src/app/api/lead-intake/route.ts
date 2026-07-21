@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { sendSystemMail } from "@/lib/mail-system";
+import { buildClientAutoReply, buildInternalNotify, type InquiryFields } from "@/lib/inquiry-emails";
 
 export const dynamic = "force-dynamic";
 
@@ -11,13 +13,24 @@ export const dynamic = "force-dynamic";
  * スパム対策: ハニーポット欄 `website`(人間には見えない入力欄)が埋まっていたら成功を装って破棄。
  *
  * 受け付けるフィールド(JSON または form-encoded):
- *   company(必須) / name / email / phone / message / event(獲得イベント名。既定 "Webフォーム")
+ *   company(必須) / name / email / phone / message
+ *   source(流入元ラベル。既定 "HP問合せ"。旧 `event` も後方互換で受ける)
+ *
+ * 通知:
+ *   - アプリ内通知(owner/admin/sales_manager)
+ *   - Slack通知(SLACK_WEBHOOK_URL 設定時)
+ *   - メール通知(SYSTEM_SMTP_* 設定時): 問い合わせ元クライアントへ自動返信 + 社内関係者へ通知
  */
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": process.env.LEAD_INTAKE_ALLOW_ORIGIN ?? "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, x-intake-token",
 };
+
+// 既定の流入元ラベル。0159 のマイグレーションで lead_sources に事前投入済み。
+const DEFAULT_SOURCE = "HP問合せ";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
@@ -58,7 +71,8 @@ export async function POST(req: Request) {
   const email = (body.email ?? "").trim().slice(0, 200);
   const phone = (body.phone ?? "").trim().slice(0, 50);
   const message = (body.message ?? "").trim().slice(0, 2000);
-  const rawEvent = (body.event ?? "Webフォーム").trim().slice(0, 100);
+  // 流入元ラベル。`source` を優先し、旧 `event` は後方互換、いずれも無ければ "HP問合せ"。
+  const source = (body.source ?? body.event ?? DEFAULT_SOURCE).trim().slice(0, 100) || DEFAULT_SOURCE;
   if (!company && !email) {
     return NextResponse.json({ ok: false, error: "company or email is required" }, { status: 400, headers: CORS_HEADERS });
   }
@@ -69,18 +83,43 @@ export async function POST(req: Request) {
   if (!tenant) {
     return NextResponse.json({ ok: false, error: "no tenant" }, { status: 500, headers: CORS_HEADERS });
   }
+  const tenantId = tenant.id as string;
+
+  // 流入元(lead_sources)を解決。無ければ作成(マイグレーション未適用でも動くように)。
+  let leadSourceId: string | null = null;
+  try {
+    const { data: existing } = await admin
+      .from("lead_sources")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("name", source)
+      .maybeSingle();
+    if (existing) {
+      leadSourceId = existing.id as string;
+    } else {
+      const { data: created } = await admin
+        .from("lead_sources")
+        .insert({ tenant_id: tenantId, name: source, description: "HPの問い合わせフォームからの流入(/api/lead-intake)", status: "active" })
+        .select("id")
+        .maybeSingle();
+      leadSourceId = (created?.id as string) ?? null;
+    }
+  } catch {
+    /* 流入元の解決に失敗してもリード作成は続行(raw_event で識別可能) */
+  }
 
   const { data: lead, error } = await admin
     .from("leads")
     .insert({
-      tenant_id: tenant.id as string,
+      tenant_id: tenantId,
+      lead_source_id: leadSourceId,
       title: [company || "(会社名未入力)", name].filter(Boolean).join(" "),
       company_name: company || "(会社名未入力)",
       contact_name: name || null,
       email: email || null,
       phone: phone || null,
       notes: message || null,
-      raw_event: rawEvent,
+      raw_event: source,
       acquired_at: new Date().toISOString().slice(0, 10),
       status: "new",
     })
@@ -89,24 +128,27 @@ export async function POST(req: Request) {
   if (error || !lead) {
     return NextResponse.json({ ok: false, error: "insert failed" }, { status: 500, headers: CORS_HEADERS });
   }
+  const leadId = lead.id as string;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://lite-crm-tau.vercel.app";
+  const leadUrl = `${appUrl}/app/leads/${leadId}`;
 
-  // アプリ内通知(A-1): owner/admin へ新規リードを知らせる(失敗しても成功扱い)
+  // アプリ内通知(A-1): owner/admin/sales_manager へ新規リードを知らせる(失敗しても成功扱い)
   try {
     const { data: admins } = await admin
       .from("memberships")
       .select("user_id")
-      .eq("tenant_id", tenant.id as string)
+      .eq("tenant_id", tenantId)
       .eq("status", "active")
       .in("role", ["owner", "admin", "sales_manager"]);
     if (admins && admins.length > 0) {
       await admin.from("notifications").insert(
         admins.map((a) => ({
-          tenant_id: tenant.id as string,
+          tenant_id: tenantId,
           user_id: a.user_id as string,
           kind: "lead",
-          title: `Webフォームから新しいリード（${rawEvent}）`,
+          title: `Webフォームから新しいリード（${source}）`,
           body: `${company || "(会社名未入力)"}${name ? `｜${name}` : ""}${message ? `\n${message.slice(0, 120)}` : ""}`,
-          href: `/app/leads/${lead.id as string}`,
+          href: `/app/leads/${leadId}`,
         })),
       );
     }
@@ -118,10 +160,9 @@ export async function POST(req: Request) {
   const webhook = process.env.SLACK_WEBHOOK_URL;
   if (webhook) {
     try {
-      const url = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://lite-crm-tau.vercel.app"}/app/leads/${lead.id as string}`;
       const text =
-        `:inbox_tray: *Webフォームから新しいリード*（${rawEvent}）\n` +
-        `<${url}|${company || "(会社名未入力)"}${name ? `｜${name}` : ""}>` +
+        `:inbox_tray: *Webフォームから新しいリード*（${source}）\n` +
+        `<${leadUrl}|${company || "(会社名未入力)"}${name ? `｜${name}` : ""}>` +
         (message ? `\n> ${message.slice(0, 200)}` : "");
       await fetch(webhook, {
         method: "POST",
@@ -133,5 +174,67 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, id: lead.id }, { headers: CORS_HEADERS });
+  // メール通知(SYSTEM_SMTP_* 未設定なら sendSystemMail が skipped を返す・失敗しても成功扱い)
+  const fields: InquiryFields = { company, name, email, phone, message, source };
+  const orgName = process.env.INQUIRY_ORG_NAME ?? process.env.SYSTEM_MAIL_FROM_NAME ?? "株式会社カトルセ";
+  try {
+    // 1) 問い合わせ元クライアントへ自動返信(有効なメールが入力されている時のみ)
+    if (email && EMAIL_RE.test(email)) {
+      const reply = buildClientAutoReply(fields, orgName);
+      await sendSystemMail({
+        to: email,
+        subject: reply.subject,
+        text: reply.text,
+        html: reply.html,
+        replyTo: process.env.INQUIRY_REPLY_TO || null,
+      });
+    }
+    // 2) 社内関係者へ通知。宛先は INQUIRY_NOTIFY_EMAILS(カンマ区切り)を優先、
+    //    未設定なら owner/admin/sales_manager のプロフィールメールにフォールバック。
+    const internalRecipients = await resolveInternalRecipients(admin, tenantId);
+    if (internalRecipients.length > 0) {
+      const notify = buildInternalNotify(fields, orgName, leadUrl);
+      await sendSystemMail({
+        to: internalRecipients,
+        subject: notify.subject,
+        text: notify.text,
+        html: notify.html,
+        replyTo: email && EMAIL_RE.test(email) ? email : null,
+      });
+    }
+  } catch {
+    /* メール通知失敗はリード作成の成功を妨げない */
+  }
+
+  return NextResponse.json({ ok: true, id: leadId }, { headers: CORS_HEADERS });
+}
+
+/** 社内通知メールの宛先を解決する。env優先 → メンバーのプロフィールメールにフォールバック。 */
+async function resolveInternalRecipients(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  tenantId: string,
+): Promise<string[]> {
+  const envList = (process.env.INQUIRY_NOTIFY_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => EMAIL_RE.test(s));
+  if (envList.length > 0) return Array.from(new Set(envList));
+
+  try {
+    const { data: members } = await admin
+      .from("memberships")
+      .select("user_id")
+      .eq("tenant_id", tenantId)
+      .eq("status", "active")
+      .in("role", ["owner", "admin", "sales_manager"]);
+    const ids = (members ?? []).map((m) => m.user_id as string);
+    if (ids.length === 0) return [];
+    const { data: profiles } = await admin.from("profiles").select("email").in("id", ids);
+    const emails = (profiles ?? [])
+      .map((p) => (p.email as string | null) ?? "")
+      .filter((e) => EMAIL_RE.test(e));
+    return Array.from(new Set(emails));
+  } catch {
+    return [];
+  }
 }
