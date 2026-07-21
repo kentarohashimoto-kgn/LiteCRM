@@ -39,7 +39,7 @@ export async function getLeadMetrics(_opps?: OppView[]): Promise<LeadMetrics> {
 }
 
 const LIST_PAGE = 100;
-const LIST_COLS = "id,company_name,contact_name,email,rank,job_title,employee_size,raw_event,priority_score,disposition,call_owner,phone,mobile_phone,account_id,status,funnel_stage";
+const LIST_COLS = "id,company_name,contact_name,email,rank,job_title,employee_size,raw_event,priority_score,disposition,call_owner,phone,mobile_phone,account_id,status,funnel_stage,created_at,inquiry_media,inquiry_tags";
 
 /** リード一覧: SQL でフィルタ＋優先度降順＋ページング(全件ロードしない)。 */
 export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[]; total: number; page: number; pageSize: number }> {
@@ -50,6 +50,7 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
   const q = (f.q ?? "").replace(/[,%_()]/g, " ").trim();
   if (q) qy = qy.or(`company_name.ilike.%${q}%,contact_name.ilike.%${q}%`);
   if (f.sourceIdIn) qy = qy.in("lead_source_id", f.sourceIdIn);
+  if (f.media) qy = qy.eq("inquiry_media", f.media);
   if (f.event) qy = qy.eq("raw_event", f.event);
   if (f.disposition) qy = qy.eq("disposition", f.disposition);
   if (f.rank) qy = qy.eq("rank", f.rank);
@@ -74,6 +75,7 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
       score: l.priority_score ?? 0, disposition: l.disposition ?? "untouched", callOwner: l.call_owner ?? "",
       phone: l.phone ?? "", mobilePhone: l.mobile_phone ?? "", converted: !!l.account_id || l.status === "converted",
       engRank: e?.rank ?? "D", engScore: e?.score ?? 0, funnelStage: l.funnel_stage ?? "new",
+      createdAt: l.created_at ?? "", media: l.inquiry_media ?? "", tags: Array.isArray(l.inquiry_tags) ? l.inquiry_tags : [],
     };
   });
   /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -149,6 +151,15 @@ export async function getWebIntakeSources(): Promise<{ id: string; name: string 
     .ilike("description", "%/api/lead-intake%")
     .order("name");
   return (data ?? []).map((s) => ({ id: s.id as string, name: s.name as string }));
+}
+
+/** 「HP問合せ」タブの流入元メディア絞り込み用: 実在する inquiry_media の一覧。 */
+export async function getWebIntakeMedia(): Promise<string[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.from("leads").select("inquiry_media").not("inquiry_media", "is", null);
+  const set = new Set<string>();
+  for (const r of (data ?? []) as { inquiry_media: string | null }[]) if (r.inquiry_media) set.add(r.inquiry_media);
+  return [...set].sort();
 }
 
 /** 単票取得。 */

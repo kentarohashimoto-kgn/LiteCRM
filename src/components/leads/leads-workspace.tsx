@@ -55,6 +55,7 @@ export function LeadsWorkspace({
   batches = [],
   aliases = [],
   events = [],
+  mediaOptions = [],
   presets = [],
   filters,
 }: {
@@ -67,6 +68,7 @@ export function LeadsWorkspace({
   batches?: BatchRow[];
   aliases?: AliasRow[];
   events?: string[];
+  mediaOptions?: string[];
   presets?: PresetRow[];
   filters: LeadsFilters;
 }) {
@@ -83,7 +85,7 @@ export function LeadsWorkspace({
         <TabLink active={tab === "batches"} tab="batches" icon={<History size={15} />} label="取込履歴" />
       </div>
       {tab === "list" && list && <LeadList list={list} filters={filters} events={events} />}
-      {tab === "inquiries" && list && <LeadList list={list} filters={filters} events={events} tabKey="inquiries" />}
+      {tab === "inquiries" && list && <LeadList list={list} filters={filters} events={events} tabKey="inquiries" mediaOptions={mediaOptions} />}
       {tab === "funnel" && funnel && <FunnelView funnel={funnel} />}
       {tab === "queue" && queue && <CallQueue queue={queue} />}
       {tab === "company" && company && <CompanyView companies={company} />}
@@ -97,7 +99,7 @@ export function LeadsWorkspace({
 // ============ リード一覧(サーバー側フィルタ＋ページング) ============
 // tabKey="inquiries" のときは「HP問合せ」タブとして、Webフォーム由来(HP問合せ・資料請求)に
 // 絞った一覧を表示する(絞り込み自体はサーバー側で sourceIn により適用済み)。
-function LeadList({ list, filters, events, tabKey = "list" }: { list: ListData; filters: LeadsFilters; events: string[]; tabKey?: LeadsTab }) {
+function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }: { list: ListData; filters: LeadsFilters; events: string[]; tabKey?: LeadsTab; mediaOptions?: string[] }) {
   const router = useRouter();
   const [q, setQ] = useState(filters.q ?? "");
   const isInquiries = tabKey === "inquiries";
@@ -108,6 +110,7 @@ function LeadList({ list, filters, events, tabKey = "list" }: { list: ListData; 
     p.set("tab", tabKey);
     if (f.q) p.set("q", f.q);
     if (f.event) p.set("ev", f.event);
+    if (f.media) p.set("md", f.media);
     if (f.disposition) p.set("disp", f.disposition);
     if (f.rank) p.set("rank", f.rank);
     if (f.page && f.page > 1) p.set("page", String(f.page));
@@ -132,13 +135,61 @@ function LeadList({ list, filters, events, tabKey = "list" }: { list: ListData; 
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="会社・担当者で検索（Enter）" className="input pl-9" />
         </form>
-        <Sel value={filters.event ?? ""} onChange={(v) => go({ event: v, page: 1 })} ph="流入" opts={events.map((e) => ({ id: e, name: evLabel(e) }))} />
+        {isInquiries && <Sel value={filters.media ?? ""} onChange={(v) => go({ media: v, page: 1 })} ph="流入元" opts={mediaOptions.map((m) => ({ id: m, name: m }))} />}
+        <Sel value={filters.event ?? ""} onChange={(v) => go({ event: v, page: 1 })} ph={isInquiries ? "流入詳細" : "流入"} opts={events.map((e) => ({ id: e, name: evLabel(e) }))} />
         <Sel value={filters.disposition ?? ""} onChange={(v) => go({ disposition: v, page: 1 })} ph="決着" opts={LEAD_DISPOSITIONS.map((d) => ({ id: d.key, name: d.label }))} />
-        <Sel value={filters.rank ?? ""} onChange={(v) => go({ rank: v, page: 1 })} ph="ランク" opts={["S", "A", "B", "C", "D"].map((x) => ({ id: x, name: x }))} />
+        {!isInquiries && <Sel value={filters.rank ?? ""} onChange={(v) => go({ rank: v, page: 1 })} ph="ランク" opts={["S", "A", "B", "C", "D"].map((x) => ({ id: x, name: x }))} />}
         <span className="text-sm text-ink/50 ml-auto">{list.total}件</span>
       </div>
       <div className="card">
         <StickyGrid freeze maxHeight="66vh">
+        {isInquiries ? (
+        <table className="w-full">
+          <thead className="border-b border-black/[0.06]">
+            <tr>
+              <th className="th">受付日時</th>
+              <th className="th">会社 / 担当者</th>
+              <th className="th">流入元</th>
+              <th className="th">流入詳細</th>
+              <th className="th">タグ</th>
+              <th className="th">決着</th>
+              <th className="th">電話</th>
+              <th className="th">案件化</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-black/[0.04]">
+            {list.rows.map((r) => (
+              <tr key={r.id} className="row-hover">
+                <td className="td text-xs text-ink/60 whitespace-nowrap tabular-nums">{r.createdAt ? formatDateFull(r.createdAt) : "—"}</td>
+                <td className="td max-w-[220px]">
+                  <Link href={`/app/leads/${r.id}`} className="font-medium text-ink hover:text-teal-deep block truncate">{r.company}</Link>
+                  <span className="text-xs text-ink/45 truncate block">{r.name || "—"}</span>
+                </td>
+                <td className="td text-xs">{r.media ? <span className="pill bg-teal-light text-teal-deep text-[10px]">{r.media}</span> : <span className="text-ink/35">—</span>}</td>
+                <td className="td text-xs text-ink/70 max-w-[200px] truncate" title={r.event}>{r.event || "—"}</td>
+                <td className="td">
+                  <div className="flex flex-wrap gap-1 max-w-[180px]">
+                    {r.tags.length ? r.tags.map((t) => <span key={t} className="pill bg-mist-soft text-ink/60 text-[10px]">{t}</span>) : <span className="text-ink/35 text-xs">—</span>}
+                  </div>
+                </td>
+                <td className="td">
+                  <form action={setLeadDispositionAction}>
+                    <input type="hidden" name="id" value={r.id} />
+                    <select name="disposition" defaultValue={r.disposition} onChange={(e) => e.currentTarget.form?.requestSubmit()} className="rounded-lg border border-black/10 bg-white px-1.5 py-1 text-xs outline-none focus:border-teal-primary">
+                      {LEAD_DISPOSITIONS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+                    </select>
+                  </form>
+                </td>
+                <td className="td text-xs text-ink/60 tabular-nums">{r.phone || "—"}{r.mobilePhone && <span className="block text-ink/40">{r.mobilePhone}</span>}</td>
+                <td className="td">
+                  {r.converted ? <span className="pill bg-teal-light text-teal-deep text-[10px]">済</span> : <PromoteLeadButton leadId={r.id} size="mini" />}
+                </td>
+              </tr>
+            ))}
+            {list.rows.length === 0 && <tr><td colSpan={8} className="td text-center text-ink/40 py-8">該当する問合せがありません</td></tr>}
+          </tbody>
+        </table>
+        ) : (
         <table className="w-full">
           <thead className="border-b border-black/[0.06]">
             <tr>
@@ -189,6 +240,7 @@ function LeadList({ list, filters, events, tabKey = "list" }: { list: ListData; 
             {list.rows.length === 0 && <tr><td colSpan={10} className="td text-center text-ink/40 py-8">該当するリードがありません</td></tr>}
           </tbody>
         </table>
+        )}
         </StickyGrid>
       </div>
       {pageCount > 1 && (

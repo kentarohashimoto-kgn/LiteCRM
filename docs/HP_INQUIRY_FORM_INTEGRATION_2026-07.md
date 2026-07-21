@@ -72,9 +72,13 @@ HP側の技術は問いません（WordPress / 静的HTML / Next / PHP など何
 | `name` | 任意 | 100 | 氏名・担当者名 |
 | `phone` | 任意 | 50 | 電話番号 |
 | `message` | 任意 | 2000 | 問い合わせ内容(自由記述) |
-| `source` | 任意 | 100 | 流入元ラベル。**未指定なら「HP問合せ」**。フォームを複数用意し区別したい時のみ指定（例: `資料請求`, `セミナー申込`） |
+| `media` | 推奨 | 100 | **流入元メディア**＝どのサイト/媒体からか（例: `カトルセHP`, `キャリプラ`, `Aicafe`）。CRMの「HP問合せ」一覧でメディア別に区別・絞り込み・集計できる。**各サイトのフォームに固定値で埋め込む**とよい。 |
+| `source` | 任意 | 100 | **流入詳細**＝種別/資料名（例: `資料請求：単価相場表2026`, `無料相談`, `法人研修相談`）。**未指定なら「HP問合せ」**。CRMでは流入詳細として表示・絞り込み。 |
+| `tags` | 任意 | — | **集計用タグ**（カンマ区切り。例: `資料請求,生成AI`）。何が何件ダウンロードされたか等の集計に使う。最大20個、各40文字。 |
 | `website` | — | — | **ハニーポット**。画面上は隠し、人間は空のまま送る欄。値が入っていたらbotとみなし破棄（§6.3） |
 | `token` | — | — | ヘッダーを使えない場合の代替トークン置き場（ヘッダー推奨） |
+
+> **メディアと詳細の使い分け**: `media` は「どのサイト/媒体か」（カトルセHP / キャリプラ / Aicafe …）、`source` は「何の資料か/相談種別か」（資料名・無料相談 …）。この2つを分けて送ると、CRMの「HP問合せ」一覧で **受付日時・流入元(メディア)・流入詳細・タグ** を列で確認でき、メディア別・資料別の集計ができます。
 
 > `event` は旧名の後方互換として `source` と同義に受け付けます。新規実装では `source` を使ってください。
 
@@ -108,7 +112,7 @@ export async function POST(req) {
       "Content-Type": "application/json",
       "x-intake-token": process.env.LEAD_INTAKE_SECRET, // ★サーバーのみ
     },
-    body: JSON.stringify({ ...form, source: "HP問合せ" }),
+    body: JSON.stringify({ ...form, media: "カトルセHP", source: "HP問合せ", tags: "問い合わせ" }),
   });
   const data = await res.json();
   return Response.json({ ok: data.ok });
@@ -158,7 +162,9 @@ $body = curl_exec($ch);
 document.getElementById("contact").addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  fd.append("source", "HP問合せ");
+  fd.append("media", "カトルセHP");   // ← このサイトのメディア名(固定値)
+  fd.append("source", "資料請求：〇〇"); // ← 何の資料/相談か
+  fd.append("tags", "資料請求");        // ← 集計用タグ(任意, カンマ区切り)
   const res = await fetch("https://<CRM_BASE_URL>/api/lead-intake", {
     method: "POST",
     headers: { "x-intake-token": "<公開されても被害を限定できるトークン>" },
