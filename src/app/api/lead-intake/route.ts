@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { sendSystemMail, diagnoseSystemMailer } from "@/lib/mail-system";
+import { sendSystemMail } from "@/lib/mail-system";
 import { buildClientAutoReply, buildInternalNotify, type InquiryFields } from "@/lib/inquiry-emails";
 
 export const dynamic = "force-dynamic";
@@ -59,24 +59,6 @@ export async function POST(req: Request) {
   const token = req.headers.get("x-intake-token") ?? body.token ?? "";
   if (token !== secret) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401, headers: CORS_HEADERS });
-  }
-
-  // 診断モード(トークン保護): メール送信設定の確認とSMTP接続テスト。リードは作成しない。
-  // body.diag が truthy のとき、verify結果 + (email指定時)実送信テスト結果を返す。
-  if (body.diag) {
-    const diag = await diagnoseSystemMailer();
-    let send: { ok: boolean; error?: string } | undefined;
-    const to = (body.email ?? "").trim();
-    if (diag.configured && to) {
-      const r = await sendSystemMail({
-        to,
-        subject: "【CATORCE】メール送信テスト",
-        text: "これはメール送信設定の確認用テストです。届いていれば設定成功です。",
-        html: "<p>これはメール送信設定の確認用テストです。届いていれば設定成功です。</p>",
-      });
-      send = r.ok ? { ok: true } : { ok: false, error: "error" in r ? r.error : "skipped" };
-    }
-    return NextResponse.json({ ok: true, diag, send }, { headers: CORS_HEADERS });
   }
 
   // ハニーポット: botが埋めがちな隠し欄。埋まっていたら成功を装って捨てる
