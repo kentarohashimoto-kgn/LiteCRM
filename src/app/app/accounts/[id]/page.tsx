@@ -17,6 +17,7 @@ import { Tag } from "@/components/ui/badges";
 import { OppMiniList } from "@/components/opportunities/opp-mini-list";
 import { MeetingList } from "@/components/meetings/meeting-list";
 import { SouvenirSection } from "@/components/accounts/souvenir-section";
+import { AccountNotesSection } from "@/components/accounts/account-notes-section";
 import { RecordRecent } from "@/components/layout/recent-items";
 import { createOpportunityAction, createMeetingAction } from "@/server/actions";
 import { deleteAccountAction } from "@/server/actions/trash";
@@ -132,7 +133,16 @@ export default async function AccountDetailPage({ params, searchParams }: { para
       <PageHeader
         title={account.name}
         subtitle={`${account.industry ?? ""} ${account.area ? "・" + account.area : ""}`}
-        action={<Tag tone={account.status === "customer" ? "teal" : "gray"}>{statusLabel[account.status]}</Tag>}
+        action={
+          <div className="flex items-center gap-2">
+            {account.rank && (
+              <Tag tone={account.rank === "A" ? "orange" : account.rank === "S" ? "orange" : account.rank === "B" ? "teal" : "gray"}>
+                {account.rank}ランク
+              </Tag>
+            )}
+            <Tag tone={account.status === "customer" ? "teal" : "gray"}>{statusLabel[account.status]}</Tag>
+          </div>
+        }
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
@@ -140,6 +150,11 @@ export default async function AccountDetailPage({ params, searchParams }: { para
         <Card><div className="text-xs text-ink/50">進行中金額</div><div className="text-2xl font-bold mt-1 tabular-nums">{formatYen(sum(open, (o) => o.amount))}</div></Card>
         <Card><div className="text-xs text-ink/50">累計受注額(LTV)</div><div className="text-2xl font-bold mt-1 stat-accent tabular-nums">{formatYen(sum(won, (o) => o.amount))}</div></Card>
         <Card><div className="text-xs text-ink/50">担当者</div><div className="stat-value mt-1">{contacts.length}<span className="stat-unit">名</span></div></Card>
+      </div>
+
+      {/* 顧客メモ: 顧客とのやりとりまとめ・AI分析(満足度/業務課題解決度)・戦略提言を集約 */}
+      <div className="mb-5">
+        <AccountNotesSection accountId={account.id} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
