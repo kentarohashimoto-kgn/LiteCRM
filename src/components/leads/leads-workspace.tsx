@@ -11,7 +11,7 @@ import { parseDelimited, detectDelim, rowToRawInput, dedupLeads, LEAD_KINDS } fr
 import { FUNNEL_STAGES, FUNNEL_STAGE_MAP, FUNNEL_MAIN, nextFunnelStage, SQL_CRITERIA, NURTURE_CRITERIA } from "@/lib/lead-funnel";
 import { PromoteLeadButton } from "@/components/leads/promote-button";
 import { StickyGrid } from "@/components/ui/sticky-grid";
-import { cn, formatDateFull } from "@/lib/utils";
+import { cn, formatDateFull, formatDateTimeJst } from "@/lib/utils";
 import type { WsListRow, WsQueueRow, WsCompanyRow, WsAnalysisScope, WsAttr, LeadsFilters, CompaniesData, AnalysisData, FunnelData } from "@/lib/data/leads-workspace";
 
 export interface BatchRow {
@@ -113,11 +113,21 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
     if (f.media) p.set("md", f.media);
     if (f.disposition) p.set("disp", f.disposition);
     if (f.rank) p.set("rank", f.rank);
+    if (isInquiries && f.sort && f.sort !== "date") p.set("sort", f.sort);
+    if (isInquiries && f.dir === "asc") p.set("dir", "asc");
     if (f.page && f.page > 1) p.set("page", String(f.page));
     router.push(`/app/leads?${p.toString()}`);
   };
 
   const pageCount = Math.max(1, Math.ceil(list.total / list.pageSize));
+
+  // 並べ替え(HP問合せタブ)。同じ列を押すと昇順/降順トグル、別列は既定方向へ。
+  const sortKey = filters.sort ?? "date";
+  const sortDir = filters.dir ?? "desc";
+  const toggleSort = (key: string) => {
+    if (sortKey === key) go({ sort: key, dir: sortDir === "asc" ? "desc" : "asc", page: 1 });
+    else go({ sort: key, dir: key === "date" ? "desc" : "asc", page: 1 });
+  };
 
   return (
     <div className="space-y-3">
@@ -147,12 +157,12 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
         <table className="w-full">
           <thead className="border-b border-black/[0.06]">
             <tr>
-              <th className="th">受付日時</th>
+              <SortTh label="受付日時" col="date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <th className="th">会社 / 担当者</th>
-              <th className="th">流入元</th>
-              <th className="th">流入詳細</th>
-              <th className="th">タグ</th>
-              <th className="th">決着</th>
+              <SortTh label="流入元" col="media" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortTh label="流入詳細" col="detail" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortTh label="タグ" col="tags" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortTh label="決着" col="disposition" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <th className="th">電話</th>
               <th className="th">案件化</th>
             </tr>
@@ -160,7 +170,7 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
           <tbody className="divide-y divide-black/[0.04]">
             {list.rows.map((r) => (
               <tr key={r.id} className="row-hover">
-                <td className="td text-xs text-ink/60 whitespace-nowrap tabular-nums">{r.createdAt ? formatDateFull(r.createdAt) : "—"}</td>
+                <td className="td text-xs text-ink/60 whitespace-nowrap tabular-nums">{r.createdAt ? formatDateTimeJst(r.createdAt) : "—"}</td>
                 <td className="td max-w-[220px]">
                   <Link href={`/app/leads/${r.id}`} className="font-medium text-ink hover:text-teal-deep block truncate">{r.company}</Link>
                   <span className="text-xs text-ink/45 truncate block">{r.name || "—"}</span>
@@ -690,6 +700,19 @@ function TabLink({ active, tab, icon, label }: { active: boolean; tab: LeadsTab;
     <Link href={`/app/leads?tab=${tab}`} prefetch className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors", active ? "bg-teal-primary text-white" : "text-ink/60 hover:text-ink")}>
       {icon}{label}
     </Link>
+  );
+}
+
+// 並べ替え可能な見出しセル(HP問合せタブ)。押すと昇順/降順トグル、矢印で状態表示。
+function SortTh({ label, col, sortKey, sortDir, onSort }: { label: string; col: string; sortKey: string; sortDir: string; onSort: (col: string) => void }) {
+  const active = sortKey === col;
+  return (
+    <th className="th">
+      <button type="button" onClick={() => onSort(col)} className={cn("inline-flex items-center gap-0.5 hover:text-teal-deep", active && "text-teal-deep font-semibold")}>
+        {label}
+        <span className="text-[9px] leading-none">{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>
+      </button>
+    </th>
   );
 }
 

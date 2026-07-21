@@ -19,7 +19,7 @@ import { LeadsWorkspace, type LeadsTab } from "@/components/leads/leads-workspac
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; page?: string; scored?: string; md?: string };
+  searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; page?: string; scored?: string; md?: string; sort?: string; dir?: string };
 }) {
   const tab = (["list", "inquiries", "funnel", "queue", "company", "analysis", "download", "batches"].includes(searchParams.tab ?? "")
     ? searchParams.tab
@@ -33,6 +33,10 @@ export default async function LeadsPage({
   // タブ内のサブ絞り込み。実在する流入詳細名/メディア名のみ受け付ける。
   const inquirySub = inquirySourceNames.includes(searchParams.ev ?? "") ? (searchParams.ev as string) : "";
   const inquiryMediaSel = inquiryMedia.includes(searchParams.md ?? "") ? (searchParams.md as string) : "";
+  // 「HP問合せ」タブの並べ替え。既定は受付日時の新しい順。許可カラムのみ受け付ける。
+  const SORTABLE = ["date", "media", "detail", "tags", "disposition"];
+  const inquirySort = SORTABLE.includes(searchParams.sort ?? "") ? (searchParams.sort as string) : "date";
+  const inquiryDir: "asc" | "desc" = searchParams.dir === "asc" ? "asc" : "desc";
 
   const filters = {
     q: searchParams.q ?? "",
@@ -42,6 +46,8 @@ export default async function LeadsPage({
     page: searchParams.page ? Math.max(1, parseInt(searchParams.page, 10) || 1) : 1,
     sourceIdIn: tab === "inquiries" ? inquirySources.map((s) => s.id) : undefined,
     media: tab === "inquiries" ? inquiryMediaSel : undefined,
+    sort: tab === "inquiries" ? inquirySort : undefined,
+    dir: tab === "inquiries" ? inquiryDir : undefined,
   };
 
   // アクティブなタブに必要なデータだけ取得する(全件ロードを避ける)。
