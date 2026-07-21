@@ -11,6 +11,7 @@ import {
   getLeadEvents,
   getExportPresets,
   getWebIntakeSources,
+  getWebIntakeMedia,
 } from "@/lib/data/leads";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { LeadsWorkspace, type LeadsTab } from "@/components/leads/leads-workspace";
@@ -18,7 +19,7 @@ import { LeadsWorkspace, type LeadsTab } from "@/components/leads/leads-workspac
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; page?: string; scored?: string };
+  searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; page?: string; scored?: string; md?: string };
 }) {
   const tab = (["list", "inquiries", "funnel", "queue", "company", "analysis", "download", "batches"].includes(searchParams.tab ?? "")
     ? searchParams.tab
@@ -26,10 +27,12 @@ export default async function LeadsPage({
 
   // 「HP問合せ」タブ用: 問い合わせフォーム由来(/api/lead-intake)の流入元を動的に取得。
   // ラベル(資料請求：〇〇・無料相談 等)が増えても description 判定で自動的に全て拾える。
-  const inquirySources = tab === "inquiries" ? await getWebIntakeSources() : [];
+  const [inquirySources, inquiryMedia] =
+    tab === "inquiries" ? await Promise.all([getWebIntakeSources(), getWebIntakeMedia()]) : [[], [] as string[]];
   const inquirySourceNames = inquirySources.map((s) => s.name);
-  // タブ内のサブ絞り込み(流入元)。実在する流入元名のみ受け付ける。
+  // タブ内のサブ絞り込み。実在する流入詳細名/メディア名のみ受け付ける。
   const inquirySub = inquirySourceNames.includes(searchParams.ev ?? "") ? (searchParams.ev as string) : "";
+  const inquiryMediaSel = inquiryMedia.includes(searchParams.md ?? "") ? (searchParams.md as string) : "";
 
   const filters = {
     q: searchParams.q ?? "",
@@ -38,6 +41,7 @@ export default async function LeadsPage({
     rank: searchParams.rank ?? "",
     page: searchParams.page ? Math.max(1, parseInt(searchParams.page, 10) || 1) : 1,
     sourceIdIn: tab === "inquiries" ? inquirySources.map((s) => s.id) : undefined,
+    media: tab === "inquiries" ? inquiryMediaSel : undefined,
   };
 
   // アクティブなタブに必要なデータだけ取得する(全件ロードを避ける)。
@@ -93,6 +97,7 @@ export default async function LeadsPage({
         batches={batches}
         aliases={aliases}
         events={events}
+        mediaOptions={inquiryMedia}
         presets={presets}
         filters={filters}
       />

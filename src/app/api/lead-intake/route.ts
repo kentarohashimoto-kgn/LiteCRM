@@ -71,8 +71,15 @@ export async function POST(req: Request) {
   const email = (body.email ?? "").trim().slice(0, 200);
   const phone = (body.phone ?? "").trim().slice(0, 50);
   const message = (body.message ?? "").trim().slice(0, 2000);
-  // 流入元ラベル。`source` を優先し、旧 `event` は後方互換、いずれも無ければ "HP問合せ"。
+  // 流入詳細(種別/資料名)。`source` を優先し、旧 `event` は後方互換、いずれも無ければ "HP問合せ"。
   const source = (body.source ?? body.event ?? DEFAULT_SOURCE).trim().slice(0, 100) || DEFAULT_SOURCE;
+  // 流入元メディア(どのサイト/媒体か。例: カトルセHP / キャリプラ / Aicafe)。任意。
+  const media = (body.media ?? "").trim().slice(0, 100);
+  // 集計用タグ(カンマ区切り→配列)。例: "資料請求,生成AI"
+  const tagsRaw = (body.tags ?? "").trim();
+  const tags = tagsRaw
+    ? Array.from(new Set(tagsRaw.split(",").map((t) => t.trim()).filter(Boolean).map((t) => t.slice(0, 40)))).slice(0, 20)
+    : [];
   if (!company && !email) {
     return NextResponse.json({ ok: false, error: "company or email is required" }, { status: 400, headers: CORS_HEADERS });
   }
@@ -120,6 +127,8 @@ export async function POST(req: Request) {
       phone: phone || null,
       notes: message || null,
       raw_event: source,
+      inquiry_media: media || null,
+      inquiry_tags: tags.length ? tags : null,
       acquired_at: new Date().toISOString().slice(0, 10),
       status: "new",
     })
@@ -175,7 +184,7 @@ export async function POST(req: Request) {
   }
 
   // メール通知(SYSTEM_SMTP_* 未設定なら sendSystemMail が skipped を返す・失敗しても成功扱い)
-  const fields: InquiryFields = { company, name, email, phone, message, source };
+  const fields: InquiryFields = { company, name, email, phone, message, source, media: media || undefined };
   const orgName = process.env.INQUIRY_ORG_NAME ?? process.env.SYSTEM_MAIL_FROM_NAME ?? "株式会社カトルセ";
   try {
     // 1) 問い合わせ元クライアントへ自動返信(有効なメールが入力されている時のみ)

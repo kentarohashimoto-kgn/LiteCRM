@@ -18,6 +18,8 @@ export interface WsListRow {
   id: string; company: string; name: string; rank: string; jobTitle: string; empSizeBucket: string;
   event: string; score: number; disposition: string; callOwner: string; phone: string; mobilePhone: string; converted: boolean;
   engRank: string; engScore: number; funnelStage: string;
+  // 「HP問合せ」タブ用: 受付日時・流入元メディア・集計タグ
+  createdAt: string; media: string; tags: string[];
 }
 export interface FunnelStageData { key: string; count: number; rows: { id: string; company: string; name: string; rank: string; score: number }[] }
 export interface FunnelData { stages: Record<string, FunnelStageData>; total: number }
@@ -38,7 +40,7 @@ export interface WsAnalysisScope {
 export interface CompaniesData { rows: WsCompanyRow[]; total: number; multi: number }
 export interface AnalysisData { events: string[]; scopes: Record<string, WsAnalysisScope>; rawAcquirers: string[] }
 
-export interface LeadsFilters { q?: string; event?: string; disposition?: string; rank?: string; page?: number; sourceIdIn?: string[] }
+export interface LeadsFilters { q?: string; event?: string; disposition?: string; rank?: string; page?: number; sourceIdIn?: string[]; media?: string }
 
 export function roleBucket(t: string): string {
   if (/社長|代表|CEO|会長/.test(t)) return "経営者";

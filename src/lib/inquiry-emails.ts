@@ -12,7 +12,8 @@ export interface InquiryFields {
   email: string;
   phone: string;
   message: string;
-  source: string; // 流入元ラベル(既定 "HP問合せ")
+  source: string; // 流入詳細(種別/資料名。既定 "HP問合せ")
+  media?: string; // 流入元メディア(カトルセHP/キャリプラ 等。任意)
 }
 
 /** HTMLエスケープ(メール本文にユーザー入力を差し込むため必須)。 */
@@ -82,7 +83,8 @@ export function buildInternalNotify(
 
   const text =
     `HPの問い合わせフォームから新しい問い合わせが届きました。\n\n` +
-    `流入元 : ${f.source}\n` +
+    (f.media ? `流入元 : ${f.media}\n` : "") +
+    `流入詳細 : ${f.source}\n` +
     `会社名 : ${orDash(f.company)}\n` +
     `お名前 : ${orDash(f.name)}\n` +
     `メール : ${orDash(f.email)}\n` +
@@ -95,7 +97,8 @@ export function buildInternalNotify(
     `<div style="font-family:sans-serif;line-height:1.7;color:#1a1a1a">` +
     `<p><b>HPの問い合わせフォーム</b>から新しい問い合わせが届きました。</p>` +
     `<table style="border-collapse:collapse;margin:12px 0;font-size:14px">` +
-    row("流入元", f.source) +
+    (f.media ? row("流入元", f.media) : "") +
+    row("流入詳細", f.source) +
     row("会社名", f.company) +
     row("お名前", f.name) +
     row("メール", f.email) +
