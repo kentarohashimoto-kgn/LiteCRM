@@ -68,6 +68,50 @@ export function isSystemMailerConfigured(): boolean {
   return readConfig() != null;
 }
 
+/**
+ * 診断用: 設定の有無とSMTP接続(verify)結果を、パスワードを伏せて返す。
+ * トークン保護されたルートからのみ使用すること。
+ */
+export async function diagnoseSystemMailer(): Promise<{
+  configured: boolean;
+  host?: string;
+  port?: number;
+  secure?: boolean;
+  user?: string;
+  from?: string;
+  fromName?: string;
+  passLen?: number;
+  verify?: { ok: true } | { ok: false; error: string };
+}> {
+  const cfg = readConfig();
+  if (!cfg) return { configured: false };
+  const base = {
+    configured: true,
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.secure,
+    user: cfg.user,
+    from: cfg.fromEmail,
+    fromName: cfg.fromName,
+    passLen: cfg.pass.length,
+  };
+  try {
+    const transport = nodemailer.createTransport({
+      host: cfg.host,
+      port: cfg.port,
+      secure: cfg.secure,
+      auth: { user: cfg.user, pass: cfg.pass },
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
+    });
+    await transport.verify();
+    return { ...base, verify: { ok: true } };
+  } catch (e) {
+    return { ...base, verify: { ok: false, error: e instanceof Error ? e.message : String(e) } };
+  }
+}
+
 /** システムメールボックスから送信。未設定なら skipped で静かに返す。 */
 export async function sendSystemMail(input: SystemMailInput): Promise<SystemMailResult> {
   const cfg = readConfig();
