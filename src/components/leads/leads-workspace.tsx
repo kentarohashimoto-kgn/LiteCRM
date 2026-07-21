@@ -120,7 +120,7 @@ function LeadList({ list, filters, events, tabKey = "list" }: { list: ListData; 
     <div className="space-y-3">
       {isInquiries && (
         <p className="text-sm text-ink/60 px-1">
-          HPの問い合わせフォーム（<b>HP問合せ</b>・<b>資料請求</b>）から届いた新規問合せだけを分離表示しています。
+          HPの問い合わせ・資料請求フォームから届いた新規問合せだけを分離表示しています（流入元で絞り込み可）。
           不要な営業問合せは「決着」を<b>対象外</b>に、有効な問合せは右端の<b>案件化</b>で商談化してください。
         </p>
       )}

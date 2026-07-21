@@ -49,7 +49,7 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
   let qy = sb.from("leads").select(LIST_COLS, { count: "exact" });
   const q = (f.q ?? "").replace(/[,%_()]/g, " ").trim();
   if (q) qy = qy.or(`company_name.ilike.%${q}%,contact_name.ilike.%${q}%`);
-  if (f.sourceIn && f.sourceIn.length) qy = qy.in("raw_event", f.sourceIn);
+  if (f.sourceIdIn) qy = qy.in("lead_source_id", f.sourceIdIn);
   if (f.event) qy = qy.eq("raw_event", f.event);
   if (f.disposition) qy = qy.eq("disposition", f.disposition);
   if (f.rank) qy = qy.eq("rank", f.rank);
@@ -134,6 +134,21 @@ export async function getLeadEvents(): Promise<string[]> {
   const set = new Set<string>();
   for (const r of (data ?? []) as { raw_event: string | null }[]) if (r.raw_event) set.add(r.raw_event);
   return [...set];
+}
+
+/**
+ * 「HP問合せ」タブ用: 問い合わせフォーム由来(/api/lead-intake)の流入元一覧。
+ * 取込APIが作成/使用する lead_sources は description に "/api/lead-intake" を含むため、
+ * これで判定すると流入元ラベル(資料請求：〇〇・無料相談 等)が増えても自動的に全て拾える。
+ */
+export async function getWebIntakeSources(): Promise<{ id: string; name: string }[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb
+    .from("lead_sources")
+    .select("id,name")
+    .ilike("description", "%/api/lead-intake%")
+    .order("name");
+  return (data ?? []).map((s) => ({ id: s.id as string, name: s.name as string }));
 }
 
 /** 単票取得。 */

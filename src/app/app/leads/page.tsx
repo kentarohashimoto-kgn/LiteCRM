@@ -10,6 +10,7 @@ import {
   getAcquirerAliases,
   getLeadEvents,
   getExportPresets,
+  getWebIntakeSources,
 } from "@/lib/data/leads";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { LeadsWorkspace, type LeadsTab } from "@/components/leads/leads-workspace";
@@ -23,10 +24,12 @@ export default async function LeadsPage({
     ? searchParams.tab
     : "list") as LeadsTab;
 
-  // 問い合わせフォーム由来(Webフォーム)の流入元。専用「HP問合せ」タブで分離表示する。
-  const WEB_INQUIRY_SOURCES = ["HP問合せ", "資料請求"];
-  // 「HP問合せ」タブ内のサブ絞り込み(流入元)。許可された値のみ受け付ける。
-  const inquirySub = WEB_INQUIRY_SOURCES.includes(searchParams.ev ?? "") ? (searchParams.ev as string) : "";
+  // 「HP問合せ」タブ用: 問い合わせフォーム由来(/api/lead-intake)の流入元を動的に取得。
+  // ラベル(資料請求：〇〇・無料相談 等)が増えても description 判定で自動的に全て拾える。
+  const inquirySources = tab === "inquiries" ? await getWebIntakeSources() : [];
+  const inquirySourceNames = inquirySources.map((s) => s.name);
+  // タブ内のサブ絞り込み(流入元)。実在する流入元名のみ受け付ける。
+  const inquirySub = inquirySourceNames.includes(searchParams.ev ?? "") ? (searchParams.ev as string) : "";
 
   const filters = {
     q: searchParams.q ?? "",
@@ -34,7 +37,7 @@ export default async function LeadsPage({
     disposition: searchParams.disp ?? "",
     rank: searchParams.rank ?? "",
     page: searchParams.page ? Math.max(1, parseInt(searchParams.page, 10) || 1) : 1,
-    sourceIn: tab === "inquiries" ? WEB_INQUIRY_SOURCES : undefined,
+    sourceIdIn: tab === "inquiries" ? inquirySources.map((s) => s.id) : undefined,
   };
 
   // アクティブなタブに必要なデータだけ取得する(全件ロードを避ける)。
@@ -46,7 +49,7 @@ export default async function LeadsPage({
   const aliasRows = tab === "analysis" ? await getAcquirerAliases() : [];
   const aliases = aliasRows.map((a) => ({ raw: a.raw, name: a.display_name ?? "" }));
   const analysis = tab === "analysis" ? await getLeadsAnalysis() : undefined;
-  const events = tab === "list" || tab === "download" ? await getLeadEvents() : tab === "inquiries" ? WEB_INQUIRY_SOURCES : [];
+  const events = tab === "list" || tab === "download" ? await getLeadEvents() : tab === "inquiries" ? inquirySourceNames : [];
   const presets = tab === "download" ? (await getExportPresets()).map((p) => ({ id: p.id, name: p.name, columns: p.columns })) : [];
   const batchRows = tab === "batches" ? await getLeadImportBatches() : [];
   const batches = batchRows.map((b) => ({
