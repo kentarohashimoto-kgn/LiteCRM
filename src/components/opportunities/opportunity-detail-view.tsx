@@ -17,8 +17,7 @@ import {
   getLeadSources,
 } from "@/lib/data/select";
 import { MeetingList } from "@/components/meetings/meeting-list";
-import { ContactLine } from "@/components/contacts/contact-line";
-import { setOpportunityAccounterAction } from "@/server/actions/opportunities";
+import { AccounterPanel } from "@/components/contacts/accounter-panel";
 import { BillingSection } from "@/components/billing/billing-section";
 import { SubscriptionForm } from "@/components/billing/subscription-form";
 import { ScheduleSection } from "@/components/opportunities/schedule-section";
@@ -593,50 +592,21 @@ export async function OpportunityDetailView({ id, inPane = false, saved, error }
             </form>
           </Section>
 
-          <Section title="顧客 / アカウンター">
-            <div className="text-sm">
-              {o.account && (
-                <Link href={`/app/accounts/${o.account.id}`} className="font-semibold text-teal-deep hover:underline">{o.account.name}</Link>
-              )}
-              <div className="text-xs text-ink/50 mt-0.5">{o.account?.industry} ・ {o.account?.area}</div>
-
-              {(() => {
-                const accounterId = ws.opportunities.find((x) => x.id === o.id)?.contact_id ?? null;
-                const accounter = contacts.find((c) => c.id === accounterId) ?? null;
-                const others = contacts.filter((c) => c.id !== accounterId);
-                return (
-                  <>
-                    {accounter ? (
-                      <div className="mt-3"><ContactLine c={accounter} isAccounter showEmail /></div>
-                    ) : (
-                      <p className="mt-3 text-xs text-accent-orange">アカウンター（顧客側の窓口担当者）が未設定です。</p>
-                    )}
-                    {contacts.length > 0 && (
-                      <form action={setOpportunityAccounterAction} className="mt-2 flex items-center gap-1.5">
-                        <input type="hidden" name="opp_id" value={o.id} />
-                        <select name="contact_id" defaultValue={accounterId ?? ""} className="input text-xs py-1 flex-1 min-w-0" aria-label="アカウンター">
-                          <option value="">アカウンター未設定</option>
-                          {contacts.map((c) => (
-                            <option key={c.id} value={c.id}>{[c.department, c.title, c.name].filter(Boolean).join("／")}</option>
-                          ))}
-                        </select>
-                        <SubmitButton className="btn-ghost text-xs py-1 whitespace-nowrap" pendingLabel="設定中…">設定</SubmitButton>
-                      </form>
-                    )}
-                    {others.length > 0 && (
-                      <ul className="mt-3 space-y-2 border-t border-black/[0.04] pt-2.5">
-                        {others.map((c) => (
-                          <li key={c.id}><ContactLine c={c} /></li>
-                        ))}
-                      </ul>
-                    )}
-                    {contacts.length === 0 && (
-                      <p className="mt-2 text-xs text-ink/40">担当者が未登録です。顧客ページで担当者を追加すると、ここでアカウンターを設定できます。</p>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
+          <Section title="顧客 / アカウンター" action={<span className="text-[11px] text-ink/40">窓口担当者の詳細を確認・追加・編集</span>}>
+            {o.account ? (
+              <AccounterPanel
+                opportunityId={o.id}
+                accountId={o.account.id}
+                accountName={o.account.name}
+                accountIndustry={o.account.industry}
+                accountArea={o.account.area}
+                accountHref={`/app/accounts/${o.account.id}`}
+                contacts={contacts}
+                accounterId={ws.opportunities.find((x) => x.id === o.id)?.contact_id ?? null}
+              />
+            ) : (
+              <p className="text-sm text-ink/40 py-2">顧客が紐づいていません。</p>
+            )}
           </Section>
 
           <Section title="タスク">
