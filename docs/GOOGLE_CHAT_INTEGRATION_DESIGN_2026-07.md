@@ -374,14 +374,39 @@ GOOGLE_CHAT_PUBSUB_AUDIENCE=https://<APP>/api/chat/pubsub
 
 ---
 
-## 12. 決めておきたいこと（実装着手の前提）
+## 12. 確定事項・暫定既定（2026-07 更新）
 
-1. **Google Workspace 管理権限**：Chat App 構成・API 有効化・Service Account 発行ができる管理者はいますか？（P0 は管理者作業）
-2. **DM 配信の対象**：毎朝ダイジェスト等は「担当者個人 DM」中心でよいですか？それともチーム Space 中心？
-3. **紐付ける Space**：どの Google Chat グループを、CRM の何（案件/取引先/営業チーム）に対応させますか？（初期 binding の設計）
-4. **リアクションの割当**：どの絵文字にどの処理を割り当てますか？（§7.2 の例をベースに確定したい）
-5. **メンションで許可する操作範囲**：参照のみ／起票まで／ステージ更新など破壊的操作まで、どこまで許可しますか？
-6. **識別子マッピングの作り方**：`chat_identities`（CRM⇄Chatユーザー）はメール突合で自動生成しますか？手動登録 UI を用意しますか？
+依頼者ヒアリングにより以下を確定。**リアクション割当・コマンド範囲は「テスト用の仮置き。後で変更前提」**。実装後に設定 UI（`chat_reaction_triggers` 等）から差し替え可能にする。
+
+| # | 項目 | 決定 |
+|---|---|---|
+| 1 | Google Workspace 管理権限 | **あり（依頼者が管理者）**。P0 の GCP/Chat App/SA/Pub/Sub 準備は実施可能 |
+| 2 | DM 配信の対象（暫定） | 毎朝ダイジェスト＝**担当者個人 DM**。危険案件＝担当 DM＋マネージャー Space。※後で調整可 |
+| 3 | 紐付ける Space（暫定） | まず**テスト用グループ Space を1つ**作り、営業チーム（`entity_type='team'`）に binding。案件単位 binding は後続 |
+| 4 | リアクション割当（**仮置き**） | 下表 §12.1 を初期シードとして投入。テスト後に変更 |
+| 5 | メンション許可範囲（暫定） | まず**参照＋起票（タスク/活動記録）まで**。ステージ更新等の破壊的操作は**確認カード必須**で後続フェーズ |
+| 6 | 識別子マッピング | メール（GWS）突合で `chat_identities` を**半自動生成**＋設定 UI で手動補正 |
+
+### 12.1 リアクション初期マッピング（テスト用・変更前提）
+
+```text
+✅ (:white_check_mark:)  → mark_reviewed   : 危険案件アラートを「確認済み」にしてスヌーズ＋activity記録
+👀 (:eyes:)              → assign_me       : 対象（リード/案件）をリアクションした人にアサイン
+🔥 (:fire:)              → escalate        : 「要エスカレ」フラグ＋マネージャーSpaceへ通知
+📝 (:memo:)              → create_task     : 対象案件にフォロータスクを起票
+```
+
+> これらは `chat_reaction_triggers` の seed として登録。運用で自由に追加・変更できる。
+
+### 12.2 残タスク（管理者作業 = P0、実装と並行可）
+
+実装（P1〜）を進める前後で、管理者側で以下を用意（設計書 §2 の手順）。実装側は未設定時 no-op で安全に先行できる。
+
+- [ ] GCP プロジェクトで Chat API / Workspace Events API / Pub/Sub API 有効化
+- [ ] Service Account 発行＋JSON キー → `GOOGLE_CHAT_SA_CREDENTIALS`
+- [ ] Chat App 構成（HTTP endpoint = `/api/chat/events`、Interactive ON）
+- [ ] Pub/Sub トピック `chat-events` ＋ Push サブスクリプション（→ `/api/chat/pubsub`, OIDC）
+- [ ] テスト用グループ Space 作成＋Bot を招待
 
 ---
 
