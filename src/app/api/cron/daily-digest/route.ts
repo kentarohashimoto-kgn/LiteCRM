@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { checkBearer } from "@/lib/secure-compare";
+import { sendChatMessage, cardMessage, isChatConfigured } from "@/lib/chat/send";
 
 export const dynamic = "force-dynamic";
 
@@ -203,8 +204,62 @@ export async function GET(req: Request) {
     /* BO通知失敗は無視 */
   }
 
+  // A-1(Google Chat): 担当者へ個人DM + 営業チームSpaceへサマリ。
+  // GOOGLE_CHAT_SA_CREDENTIALS 未設定なら sendChatMessage が no-op（既存挙動に影響なし）。
+  let chatDm = 0;
+  let chatTeam = 0;
+  if (isChatConfigured() && owners.length > 0) {
+    try {
+      const { data: tenant } = await admin.from("tenants").select("id").eq("is_demo", false).limit(1).maybeSingle();
+      if (tenant) {
+        const tid = tenant.id as string;
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://lite-crm-tau.vercel.app";
+        const partsOf = (r: Row): string[] => {
+          const parts: string[] = [];
+          if (r.appts.length) parts.push(`アポ ${r.appts.length}件（${r.appts.slice(0, 3).join(" / ")}${r.appts.length > 3 ? " 他" : ""}）`);
+          if (r.acs.length) parts.push(`今日のAC ${r.acs.length}件`);
+          if (r.overdue) parts.push(`⚠️ 超過AC ${r.overdue}件`);
+          if (r.proposals.length) parts.push(`📝 提案書の期日 ${r.proposals.length}件`);
+          return parts;
+        };
+        // 個人DM
+        for (const [uid, r] of owners) {
+          if (!uid) continue;
+          const res2 = await sendChatMessage(
+            { type: "dm", tenantId: tid, userId: uid },
+            cardMessage({
+              title: `今日の営業ダイジェスト（${label}）`,
+              lines: partsOf(r),
+              buttonText: "今日のタスクを開く",
+              buttonUrl: `${appUrl}/app/today`,
+              messageKind: "digest",
+            }),
+          );
+          if (res2.sent > 0) chatDm += 1;
+        }
+        // 営業チームSpace（team binding: entity_id = tenant.id）へ全体サマリ
+        const teamLines = owners
+          .filter(([uid]) => uid)
+          .map(([uid, r]) => `<b>${nameOf.get(uid) ?? "未割当"}</b>: ${partsOf(r).join(" ・ ")}`);
+        const teamRes = await sendChatMessage(
+          { type: "entity", tenantId: tid, entityType: "team", entityId: tid },
+          cardMessage({
+            title: `CATORCE 今日の営業ダイジェスト（${label}）`,
+            lines: teamLines,
+            buttonText: "ダッシュボードを開く",
+            buttonUrl: `${appUrl}/app/dashboard`,
+            messageKind: "digest",
+          }),
+        );
+        chatTeam = teamRes.sent;
+      }
+    } catch {
+      /* Chat配信失敗は無視（Slack/アプリ内通知は継続） */
+    }
+  }
+
   if (!webhook) {
-    return NextResponse.json({ ok: true, owners: owners.length, pending, purged, notified, boNotified, skipped: "SLACK_WEBHOOK_URL not configured" });
+    return NextResponse.json({ ok: true, owners: owners.length, pending, purged, notified, boNotified, chatDm, chatTeam, skipped: "SLACK_WEBHOOK_URL not configured" });
   }
   const res = await fetch(webhook, {
     method: "POST",
@@ -212,5 +267,5 @@ export async function GET(req: Request) {
     body: JSON.stringify({ text: lines.join("\n") }),
   });
 
-  return NextResponse.json({ ok: res.ok, owners: owners.length, pending, purged, notified, boNotified });
+  return NextResponse.json({ ok: res.ok, owners: owners.length, pending, purged, notified, boNotified, chatDm, chatTeam });
 }
