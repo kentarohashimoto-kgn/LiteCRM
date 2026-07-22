@@ -14,7 +14,7 @@ import { MeetingsList } from "./meetings-list";
 import { AppointmentCalendarPro, type BookingLink } from "./appointment-calendar-pro";
 import { cn } from "@/lib/utils";
 
-interface Option { id: string; name: string; }
+interface Option { id: string; name: string; color?: string; hidden?: boolean; }
 type View = "list" | "meetings" | "board" | "calendar" | "proposal";
 
 export function OppWorkspace({
@@ -116,7 +116,7 @@ export function OppWorkspace({
         />
       ) : view === "calendar" ? (
         calItems ? (
-          <AppointmentCalendarPro items={calItems} owners={owners} bookingLinks={bookingLinks} />
+          <AppointmentCalendarPro items={calItems} owners={owners} bookingLinks={bookingLinks} canManage={canReassign} />
         ) : (
           <div className="card card-pad flex items-center gap-2 text-sm text-ink/40"><Loader2 size={15} className="animate-spin" /> 読み込み中…</div>
         )

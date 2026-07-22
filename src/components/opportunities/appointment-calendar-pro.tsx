@@ -2,14 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, List, CalendarDays, Columns3, Square, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, List, CalendarDays, Columns3, Square, Check, SlidersHorizontal } from "lucide-react";
 import type { CalItem } from "@/lib/data/calendar";
 import { setAppointmentAtAction } from "@/server/actions/opportunities";
+import { setOwnerColorAction, setOwnerCalendarHiddenAction } from "@/server/actions/calendar-owners";
 import { YomiBadge } from "@/components/ui/badges";
 import { Avatar } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
+import { CalendarOwnerManager, type OwnerMeta } from "./calendar-owner-manager";
 
-interface Option { id: string; name: string; }
+interface Option { id: string; name: string; color?: string; hidden?: boolean; }
 type View = "list" | "month" | "week" | "day";
 type KindFilter = "all" | "appt";
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
@@ -72,7 +74,7 @@ function layoutColumns(items: Appt[]): Map<string, { col: number; cols: number }
 
 export interface BookingLink { id: string; label: string; url: string; }
 
-export function AppointmentCalendarPro({ items, owners, bookingLinks = [] }: { items: CalItem[]; owners: Option[]; bookingLinks?: BookingLink[] }) {
+export function AppointmentCalendarPro({ items, owners, bookingLinks = [], canManage = false }: { items: CalItem[]; owners: Option[]; bookingLinks?: BookingLink[]; canManage?: boolean }) {
   const [rows, setRows] = useState<CalItem[]>(items);
   useEffect(() => setRows(items), [items]);
   const [view, setView] = useState<View>("week");
@@ -80,13 +82,42 @@ export function AppointmentCalendarPro({ items, owners, bookingLinks = [] }: { i
   const [ownerFilter, setOwnerFilter] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
 
+  // 担当ごとの色・非表示のローカル状態（初期値はサーバーから）。編集は即時反映＋永続化。
+  const [colorByOwner, setColorByOwner] = useState<Record<string, string>>(() =>
+    Object.fromEntries(owners.filter((o) => o.color).map((o) => [o.id, o.color as string])),
+  );
+  const [hiddenSet, setHiddenSet] = useState<Set<string>>(() => new Set(owners.filter((o) => o.hidden).map((o) => o.id)));
+  const [editingOwners, setEditingOwners] = useState(false);
+
+  function applyColor(userId: string, color: string) {
+    setColorByOwner((m) => ({ ...m, [userId]: color }));
+    void setOwnerColorAction({ userId, color });
+  }
+  function applyHidden(userId: string, hidden: boolean) {
+    setHiddenSet((s) => { const n = new Set(s); if (hidden) n.add(userId); else n.delete(userId); return n; });
+    void setOwnerCalendarHiddenAction({ userId, hidden });
+  }
+
+  // 非表示担当を除外し、担当色のローカル変更を各イベントへ反映した表示用の行。
+  const displayRows = useMemo(() =>
+    rows
+      .filter((it) => !(it.owner_user_id && hiddenSet.has(it.owner_user_id)))
+      .map((it) => (it.owner_user_id && colorByOwner[it.owner_user_id] ? { ...it, owner_color: colorByOwner[it.owner_user_id] } : it)),
+    [rows, hiddenSet, colorByOwner],
+  );
+
+  const ownerMeta: OwnerMeta[] = useMemo(() =>
+    owners.map((o) => ({ id: o.id, name: o.name, color: colorByOwner[o.id] ?? o.color ?? "#008C8C", hidden: hiddenSet.has(o.id) })),
+    [owners, colorByOwner, hiddenSet],
+  );
+
   const appts: Appt[] = useMemo(() => {
-    return rows
+    return displayRows
       .filter((it) => kindFilter === "all" || it.kind === "appt")
       .filter((it) => !ownerFilter || it.owner_user_id === ownerFilter)
       .map((it, i) => ({ item: it, at: eventDate(it), timed: it.timed, key: it.meeting_id ?? `${it.opportunity_id}:${it.kind}:${it.on_date}:${i}` }))
       .sort((a, b) => +a.at - +b.at);
-  }, [rows, ownerFilter, kindFilter]);
+  }, [displayRows, ownerFilter, kindFilter]);
 
   const byDay = useMemo(() => {
     const m = new Map<string, Appt[]>();
@@ -101,8 +132,8 @@ export function AppointmentCalendarPro({ items, owners, bookingLinks = [] }: { i
   }, [appts]);
 
   const legend = useMemo(() => {
-    const m = new Map<string, { name: string; color: string }>();
-    for (const a of appts) if (a.item.owner_user_id) m.set(a.item.owner_user_id, { name: a.item.owner_name ?? "—", color: ownerColor(a.item) });
+    const m = new Map<string, { id: string; name: string; color: string }>();
+    for (const a of appts) if (a.item.owner_user_id) m.set(a.item.owner_user_id, { id: a.item.owner_user_id, name: a.item.owner_name ?? "—", color: ownerColor(a.item) });
     return Array.from(m.values());
   }, [appts]);
 
@@ -161,11 +192,30 @@ export function AppointmentCalendarPro({ items, owners, bookingLinks = [] }: { i
         <span className="inline-flex items-center gap-1 text-[11px] text-ink/70"><span className="w-3 h-3 rounded-sm border border-dashed border-ink/40 bg-white inline-flex items-center justify-center"><Check size={8} className="text-ink/50" /></span>アポ済(実施)</span>
         {legend.length > 0 && <span className="text-[11px] text-ink/30 mx-1">|</span>}
         {legend.map((l) => (
-          <span key={l.name} className="inline-flex items-center gap-1 text-[11px] text-ink/70">
+          <span key={l.id} className="inline-flex items-center gap-1 text-[11px] text-ink/70">
             <span className="w-3 h-3 rounded-sm" style={{ background: l.color }} />{l.name}
           </span>
         ))}
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setEditingOwners((v) => !v)}
+            className={cn("ml-auto inline-flex items-center gap-1 rounded-lg border border-black/10 px-2 py-1 text-[11px] transition-colors", editingOwners ? "bg-teal-primary text-white border-teal-primary" : "text-ink/55 hover:bg-mist-soft")}
+            title="担当ごとの色・表示を編集"
+          >
+            <SlidersHorizontal size={12} /> 担当の色・表示
+          </button>
+        )}
       </div>
+
+      {canManage && editingOwners && (
+        <CalendarOwnerManager
+          owners={ownerMeta}
+          onSetColor={applyColor}
+          onSetHidden={applyHidden}
+          onClose={() => setEditingOwners(false)}
+        />
+      )}
 
       {view === "list" && <ListView byDay={byDay} onSetTime={setTime} />}
       {view === "month" && <MonthView cursor={cursor} byDay={byDay} onPickDay={(d) => { setCursor(d); setView("day"); }} />}

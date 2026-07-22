@@ -359,6 +359,34 @@ export function colorOf(key?: string) {
   return COLOR_MAP[(key as ColorKey) ?? "teal"] ?? COLOR_MAP.teal;
 }
 
+/**
+ * カレンダー(案件カレンダー)の担当色パレット。profiles.avatar_color に
+ * 保存する生のHEX値。担当ごとに重複しにくいよう十分な数を用意する。
+ */
+export const CALENDAR_OWNER_COLORS: string[] = [
+  "#008C8C", // teal
+  "#F59A2A", // orange
+  "#7C3AED", // violet
+  "#E11D48", // rose
+  "#0EA5E9", // sky
+  "#65A30D", // lime
+  "#D97706", // amber
+  "#2563EB", // blue
+  "#DB2777", // pink
+  "#059669", // emerald
+  "#C026D3", // fuchsia
+  "#4F46E5", // indigo
+  "#0891B2", // cyan
+  "#DC2626", // red
+  "#16A34A", // green
+  "#64748B", // slate
+];
+export const CALENDAR_OWNER_COLOR_SET = new Set(CALENDAR_OWNER_COLORS.map((c) => c.toUpperCase()));
+/** HEX(#RRGGBB) の妥当性チェック。 */
+export function isHexColor(v: string): boolean {
+  return /^#[0-9A-Fa-f]{6}$/.test(v);
+}
+
 /** タスクビューの種類。 */
 export const TASK_VIEWS: { key: TaskViewKind; label: string; icon: string }[] = [
   { key: "list", label: "リスト", icon: "list" },
