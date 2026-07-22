@@ -738,6 +738,10 @@ export interface Task {
   status: TaskStatus;
   priority?: Priority;
   completed_at?: string;
+  /** タスクの発生源。'next_action'=案件のネクストアクション、'manual'=手動 等。 */
+  origin?: string;
+  /** ネクストアクションの発生元商談。この商談の次アクション欄から作られた場合に紐づく。 */
+  source_meeting_id?: UUID | null;
   /** Asana型: 上位プロジェクト（任意）。 */
   project_id?: UUID;
   /** Asana型: プロジェクト内セクション（ボード列/リスト見出し）。 */
