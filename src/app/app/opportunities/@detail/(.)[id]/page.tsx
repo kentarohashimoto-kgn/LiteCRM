@@ -8,7 +8,7 @@ import { DetailPane } from "@/components/opportunities/detail-pane";
  */
 export default async function InterceptedOpportunityDetail({ params }: { params: { id: string } }) {
   return (
-    <DetailPane oppId={params.id}>
+    <DetailPane title="案件詳細" hint="左の一覧から次の案件をクリックできます" fullHref={`/app/opportunities/${params.id}`}>
       <OpportunityDetailView id={params.id} inPane />
     </DetailPane>
   );

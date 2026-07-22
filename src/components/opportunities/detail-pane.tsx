@@ -3,18 +3,35 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { X, Maximize2 } from "lucide-react";
+import { X, Maximize2, ChevronLeft } from "lucide-react";
 
 const LIST_PATH = "/app/opportunities";
 
 /**
  * 案件一覧の上に重ねるスライドオーバー。右側に画面幅の約2/3で開き、
- * 一覧に留まったまま案件詳細を確認・更新できる。
+ * 一覧に留まったまま案件詳細・商談詳細を確認・更新できる。
  *  - バックドロップは張らない → 左に残る一覧（顧客/案件列）をそのままクリックして
  *    次の案件へ次々切り替えられる。一覧のスクロール・検索状態も保持される。
+ *  - 商談を開くとペイン内だけが更新され、「案件に戻る」で案件詳細へ戻れる。
  *  - ✕ / ESC で閉じる（一覧へ戻る）。「全画面」で従来のフルページを別タブで開ける。
  */
-export function DetailPane({ oppId, children }: { oppId: string; children: React.ReactNode }) {
+export function DetailPane({
+  children,
+  title = "案件詳細",
+  hint,
+  fullHref,
+  backHref,
+  backLabel = "戻る",
+}: {
+  children: React.ReactNode;
+  title?: string;
+  hint?: string;
+  /** 「全画面」で開くフルページのURL。 */
+  fullHref: string;
+  /** 指定時、ヘッダーに「戻る」ボタンを出す（ペイン内をソフト遷移で更新）。 */
+  backHref?: string;
+  backLabel?: string;
+}) {
   const router = useRouter();
   const [shown, setShown] = useState(false);
 
@@ -23,6 +40,8 @@ export function DetailPane({ oppId, children }: { oppId: string; children: React
     // アニメーション後に一覧へ戻す（一覧はマウントされたままなので状態は保持される）
     setTimeout(() => router.push(LIST_PATH), 180);
   };
+  // ペイン内での遷移（商談↔案件）。一覧はマウントされたまま＝絞り込みは維持される。
+  const goInPane = (href: string) => router.push(href);
 
   useEffect(() => {
     setShown(true);
@@ -31,7 +50,7 @@ export function DetailPane({ oppId, children }: { oppId: string; children: React
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-    // マウント時のみ。別の行を開いても（oppId 変化）ペインは開いたまま更新される。
+    // マウント時のみ。別の行/商談を開いても（props 変化）ペインは開いたまま更新される。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -44,14 +63,28 @@ export function DetailPane({ oppId, children }: { oppId: string; children: React
         }`}
         role="dialog"
         aria-modal="false"
-        aria-label="案件詳細"
+        aria-label={title}
       >
         {/* ヘッダー（固定） */}
         <div className="flex items-center justify-between gap-3 border-b border-black/10 bg-white px-4 py-2.5 md:px-6">
-          <span className="text-sm font-semibold text-ink/70">案件詳細<span className="ml-2 text-[11px] font-normal text-ink/35">左の一覧から次の案件をクリックできます</span></span>
-          <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 items-center gap-2">
+            {backHref && (
+              <button
+                type="button"
+                onClick={() => goInPane(backHref)}
+                className="inline-flex items-center gap-1 rounded-lg border border-black/10 px-2 py-1.5 text-xs text-ink/60 hover:bg-black/[0.03]"
+              >
+                <ChevronLeft size={14} /> {backLabel}
+              </button>
+            )}
+            <span className="truncate text-sm font-semibold text-ink/70">
+              {title}
+              {hint && <span className="ml-2 text-[11px] font-normal text-ink/35">{hint}</span>}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
             <Link
-              href={`${LIST_PATH}/${oppId}`}
+              href={fullHref}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-ink/60 hover:bg-black/[0.03]"
