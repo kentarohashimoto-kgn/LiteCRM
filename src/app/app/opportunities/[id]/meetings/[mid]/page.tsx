@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { getWorkspaceForOpportunity } from "@/lib/data/workspace";
 import { ContactLine } from "@/components/contacts/contact-line";
-import { getMeeting, getOpportunity, getContactsByAccount, getActivitiesByOpportunity, getUser, listMembers } from "@/lib/data/select";
+import { getMeeting, getOpportunity, getContactsByAccount, getActivitiesByOpportunity, getUser, listMembers, getTasksByOpportunity } from "@/lib/data/select";
 import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { YomiBadge } from "@/components/ui/badges";
 import { updateMeetingAction } from "@/server/actions";
@@ -37,6 +37,11 @@ export default async function MeetingDetailPage({ params, searchParams }: { para
   const members = listMembers(ws).map(({ user }) => user);
   const canReassign = canReassignOwner(ws.ctx.role);
   const recordings = await listMeetingRecordings(meeting.id);
+  // 案件のネクストアクション（複数可）から、最も近い未完了を代表として参照表示する。
+  const openNextActions = (opp ? getTasksByOpportunity(ws, opp.id) : [])
+    .filter((t) => t.origin === "next_action" && t.status !== "done")
+    .sort((a, b) => (a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0));
+  const nearestNextAction = openNextActions[0] ?? null;
 
   return (
     <div>
@@ -175,7 +180,7 @@ export default async function MeetingDetailPage({ params, searchParams }: { para
               <div className="flex items-center justify-between gap-2"><dt className="text-xs text-ink/45">ヨミ</dt><dd><YomiBadge yomi={opp?.yomi} /></dd></div>
               <div className="flex items-center justify-between gap-2"><dt className="text-xs text-ink/45">見込み金額</dt><dd className="tabular-nums font-semibold">{formatYen(opp?.amount ?? 0)}</dd></div>
               <div className="flex items-center justify-between gap-2"><dt className="text-xs text-ink/45">受注予定</dt><dd>{formatDateFull(opp?.expected_close_date)}</dd></div>
-              <div className="flex items-center justify-between gap-2"><dt className="text-xs text-ink/45">次アクション</dt><dd className="text-right text-xs">{opp?.next_action_date ? `${formatDateFull(opp.next_action_date)} ${opp.next_action_text ?? ""}` : "—"}</dd></div>
+              <div className="flex items-start justify-between gap-2"><dt className="text-xs text-ink/45">次アクション</dt><dd className="text-right text-xs">{nearestNextAction ? (<span>{formatDateFull(nearestNextAction.due_date)} {nearestNextAction.title}{openNextActions.length > 1 ? <span className="text-ink/40"> 他{openNextActions.length - 1}件</span> : null}</span>) : "—"}</dd></div>
             </dl>
           </Section>
 

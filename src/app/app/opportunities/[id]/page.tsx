@@ -30,6 +30,7 @@ import { ForecastBadge, StageBadge, StatusBadge, YomiBadge } from "@/components/
 import { evaluateRisk, RISK_LABELS } from "@/lib/risk";
 import { addActivityAction, updateOpportunityAction, setOpportunityCampaignAction, createMeetingAction, saveOppResearchAction, updateOpportunityBasicsAction, updateOppMemoAction } from "@/server/actions";
 import { MeetingTaskInputs } from "@/components/opportunities/meeting-task-inputs";
+import { NextActionList, type NextActionItem } from "@/components/opportunities/next-action-list";
 import { YOMI_OPTIONS, canReassignOwner, canManageProjects } from "@/lib/constants";
 import { deleteOpportunityAction } from "@/server/actions/trash";
 import { ChangeHistory } from "@/components/history/change-history";
@@ -58,6 +59,26 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
   const members = listMembers(ws).map(({ user }) => user);
   const canReassign = canReassignOwner(ws.ctx.role);
   const tasks = getTasksByOpportunity(ws, o.id);
+  // ネクストアクション（案件・複数）は tasks(origin='next_action') が実体。
+  // 商談発のものは source_meeting_id で商談へ紐づく。汎用タスク欄とは分けて表示する。
+  const otherTasks = tasks.filter((t) => t.origin !== "next_action");
+  const meetingTitleById = new Map(meetings.map((m) => [m.id, m.title] as const));
+  const todayIso = toJstDate(new Date().toISOString()) ?? "";
+  const nextActionItems: NextActionItem[] = tasks
+    .filter((t) => t.origin === "next_action")
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      dueDate: t.due_date,
+      done: t.status === "done",
+      overdue: t.status !== "done" && Boolean(t.due_date) && t.due_date < todayIso,
+      sourceMeetingId: t.source_meeting_id ?? null,
+      sourceMeetingTitle: t.source_meeting_id ? (meetingTitleById.get(t.source_meeting_id) ?? null) : null,
+    }))
+    .sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1; // 未完了を上へ
+      return a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0; // 期日昇順
+    });
   const history = getStageHistory(ws, o.id);
   const contacts = o.account ? getContactsByAccount(ws, o.account.id) : [];
   const campaigns = listCampaigns(ws);
@@ -292,6 +313,14 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
                 <SubmitButton className="btn-accent" pendingLabel="登録中…">商談を登録</SubmitButton>
               </form>
             </details>
+          </Section>
+
+          <Section
+            title="ネクストアクション（案件）"
+            className={entityBorder("opportunity")}
+            action={<span className="text-[11px] text-ink/40">商談の次アクションもここに集約。一覧には最も近い未完了を表示</span>}
+          >
+            <NextActionList opportunityId={o.id} items={nextActionItems} />
           </Section>
 
           <Section title="案件を更新" className={entityBorder("opportunity")} action={<EditTarget level="opportunity" />}>
@@ -604,11 +633,11 @@ export default async function OpportunityDetailPage({ params, searchParams }: { 
           </Section>
 
           <Section title="タスク">
-            {tasks.length === 0 ? (
+            {otherTasks.length === 0 ? (
               <p className="text-sm text-ink/40 py-2">タスクはありません</p>
             ) : (
               <ul className="space-y-2">
-                {tasks.map((t) => (
+                {otherTasks.map((t) => (
                   <li key={t.id} className="flex items-center justify-between text-sm">
                     <span className={t.status === "done" ? "line-through text-ink/40" : ""}>{t.title}</span>
                     <span className="text-xs text-ink/40">{formatDateFull(t.due_date)}</span>

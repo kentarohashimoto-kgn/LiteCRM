@@ -11,6 +11,7 @@ import { yomiToFields, productToCategory, canonicalExhibition, type DealRow } fr
 import { exhibitionCoreName } from "@/lib/exhibition-label";
 import { parsePeriod, parseProbability, parseAmount, parseDateLoose } from "@/lib/revenue-forecast";
 import { ensureTransitionOnWon } from "@/server/transitions-util";
+import { upsertMeetingNextAction } from "@/server/next-actions";
 import { logAudit, clientIp } from "@/lib/audit-events";
 import { verifyTurnstile } from "@/lib/turnstile";
 
@@ -440,8 +441,9 @@ export async function createMeetingAction(formData: FormData) {
     .limit(5);
   const dup = (recent ?? []).length > 0; // 同案件・同タイトルの直近作成があれば重複とみなす
 
+  let newMeetingId: string | null = null;
   if (!dup) {
-    await sb.from("meetings").insert({
+    const { data: mIns } = await sb.from("meetings").insert({
       tenant_id: ctx.tenantId,
       opportunity_id: oppId,
       account_id: accountId,
@@ -455,7 +457,8 @@ export async function createMeetingAction(formData: FormData) {
       next_action_date: nextDate,
       next_action_text: nextText,
       created_by: ctx.userId,
-    });
+    }).select("id").single();
+    newMeetingId = (mIns?.id as string | undefined) ?? null;
   }
 
   // 商談で発生した任意タスク(資料送付・アポ調整・提案書作成 等)をまとめて登録。重複時は起票しない。
@@ -482,13 +485,21 @@ export async function createMeetingAction(formData: FormData) {
   }
 
   if (!dup) {
-    // 親案件の最終活動/次アクションを更新
-    const patch: Record<string, unknown> = { last_activity_at: new Date().toISOString() };
-    if (nextDate) {
-      patch.next_action_date = nextDate;
-      patch.next_action_text = nextText;
+    // 親案件の最終活動を更新
+    await sb.from("opportunities").update({ last_activity_at: new Date().toISOString() }).eq("id", oppId);
+    // 商談の次アクション → この商談に紐づく案件のネクストアクション(tasks)を作成
+    if (newMeetingId && nextDate) {
+      await upsertMeetingNextAction(sb, {
+        tenantId: ctx.tenantId,
+        oppId,
+        meetingId: newMeetingId,
+        accountId: accountId ?? null,
+        ownerId,
+        createdBy: ctx.userId,
+        date: nextDate,
+        text: nextText,
+      });
     }
-    await sb.from("opportunities").update(patch).eq("id", oppId);
   }
   revalidatePath(`/app/opportunities/${oppId}`);
   if (!dup && taskRows.length > 0) revalidatePath("/app/tasks");
@@ -515,13 +526,13 @@ export async function updateMeetingAction(formData: FormData) {
   if (meetingOwner && canReassignOwner(ctx.role)) patch.owner_user_id = meetingOwner;
   await sb.from("meetings").update(patch).eq("id", id);
   // 商談の入力を親案件へ同期(案件と商談で二重更新しなくて済むように)。
-  //  - 次アクション日/内容
   //  - ヨミ(選択時): ステージ・予測区分・確度・ステータスを自動導出
+  //  - 次アクション: この商談に紐づく案件のネクストアクション(tasks)を1件 upsert する
+  //    （案件のネクストアクションは複数可。案件カラムは手動/主ネクストの枠なので触らない）
+  const nd = str(formData.get("next_action_date"));
+  const nt = str(formData.get("next_action_text"));
   if (oppId) {
     const oppPatch: Record<string, unknown> = { last_activity_at: new Date().toISOString() };
-    const nd = str(formData.get("next_action_date"));
-    const nt = str(formData.get("next_action_text"));
-    if (nd || nt) { oppPatch.next_action_date = nd; oppPatch.next_action_text = nt; }
     const yomi = str(formData.get("yomi"));
     if (yomi) {
       const yf = yomiToFields(yomi);
@@ -535,6 +546,18 @@ export async function updateMeetingAction(formData: FormData) {
     if (yomi && yomiToFields(yomi).status === "won") {
       await ensureTransitionOnWon(ctx.tenantId, ctx.userId, oppId);
     }
+    const { data: m } = await sb.from("meetings").select("account_id, owner_user_id").eq("id", id).maybeSingle();
+    await upsertMeetingNextAction(sb, {
+      tenantId: ctx.tenantId,
+      oppId,
+      meetingId: id,
+      accountId: (m?.account_id as string | null) ?? null,
+      ownerId: (m?.owner_user_id as string | null) ?? ctx.userId,
+      createdBy: ctx.userId,
+      date: nd,
+      text: nt,
+    });
+    revalidatePath("/app/tasks");
   }
   revalidatePath(`/app/opportunities/${oppId}/meetings/${id}`);
   if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
