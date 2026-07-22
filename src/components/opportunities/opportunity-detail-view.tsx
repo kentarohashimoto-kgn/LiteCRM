@@ -43,9 +43,37 @@ import { UnifiedTimeline, type TimelineEvent } from "@/components/history/unifie
 import { CommentThread, type CommentView } from "@/components/opportunities/comment-thread";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { LOST_REASONS } from "@/lib/constants";
+import { normCompany } from "@/lib/lead-import";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince, toJstDate } from "@/lib/utils";
 
 const SAVED_MSG: Record<string, string> = { "1": "保存しました", activity: "活動を記録しました", memo: "現状メモ・ヨミを更新しました" };
+
+/** アカウンター候補として引くリードの必要列。 */
+type LeadCandRow = {
+  id: string;
+  contact_name?: string | null;
+  last_name?: string | null;
+  first_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  mobile_phone?: string | null;
+  department?: string | null;
+  job_title?: string | null;
+  role_level?: string | null;
+  raw_event?: string | null;
+};
+
+/** 役職の高い順に並べるためのランク（小さいほど上位）。job_title のキーワードで判定。 */
+function leadRoleRank(jobTitle?: string | null, roleLevel?: string | null): number {
+  const t = `${jobTitle ?? ""} ${roleLevel ?? ""}`;
+  if (/社長|代表|会長|オーナー|CEO|ＣＥＯ/.test(t)) return 0;
+  if (/取締役|役員|執行役員|本部長|事業部長|CxO|C[TFOI]O|ＣＴＯ|ＣＦＯ/.test(t)) return 1;
+  if (/部長|部門長|センター長|室長|支店長|所長/.test(t)) return 2;
+  if (/課長|次長|マネージャ|マネジャー|グループ長|チームリーダー/.test(t)) return 3;
+  if (/係長|主任|リーダー|チーフ|主査/.test(t)) return 4;
+  if (jobTitle && jobTitle.trim()) return 5;
+  return 6;
+}
 
 /**
  * 案件詳細の本体。フルページ（/app/opportunities/[id]）と、案件一覧の
@@ -92,13 +120,50 @@ export async function OpportunityDetailView({ id, inPane = false, saved, error }
   const since = daysSince(o.last_activity_at);
   const todayInput = toJstDate(new Date().toISOString()) ?? "";
   const sb = getSupabaseServer();
-  const [schedule, allTemplates, commentsR, detailsR] = await Promise.all([
+  // アカウンター候補：同じ会社(account_id か 正規化会社名)の未昇格リード（名刺）。
+  const accountNorm = o.account ? normCompany(o.account.name) : "";
+  // PostgREST の or() を壊さない値のみ会社名一致に使う（括弧・カンマ等を含む場合は account_id のみ）。
+  const safeNorm = accountNorm && !/[(),.]/.test(accountNorm) ? accountNorm : "";
+  const leadCandQuery = o.account
+    ? sb
+        .from("leads")
+        .select("id, contact_name, last_name, first_name, email, phone, mobile_phone, department, job_title, role_level, raw_event, acquired_at, contact_id")
+        .is("contact_id", null)
+        .is("deleted_at", null)
+        .neq("status", "disqualified")
+        .or(safeNorm ? `account_id.eq.${o.account.id},company_norm.eq.${safeNorm}` : `account_id.eq.${o.account.id}`)
+        .order("acquired_at", { ascending: false })
+        .limit(60)
+    : Promise.resolve({ data: [] as unknown[] });
+  const [schedule, allTemplates, commentsR, detailsR, leadCandR] = await Promise.all([
     getLatestSchedule(o.id),
     getSalesTemplates(),
     sb.from("opportunity_comments").select("id, author_user_id, body, mentions, created_at").eq("opportunity_id", o.id).order("created_at", { ascending: true }).limit(100),
     sb.from("lead_source_details").select("id, lead_source_id, name").eq("status", "active").order("sort_order").order("name"),
+    leadCandQuery,
   ]);
   const sourceDetails = (detailsR.data ?? []) as SourceDetailOption[];
+  // 候補リードを整形（既存担当者とメール重複するものは除外、役職の高い順）。
+  const contactEmails = new Set(contacts.map((c) => (c.email ?? "").toLowerCase()).filter(Boolean));
+  const seenLeadEmail = new Set<string>();
+  const leadCandidates = ((leadCandR.data ?? []) as LeadCandRow[])
+    .map((l) => ({
+      id: l.id,
+      name: (l.contact_name || [l.last_name, l.first_name].filter(Boolean).join(" ") || l.email || "（名称未設定）").trim(),
+      email: l.email ?? null,
+      phone: l.phone || l.mobile_phone || null,
+      jobTitle: l.job_title ?? null,
+      department: l.department ?? null,
+      source: l.raw_event ?? null,
+      rank: leadRoleRank(l.job_title, l.role_level),
+    }))
+    .filter((c) => {
+      const e = (c.email ?? "").toLowerCase();
+      if (e && contactEmails.has(e)) return false;
+      if (e) { if (seenLeadEmail.has(e)) return false; seenLeadEmail.add(e); }
+      return true;
+    })
+    .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, "ja"));
   const templates = matchTemplates(allTemplates, o.account?.industry, contacts.map((c) => c.title));
   const comments: CommentView[] = ((commentsR.data ?? []) as { id: string; author_user_id: string; body: string; mentions: string[]; created_at: string }[]).map((c) => ({
     ...c,
@@ -603,6 +668,7 @@ export async function OpportunityDetailView({ id, inPane = false, saved, error }
                 accountHref={`/app/accounts/${o.account.id}`}
                 contacts={contacts}
                 accounterId={ws.opportunities.find((x) => x.id === o.id)?.contact_id ?? null}
+                leadCandidates={leadCandidates}
               />
             ) : (
               <p className="text-sm text-ink/40 py-2">顧客が紐づいていません。</p>

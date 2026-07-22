@@ -3,8 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Phone, Mail, Pencil, Plus, Star, Trash2, Loader2, X, Building2 } from "lucide-react";
-import { createContactAction, updateContactAction, deleteContactAction, setAccounterAction, type ContactInput } from "@/server/actions/contacts";
+import { Phone, Mail, Pencil, Plus, Star, Trash2, Loader2, X, Building2, UserPlus, ChevronDown } from "lucide-react";
+import { createContactAction, updateContactAction, deleteContactAction, setAccounterAction, promoteLeadToContactAction, type ContactInput } from "@/server/actions/contacts";
 import { cn } from "@/lib/utils";
 
 export interface PanelContact {
@@ -16,6 +16,16 @@ export interface PanelContact {
   email?: string | null;
   notes?: string | null;
   decision_role?: string | null;
+}
+
+export interface LeadCandidate {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  jobTitle?: string | null;
+  department?: string | null;
+  source?: string | null;
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -42,6 +52,7 @@ export function AccounterPanel({
   accountHref,
   contacts,
   accounterId,
+  leadCandidates = [],
   canEdit = true,
 }: {
   opportunityId: string;
@@ -52,15 +63,19 @@ export function AccounterPanel({
   accountHref: string;
   contacts: PanelContact[];
   accounterId: string | null;
+  leadCandidates?: LeadCandidate[];
   canEdit?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [mode, setMode] = useState<null | "add" | { editId: string }>(null);
   const [error, setError] = useState("");
+  const [showAllLeads, setShowAllLeads] = useState(false);
 
   const accounter = contacts.find((c) => c.id === accounterId) ?? null;
   const others = contacts.filter((c) => c.id !== accounterId);
+  const LEAD_PREVIEW = 5;
+  const shownLeads = showAllLeads ? leadCandidates : leadCandidates.slice(0, LEAD_PREVIEW);
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, onOk?: () => void) => {
     setError("");
@@ -77,6 +92,8 @@ export function AccounterPanel({
     if (!window.confirm("この担当者を削除しますか？")) return;
     run(() => deleteContactAction({ id, opportunityId, accountId }));
   };
+  const promoteLead = (leadId: string, setAsAccounter: boolean) =>
+    run(() => promoteLeadToContactAction({ leadId, accountId, opportunityId, setAccounter: setAsAccounter }));
 
   return (
     <div className="space-y-3 text-sm">
@@ -128,6 +145,55 @@ export function AccounterPanel({
               <option key={c.id} value={c.id}>{[c.department, c.title, c.name].filter(Boolean).join("／")}</option>
             ))}
           </select>
+        </div>
+      )}
+
+      {/* リード候補（名刺・リードから窓口を選ぶ） */}
+      {leadCandidates.length > 0 && (
+        <div className="space-y-1.5 border-t border-black/[0.05] pt-2.5">
+          <div className="text-[11px] font-medium text-ink/55">
+            リード候補（{leadCandidates.length}）
+            <span className="ml-1 font-normal text-ink/35">名刺・リードから窓口担当者を選べます</span>
+          </div>
+          <ul className="space-y-1.5">
+            {shownLeads.map((l) => (
+              <li key={l.id} className="rounded-lg border border-black/[0.06] bg-white px-3 py-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-medium text-ink/85">{l.name}</span>
+                      {l.jobTitle && <span className="pill bg-black/[0.05] text-ink/55 text-[10px]">{l.jobTitle}</span>}
+                    </div>
+                    {(l.department || l.source) && (
+                      <div className="mt-0.5 text-[11px] text-ink/50">{[l.department, l.source].filter(Boolean).join("・")}</div>
+                    )}
+                    {(l.email || l.phone) && (
+                      <div className="mt-1 space-y-0.5 text-[11px]">
+                        {l.email && <div className="flex items-center gap-1.5 text-ink/70"><Mail size={11} className="text-ink/40" /><a href={`mailto:${l.email}`} className="truncate hover:underline">{l.email}</a></div>}
+                        {l.phone && <div className="flex items-center gap-1.5 text-ink/70"><Phone size={11} className="text-ink/40" /><a href={`tel:${l.phone}`} className="hover:underline">{l.phone}</a></div>}
+                      </div>
+                    )}
+                  </div>
+                  {canEdit && (
+                    <div className="flex shrink-0 flex-col items-stretch gap-1">
+                      <button type="button" onClick={() => promoteLead(l.id, true)} disabled={pending} className="inline-flex items-center justify-center gap-1 rounded-lg bg-teal-primary px-2 py-1 text-[11px] font-medium text-white hover:bg-teal-deep disabled:opacity-50" title="この人を窓口(アカウンター)に設定">
+                        <Star size={11} /> 窓口に設定
+                      </button>
+                      <button type="button" onClick={() => promoteLead(l.id, false)} disabled={pending} className="inline-flex items-center justify-center gap-1 rounded-lg border border-black/10 px-2 py-1 text-[11px] text-ink/60 hover:bg-mist-soft disabled:opacity-50" title="担当者として追加(窓口にはしない)">
+                        <UserPlus size={11} /> 追加
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {leadCandidates.length > LEAD_PREVIEW && (
+            <button type="button" onClick={() => setShowAllLeads((v) => !v)} className="inline-flex items-center gap-1 text-[11px] text-teal-deep hover:underline">
+              <ChevronDown size={12} className={cn("transition-transform", showAllLeads && "rotate-180")} />
+              {showAllLeads ? "候補をたたむ" : `すべて表示（${leadCandidates.length}）`}
+            </button>
+          )}
         </div>
       )}
 

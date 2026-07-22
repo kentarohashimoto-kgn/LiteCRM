@@ -113,6 +113,76 @@ export async function deleteContactAction(input: { id: string; opportunityId?: s
   return { ok: true };
 }
 
+/**
+ * リード(名刺)を担当者(contact)へ昇格し、必要なら案件の窓口(アカウンター)に設定する。
+ *  - リードの氏名・部署・役職・電話・メール・メモから contact を作成（同メールの既存があれば再利用）。
+ *  - リードに contact_id/account_id を紐付け、以後は候補から外れる。
+ */
+export async function promoteLeadToContactAction(input: {
+  leadId: string;
+  accountId: string;
+  opportunityId?: string;
+  setAccounter?: boolean;
+}): Promise<Result> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  if (!input.leadId || !input.accountId) return { ok: false, error: "対象が不明です" };
+
+  const { data: lead } = await sb
+    .from("leads")
+    .select("id, contact_name, last_name, first_name, email, phone, mobile_phone, department, job_title, notes, account_id, contact_id")
+    .eq("id", input.leadId)
+    .maybeSingle();
+  if (!lead) return { ok: false, error: "リードが見つかりません" };
+
+  const l = lead as {
+    contact_name?: string | null; last_name?: string | null; first_name?: string | null;
+    email?: string | null; phone?: string | null; mobile_phone?: string | null;
+    department?: string | null; job_title?: string | null; notes?: string | null;
+    account_id?: string | null; contact_id?: string | null;
+  };
+  const name = (l.contact_name || [l.last_name, l.first_name].filter(Boolean).join(" ") || l.email || "(担当者)").trim();
+
+  let contactId = l.contact_id ?? null;
+  // 同一顧客でメール一致の既存担当者があれば再利用（重複作成を避ける）
+  if (!contactId && l.email) {
+    const { data: ex } = await sb
+      .from("contacts")
+      .select("id")
+      .eq("account_id", input.accountId)
+      .ilike("email", l.email)
+      .limit(1)
+      .maybeSingle();
+    contactId = (ex as { id: string } | null)?.id ?? null;
+  }
+  if (!contactId) {
+    const { data: c, error } = await sb
+      .from("contacts")
+      .insert({
+        tenant_id: ctx.tenantId,
+        account_id: input.accountId,
+        name,
+        department: nn(l.department),
+        title: nn(l.job_title),
+        phone: nn(l.phone) ?? nn(l.mobile_phone),
+        email: nn(l.email),
+        notes: nn(l.notes),
+      })
+      .select("id")
+      .single();
+    if (error || !c) return { ok: false, error: error?.message ?? "担当者の作成に失敗しました" };
+    contactId = (c as { id: string }).id;
+  }
+
+  await sb.from("leads").update({ contact_id: contactId, account_id: l.account_id ?? input.accountId }).eq("id", input.leadId);
+
+  if (input.setAccounter && input.opportunityId) {
+    await sb.from("opportunities").update({ contact_id: contactId }).eq("id", input.opportunityId);
+  }
+  revalidate(input.opportunityId, input.accountId);
+  return { ok: true, id: contactId };
+}
+
 /** 案件のアカウンター(窓口担当者)を設定/解除する(型付き・{ok}を返す版)。 */
 export async function setAccounterAction(input: { opportunityId: string; contactId: string | null }): Promise<Result> {
   await requireCtx();
