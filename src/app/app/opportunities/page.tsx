@@ -13,9 +13,11 @@ export default async function OpportunitiesPage() {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   // 初期ページ(50件)＋フィルタ用の小マスタのみ取得。全案件1.3MBの取得を回避。
-  const [pageR, ownersR, productsR, sourcesR, campaignsR, bookingR] = await Promise.all([
+  const [pageR, ownersR, membershipsR, productsR, sourcesR, campaignsR, bookingR] = await Promise.all([
     sb.rpc("opportunities_page", { p_filter: {}, p_sort: "expected_close_date", p_asc: true, p_limit: 50, p_offset: 0 }),
-    sb.from("profiles").select("id,display_name,email"),
+    sb.from("profiles").select("id,display_name,email,avatar_color"),
+    // カレンダーの担当表示設定（テナント内メンバーの非表示フラグ）
+    sb.from("memberships").select("user_id,calendar_hidden"),
     sb.from("products").select("id,name"),
     sb.from("lead_sources").select("id,name"),
     // 展示会・施策フィルタの選択肢は案件の source_detail(YYYYMM_展示会名)実データから生成
@@ -24,7 +26,13 @@ export default async function OpportunitiesPage() {
   ]);
   const page = (pageR.data ?? { rows: [], total: 0, sum_amount: 0, sum_weighted: 0 }) as OppsPage;
   const initialRows = page.rows.map(leanToOppView);
-  const owners = (ownersR.data ?? []).map((p) => ({ id: p.id as string, name: (p.display_name as string) ?? (p.email as string) ?? "—" }));
+  const hiddenOwnerIds = new Set(((membershipsR.data ?? []) as { user_id: string; calendar_hidden: boolean }[]).filter((m) => m.calendar_hidden).map((m) => m.user_id));
+  const owners = (ownersR.data ?? []).map((p) => ({
+    id: p.id as string,
+    name: (p.display_name as string) ?? (p.email as string) ?? "—",
+    color: (p.avatar_color as string) ?? "#008C8C",
+    hidden: hiddenOwnerIds.has(p.id as string),
+  }));
   const products = (productsR.data ?? []).map((p) => ({ id: p.id as string, name: (p.name as string) ?? "—" }));
   const sources = (sourcesR.data ?? []).map((s) => ({ id: s.id as string, name: (s.name as string) ?? "—" }));
   const campaigns = ((campaignsR.data ?? []) as { source_detail: string }[])
