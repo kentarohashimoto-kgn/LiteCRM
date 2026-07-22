@@ -33,7 +33,8 @@ import { getTransitionsByAccount, TRANSITION_STATUS_LABEL, FOLLOWUP_STATUS_LABEL
 import { STAGES, FORECAST_CATEGORIES, DEAL_PHASES } from "@/lib/constants";
 import { formatYen, sum, formatDateFull } from "@/lib/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { ContactLine } from "@/components/contacts/contact-line";
+import { AccountContactsPanel } from "@/components/contacts/account-contacts-panel";
+import { leadCandidatesQuery, buildLeadCandidates, type LeadCandRow } from "@/lib/data/lead-candidates";
 
 const statusLabel: Record<string, string> = { prospect: "見込み", customer: "顧客", inactive: "休眠" };
 
@@ -55,14 +56,22 @@ export default async function AccountDetailPage({ params, searchParams }: { para
   const orFilter = oppIds.length > 0
     ? `account_id.eq.${account.id},opportunity_id.in.(${oppIds.join(",")})`
     : `account_id.eq.${account.id}`;
-  const [packages, souvenirs, transitions, businessCards, activitiesR, tasksR] = await Promise.all([
+  const [packages, souvenirs, transitions, businessCards, activitiesR, tasksR, leadCandR] = await Promise.all([
     getSolutionPackages(),
     getAccountSouvenirs(account.id),
     getTransitionsByAccount(account.id),
     getCardsByAccount(account.id),
     sb.from("activities").select("id,activity_type,title,body,activity_at,owner_user_id").or(orFilter).order("activity_at", { ascending: false }).limit(60),
     sb.from("tasks").select("id,title,due_date,status,assigned_to").or(orFilter).order("due_date", { ascending: false }).limit(30),
+    leadCandidatesQuery(sb, account.id, account.name),
   ]);
+  // 担当者：各担当者が窓口(アカウンター)になっている案件と、リード候補（名刺）を用意。
+  const accounterByContact: Record<string, { id: string; name: string }[]> = {};
+  for (const op of ws.opportunities.filter((x) => x.account_id === account.id)) {
+    if (op.contact_id) (accounterByContact[op.contact_id] ??= []).push({ id: op.id, name: op.name });
+  }
+  const contactEmails = new Set(contacts.map((c) => (c.email ?? "").toLowerCase()).filter(Boolean));
+  const leadCandidates = buildLeadCandidates((leadCandR.data ?? []) as LeadCandRow[], contactEmails);
 
   // C-1 統合タイムライン: 活動・商談・タスク・案件の節目を時系列1本に
   const usersById = ws.usersById;
@@ -326,38 +335,13 @@ export default async function AccountDetailPage({ params, searchParams }: { para
             </dl>
           </Section>
 
-          <Section title="担当者">
-            {contacts.length === 0 ? (
-              <p className="text-sm text-ink/40 py-2">担当者がいません</p>
-            ) : (
-              (() => {
-                // 各担当者がどの案件のアカウンター(窓口)かを表示
-                const accounterOf = new Map<string, { id: string; name: string }[]>();
-                for (const op of ws.opportunities.filter((x) => x.account_id === account.id)) {
-                  if (!op.contact_id) continue;
-                  (accounterOf.get(op.contact_id) ?? accounterOf.set(op.contact_id, []).get(op.contact_id)!).push({ id: op.id, name: op.name });
-                }
-                return (
-                  <ul className="space-y-3">
-                    {contacts.map((c) => {
-                      const of = accounterOf.get(c.id) ?? [];
-                      return (
-                        <li key={c.id}>
-                          <ContactLine c={c} isAccounter={of.length > 0} showEmail />
-                          {of.length > 0 && (
-                            <div className="mt-1 text-[11px] text-teal-deep">
-                              担当案件: {of.map((op, i) => (
-                                <span key={op.id}>{i > 0 && "、"}<Link href={`/app/opportunities/${op.id}`} className="hover:underline">{op.name}</Link></span>
-                              ))}
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                );
-              })()
-            )}
+          <Section title="担当者" action={<span className="text-[11px] text-ink/40">窓口担当者の確認・追加・編集。各担当がどの案件の窓口かも表示</span>}>
+            <AccountContactsPanel
+              accountId={account.id}
+              contacts={contacts}
+              accounterByContact={accounterByContact}
+              leadCandidates={leadCandidates}
+            />
           </Section>
 
           <Section title={`名刺情報（${businessCards.length}）`} action={<Link href="/app/business-cards" className="text-[11px] text-teal-deep hover:underline">名刺一覧へ</Link>}>

@@ -194,6 +194,13 @@ export function AccounterPanel({
               {showAllLeads ? "候補をたたむ" : `すべて表示（${leadCandidates.length}）`}
             </button>
           )}
+          {canEdit && mode !== "add" && (
+            <p className="text-[11px] text-ink/45">
+              候補に該当者がいない場合は
+              <button type="button" onClick={() => { setError(""); setMode("add"); }} className="mx-0.5 text-teal-deep hover:underline">新規登録</button>
+              できます。
+            </p>
+          )}
         </div>
       )}
 
@@ -248,7 +255,7 @@ export function AccounterPanel({
             onClick={() => { setError(""); setMode("add"); }}
             className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium text-teal-deep hover:bg-mist-soft"
           >
-            <Plus size={14} /> 担当者を追加
+            <Plus size={14} /> 担当者を新規登録
           </button>
         )
       )}
@@ -259,7 +266,7 @@ export function AccounterPanel({
 }
 
 /** 担当者1件の詳細カード表示。 */
-function ContactCard({
+export function ContactCard({
   c,
   isAccounter,
   canEdit,
@@ -267,6 +274,7 @@ function ContactCard({
   onEdit,
   onRemove,
   onSetAccounter,
+  accounterOpps,
 }: {
   c: PanelContact;
   isAccounter?: boolean;
@@ -275,6 +283,8 @@ function ContactCard({
   onEdit: () => void;
   onRemove: () => void;
   onSetAccounter?: () => void;
+  /** この担当者が窓口(アカウンター)になっている案件（顧客ビュー用）。 */
+  accounterOpps?: { id: string; name: string }[];
 }) {
   return (
     <div className={cn("rounded-lg border px-3 py-2.5", isAccounter ? "border-teal-primary/25 bg-teal-light/40" : "border-black/[0.06] bg-white")}>
@@ -318,12 +328,20 @@ function ContactCard({
           {c.notes && <div className="whitespace-pre-wrap text-ink/60"><span className="text-ink/35">メモ：</span>{c.notes}</div>}
         </div>
       )}
+      {accounterOpps && accounterOpps.length > 0 && (
+        <div className="mt-2 border-t border-black/[0.05] pt-1.5 text-[11px] text-ink/55">
+          <span className="text-ink/40">窓口の案件：</span>
+          {accounterOpps.map((op, i) => (
+            <span key={op.id}>{i > 0 && "、"}<Link href={`/app/opportunities/${op.id}`} className="text-teal-deep hover:underline">{op.name}</Link></span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 /** 担当者の追加/編集フォーム。 */
-function ContactForm({
+export function ContactForm({
   title,
   initial,
   pending,
