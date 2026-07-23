@@ -71,3 +71,47 @@ describe("isChatInteractionEvent (P2 Pub/Sub経路)", () => {
     expect(isChatInteractionEvent(undefined)).toBe(false);
   });
 });
+
+describe("normalizeChatEvent (Workspaceアドオン形式→クラシック形式)", () => {
+  it("messagePayload を MESSAGE に変換する（実受信ペイロード形状）", async () => {
+    const { normalizeChatEvent } = await import("@/lib/chat/interactions");
+    const raw = {
+      chat: {
+        user: { name: "users/102", type: "HUMAN", email: "a@b.jp", displayName: "テスト" },
+        messagePayload: {
+          space: { name: "spaces/AAQ", spaceType: "SPACE", displayName: "CRMチャット" },
+          message: {
+            name: "spaces/AAQ/messages/x.y",
+            text: "@CATORCE CRM ヘルプ",
+            argumentText: " ヘルプ",
+            thread: { name: "spaces/AAQ/threads/x" },
+            sender: { name: "users/102", email: "a@b.jp" },
+          },
+        },
+      },
+      commonEventObject: { hostApp: "CHAT" },
+    };
+    const ev = normalizeChatEvent(raw);
+    expect(ev.type).toBe("MESSAGE");
+    expect(ev.space.name).toBe("spaces/AAQ");
+    expect(ev.message.argumentText).toBe(" ヘルプ");
+    expect(ev.message.thread.name).toBe("spaces/AAQ/threads/x");
+    expect(ev.user.email).toBe("a@b.jp");
+  });
+
+  it("addedToSpacePayload / removedFromSpacePayload を変換する", async () => {
+    const { normalizeChatEvent } = await import("@/lib/chat/interactions");
+    const added = normalizeChatEvent({ chat: { user: { email: "a@b.jp" }, addedToSpacePayload: { space: { name: "spaces/X" } } } });
+    expect(added.type).toBe("ADDED_TO_SPACE");
+    expect(added.space.name).toBe("spaces/X");
+    const removed = normalizeChatEvent({ chat: { removedFromSpacePayload: { space: { name: "spaces/Y" } } } });
+    expect(removed.type).toBe("REMOVED_FROM_SPACE");
+  });
+
+  it("クラシック形式はそのまま、対象外は null", async () => {
+    const { normalizeChatEvent } = await import("@/lib/chat/interactions");
+    expect(normalizeChatEvent({ type: "MESSAGE", message: {} }).type).toBe("MESSAGE");
+    expect(normalizeChatEvent({ eventType: "google.workspace.chat.reaction.v1.created" })).toBeNull();
+    expect(normalizeChatEvent({ chat: { user: {} } })).toBeNull();
+  });
+});
