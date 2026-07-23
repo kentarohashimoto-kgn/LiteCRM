@@ -82,7 +82,7 @@ export async function parseTaskWithAI(
   try {
     const client = new Anthropic();
     const response = await client.messages.create({
-      model: "claude-opus-4-8",
+      model: "claude-sonnet-5",
       max_tokens: 500,
       output_config: {
         effort: "low",

@@ -23,7 +23,7 @@ import {
   type PmoTaskRow,
 } from "@/lib/pmo";
 
-export const PMO_MODEL = "claude-opus-4-8";
+export const PMO_MODEL = "claude-sonnet-5";
 
 // createServerClient(@supabase/ssr) と createClient(service role) の両方を受ける
 // ため、スキーマ型は既定のままにする。
