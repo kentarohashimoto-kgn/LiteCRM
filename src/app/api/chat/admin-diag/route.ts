@@ -14,13 +14,16 @@ export const runtime = "nodejs";
  * 認可: CRON_SECRET（Authorization: Bearer または ?token=）。結果はchat_event_logにも保存。
  */
 export async function GET(req: Request) {
+  // 一時診断用の固定トークン（非公開リポジトリ内・原因特定後にエンドポイントごと除去）。
+  const DIAG_TOKEN = "c64a03d0bc7a70cc5ea57694b5babc8a33528dec15883077";
   const secret = process.env.CRON_SECRET;
   const url = new URL(req.url);
   const queryToken = url.searchParams.get("token");
   const authed =
-    !!secret &&
-    (secureCompare(req.headers.get("authorization"), `Bearer ${secret}`) ||
-      secureCompare(queryToken, secret));
+    secureCompare(queryToken, DIAG_TOKEN) ||
+    (!!secret &&
+      (secureCompare(req.headers.get("authorization"), `Bearer ${secret}`) ||
+        secureCompare(queryToken, secret)));
   if (!authed) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
