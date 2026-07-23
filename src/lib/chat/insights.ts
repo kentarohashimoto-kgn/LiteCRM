@@ -89,15 +89,33 @@ export async function meetingsList(
     body: string;
   }
   const items: Item[] = [];
+  // 同一アポの二重表示防止: 打合せ予定と商談側アポの両方に記録されるため、
+  // 「日付＋時刻＋取引先」で重複排除する（打合せ予定を優先し、案件名は行に統合）。
+  const seen = new Set<string>();
+  const dedupeKey = (day: string, time: string, acc: string) => `${day}|${time}|${acc}`;
+  // 取引先名の重複を除いた案件名（「◯◯株式会社 / AI研修」→「AI研修」）
+  const cleanOppName = (oppName: string | null | undefined, acc: string): string => {
+    if (!oppName) return "";
+    return oppName
+      .replace(acc, "")
+      .replace(/^[\s/／・|｜-]+|[\s/／・|｜-]+$/g, "")
+      .trim();
+  };
+
   for (const m of meetings ?? []) {
-    const acc = (m.opportunities as { accounts?: { name?: string } } | null)?.accounts?.name ?? "—";
+    const opp = m.opportunities as { name?: string; accounts?: { name?: string } } | null;
+    const acc = opp?.accounts?.name ?? "—";
     const day = m.meeting_date as string;
     const time = m.meeting_at ? jstTimeOf(m.meeting_at as string) : "終日";
+    seen.add(dedupeKey(day, time, acc));
+    const title = m.title as string;
+    const extra = cleanOppName(opp?.name, acc);
+    const label = extra && !title.includes(extra) ? `${title} / ${extra}` : title;
     items.push({
       day,
       time,
       owner: names.get(m.owner_user_id as string) ?? "—",
-      body: `<b>${acc}</b>｜${m.title}`,
+      body: `<b>${acc}</b>｜${label}`,
     });
   }
   for (const o of appts ?? []) {
@@ -105,11 +123,13 @@ export async function meetingsList(
     if (!day || day < start || day > end) continue;
     const time = o.appointment_at ? jstTimeOf(o.appointment_at as string) : "終日";
     const acc = (o.accounts as { name?: string } | null)?.name ?? "—";
+    if (seen.has(dedupeKey(day, time, acc))) continue; // 打合せ予定側に既にある
+    seen.add(dedupeKey(day, time, acc));
     items.push({
       day,
       time,
       owner: names.get(o.owner_user_id as string) ?? "—",
-      body: `<b>${acc}</b>｜${o.name}`,
+      body: `<b>${acc}</b>｜${cleanOppName(o.name as string, acc) || (o.name as string)}`,
     });
   }
 
