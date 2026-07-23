@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { yomiToFields } from "@/lib/deal-import";
+import { deriveFirstMeeting, earliestMeeting, jstDate } from "@/lib/meeting-sync";
 import { canReassignOwner } from "@/lib/constants";
 import { casUpdate } from "./_helpers";
 import { ensureTransitionOnWon } from "@/server/transitions-util";
@@ -86,8 +87,29 @@ export async function setAppointmentAtAction(input: { id: string; iso: string | 
   await requireCtx();
   const sb = getSupabaseServer();
   const { error } = await sb.from("opportunities").update({ appointment_at: input.iso }).eq("id", input.id);
-  if (!error) revalidatePath("/app/opportunities");
-  return { ok: !error };
+  if (error) return { ok: false };
+
+  // カレンダー上のアポ移動は「初回商談(最も早い商談)の振り替え」を意味する。
+  // 商談レコード側も追従させ、案件の初回商談日/アポ日時を再同期する。
+  // これをしないと商談と案件で日付がズレ、カレンダーに別日で二重表示される。
+  if (input.iso) {
+    const day = jstDate(input.iso);
+    const { data } = await sb.from("meetings").select("id, meeting_date, meeting_at").eq("opportunity_id", input.id);
+    const rows = (data ?? []) as { id: string; meeting_date: string | null; meeting_at: string | null }[];
+    const first = earliestMeeting(rows);
+    if (first) {
+      await sb.from("meetings").update({ meeting_at: input.iso, meeting_date: day }).eq("id", first.id);
+      const patch = deriveFirstMeeting(
+        rows.map((r) => (r.id === first.id ? { meeting_date: day, meeting_at: input.iso } : r)),
+      );
+      if (patch) await sb.from("opportunities").update(patch).eq("id", input.id);
+    } else {
+      // 商談がまだ無い案件: 案件側の初回商談日だけ整合させる
+      await sb.from("opportunities").update({ first_meeting_date: day }).eq("id", input.id);
+    }
+  }
+  revalidatePath("/app/opportunities");
+  return { ok: true };
 }
 
 /** ボード表示用に全案件(軽量)を取得。ボードを開いた時だけ遅延取得する。 */

@@ -12,6 +12,7 @@ import { exhibitionCoreName } from "@/lib/exhibition-label";
 import { parsePeriod, parseProbability, parseAmount, parseDateLoose } from "@/lib/revenue-forecast";
 import { ensureTransitionOnWon } from "@/server/transitions-util";
 import { upsertMeetingNextAction } from "@/server/next-actions";
+import { deriveFirstMeeting } from "@/lib/meeting-sync";
 import { logAudit, clientIp } from "@/lib/audit-events";
 import { verifyTurnstile } from "@/lib/turnstile";
 
@@ -23,6 +24,17 @@ function num(v: FormDataEntryValue | null): number | null {
 function str(v: FormDataEntryValue | null): string | null {
   const s = v == null ? "" : String(v).trim();
   return s === "" ? null : s;
+}
+
+/**
+ * 案件の初回商談日/アポ日時を、配下商談のうち「最も早い商談」に同期する。
+ * 商談の日付変更が案件側へ追従せず、アポカレンダーが別日で二重表示される事故の再発防止。
+ * 商談が1件も無い(または全て日付なし)案件は何も変更しない。
+ */
+async function syncOppFirstMeeting(sb: ReturnType<typeof getSupabaseServer>, oppId: string) {
+  const { data } = await sb.from("meetings").select("meeting_date, meeting_at").eq("opportunity_id", oppId);
+  const patch = deriveFirstMeeting((data ?? []) as { meeting_date: string | null; meeting_at: string | null }[]);
+  if (patch) await sb.from("opportunities").update(patch).eq("id", oppId);
 }
 
 // ===================== 認証 =====================
@@ -487,6 +499,8 @@ export async function createMeetingAction(formData: FormData) {
   if (!dup) {
     // 親案件の最終活動を更新
     await sb.from("opportunities").update({ last_activity_at: new Date().toISOString() }).eq("id", oppId);
+    // 初回商談日/アポ日時を配下商談に同期(backdateされた商談の追加にも追従)
+    if (oppId) await syncOppFirstMeeting(sb, oppId);
     // 商談の次アクション → この商談に紐づく案件のネクストアクション(tasks)を作成
     if (newMeetingId && nextDate) {
       await upsertMeetingNextAction(sb, {
@@ -543,6 +557,9 @@ export async function updateMeetingAction(formData: FormData) {
       oppPatch.status = yf.status;
     }
     await sb.from("opportunities").update(oppPatch).eq("id", oppId);
+    // 商談の日付変更を案件側(初回商談日/アポ日時)へ同期。これが無いと商談を振り替えても
+    // 案件の初回商談日が旧日付のまま残り、アポカレンダーに別日で二重表示される(本不具合の主因)。
+    await syncOppFirstMeeting(sb, oppId);
     if (yomi && yomiToFields(yomi).status === "won") {
       await ensureTransitionOnWon(ctx.tenantId, ctx.userId, oppId);
     }
