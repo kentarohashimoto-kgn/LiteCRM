@@ -156,6 +156,110 @@ export interface ManagedProjectRow {
   approvedCost: number; // 承認済み実績の原価換算(円)
 }
 
+/** 原価管理対象の「候補」として拾う最小金額（これ未満は一覧のノイズになるため既定では強調しない）。 */
+export const CANDIDATE_MIN_AMOUNT = 1_000_000;
+
+export interface CandidateRow {
+  opportunityId: string;
+  oppName: string;
+  accountName: string;
+  ownerUserId: string | null;
+  status: string; // won / open
+  stage: string | null;
+  amount: number;
+  expectedCloseDate: string | null; // YYYY-MM-DD
+  startMonth: string | null; // 推定開始月 YYYY-MM
+  endMonth: string | null; // 推定終了月 YYYY-MM
+  hasPlan: boolean; // 計画データだけは存在する（対象化を外しただけ）
+  tier: "won" | "large_open"; // 受注済み(強) / 大型商談(先行計画候補)
+  reason: string; // なぜ候補か
+}
+
+/**
+ * 原価管理「対象候補」を抽出する。is_project_managed=false のうち、
+ *  - 受注済み(status=won): デリバリーが発生する＝原価管理すべき（強い候補）
+ *  - 商談中(status=open)で金額が閾値以上: 先行して計画すべき候補
+ * 期間は billing_schedules → expected_revenue_month → expected_close_date の順で推定する。
+ */
+export async function listProjectCandidates(minAmount = CANDIDATE_MIN_AMOUNT): Promise<CandidateRow[]> {
+  const sb = getSupabaseServer();
+  const { data, error } = await sb
+    .from("opportunities")
+    .select("id, name, account_id, owner_user_id, status, stage, amount, expected_close_date, expected_revenue_month")
+    .eq("is_project_managed", false)
+    .is("deleted_at", null)
+    .in("status", ["won", "open"]);
+  if (error) throw new Error(`原価管理候補の取得に失敗: ${error.message}`);
+  type OppLite = {
+    id: string; name: string; account_id: string | null; owner_user_id: string | null;
+    status: string; stage: string | null; amount: number | null;
+    expected_close_date: string | null; expected_revenue_month: string | null;
+  };
+  const rows = ((data ?? []) as OppLite[]).filter(
+    (o) => o.status === "won" || (Number(o.amount) || 0) >= minAmount
+  );
+  if (rows.length === 0) return [];
+
+  const oppIds = rows.map((o) => o.id);
+  const accIds = [...new Set(rows.map((o) => o.account_id).filter((v): v is string => !!v))];
+  const [accR, billR, planR] = await Promise.all([
+    accIds.length ? sb.from("accounts").select("id, name").in("id", accIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    sb.from("billing_schedules").select("opportunity_id, billing_date, recurring_start_month, recurring_end_month").in("opportunity_id", oppIds),
+    sb.from("project_plans").select("opportunity_id, start_month, end_month").in("opportunity_id", oppIds),
+  ]);
+  const accName = new Map((((accR.data ?? []) as { id: string; name: string }[])).map((a) => [a.id, a.name]));
+  type Bill = { opportunity_id: string; billing_date: string | null; recurring_start_month: string | null; recurring_end_month: string | null };
+  const billByOpp = new Map<string, Bill[]>();
+  for (const b of ((billR.data ?? []) as Bill[])) {
+    const arr = billByOpp.get(b.opportunity_id) ?? [];
+    arr.push(b); billByOpp.set(b.opportunity_id, arr);
+  }
+  type PlanLite = { opportunity_id: string; start_month: string | null; end_month: string | null };
+  const planByOpp = new Map(((planR.data ?? []) as PlanLite[]).map((p) => [p.opportunity_id, p]));
+
+  return rows
+    .map((o): CandidateRow => {
+      // 期間推定: 請求スケジュールの月範囲 → 計画 → 売上計上月 → クローズ月
+      const bills = billByOpp.get(o.id) ?? [];
+      const starts: string[] = [];
+      const ends: string[] = [];
+      for (const b of bills) {
+        const s = monthKey(b.recurring_start_month) || monthKey(b.billing_date);
+        const e = monthKey(b.recurring_end_month) || monthKey(b.billing_date);
+        if (s) starts.push(s);
+        if (e) ends.push(e);
+      }
+      const plan = planByOpp.get(o.id);
+      let startMonth = starts.length ? starts.sort()[0] : plan?.start_month ? monthKey(plan.start_month) : null;
+      let endMonth = ends.length ? ends.sort().slice(-1)[0] : plan?.end_month ? monthKey(plan.end_month) : null;
+      if (!startMonth) startMonth = monthKey(o.expected_revenue_month) || monthKey(o.expected_close_date) || null;
+      if (!endMonth) endMonth = startMonth;
+
+      const isWon = o.status === "won";
+      return {
+        opportunityId: o.id,
+        oppName: o.name,
+        accountName: o.account_id ? accName.get(o.account_id) ?? "—" : "—",
+        ownerUserId: o.owner_user_id,
+        status: o.status,
+        stage: o.stage,
+        amount: Number(o.amount) || 0,
+        expectedCloseDate: o.expected_close_date,
+        startMonth,
+        endMonth,
+        hasPlan: planByOpp.has(o.id),
+        tier: isWon ? "won" : "large_open",
+        reason: isWon
+          ? "受注済み・原価未管理（デリバリー発生）"
+          : `大型商談（¥${(Number(o.amount) || 0).toLocaleString("ja-JP")}）・先行計画候補`,
+      };
+    })
+    .sort((a, b) => {
+      if (a.tier !== b.tier) return a.tier === "won" ? -1 : 1; // 受注済みを上に
+      return b.amount - a.amount;
+    });
+}
+
 /** 案件管理対象(フラグON)の案件を、月別集計＋期間・進捗・完了実績付きで一覧取得。 */
 export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
   const sb = getSupabaseServer();
