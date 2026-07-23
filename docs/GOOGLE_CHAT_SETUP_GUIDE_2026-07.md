@@ -168,9 +168,41 @@ do update set chat_user_id = excluded.chat_user_id, email = excluded.email;
 
 ---
 
-## 次フェーズで追加でお願いする作業（参考・今は不要）
+## STEP 8. P2（メンション操作）/ P3（リアクション）を有効化 — Cloud Pub/Sub 配信
 
-- **P2（メンション→CRM操作）**: STEP4 の App URL を本使用 → Chat App の「Slash command」定義、公開範囲の確定。
-- **P3（リアクション→処理）**: Pub/Sub トピック `chat-events` 作成 + Push サブスクリプション（→ `/api/chat/pubsub`）+ サービスアカウントに `chat.app.messages.readonly` スコープ許可。
+> **重要（2026-07 調査結果）**: 新規Chatアプリ（「Workspaceアドオンとしてビルド」型）では、
+> 接続設定「HTTPエンドポイントURL」でのインタラクションイベント配信が作動しない事象を確認。
+> そのため配信経路は **Cloud Pub/Sub** を使う。受信側（`/api/chat/pubsub`）は
+> インタラクション（P2）とリアクション（P3）の両方に対応済み。
 
-各フェーズ着手時に、この手順書へ追記します。
+### 8-1. Pub/Sub トピックを作成
+1. Google Cloud（プロジェクト `catorce-chat`）で **Pub/Sub API** を有効化
+2. Pub/Sub → トピック作成 → ID: **`chat-events`**
+3. 作成したトピックの権限に、プリンシパル **`chat-api-push@system.gserviceaccount.com`** を
+   ロール **「Pub/Sub パブリッシャー」** で追加（Chat がここに発行するために必須）
+
+### 8-2. Push サブスクリプションを作成
+1. トピック `chat-events` → サブスクリプション作成
+2. 配信タイプ: **Push** / エンドポイントURL: `https://<APP>/api/chat/pubsub`
+3. **「認証を有効にする」をON** → サービスアカウントは `catorce-chat-bot@...` を選択
+   / オーディエンス（audience）: エンドポイントURLと同じ値
+
+### 8-3. Vercel 環境変数
+| 変数 | 値 |
+|---|---|
+| `GOOGLE_CHAT_PUBSUB_TOPIC` | `projects/catorce-chat/topics/chat-events` |
+| `GOOGLE_CHAT_PUBSUB_AUDIENCE` | `https://<APP>/api/chat/pubsub` |
+
+設定後 **Redeploy**。
+
+### 8-4. Chat アプリの接続設定を切り替え
+Google Chat API →「構成」→ 接続設定で **「Cloud Pub/Sub」** を選択し、
+トピック名 `projects/catorce-chat/topics/chat-events` を入力 → 保存。
+
+### 8-5. 動作確認
+- スペースで `@CATORCE CRM ヘルプ` → 使い方カードが**スレッド返信**されれば P2 疎通OK
+- Bot のメッセージに 📝 リアクション → タスク起票の返信が来れば P3 疎通OK
+  （P3 は購読cron `/api/cron/chat-subscriptions` が走ってから有効）
+
+> 補足: Pub/Sub 経由の返信は同期応答ではなくAPI投稿のため、Chat 画面に
+> 「応答がありません」と一瞬表示されることがあるが、直後に返信が投稿されれば正常。
