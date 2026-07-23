@@ -178,8 +178,13 @@ do update set chat_user_id = excluded.chat_user_id, email = excluded.email;
 ### 8-1. Pub/Sub トピックを作成
 1. Google Cloud（プロジェクト `catorce-chat`）で **Pub/Sub API** を有効化
 2. Pub/Sub → トピック作成 → ID: **`chat-events`**
-3. 作成したトピックの権限に、プリンシパル **`chat-api-push@system.gserviceaccount.com`** を
-   ロール **「Pub/Sub パブリッシャー」** で追加（Chat がここに発行するために必須）
+3. 作成したトピックの権限に、**Chat が発行に使うサービスアカウント**を
+   ロール **「Pub/Sub パブリッシャー」** で追加（これが無いと何も届かない・最重要）
+   - **どのアカウントかは Chat API「構成」→ 接続設定の「サービス アカウントのメール」欄に表示される。**
+     新型（Workspaceアドオン型）アプリでは
+     **`service-<プロジェクト番号>@gcp-sa-gsuiteaddons.iam.gserviceaccount.com`**
+     （本プロジェクトでは `service-274438881688@gcp-sa-gsuiteaddons.iam.gserviceaccount.com`）
+   - 旧型アプリの場合は `chat-api-push@system.gserviceaccount.com`。迷ったら両方付与してよい
 
 ### 8-2. Push サブスクリプションを作成
 1. トピック `chat-events` → サブスクリプション作成
