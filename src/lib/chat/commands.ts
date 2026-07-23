@@ -230,6 +230,8 @@ export async function executeChatCommand(
   if (["タスク", "task", "todo"].includes(head)) return createTask(sender.tenantId, sender.userId, rest);
 
   // 固定コマンドに当たらない自由文: AIで意図分類（読み取り専用クエリのみ）。
+  // APIキー未設定なら分類もメンバー取得も行わず即ヘルプへ。
+  if (!process.env.ANTHROPIC_API_KEY) return helpCard();
   const members = await listTenantMembers(sender.tenantId);
   const classified = await classifyChatIntent(text, members.map((m) => m.name).filter(Boolean));
   if (classified && classified.intent !== "none") {
