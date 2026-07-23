@@ -9,7 +9,7 @@ import {
   resolveAssignee,
 } from "./ai-task-parse";
 import { classifyChatIntent } from "./ai-intent";
-import { closingThisMonth, needsFollowup, tomorrowMeetings } from "./insights";
+import { closingDeals, meetingsList, needsFollowup } from "./insights";
 
 /**
  * メンション本文（argumentText: Botメンションを除いた文字列）を解釈し、
@@ -44,7 +44,7 @@ function helpCard(): ChatMessagePayload {
       "・<b>商談 &lt;キーワード&gt;</b> — 進行中商談を検索（例: 商談 近代美術）",
       "・<b>今日</b> — 自分の今日のAC・超過を表示",
       "・<b>タスク &lt;内容&gt;</b> — タスク起票。自然文OK（例: タスク CTCに7月末までに注文書の催促。担当橋本）",
-      "・自然文の質問もOK — 「<b>明日の商談は？</b>」「<b>今月成約できそうな案件は？</b>」「<b>催促すべき案件は？</b>」",
+      "・自然文の質問もOK — 「<b>来週の商談を担当者別に</b>」「<b>今月成約できそうな案件は？</b>」「<b>催促すべき案件は？</b>」",
       "・<b>ヘルプ</b> — この案内",
     ],
     buttonText: "アプリを開く",
@@ -230,12 +230,36 @@ export async function executeChatCommand(
   if (["タスク", "task", "todo"].includes(head)) return createTask(sender.tenantId, sender.userId, rest);
 
   // 固定コマンドに当たらない自由文: AIで意図分類（読み取り専用クエリのみ）。
-  const classified = await classifyChatIntent(text);
-  if (classified) {
-    const { intent, scope } = classified;
-    if (intent === "tomorrow_meetings") return tomorrowMeetings(sender.tenantId, sender.userId, scope);
-    if (intent === "closing_this_month") return closingThisMonth(sender.tenantId, sender.userId, scope);
-    if (intent === "needs_followup") return needsFollowup(sender.tenantId, sender.userId, scope);
+  // APIキー未設定なら分類もメンバー取得も行わず即ヘルプへ。
+  if (!process.env.ANTHROPIC_API_KEY) return helpCard();
+  const members = await listTenantMembers(sender.tenantId);
+  const classified = await classifyChatIntent(text, members.map((m) => m.name).filter(Boolean));
+  if (classified && classified.intent !== "none") {
+    // 絞り込み対象: 名指しメンバー > 「自分の」 > チーム全体
+    const named = resolveAssignee(classified.member_name, members);
+    const filter = named
+      ? { memberId: named.id, memberLabel: named.name.split(" ")[0] || named.name }
+      : classified.scope === "mine"
+        ? { memberId: sender.userId, memberLabel: "自分" }
+        : { memberId: null, memberLabel: null };
+
+    if (classified.intent === "meetings_list") {
+      const start = classified.start_date ?? jstPlusDays(1);
+      const end = classified.end_date ?? start;
+      return meetingsList(sender.tenantId, {
+        start,
+        end,
+        groupBy: classified.group_by,
+        filter,
+      });
+    }
+    if (classified.intent === "closing_deals") {
+      const month = classified.month ?? jstToday().slice(0, 7);
+      return closingDeals(sender.tenantId, { month, filter });
+    }
+    if (classified.intent === "needs_followup") {
+      return needsFollowup(sender.tenantId, { filter });
+    }
   }
 
   // 未知コマンド: ヘルプを返す
