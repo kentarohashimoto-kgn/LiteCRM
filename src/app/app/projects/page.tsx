@@ -48,6 +48,8 @@ export default async function ProjectsListPage({ searchParams }: { searchParams:
       finalComment: r.finalComment,
       approvedHours: r.approvedHours,
       approvedCost: r.approvedCost,
+      leadAssignmentId: r.leadAssignmentId,
+      assignees: r.assignees,
     };
   });
 
