@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { cardMessage, textMessage } from "./cards";
 import type { ChatMessagePayload } from "./client";
 import type { ResolvedSender } from "./identities";
+import { listTenantMembers, parseTaskWithAI, resolveAssignee } from "./ai-task-parse";
 
 /**
  * メンション本文（argumentText: Botメンションを除いた文字列）を解釈し、
@@ -35,7 +36,7 @@ function helpCard(): ChatMessagePayload {
       "<b>@CATORCE CRM</b> に続けて入力してください：",
       "・<b>商談 &lt;キーワード&gt;</b> — 進行中商談を検索（例: 商談 近代美術）",
       "・<b>今日</b> — 自分の今日のAC・超過を表示",
-      "・<b>タスク &lt;本文&gt;</b> — 自分にタスク起票（例: タスク 見積書送付 明日）",
+      "・<b>タスク &lt;内容&gt;</b> — タスク起票。自然文OK（例: タスク CTCに7月末までに注文書の催促。担当橋本）",
       "・<b>ヘルプ</b> — この案内",
     ],
     buttonText: "アプリを開く",
@@ -122,38 +123,70 @@ async function createTask(
   rest: string,
 ): Promise<ChatMessagePayload> {
   const admin = getSupabaseAdmin();
-  let due = jstPlusDays(1); // 既定: 明日
-  let title = rest;
-
-  const dateMatch = rest.match(/(\d{4}-\d{2}-\d{2})/);
-  if (dateMatch) {
-    due = dateMatch[1];
-    title = rest.replace(dateMatch[1], "").trim();
-  } else if (/(^|\s)今日(\s|$)/.test(rest)) {
-    due = jstToday();
-    title = rest.replace(/今日/, "").trim();
-  } else if (/(^|\s)明日(\s|$)/.test(rest)) {
-    due = jstPlusDays(1);
-    title = rest.replace(/明日/, "").trim();
+  if (!rest.trim()) {
+    return textMessage("タスクの本文を入力してください。例）タスク CTCに7月末までに注文書の催促。担当橋本");
   }
-  title = title.trim();
+
+  // AI解析（ANTHROPIC_API_KEY設定時）: 自然言語の期限・担当・優先度を解釈。
+  const members = await listTenantMembers(tenantId);
+  const ai = await parseTaskWithAI(rest, members.map((m) => m.name).filter(Boolean));
+
+  let title: string;
+  let due: string;
+  let priority: "high" | "middle" | "low" = "middle";
+  let assignee: { id: string; name: string } | null = null;
+  let aiUsed = false;
+
+  if (ai) {
+    aiUsed = true;
+    title = ai.title;
+    due = ai.due_date;
+    priority = ai.priority;
+    assignee = resolveAssignee(ai.assignee_name, members);
+  } else {
+    // フォールバック: ルールベース（YYYY-MM-DD / 今日 / 明日 のみ認識）。
+    due = jstPlusDays(1);
+    title = rest;
+    const dateMatch = rest.match(/(\d{4}-\d{2}-\d{2})/);
+    if (dateMatch) {
+      due = dateMatch[1];
+      title = rest.replace(dateMatch[1], "").trim();
+    } else if (/(^|\s)今日(\s|$)/.test(rest)) {
+      due = jstToday();
+      title = rest.replace(/今日/, "").trim();
+    } else if (/(^|\s)明日(\s|$)/.test(rest)) {
+      due = jstPlusDays(1);
+      title = rest.replace(/明日/, "").trim();
+    }
+    title = title.trim();
+  }
   if (!title) return textMessage("タスクの本文を入力してください。例）タスク 見積書送付 明日");
 
+  const assignedTo = assignee?.id ?? userId;
   const { error } = await admin.from("tasks").insert({
     tenant_id: tenantId,
-    assigned_to: userId,
+    assigned_to: assignedTo,
     created_by: userId,
     title,
     due_date: due,
     status: "todo",
-    priority: "middle",
+    priority,
     origin: "chat",
   });
   if (error) return textMessage(`タスク作成に失敗しました: ${error.message}`);
 
+  const prioLabel = priority === "high" ? "高" : priority === "low" ? "低" : "中";
+  const lines = [
+    `<b>${title}</b>`,
+    `期限: ${due} ／ 優先度: ${prioLabel}`,
+    `担当: ${assignee ? assignee.name : "自分"}`,
+  ];
+  if (ai?.assignee_name && !assignee) {
+    lines.push(`⚠️ 「${ai.assignee_name}」に一致するメンバーが見つからず、自分に割り当てました。`);
+  }
   return cardMessage({
-    title: "✅ タスクを起票しました",
-    lines: [`<b>${title}</b>`, `期限: ${due}`],
+    title: aiUsed ? "✅ タスクを起票しました（AI解釈）" : "✅ タスクを起票しました",
+    lines,
     buttonText: "タスク一覧を開く",
     buttonUrl: `${appUrl()}/app/tasks`,
   });
