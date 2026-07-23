@@ -46,7 +46,7 @@ import { LOST_REASONS } from "@/lib/constants";
 import { leadCandidatesQuery, buildLeadCandidates, type LeadCandRow } from "@/lib/data/lead-candidates";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince, toJstDate } from "@/lib/utils";
 
-const SAVED_MSG: Record<string, string> = { "1": "保存しました", activity: "活動を記録しました", memo: "現状メモ・ヨミを更新しました" };
+const SAVED_MSG: Record<string, string> = { "1": "保存しました", activity: "活動を記録しました", memo: "現状メモ・ヨミを更新しました", meeting_moved: "商談日を変更しました", meeting_deleted: "商談を削除しました" };
 
 /**
  * 案件詳細の本体。フルページ（/app/opportunities/[id]）と、案件一覧の
@@ -266,7 +266,7 @@ export async function OpportunityDetailView({ id, inPane = false, saved, error }
           </Section>
 
           <Section title={`商談（${meetings.length}回）`} className={entityBorder("meeting")} action={<EditTarget level="meeting" />}>
-            <MeetingList meetings={meetings} />
+            <MeetingList meetings={meetings} manage canManage={canReassign} currentUserId={ws.ctx.userId} />
             <details className="mt-3">
               <summary className="cursor-pointer text-sm font-medium text-teal-deep">＋ 商談を登録</summary>
               <form action={createMeetingAction} className="mt-3 space-y-3 border-t border-black/[0.05] pt-3">

@@ -581,6 +581,73 @@ export async function updateMeetingAction(formData: FormData) {
   redirect(`/app/opportunities/${oppId}/meetings/${id}?saved=1`);
 }
 
+/**
+ * 商談日の変更(リスケ)。日付/時刻だけを更新し、議事録・タイトル等は変更しない
+ * (updateMeetingActionはフォーム全項目を上書きするため、日付だけ変えたい導線には使わない)。
+ * 初回商談を動かした場合は案件の初回商談日/アポ日時も自動追従する。
+ */
+export async function rescheduleMeetingAction(formData: FormData) {
+  await requireCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  const oppId = str(formData.get("opportunity_id"));
+  const md = str(formData.get("meeting_date"));
+  const mt = str(formData.get("meeting_time"));
+  const backTo = oppId ? `/app/opportunities/${oppId}` : "/app/opportunities";
+  if (!id || !md) redirect(`${backTo}?error=${encodeURIComponent("商談日を入力してください")}`);
+
+  const meetingAt = md && mt ? `${md}T${mt}:00+09:00` : null;
+  await sb.from("meetings").update({ meeting_date: md, meeting_at: meetingAt }).eq("id", id);
+  if (oppId) {
+    await sb.from("opportunities").update({ last_activity_at: new Date().toISOString() }).eq("id", oppId);
+    await syncOppFirstMeeting(sb, oppId); // 初回商談の振り替えを案件へ同期(カレンダー二重表示の防止)
+    revalidatePath(`/app/opportunities/${oppId}`);
+    revalidatePath(`/app/opportunities/${oppId}/meetings/${id}`);
+  }
+  revalidatePath("/app/opportunities");
+  redirect(`${backTo}?saved=meeting_moved`);
+}
+
+/**
+ * 商談を削除する(誤登録・重複の整理、または商談自体の取消)。
+ * 権限: 案件/商談の再割当て権限ロール(代表・管理者・Sales Ops)、または当該商談の担当者本人。
+ * 初回商談を削除した場合は、案件の初回商談日/アポ日時を残った商談から再同期する。
+ */
+export async function deleteMeetingAction(formData: FormData) {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const id = String(formData.get("id"));
+  const oppId = str(formData.get("opportunity_id"));
+  const backTo = oppId ? `/app/opportunities/${oppId}` : "/app/opportunities";
+  if (!id) redirect(backTo);
+
+  // 対象商談(テナント内・閲覧可能な範囲)を取得し、権限判定に使う。
+  const { data: m } = await sb
+    .from("meetings")
+    .select("id, owner_user_id, opportunity_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!m) redirect(`${backTo}?error=${encodeURIComponent("商談が見つかりません")}`);
+
+  const canDelete = canReassignOwner(ctx.role) || (m.owner_user_id as string | null) === ctx.userId;
+  const targetOpp = (m.opportunity_id as string | null) ?? oppId;
+  const target = targetOpp ? `/app/opportunities/${targetOpp}` : "/app/opportunities";
+  if (!canDelete) redirect(`${target}?error=${encodeURIComponent("この商談を削除する権限がありません")}`);
+
+  // 削除はサービスロールで実行(meetingsのDELETEポリシーはowner/admin限定のため)。
+  // 上のアプリ権限判定＋tenant境界の明示指定で担保する。
+  const admin = getSupabaseAdmin();
+  await admin.from("meetings").delete().eq("id", id).eq("tenant_id", ctx.tenantId);
+
+  if (targetOpp) {
+    // 初回商談が消えた場合、案件の初回商談日/アポ日時を残った商談から再同期。
+    await syncOppFirstMeeting(sb, targetOpp);
+    revalidatePath(`/app/opportunities/${targetOpp}`);
+  }
+  revalidatePath("/app/opportunities");
+  redirect(`${target}?saved=meeting_deleted`);
+}
+
 // ===================== 目標(月別) =====================
 export async function saveTargetsAction(formData: FormData) {
   const ctx = await requireCtx();

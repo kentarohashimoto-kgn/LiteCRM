@@ -8,6 +8,7 @@ import { Card, PageHeader, Section, Avatar } from "@/components/ui/primitives";
 import { YomiBadge } from "@/components/ui/badges";
 import { updateMeetingAction } from "@/server/actions";
 import { AiSummaryButton } from "@/components/meetings/ai-summary-button";
+import { DeleteMeetingButton } from "@/components/meetings/meeting-manage";
 import { MeetingRecorder } from "@/components/meetings/meeting-recorder";
 import { listMeetingRecordings } from "@/lib/data/recordings";
 import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
@@ -36,6 +37,7 @@ export default async function MeetingDetailPage({ params, searchParams }: { para
   const recentActivities = opp ? getActivitiesByOpportunity(ws, opp.id).slice(0, 3) : [];
   const members = listMembers(ws).map(({ user }) => user);
   const canReassign = canReassignOwner(ws.ctx.role);
+  const canDeleteMeeting = canReassign || meeting.owner_user_id === ws.ctx.userId;
   const recordings = await listMeetingRecordings(meeting.id);
   // 案件のネクストアクション（複数可）から、最も近い未完了を代表として参照表示する。
   const openNextActions = (opp ? getTasksByOpportunity(ws, opp.id) : [])
@@ -45,9 +47,12 @@ export default async function MeetingDetailPage({ params, searchParams }: { para
 
   return (
     <div>
-      <Link href={`/app/opportunities/${params.id}`} className="inline-flex items-center gap-1 text-sm text-ink/50 hover:text-ink mb-3">
-        <ChevronLeft size={16} /> 案件へ戻る
-      </Link>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <Link href={`/app/opportunities/${params.id}`} className="inline-flex items-center gap-1 text-sm text-ink/50 hover:text-ink">
+          <ChevronLeft size={16} /> 案件へ戻る
+        </Link>
+        {canDeleteMeeting && <DeleteMeetingButton meetingId={meeting.id} opportunityId={meeting.opportunity_id} />}
+      </div>
       {/* データ階層: 顧客 > 案件 > 商談(いまここ) */}
       <DataPath
         items={[

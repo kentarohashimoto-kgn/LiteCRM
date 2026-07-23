@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { MeetingView } from "@/lib/data/select";
 import { Avatar, EmptyState } from "@/components/ui/primitives";
-import { formatDate } from "@/lib/utils";
+import { formatDate, toJstDate } from "@/lib/utils";
+import { MeetingRowActions } from "@/components/meetings/meeting-manage";
 
 function hm(iso?: string): string | null {
   if (!iso) return null;
@@ -11,15 +12,25 @@ function hm(iso?: string): string | null {
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 
-/** 案件配下の商談リスト。商談日・時間・概要を把握しやすく表示。 */
+/**
+ * 案件配下の商談リスト。商談日・時間・概要を把握しやすく表示。
+ * manage=true で各行に「日付変更(リスケ)/削除」の操作を表示する
+ * (案件詳細でのみ有効。削除は canManage もしくは当該商談の担当者本人に限定)。
+ */
 export function MeetingList({
   meetings,
   showOpportunity = false,
   emptyMessage = "商談はまだありません",
+  manage = false,
+  canManage = false,
+  currentUserId,
 }: {
   meetings: MeetingView[];
   showOpportunity?: boolean;
   emptyMessage?: string;
+  manage?: boolean;
+  canManage?: boolean;
+  currentUserId?: string;
 }) {
   if (meetings.length === 0) return <EmptyState message={emptyMessage} />;
   return (
@@ -46,6 +57,15 @@ export function MeetingList({
                 {m.next_action_date && <div className="text-[11px] text-ink/40 mt-1">次アクション: {formatDate(m.next_action_date)}{m.next_action_text ? ` ・ ${m.next_action_text}` : ""}</div>}
               </div>
             </Link>
+            {manage && (
+              <MeetingRowActions
+                meetingId={m.id}
+                opportunityId={m.opportunity_id}
+                meetingDate={m.meeting_date ?? toJstDate(m.meeting_at) ?? ""}
+                meetingTime={time ?? ""}
+                canDelete={canManage || m.owner_user_id === currentUserId}
+              />
+            )}
           </li>
         );
       })}
