@@ -16,6 +16,34 @@ export function isChatInteractionEvent(type: unknown): type is string {
   return type === "MESSAGE" || type === "ADDED_TO_SPACE" || type === "REMOVED_FROM_SPACE";
 }
 
+/**
+ * 受信イベントを旧来（クラシック）形式に正規化する。
+ * 新型Chatアプリ（Workspaceアドオン型）は
+ *   { chat: { user, messagePayload|addedToSpacePayload|removedFromSpacePayload }, commonEventObject }
+ * という形式で届くため、{ type, user, space, message } に揃える。
+ * 旧形式（type を持つ）はそのまま返す。どちらでもなければ null。
+ */
+export function normalizeChatEvent(raw: any): any | null {
+  if (raw?.type) return raw;
+  const chat = raw?.chat;
+  if (!chat) return null;
+  if (chat.messagePayload) {
+    return {
+      type: "MESSAGE",
+      user: chat.user,
+      space: chat.messagePayload.space,
+      message: chat.messagePayload.message,
+    };
+  }
+  if (chat.addedToSpacePayload) {
+    return { type: "ADDED_TO_SPACE", user: chat.user, space: chat.addedToSpacePayload.space };
+  }
+  if (chat.removedFromSpacePayload) {
+    return { type: "REMOVED_FROM_SPACE", user: chat.user, space: chat.removedFromSpacePayload.space };
+  }
+  return null;
+}
+
 export async function handleChatInteraction(event: any): Promise<ChatMessagePayload | null> {
   const type = event?.type as string | undefined;
   const admin = getSupabaseAdmin();

@@ -3,7 +3,11 @@ import crypto from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { verifyPubsubPush } from "@/lib/chat/pubsub-verify";
 import { handleReactionCreated } from "@/lib/chat/reactions";
-import { handleChatInteraction, isChatInteractionEvent } from "@/lib/chat/interactions";
+import {
+  handleChatInteraction,
+  isChatInteractionEvent,
+  normalizeChatEvent,
+} from "@/lib/chat/interactions";
 import { createMessage } from "@/lib/chat/client";
 
 export const dynamic = "force-dynamic";
@@ -72,7 +76,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, skipped: "undecodable data" });
   }
 
-  const eventType: string = event?.eventType ?? event?.type ?? "unknown";
+  // 新型（Workspaceアドオン形式）のインタラクションはクラシック形式に正規化。
+  const interaction = normalizeChatEvent(event);
+  const eventType: string =
+    event?.eventType ?? interaction?.type ?? event?.type ?? "unknown";
   const admin = getSupabaseAdmin();
 
   // 冪等性: Pub/Sub messageId をキーに記録。重複なら即終了。
@@ -89,18 +96,18 @@ export async function POST(req: Request) {
 
   try {
     // P2: インタラクションイベント（接続設定=Cloud Pub/Sub のとき）。
-    if (isChatInteractionEvent(event?.type)) {
-      const reply = await handleChatInteraction(event);
-      const spaceName = event?.space?.name as string | undefined;
+    if (interaction && isChatInteractionEvent(interaction.type)) {
+      const reply = await handleChatInteraction(interaction);
+      const spaceName = interaction.space?.name as string | undefined;
       if (reply && spaceName) {
         // 元メッセージのスレッドに返信（無ければ新規スレッドにフォールバック）。
-        const threadName = event?.message?.thread?.name as string | undefined;
+        const threadName = interaction.message?.thread?.name as string | undefined;
         const payload = threadName ? { ...reply, thread: { name: threadName } } : reply;
         await createMessage(spaceName, payload, {
           messageReplyOption: "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD",
         });
       }
-      return NextResponse.json({ ok: true, interaction: event?.type, replied: !!reply });
+      return NextResponse.json({ ok: true, interaction: interaction.type, replied: !!reply });
     }
 
     // P3: リアクションイベント。
