@@ -12,6 +12,7 @@ export interface ParsedTask {
   title: string;
   due_date: string; // YYYY-MM-DD
   assignee_name: string | null;
+  project_name: string | null;
   priority: "high" | "middle" | "low";
 }
 
@@ -34,15 +35,33 @@ const OUTPUT_SCHEMA = {
       description:
         "「担当◯◯」等で指定された担当者名。メンバー一覧の表記に最も近い1名。指定なし・「自分」の場合は null。",
     },
+    project_name: {
+      type: ["string", "null"],
+      description:
+        "「◯◯に入れて」「◯◯プロジェクトの」等で指定されたプロジェクト名。プロジェクト一覧の表記に最も近い1つ。指定が無ければ null。",
+    },
     priority: {
       type: "string",
       enum: ["high", "middle", "low"],
       description: "至急/最優先→high、急がない/いつでも→low、それ以外→middle。",
     },
   },
-  required: ["title", "due_date", "assignee_name", "priority"],
+  required: ["title", "due_date", "assignee_name", "project_name", "priority"],
   additionalProperties: false,
 } as const;
+
+/** テナントのタスクプロジェクト一覧（id, 名前）。プロジェクト名の解決に使う。 */
+export async function listTaskProjects(
+  tenantId: string,
+): Promise<Array<{ id: string; name: string }>> {
+  const admin = getSupabaseAdmin();
+  const { data } = await admin
+    .from("task_projects")
+    .select("id, name")
+    .eq("tenant_id", tenantId)
+    .limit(50);
+  return (data ?? []).map((p) => ({ id: p.id as string, name: (p.name as string) ?? "" }));
+}
 
 /** テナントのメンバー一覧（id, 表示名）。担当者名の解決に使う。 */
 export async function listTenantMembers(
@@ -75,6 +94,7 @@ function jstTodayParts(): { date: string; weekday: string } {
 export async function parseTaskWithAI(
   text: string,
   memberNames: string[],
+  projectNames: string[] = [],
 ): Promise<ParsedTask | null> {
   if (!process.env.ANTHROPIC_API_KEY) return null;
   const { date, weekday } = jstTodayParts();
@@ -96,7 +116,8 @@ export async function parseTaskWithAI(
           role: "user",
           content:
             `今日は ${date}（${weekday}曜日）です。\n` +
-            `チームのメンバー一覧: ${memberNames.length ? memberNames.join(" / ") : "(なし)"}\n\n` +
+            `チームのメンバー一覧: ${memberNames.length ? memberNames.join(" / ") : "(なし)"}\n` +
+            `プロジェクト一覧: ${projectNames.length ? projectNames.join(" / ") : "(なし)"}\n\n` +
             `次のタスク指示を構造化してください:\n${text}`,
         },
       ],
