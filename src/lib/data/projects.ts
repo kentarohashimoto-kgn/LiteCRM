@@ -31,6 +31,7 @@ export interface ProjectPlan {
   notes: string | null;
   hours_per_month: number;
   priority: "high" | "middle" | "low";
+  lead_assignment_id: string | null; // 責任者として指名したアサイン
 }
 export interface RevenueMonth { id: string; plan_id: string; month: string; amount: number; note: string | null; }
 export interface ProjAssignment {
@@ -154,6 +155,8 @@ export interface ManagedProjectRow {
   finalComment: string | null; // 順調だったか等のコメント
   approvedHours: number; // 稼働報告の承認済み実績工数(h)
   approvedCost: number; // 承認済み実績の原価換算(円)
+  leadAssignmentId: string | null; // 責任者として指名したアサイン
+  assignees: { id: string; label: string; kind: string }[]; // 選択肢(有効なアサイン)
 }
 
 /** 原価管理対象の「候補」として拾う最小金額（これ未満は一覧のノイズになるため既定では強調しない）。 */
@@ -335,6 +338,10 @@ export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
       }
     }
 
+    const activeAssignees = plan
+      ? byPlan(asgs, plan.id).filter((a) => a.status !== "removed").map((a) => ({ id: a.id, label: a.label, kind: a.kind }))
+      : [];
+
     const planWeeks = plan ? byPlan(weeks, plan.id) : [];
     const latest = planWeeks[0] ?? null; // created_at desc
     const finalR = planWeeks.find((w) => w.period_type === "final") ?? null;
@@ -364,6 +371,8 @@ export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
       finalComment: finalR ? finalR.blockers ?? finalR.notes ?? null : null,
       approvedHours,
       approvedCost: Math.round(approvedCost),
+      leadAssignmentId: plan?.lead_assignment_id ?? null,
+      assignees: activeAssignees,
     };
   });
 }

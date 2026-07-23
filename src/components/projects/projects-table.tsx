@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, UserRound } from "lucide-react";
 import { StickyGrid } from "@/components/ui/sticky-grid";
+import { setProjectLeadAction } from "@/server/actions/projects";
 
 export interface ProjectRow {
   opportunityId: string;
@@ -30,6 +31,8 @@ export interface ProjectRow {
   finalComment: string | null;
   approvedHours: number;
   approvedCost: number;
+  leadAssignmentId: string | null;
+  assignees: { id: string; label: string; kind: string }[];
 }
 
 const yen = (n: number) => "¥" + Math.round(n).toLocaleString("ja-JP");
@@ -91,11 +94,12 @@ export function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
 
   return (
     <StickyGrid freeze maxHeight="66vh">
-      <table className="w-full text-sm tabular-nums" style={{ minWidth: 920 }}>
+      <table className="w-full text-sm tabular-nums" style={{ minWidth: 1040 }}>
         <thead className="text-ink/40 text-xs bg-mist-soft/30">
           <tr>
             <th className="th">顧客 / 案件</th>
             <Th label="重要度" k="priority" sort={sort} dir={dir} onClick={click} />
+            <th className="th">担当（責任者）</th>
             <Th label="期間" k="end" sort={sort} dir={dir} onClick={click} />
             <Th label="販売" k="revenue" sort={sort} dir={dir} onClick={click} align="right" />
             <Th label="原価" k="cost" sort={sort} dir={dir} onClick={click} align="right" />
@@ -105,7 +109,7 @@ export function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
             <Th label="稼働実績(承認)" k="approved" sort={sort} dir={dir} onClick={click} align="right" />
             <th className="th">進捗 / 完了実績</th>
             <Th label="予実差" k="variance" sort={sort} dir={dir} onClick={click} align="right" />
-            <th className="th">担当</th>
+            <th className="th">営業担当</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-black/[0.04]">
@@ -123,6 +127,7 @@ export function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
                   </Link>
                 </td>
                 <td className="td"><span className={`pill ${PRIO[r.priority].cls} text-[10px] font-bold`}>{PRIO[r.priority].label}</span></td>
+                <td className="td"><LeadSelect row={r} /></td>
                 <td className="td">
                   <div className="text-ink/70">{period}</div>
                   {periodBadge && <span className={`pill ${periodBadge.c} text-[10px] mt-0.5 inline-block`}>{periodBadge.t}</span>}
@@ -169,6 +174,43 @@ export function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
         </tbody>
       </table>
     </StickyGrid>
+  );
+}
+
+/**
+ * 責任者(対応チームのリーダー)のインライン選択。案件のアサイン(外注/社員)から1名を指名する。
+ * 変更で即保存(サーバーアクション)。アサインが無い案件は登録導線を表示。
+ */
+function LeadSelect({ row }: { row: ProjectRow }) {
+  if (row.assignees.length === 0) {
+    return (
+      <Link href={`/app/projects/${row.opportunityId}`} className="text-[11px] text-ink/35 hover:text-teal-deep whitespace-nowrap" title="アサインを登録すると責任者を指名できます">
+        アサイン未登録
+      </Link>
+    );
+  }
+  const KIND = { external: "外注", internal: "社員" } as const;
+  return (
+    <form action={setProjectLeadAction} className="min-w-[120px]">
+      <input type="hidden" name="opportunity_id" value={row.opportunityId} />
+      <div className="inline-flex items-center gap-1">
+        <UserRound size={12} className={row.leadAssignmentId ? "text-teal-deep" : "text-ink/25"} />
+        <select
+          name="lead_assignment_id"
+          defaultValue={row.leadAssignmentId ?? ""}
+          onChange={(e) => e.currentTarget.form?.requestSubmit()}
+          className={`text-xs rounded-md border border-black/10 bg-white px-1.5 py-1 max-w-[130px] ${row.leadAssignmentId ? "text-ink/80 font-medium" : "text-ink/40"}`}
+          title="対応チームの責任者を指名"
+        >
+          <option value="">未指名</option>
+          {row.assignees.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.label}（{KIND[a.kind as "external" | "internal"] ?? a.kind}）
+            </option>
+          ))}
+        </select>
+      </div>
+    </form>
   );
 }
 

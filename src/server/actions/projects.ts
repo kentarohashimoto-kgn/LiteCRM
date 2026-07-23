@@ -50,6 +50,17 @@ export async function enableProjectManagementAction(formData: FormData) {
   redirect(`/app/projects/${oppId}`);
 }
 
+/** 責任者(対応チームのリーダー)を指名/解除する。一覧のインライン選択から呼ばれる(遷移しない)。 */
+export async function setProjectLeadAction(formData: FormData) {
+  await requireProjectCtx();
+  const sb = getSupabaseServer();
+  const oppId = String(formData.get("opportunity_id"));
+  if (!oppId) return;
+  const leadId = str(formData.get("lead_assignment_id")); // 空 => 未設定(null)
+  await sb.from("project_plans").update({ lead_assignment_id: leadId }).eq("opportunity_id", oppId);
+  revalidateProject(oppId);
+}
+
 /** 案件管理対象から外す(計画データは残す)。 */
 export async function disableProjectManagementAction(formData: FormData) {
   await requireProjectCtx();
