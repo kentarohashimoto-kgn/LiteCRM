@@ -115,3 +115,27 @@ describe("normalizeChatEvent (Workspaceアドオン形式→クラシック形�
     expect(normalizeChatEvent({ chat: { user: {} } })).toBeNull();
   });
 });
+
+describe("AIタスク解析（純粋部分）", () => {
+  it("ANTHROPIC_API_KEY 未設定なら null（ルールベースへフォールバック）", async () => {
+    const orig = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    const { parseTaskWithAI } = await import("@/lib/chat/ai-task-parse");
+    expect(await parseTaskWithAI("テスト 明日", [])).toBeNull();
+    if (orig !== undefined) process.env.ANTHROPIC_API_KEY = orig;
+  });
+
+  it("resolveAssignee: 部分一致で担当者を解決", async () => {
+    const { resolveAssignee } = await import("@/lib/chat/ai-task-parse");
+    const members = [
+      { id: "u1", name: "橋本 健太郎" },
+      { id: "u2", name: "村上" },
+      { id: "u3", name: "teshima@catorce.jp" },
+    ];
+    expect(resolveAssignee("橋本", members)?.id).toBe("u1");
+    expect(resolveAssignee("村上", members)?.id).toBe("u2");
+    expect(resolveAssignee("teshima", members)?.id).toBe("u3");
+    expect(resolveAssignee("存在しない", members)).toBeNull();
+    expect(resolveAssignee(null, members)).toBeNull();
+  });
+});
