@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, TriangleAlert } from "lucide-react";
+import { CheckCircle2, TriangleAlert, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { enableProjectManagementAction } from "@/server/actions/projects";
+import { StickyGrid } from "@/components/ui/sticky-grid";
 
 export interface CandidateView {
   opportunityId: string;
@@ -29,14 +30,48 @@ const STAGE_LABEL: Record<string, string> = {
 };
 
 type Filter = "all" | "won" | "large_open";
+type SortKey = "date" | "amount" | "status" | "account" | "owner";
 
-/** 原価管理「対象候補」一覧。受注済みで未管理の案件を上位に、その場で対象化できる。 */
+const TIER_RANK = { won: 1, large_open: 0 } as const;
+/** 期間の並び替え用の数値。未推定は null（常に末尾へ）。 */
+const dateVal = (m: string | null): number | null => (m ? Number(m.replace("-", "")) : null);
+
+/** 原価管理「対象候補」一覧。ヘッダー固定・日程が直近順を既定に、各列でソートできる。 */
 export function CandidatesTable({ rows }: { rows: CandidateView[] }) {
   const [filter, setFilter] = useState<Filter>("all");
+  const [sort, setSort] = useState<SortKey>("date");
+  const [dir, setDir] = useState<"asc" | "desc">("desc"); // 直近(新しい期間)が上
+
   const wonCount = rows.filter((r) => r.tier === "won").length;
   const openCount = rows.filter((r) => r.tier === "large_open").length;
 
-  const shown = useMemo(() => rows.filter((r) => filter === "all" || r.tier === filter), [rows, filter]);
+  const click = (key: SortKey) => {
+    if (key === sort) setDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSort(key); setDir(key === "account" || key === "owner" ? "asc" : "desc"); }
+  };
+
+  const shown = useMemo(() => {
+    const filtered = rows.filter((r) => filter === "all" || r.tier === filter);
+    return [...filtered].sort((a, b) => {
+      let d = 0;
+      switch (sort) {
+        case "amount": d = a.amount - b.amount; break;
+        case "status": d = TIER_RANK[a.tier] - TIER_RANK[b.tier]; break;
+        case "account": d = a.accountName.localeCompare(b.accountName, "ja"); break;
+        case "owner": d = a.ownerName.localeCompare(b.ownerName, "ja"); break;
+        case "date":
+        default: {
+          const av = dateVal(a.startMonth), bv = dateVal(b.startMonth);
+          if (av === null && bv === null) d = 0;
+          else if (av === null) return 1; // 未推定は常に末尾
+          else if (bv === null) return -1;
+          else d = av - bv;
+          break;
+        }
+      }
+      return dir === "asc" ? d : -d;
+    });
+  }, [rows, filter, sort, dir]);
 
   const Seg = ({ v, label, n }: { v: Filter; label: string; n: number }) => (
     <button type="button" onClick={() => setFilter(v)} className={`seg ${filter === v ? "seg-on" : "seg-off"}`}>
@@ -57,16 +92,16 @@ export function CandidatesTable({ rows }: { rows: CandidateView[] }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-black/[0.06]">
+      <StickyGrid freeze freezeLast maxHeight="64vh">
         <table className="w-full text-sm tabular-nums" style={{ minWidth: 860 }}>
           <thead className="text-ink/40 text-xs bg-mist-soft/30">
             <tr>
-              <th className="th">顧客 / 案件</th>
-              <th className="th">状況</th>
-              <th className="th text-right">金額</th>
-              <th className="th">推定期間</th>
+              <Th label="顧客 / 案件" k="account" sort={sort} dir={dir} onClick={click} />
+              <Th label="状況" k="status" sort={sort} dir={dir} onClick={click} />
+              <Th label="金額" k="amount" sort={sort} dir={dir} onClick={click} align="right" />
+              <Th label="推定期間" k="date" sort={sort} dir={dir} onClick={click} />
               <th className="th">候補理由</th>
-              <th className="th">担当</th>
+              <Th label="担当" k="owner" sort={sort} dir={dir} onClick={click} />
               <th className="th text-right">操作</th>
             </tr>
           </thead>
@@ -111,8 +146,20 @@ export function CandidatesTable({ rows }: { rows: CandidateView[] }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </StickyGrid>
       {shown.length === 0 && <p className="py-8 text-center text-sm text-ink/40">該当する候補はありません。</p>}
     </div>
+  );
+}
+
+function Th({ label, k, sort, dir, onClick, align }: { label: string; k: SortKey; sort: SortKey; dir: "asc" | "desc"; onClick: (k: SortKey) => void; align?: "right" }) {
+  const active = sort === k;
+  return (
+    <th className={`th ${align === "right" ? "text-right" : ""}`}>
+      <button type="button" onClick={() => onClick(k)} className={`inline-flex items-center gap-1 hover:text-ink/70 ${active ? "text-teal-deep font-bold" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}>
+        {label}
+        {active ? (dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} className="opacity-40" />}
+      </button>
+    </th>
   );
 }
