@@ -60,3 +60,14 @@ describe("verifyPubsubPush（早期リターン）", () => {
     expect(r.reason).toBe("malformed token");
   });
 });
+
+describe("isChatInteractionEvent (P2 Pub/Sub経路)", () => {
+  it("インタラクション種別を判定する", async () => {
+    const { isChatInteractionEvent } = await import("@/lib/chat/interactions");
+    expect(isChatInteractionEvent("MESSAGE")).toBe(true);
+    expect(isChatInteractionEvent("ADDED_TO_SPACE")).toBe(true);
+    expect(isChatInteractionEvent("REMOVED_FROM_SPACE")).toBe(true);
+    expect(isChatInteractionEvent("google.workspace.chat.reaction.v1.created")).toBe(false);
+    expect(isChatInteractionEvent(undefined)).toBe(false);
+  });
+});

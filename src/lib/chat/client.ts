@@ -127,16 +127,20 @@ async function chatApiFetch<T = unknown>(
 export interface ChatMessagePayload {
   text?: string;
   cardsV2?: unknown[];
+  /** スレッド返信時に指定（P2 Pub/Sub経路の非同期返信で使用）。 */
+  thread?: { name: string };
 }
 
 /** Space（DM含む）にメッセージを作成。 */
 export async function createMessage(
   spaceName: string,
   payload: ChatMessagePayload,
+  query?: Record<string, string>,
 ): Promise<{ name: string } | null> {
+  const qs = query ? `?${new URLSearchParams(query).toString()}` : "";
   return chatApiFetch<{ name: string }>(
     "POST",
-    `/${spaceName}/messages`,
+    `/${spaceName}/messages${qs}`,
     payload,
   );
 }
