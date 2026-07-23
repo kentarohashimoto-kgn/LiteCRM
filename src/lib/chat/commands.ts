@@ -1,0 +1,180 @@
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { cardMessage, textMessage } from "./cards";
+import type { ChatMessagePayload } from "./client";
+import type { ResolvedSender } from "./identities";
+
+/**
+ * メンション本文（argumentText: Botメンションを除いた文字列）を解釈し、
+ * CRM操作を実行して返信メッセージ（カード）を組み立てる。
+ *
+ * P2の対応コマンド（参照＋起票。破壊的操作は含めない）:
+ *   商談 <キーワード>   … 進行中商談を名称/取引先名で検索
+ *   今日               … 自分の今日のAC/超過サマリ
+ *   タスク <本文>       … 自分にタスクを起票（既定期限=明日、YYYY-MM-DD/明日/今日を認識）
+ *   ヘルプ             … 使い方
+ */
+
+function appUrl(): string {
+  return process.env.NEXT_PUBLIC_APP_URL ?? "https://lite-crm-tau.vercel.app";
+}
+function jstToday(): string {
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+}
+function jstPlusDays(days: number): string {
+  return new Date(Date.now() + 9 * 3600 * 1000 + days * 24 * 3600 * 1000).toISOString().slice(0, 10);
+}
+function yen(n: unknown): string {
+  const v = typeof n === "number" ? n : Number(n ?? 0);
+  return `¥${(v || 0).toLocaleString("ja-JP")}`;
+}
+
+function helpCard(): ChatMessagePayload {
+  return cardMessage({
+    title: "CATORCE CRM の使い方",
+    lines: [
+      "<b>@CATORCE CRM</b> に続けて入力してください：",
+      "・<b>商談 &lt;キーワード&gt;</b> — 進行中商談を検索（例: 商談 近代美術）",
+      "・<b>今日</b> — 自分の今日のAC・超過を表示",
+      "・<b>タスク &lt;本文&gt;</b> — 自分にタスク起票（例: タスク 見積書送付 明日）",
+      "・<b>ヘルプ</b> — この案内",
+    ],
+    buttonText: "アプリを開く",
+    buttonUrl: `${appUrl()}/app/today`,
+  });
+}
+
+async function searchDeals(tenantId: string, kw: string): Promise<ChatMessagePayload> {
+  const admin = getSupabaseAdmin();
+  if (!kw) return textMessage("検索キーワードを指定してください。例）商談 近代美術");
+
+  // 取引先名の一致から account_id を集める
+  const { data: accs } = await admin
+    .from("accounts")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .ilike("name", `%${kw}%`)
+    .limit(50);
+  const accIds = (accs ?? []).map((a) => a.id as string);
+
+  let q = admin
+    .from("opportunities")
+    .select("id, name, amount, stage, probability, next_action_date, accounts(name)")
+    .eq("tenant_id", tenantId)
+    .eq("status", "open")
+    .is("deleted_at", null)
+    .limit(5);
+  q = accIds.length
+    ? q.or(`name.ilike.%${kw}%,account_id.in.(${accIds.join(",")})`)
+    : q.ilike("name", `%${kw}%`);
+
+  const { data: opps } = await q;
+  if (!opps || opps.length === 0) {
+    return textMessage(`「${kw}」に一致する進行中の商談は見つかりませんでした。`);
+  }
+  const lines = opps.map((o) => {
+    const acc = (o.accounts as { name?: string } | null)?.name ?? "—";
+    const ac = o.next_action_date ? ` / 次AC ${o.next_action_date}` : "";
+    return `<b>${acc}</b>｜${o.name} — ${yen(o.amount)} / ${o.stage}(${o.probability}%)${ac}`;
+  });
+  return cardMessage({
+    title: `商談検索: 「${kw}」 ${opps.length}件`,
+    lines,
+    buttonText: "商談一覧を開く",
+    buttonUrl: `${appUrl()}/app/opportunities`,
+  });
+}
+
+async function todaySummary(tenantId: string, userId: string): Promise<ChatMessagePayload> {
+  const admin = getSupabaseAdmin();
+  const today = jstToday();
+  const { data: opps } = await admin
+    .from("opportunities")
+    .select("name, next_action_date, accounts(name)")
+    .eq("tenant_id", tenantId)
+    .eq("owner_user_id", userId)
+    .eq("status", "open")
+    .is("deleted_at", null)
+    .not("next_action_date", "is", null);
+
+  const acToday: string[] = [];
+  const overdue: string[] = [];
+  for (const o of opps ?? []) {
+    const acc = (o.accounts as { name?: string } | null)?.name ?? "—";
+    const d = o.next_action_date as string | null;
+    if (d === today) acToday.push(acc);
+    else if (d && d < today) overdue.push(acc);
+  }
+  const lines = [
+    `今日のAC: <b>${acToday.length}件</b>${acToday.length ? `（${acToday.slice(0, 5).join(" / ")}${acToday.length > 5 ? " 他" : ""}）` : ""}`,
+    `⚠️ 超過AC: <b>${overdue.length}件</b>${overdue.length ? `（${overdue.slice(0, 5).join(" / ")}${overdue.length > 5 ? " 他" : ""}）` : ""}`,
+  ];
+  return cardMessage({
+    title: `今日のサマリ（${today.slice(5)}）`,
+    lines,
+    buttonText: "今日のタスクを開く",
+    buttonUrl: `${appUrl()}/app/today`,
+  });
+}
+
+async function createTask(
+  tenantId: string,
+  userId: string,
+  rest: string,
+): Promise<ChatMessagePayload> {
+  const admin = getSupabaseAdmin();
+  let due = jstPlusDays(1); // 既定: 明日
+  let title = rest;
+
+  const dateMatch = rest.match(/(\d{4}-\d{2}-\d{2})/);
+  if (dateMatch) {
+    due = dateMatch[1];
+    title = rest.replace(dateMatch[1], "").trim();
+  } else if (/(^|\s)今日(\s|$)/.test(rest)) {
+    due = jstToday();
+    title = rest.replace(/今日/, "").trim();
+  } else if (/(^|\s)明日(\s|$)/.test(rest)) {
+    due = jstPlusDays(1);
+    title = rest.replace(/明日/, "").trim();
+  }
+  title = title.trim();
+  if (!title) return textMessage("タスクの本文を入力してください。例）タスク 見積書送付 明日");
+
+  const { error } = await admin.from("tasks").insert({
+    tenant_id: tenantId,
+    assigned_to: userId,
+    created_by: userId,
+    title,
+    due_date: due,
+    status: "todo",
+    priority: "middle",
+    origin: "chat",
+  });
+  if (error) return textMessage(`タスク作成に失敗しました: ${error.message}`);
+
+  return cardMessage({
+    title: "✅ タスクを起票しました",
+    lines: [`<b>${title}</b>`, `期限: ${due}`],
+    buttonText: "タスク一覧を開く",
+    buttonUrl: `${appUrl()}/app/tasks`,
+  });
+}
+
+/** メンション本文を解釈して実行し、返信メッセージを返す。 */
+export async function executeChatCommand(
+  argumentText: string,
+  sender: ResolvedSender,
+): Promise<ChatMessagePayload> {
+  const text = (argumentText || "").trim();
+  if (!text || /^(ヘルプ|help|\?|？)$/i.test(text)) return helpCard();
+
+  const spaceIdx = text.search(/\s/);
+  const head = (spaceIdx === -1 ? text : text.slice(0, spaceIdx)).toLowerCase();
+  const rest = spaceIdx === -1 ? "" : text.slice(spaceIdx + 1).trim();
+
+  if (["商談", "案件", "deal"].includes(head)) return searchDeals(sender.tenantId, rest);
+  if (["今日", "today"].includes(head)) return todaySummary(sender.tenantId, sender.userId);
+  if (["タスク", "task", "todo"].includes(head)) return createTask(sender.tenantId, sender.userId, rest);
+
+  // 未知コマンド: ヘルプを返す
+  return helpCard();
+}
