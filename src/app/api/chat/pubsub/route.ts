@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { verifyPubsubPush } from "@/lib/chat/pubsub-verify";
 import { handleReactionCreated } from "@/lib/chat/reactions";
@@ -18,7 +19,34 @@ export const runtime = "nodejs";
  * Pub/Sub は at-least-once なので、成功時は必ず 200 を返して再送を止める。
  */
 export async function POST(req: Request) {
-  const verify = await verifyPubsubPush(req.headers.get("authorization"));
+  const authHeader = req.headers.get("authorization");
+  const verify = await verifyPubsubPush(authHeader);
+
+  // 【一時診断】受信のたびに検証結果とトークン概要を記録（原因特定後に除去）。
+  try {
+    let peek: Record<string, unknown> = { note: "no-bearer" };
+    if (authHeader?.startsWith("Bearer ")) {
+      const [h, p] = authHeader.slice(7).trim().split(".");
+      const dec = (s: string) =>
+        JSON.parse(Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"));
+      try {
+        const header = dec(h);
+        const claims = dec(p);
+        peek = { iss: claims.iss, aud: claims.aud, email: claims.email, kid: header.kid };
+      } catch {
+        peek = { note: "decode-failed" };
+      }
+    }
+    await getSupabaseAdmin().from("chat_event_log").insert({
+      event_id: crypto.randomUUID(),
+      event_type: "debug_pubsub_inbound",
+      space_name: null,
+      payload: { ok: verify.ok, reason: verify.reason ?? null, ...peek },
+    });
+  } catch {
+    /* 診断失敗は無視 */
+  }
+
   if (!verify.ok) {
     return NextResponse.json({ error: `unauthorized: ${verify.reason}` }, { status: 401 });
   }
