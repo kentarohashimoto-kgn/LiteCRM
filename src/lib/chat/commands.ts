@@ -8,6 +8,8 @@ import {
   parseTaskWithAI,
   resolveAssignee,
 } from "./ai-task-parse";
+import { classifyChatIntent } from "./ai-intent";
+import { closingThisMonth, needsFollowup, tomorrowMeetings } from "./insights";
 
 /**
  * メンション本文（argumentText: Botメンションを除いた文字列）を解釈し、
@@ -42,6 +44,7 @@ function helpCard(): ChatMessagePayload {
       "・<b>商談 &lt;キーワード&gt;</b> — 進行中商談を検索（例: 商談 近代美術）",
       "・<b>今日</b> — 自分の今日のAC・超過を表示",
       "・<b>タスク &lt;内容&gt;</b> — タスク起票。自然文OK（例: タスク CTCに7月末までに注文書の催促。担当橋本）",
+      "・自然文の質問もOK — 「<b>明日の商談は？</b>」「<b>今月成約できそうな案件は？</b>」「<b>催促すべき案件は？</b>」",
       "・<b>ヘルプ</b> — この案内",
     ],
     buttonText: "アプリを開く",
@@ -225,6 +228,15 @@ export async function executeChatCommand(
   if (["商談", "案件", "deal"].includes(head)) return searchDeals(sender.tenantId, rest);
   if (["今日", "today"].includes(head)) return todaySummary(sender.tenantId, sender.userId);
   if (["タスク", "task", "todo"].includes(head)) return createTask(sender.tenantId, sender.userId, rest);
+
+  // 固定コマンドに当たらない自由文: AIで意図分類（読み取り専用クエリのみ）。
+  const classified = await classifyChatIntent(text);
+  if (classified) {
+    const { intent, scope } = classified;
+    if (intent === "tomorrow_meetings") return tomorrowMeetings(sender.tenantId, sender.userId, scope);
+    if (intent === "closing_this_month") return closingThisMonth(sender.tenantId, sender.userId, scope);
+    if (intent === "needs_followup") return needsFollowup(sender.tenantId, sender.userId, scope);
+  }
 
   // 未知コマンド: ヘルプを返す
   return helpCard();
