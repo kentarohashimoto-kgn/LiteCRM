@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import crypto from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { verifyChatRequest } from "@/lib/chat/verify";
 import { resolveAndUpsertSender, type ChatSender } from "@/lib/chat/identities";
@@ -9,21 +8,6 @@ import { cardMessage, textMessage } from "@/lib/chat/cards";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs"; // crypto(JWT検証) を使うため
 
-/** 【一時診断】署名検証せずに JWT の iss/aud/kid を覗く（原因切り分け用）。 */
-function peekTokenClaims(authHeader: string | null): Record<string, unknown> {
-  try {
-    if (!authHeader?.startsWith("Bearer ")) return { note: "no-bearer" };
-    const [h, p] = authHeader.slice(7).trim().split(".");
-    const dec = (s: string) =>
-      JSON.parse(Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"));
-    const header = dec(h);
-    const claims = dec(p);
-    return { iss: claims.iss, aud: claims.aud, kid: header.kid, alg: header.alg };
-  } catch (e) {
-    return { note: "decode-failed", err: (e as Error).message };
-  }
-}
-
 /**
  * P2: Google Chat の Bot インタラクションイベント受信（HTTP endpoint）。
  * @メンション / DM のメッセージ、スペース参加/退出を処理する。
@@ -32,23 +16,7 @@ function peekTokenClaims(authHeader: string | null): Record<string, unknown> {
  * 返信: 200 応答の body に Message(カード) を載せると同期返信になる。
  */
 export async function POST(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  const verify = await verifyChatRequest(authHeader);
-
-  // 【一時診断】受信のたびに検証結果と生クレームを記録（後で除去）。
-  try {
-    await getSupabaseAdmin()
-      .from("chat_event_log")
-      .insert({
-        event_id: crypto.randomUUID(),
-        event_type: "debug_inbound",
-        space_name: null,
-        payload: { ok: verify.ok, reason: verify.reason ?? null, ...peekTokenClaims(authHeader) },
-      });
-  } catch {
-    /* 診断失敗は無視 */
-  }
-
+  const verify = await verifyChatRequest(req.headers.get("authorization"));
   if (!verify.ok) {
     return NextResponse.json({ error: `unauthorized: ${verify.reason}` }, { status: 401 });
   }
