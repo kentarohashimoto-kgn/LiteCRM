@@ -42,7 +42,7 @@ export async function generateMeetingSummaryAction(input: {
   let text = "";
   try {
     const response = await client.messages.create({
-      model: "claude-opus-4-8",
+      model: "claude-sonnet-5",
       max_tokens: 8000,
       thinking: { type: "adaptive" },
       system:
