@@ -14,6 +14,8 @@ import crypto from "node:crypto";
 
 const CHAT_API_BASE = "https://chat.googleapis.com/v1";
 const CHAT_BOT_SCOPE = "https://www.googleapis.com/auth/chat.bot";
+/** P3: Workspace Events でメッセージ/リアクションを購読するスコープ（アプリ認証）。 */
+export const CHAT_EVENTS_SCOPE = "https://www.googleapis.com/auth/chat.app.messages.readonly";
 
 interface SaCredentials {
   client_email: string;
@@ -59,7 +61,7 @@ function base64url(input: Buffer | string): string {
 }
 
 /** Service Account の JWT を発行 → アクセストークンに交換（キャッシュ付き）。 */
-async function getAccessToken(scope: string = CHAT_BOT_SCOPE): Promise<string | null> {
+export async function getChatAccessToken(scope: string = CHAT_BOT_SCOPE): Promise<string | null> {
   const creds = getChatCredentials();
   if (!creds) return null;
 
@@ -104,7 +106,7 @@ async function chatApiFetch<T = unknown>(
   body?: unknown,
   scope: string = CHAT_BOT_SCOPE,
 ): Promise<T | null> {
-  const token = await getAccessToken(scope);
+  const token = await getChatAccessToken(scope);
   if (!token) return null;
   const res = await fetch(`${CHAT_API_BASE}${path}`, {
     method,
@@ -152,4 +154,9 @@ export async function setupDirectMessage(chatUserId: string): Promise<{ name: st
     space: { spaceType: "DIRECT_MESSAGE" },
     memberships: [{ member: { name: chatUserId, type: "HUMAN" } }],
   });
+}
+
+/** メッセージを取得（P3: リアクション対象メッセージの本文/カードを読む）。 */
+export async function getMessage(messageName: string): Promise<any | null> {
+  return chatApiFetch<any>("GET", `/${messageName}`);
 }
