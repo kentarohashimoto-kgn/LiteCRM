@@ -2,7 +2,12 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { cardMessage, textMessage } from "./cards";
 import type { ChatMessagePayload } from "./client";
 import type { ResolvedSender } from "./identities";
-import { listTenantMembers, parseTaskWithAI, resolveAssignee } from "./ai-task-parse";
+import {
+  listTaskProjects,
+  listTenantMembers,
+  parseTaskWithAI,
+  resolveAssignee,
+} from "./ai-task-parse";
 
 /**
  * メンション本文（argumentText: Botメンションを除いた文字列）を解釈し、
@@ -127,14 +132,22 @@ async function createTask(
     return textMessage("タスクの本文を入力してください。例）タスク CTCに7月末までに注文書の催促。担当橋本");
   }
 
-  // AI解析（ANTHROPIC_API_KEY設定時）: 自然言語の期限・担当・優先度を解釈。
-  const members = await listTenantMembers(tenantId);
-  const ai = await parseTaskWithAI(rest, members.map((m) => m.name).filter(Boolean));
+  // AI解析（ANTHROPIC_API_KEY設定時）: 自然言語の期限・担当・プロジェクト・優先度を解釈。
+  const [members, projects] = await Promise.all([
+    listTenantMembers(tenantId),
+    listTaskProjects(tenantId),
+  ]);
+  const ai = await parseTaskWithAI(
+    rest,
+    members.map((m) => m.name).filter(Boolean),
+    projects.map((p) => p.name).filter(Boolean),
+  );
 
   let title: string;
   let due: string;
   let priority: "high" | "middle" | "low" = "middle";
   let assignee: { id: string; name: string } | null = null;
+  let project: { id: string; name: string } | null = null;
   let aiUsed = false;
 
   if (ai) {
@@ -143,6 +156,7 @@ async function createTask(
     due = ai.due_date;
     priority = ai.priority;
     assignee = resolveAssignee(ai.assignee_name, members);
+    project = resolveAssignee(ai.project_name, projects);
   } else {
     // フォールバック: ルールベース（YYYY-MM-DD / 今日 / 明日 のみ認識）。
     due = jstPlusDays(1);
@@ -172,6 +186,7 @@ async function createTask(
     status: "todo",
     priority,
     origin: "chat",
+    project_id: project?.id ?? null,
   });
   if (error) return textMessage(`タスク作成に失敗しました: ${error.message}`);
 
@@ -179,10 +194,13 @@ async function createTask(
   const lines = [
     `<b>${title}</b>`,
     `期限: ${due} ／ 優先度: ${prioLabel}`,
-    `担当: ${assignee ? assignee.name : "自分"}`,
+    `担当: ${assignee ? assignee.name : "自分"}${project ? ` ／ プロジェクト: ${project.name}` : ""}`,
   ];
   if (ai?.assignee_name && !assignee) {
     lines.push(`⚠️ 「${ai.assignee_name}」に一致するメンバーが見つからず、自分に割り当てました。`);
+  }
+  if (ai?.project_name && !project) {
+    lines.push(`⚠️ 「${ai.project_name}」に一致するプロジェクトが見つかりませんでした。`);
   }
   return cardMessage({
     title: aiUsed ? "✅ タスクを起票しました（AI解釈）" : "✅ タスクを起票しました",
