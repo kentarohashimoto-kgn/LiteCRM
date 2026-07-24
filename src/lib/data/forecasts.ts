@@ -9,6 +9,7 @@ export type AmountBasis = "monthly" | "total";
 export interface ForecastRow {
   id: string;
   kind: ForecastKind;
+  opportunityId: string | null; // 紐づけた既存案件(同一行にマージ表示するため)
   title: string;
   startMonth: string | null; // YYYY-MM
   endMonth: string | null;
@@ -58,7 +59,7 @@ export function addMonths(m: string, n: number): string {
 }
 
 interface ForecastDbRow {
-  id: string; kind: string; title: string;
+  id: string; kind: string; opportunity_id: string | null; title: string;
   start_month: string | null; end_month: string | null;
   amount: number | null; amount_basis: string; probability: number | null;
   required_headcount: number | null; staffing_status: string;
@@ -73,7 +74,7 @@ export async function listDeliveryForecasts(): Promise<ForecastData> {
 
   const { data, error } = await sb
     .from("delivery_forecasts")
-    .select("id, kind, title, start_month, end_month, amount, amount_basis, probability, required_headcount, staffing_status, arrange_deadline, notes")
+    .select("id, kind, opportunity_id, title, start_month, end_month, amount, amount_basis, probability, required_headcount, staffing_status, arrange_deadline, notes")
     .eq("tenant_id", TENANT)
     .eq("status", "active")
     .order("start_month", { ascending: true });
@@ -91,6 +92,7 @@ export async function listDeliveryForecasts(): Promise<ForecastData> {
     return {
       id: r.id,
       kind: (r.kind === "new" ? "new" : "continuation") as ForecastKind,
+      opportunityId: r.opportunity_id,
       title: r.title,
       startMonth, endMonth, amount, amountBasis: basis,
       monthlyAmount, totalAmount,

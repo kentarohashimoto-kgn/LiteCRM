@@ -6,19 +6,18 @@ import { listManagedProjects, listProjectCandidates } from "@/lib/data/projects"
 import { listDeliveryForecasts } from "@/lib/data/forecasts";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { ProjectsTable, type ProjectRow } from "@/components/projects/projects-table";
-import { ProjectsCalendar, type CalendarRow } from "@/components/projects/projects-calendar";
 import { CandidatesTable, type CandidateView } from "@/components/projects/candidates-table";
-import { ForecastPanel } from "@/components/projects/forecast-panel";
+import { UnifiedTimeline, type ConfirmedRow } from "@/components/projects/unified-timeline";
 import { ProjectsViewTabs, type ProjectView } from "@/components/projects/projects-view-tabs";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsListPage({ searchParams }: { searchParams: { view?: string } }) {
   await requireProjectCtx();
+  // 旧 ?view=forecast はカレンダー(統合ビュー)に集約
   const view: ProjectView =
-    searchParams.view === "calendar" ? "calendar"
+    searchParams.view === "calendar" || searchParams.view === "forecast" ? "calendar"
     : searchParams.view === "candidates" ? "candidates"
-    : searchParams.view === "forecast" ? "forecast"
     : "list";
   const nowMonth = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" }).slice(0, 7);
 
@@ -59,7 +58,7 @@ export default async function ProjectsListPage({ searchParams }: { searchParams:
     };
   });
 
-  const calendarRows: CalendarRow[] = rows.map((r) => ({
+  const confirmedRows: ConfirmedRow[] = rows.map((r) => ({
     opportunityId: r.opportunityId,
     accountName: r.accountName,
     oppName: r.oppName,
@@ -71,9 +70,10 @@ export default async function ProjectsListPage({ searchParams }: { searchParams:
     isPast: r.isPast,
     revenue: r.computed?.roll.totals.revenue ?? 0,
     grossRate: r.computed?.roll.totals.grossRate ?? 0,
-    hasPlan: !!r.computed,
     monthly: (r.computed?.roll.months ?? []).map((m) => ({ month: m.month, revenue: m.revenue })),
   }));
+  // 見込みフォームの「紐づけ案件」選択肢(原価管理対象の案件)
+  const linkOptions = rows.map((r) => ({ id: r.opportunityId, label: `${r.accountName} / ${r.oppName}` }));
 
   const candidateViews: CandidateView[] = candidates.map((c) => ({
     opportunityId: c.opportunityId,
@@ -108,15 +108,17 @@ export default async function ProjectsListPage({ searchParams }: { searchParams:
 
       {view === "calendar" ? (
         <Section title="">
-          <ProjectsCalendar rows={calendarRows} nowMonth={nowMonth} />
+          <UnifiedTimeline
+            confirmed={confirmedRows}
+            forecasts={forecast.rows}
+            alerts={forecast.alerts}
+            nowMonth={nowMonth}
+            linkOptions={linkOptions}
+          />
         </Section>
       ) : view === "candidates" ? (
         <Section title="">
           <CandidatesTable rows={candidateViews} />
-        </Section>
-      ) : view === "forecast" ? (
-        <Section title="">
-          <ForecastPanel data={forecast} />
         </Section>
       ) : (
         <Section title="">
