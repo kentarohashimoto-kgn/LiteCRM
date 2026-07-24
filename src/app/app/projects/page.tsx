@@ -71,6 +71,8 @@ export default async function ProjectsListPage({ searchParams }: { searchParams:
     revenue: r.computed?.roll.totals.revenue ?? 0,
     grossRate: r.computed?.roll.totals.grossRate ?? 0,
     monthly: (r.computed?.roll.months ?? []).map((m) => ({ month: m.month, revenue: m.revenue })),
+    leadAssignmentId: r.leadAssignmentId,
+    assignees: r.assignees,
   }));
   // 見込みフォームの「紐づけ案件」選択肢(原価管理対象の案件)
   const linkOptions = rows.map((r) => ({ id: r.opportunityId, label: `${r.accountName} / ${r.oppName}` }));
