@@ -3,21 +3,27 @@ import { FolderKanban } from "lucide-react";
 import { requireProjectCtx } from "@/lib/session";
 import { getMembersLite } from "@/lib/data/workspace";
 import { listManagedProjects, listProjectCandidates } from "@/lib/data/projects";
+import { listDeliveryForecasts } from "@/lib/data/forecasts";
 import { PageHeader, Section } from "@/components/ui/primitives";
 import { ProjectsTable, type ProjectRow } from "@/components/projects/projects-table";
 import { ProjectsCalendar, type CalendarRow } from "@/components/projects/projects-calendar";
 import { CandidatesTable, type CandidateView } from "@/components/projects/candidates-table";
+import { ForecastPanel } from "@/components/projects/forecast-panel";
 import { ProjectsViewTabs, type ProjectView } from "@/components/projects/projects-view-tabs";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsListPage({ searchParams }: { searchParams: { view?: string } }) {
   await requireProjectCtx();
-  const view: ProjectView = searchParams.view === "calendar" ? "calendar" : searchParams.view === "candidates" ? "candidates" : "list";
+  const view: ProjectView =
+    searchParams.view === "calendar" ? "calendar"
+    : searchParams.view === "candidates" ? "candidates"
+    : searchParams.view === "forecast" ? "forecast"
+    : "list";
   const nowMonth = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" }).slice(0, 7);
 
   // 一覧に必要なのは担当者名だけなので、重いworkspace RPCではなく軽量なメンバー一覧を使う
-  const [rows, candidates, members] = await Promise.all([listManagedProjects(), listProjectCandidates(), getMembersLite()]);
+  const [rows, candidates, forecast, members] = await Promise.all([listManagedProjects(), listProjectCandidates(), listDeliveryForecasts(), getMembersLite()]);
   const nameById = new Map(members.map((m) => [m.user.id, m.user.name]));
   const ownerName = (id: string | null) => (id ? nameById.get(id) ?? "—" : "—");
 
@@ -98,7 +104,7 @@ export default async function ProjectsListPage({ searchParams }: { searchParams:
         }
       />
 
-      <ProjectsViewTabs view={view} candidateCount={wonCandidates} />
+      <ProjectsViewTabs view={view} candidateCount={wonCandidates} forecastAlertCount={forecast.alerts.actionItems.length} />
 
       {view === "calendar" ? (
         <Section title="">
@@ -107,6 +113,10 @@ export default async function ProjectsListPage({ searchParams }: { searchParams:
       ) : view === "candidates" ? (
         <Section title="">
           <CandidatesTable rows={candidateViews} />
+        </Section>
+      ) : view === "forecast" ? (
+        <Section title="">
+          <ForecastPanel data={forecast} />
         </Section>
       ) : (
         <Section title="">
