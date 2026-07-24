@@ -227,7 +227,9 @@ export async function executeChatCommand(
 
   if (["商談", "案件", "deal"].includes(head)) return searchDeals(sender.tenantId, rest);
   if (["今日", "today"].includes(head)) return todaySummary(sender.tenantId, sender.userId);
-  if (["タスク", "task", "todo"].includes(head)) return createTask(sender.tenantId, sender.userId, rest);
+  if (["task", "todo"].includes(head) || /^タスク(追加|登録|作成|起票)?$/.test(head)) {
+    return createTask(sender.tenantId, sender.userId, rest);
+  }
 
   // 固定コマンドに当たらない自由文: AIで意図分類（読み取り専用クエリのみ）。
   // APIキー未設定なら分類もメンバー取得も行わず即ヘルプへ。
@@ -259,6 +261,10 @@ export async function executeChatCommand(
     }
     if (classified.intent === "needs_followup") {
       return needsFollowup(sender.tenantId, { filter });
+    }
+    if (classified.intent === "create_task") {
+      // キーワード無しのタスク指示（断片語の羅列等）。全文をAI解析に渡す。
+      return createTask(sender.tenantId, sender.userId, text);
     }
   }
 
