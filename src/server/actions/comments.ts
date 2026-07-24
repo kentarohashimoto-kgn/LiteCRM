@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { notifyCommentToChat } from "@/lib/chat/notify-comment";
 
 export interface OppComment {
   id: string;
@@ -33,21 +34,22 @@ export async function addOppCommentAction(input: {
   });
   if (error) return { ok: false, error: error.message };
 
-  // メンション通知: アプリ内ベル(A-1)＋Slack(設定時)。失敗しても投稿は成立させる
-  if (mentions.length > 0) {
-    try {
-      const [{ data: opp }, { data: profs }] = await Promise.all([
-        sb.from("opportunities").select("name, accounts(name)").eq("id", input.opportunityId).maybeSingle(),
-        sb.from("profiles").select("id, display_name, email").in("id", [...mentions, ctx.userId]),
-      ]);
-      const nameOf = new Map((profs ?? []).map((p) => [p.id as string, (p.display_name as string) || (p.email as string) || "—"]));
-      const oppRow = opp as { name?: string; accounts?: { name?: string } | null } | null;
-      const oppLabel = [oppRow?.accounts?.name, oppRow?.name].filter(Boolean).join("｜") || "案件";
-      const authorName = nameOf.get(ctx.userId) ?? ctx.email;
-      const href = `/app/opportunities/${input.opportunityId}`;
+  // 通知: アプリ内ベル(A-1)＋Slack(設定時)＋Google Chat。失敗しても投稿は成立させる
+  try {
+    const [{ data: opp }, { data: profs }] = await Promise.all([
+      sb.from("opportunities").select("name, accounts(name)").eq("id", input.opportunityId).maybeSingle(),
+      sb.from("profiles").select("id, display_name, email").in("id", [...mentions, ctx.userId]),
+    ]);
+    const nameOf = new Map((profs ?? []).map((p) => [p.id as string, (p.display_name as string) || (p.email as string) || "—"]));
+    const oppRow = opp as { name?: string; accounts?: { name?: string } | null } | null;
+    const oppLabel = [oppRow?.accounts?.name, oppRow?.name].filter(Boolean).join("｜") || "案件";
+    const authorName = nameOf.get(ctx.userId) ?? ctx.email;
+    const href = `/app/opportunities/${input.opportunityId}`;
+    const url = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://lite-crm-tau.vercel.app"}${href}`;
+    const targets = mentions.filter((m) => m !== ctx.userId);
 
+    if (mentions.length > 0) {
       // アプリ内通知(自分宛は除外)
-      const targets = mentions.filter((m) => m !== ctx.userId);
       if (targets.length > 0) {
         await sb.from("notifications").insert(
           targets.map((userId) => ({
@@ -63,7 +65,6 @@ export async function addOppCommentAction(input: {
 
       const webhook = process.env.SLACK_WEBHOOK_URL;
       if (webhook) {
-        const url = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://lite-crm-tau.vercel.app"}${href}`;
         const to = mentions.map((m) => nameOf.get(m) ?? "—").join(" ");
         const text = `:speech_balloon: *${authorName}* さんが *${to}* さんをメンションしました\n<${url}|${oppLabel}>\n> ${body.slice(0, 300)}`;
         await fetch(webhook, {
@@ -72,9 +73,19 @@ export async function addOppCommentAction(input: {
           body: JSON.stringify({ text }),
         });
       }
-    } catch {
-      /* 通知失敗は無視 */
     }
+
+    // Google Chat: メンションあり→本人へDM / なし→コメントフィードSpaceへ配信
+    await notifyCommentToChat({
+      tenantId: ctx.tenantId,
+      authorName,
+      oppLabel,
+      body,
+      url,
+      mentionTargets: targets,
+    });
+  } catch {
+    /* 通知失敗は無視 */
   }
 
   revalidatePath(`/app/opportunities/${input.opportunityId}`);
