@@ -2,8 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, TriangleAlert, Users, TrendingUp, X, CalendarRange } from "lucide-react";
+import { Plus, Pencil, Trash2, TriangleAlert, Users, TrendingUp, X, CalendarRange, UserRound } from "lucide-react";
 import { saveDeliveryForecastAction, deleteDeliveryForecastAction } from "@/server/actions/forecasts";
+import { setProjectLeadAction } from "@/server/actions/projects";
 import type { ForecastAlerts, ForecastRow } from "@/lib/data/forecasts";
 
 /** 確定(原価管理対象)案件の行データ。page.tsx から渡す。 */
@@ -20,6 +21,8 @@ export interface ConfirmedRow {
   revenue: number;
   grossRate: number;
   monthly: { month: string; revenue: number }[];
+  leadAssignmentId: string | null; // 主担当(責任者)に指名したアサイン
+  assignees: { id: string; label: string; kind: string }[]; // 指名の選択肢(有効なアサイン)
 }
 
 export interface LinkOption { id: string; label: string }
@@ -111,6 +114,12 @@ export function UnifiedTimeline({
     return monthsBetween(start, end);
   }, [groups, nowMonth]);
 
+  // 終了以外(契約中/開始前)で責任者が未指名の案件数 → 「誰が見ているか」不安な案件
+  const noLeadCount = useMemo(
+    () => confirmed.filter((c) => !c.isPast && !c.leadAssignmentId).length,
+    [confirmed]
+  );
+
   // 月次フッタ: 確定売上 / 見込み(加重) / 必要人員(うち要手配)
   const footer = useMemo(() => {
     const map = new Map(win.map((m) => [m, { confirmed: 0, weighted: 0, required: 0, shortage: 0 }]));
@@ -165,13 +174,18 @@ export function UnifiedTimeline({
         </div>
       )}
 
-      {/* 凡例 + 追加 */}
+      {/* 凡例 + 責任者アラート + 追加 */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 text-[11px] text-ink/55 flex-wrap">
           <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-2.5 rounded-sm bg-teal-primary" />契約中</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-2.5 rounded-sm bg-ink/35" />終了</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-2.5 rounded-sm bg-teal-primary/45" />開始前(確定)</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-2.5 rounded-sm border border-dashed border-ink/40 bg-emerald-500/70" />見込み(色=確度: 緑≥70/黄40-69/赤&lt;40)</span>
+          {noLeadCount > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-bold">
+              <TriangleAlert size={11} /> 責任者未指名 {noLeadCount}件
+            </span>
+          )}
         </div>
         <button type="button" onClick={() => setEdit("new")} className="inline-flex items-center gap-1 rounded-lg bg-teal-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-deep shrink-0">
           <Plus size={14} /> 見込みを追加
@@ -228,6 +242,8 @@ export function UnifiedTimeline({
                           <div className="font-medium text-ink/90 text-sm truncate">{g.forecasts[0]?.title}</div>
                         </div>
                       )}
+                      {/* 主担当(責任者): 名前を表示、その場で指名も可能 */}
+                      {c && <LeadBadge row={c} />}
                       {/* 紐づく見込みのバッジ＋編集 */}
                       {g.forecasts.map((f) => (
                         <div key={f.id} className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -312,6 +328,61 @@ function FooterRow({ label, win, nowMonth, render }: { label: string; win: strin
         <div key={m} className={`shrink-0 text-center py-1.5 border-l border-black/[0.03] ${m === nowMonth ? "bg-teal-light/30" : ""}`} style={{ width: COL }}>{render(m)}</div>
       ))}
     </div>
+  );
+}
+
+/**
+ * 主担当(責任者)の表示＋インライン指名。
+ * 指名済み: 名前をティールで表示(クリックで変更モードへ)。
+ * 未指名: アンバーの「責任者未指名」表示(終了案件はグレー)。選択で即保存。
+ */
+function LeadBadge({ row }: { row: ConfirmedRow }) {
+  const [editing, setEditing] = useState(false);
+  const lead = row.leadAssignmentId ? row.assignees.find((a) => a.id === row.leadAssignmentId) ?? null : null;
+  const KINDLBL: Record<string, string> = { external: "外注", internal: "社員" };
+
+  if (!editing) {
+    if (lead) {
+      return (
+        <button type="button" onClick={() => setEditing(true)} className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-teal-deep font-medium hover:underline" title="クリックで担当を変更">
+          <UserRound size={11} /> {lead.label}（{KINDLBL[lead.kind] ?? lead.kind}）
+        </button>
+      );
+    }
+    if (row.assignees.length === 0) {
+      return (
+        <Link href={`/app/projects/${row.opportunityId}`} className={`mt-0.5 inline-flex items-center gap-1 text-[11px] ${row.isPast ? "text-ink/30" : "text-amber-600 font-medium"} hover:underline`} title="アサインを登録すると責任者を指名できます">
+          <TriangleAlert size={11} /> アサイン未登録
+        </Link>
+      );
+    }
+    return (
+      <button type="button" onClick={() => setEditing(true)} className={`mt-0.5 inline-flex items-center gap-1 text-[11px] ${row.isPast ? "text-ink/30" : "text-amber-600 font-medium"} hover:underline`} title="クリックで責任者を指名">
+        <TriangleAlert size={11} /> 責任者未指名
+      </button>
+    );
+  }
+
+  return (
+    <form action={setProjectLeadAction} className="mt-0.5">
+      <input type="hidden" name="opportunity_id" value={row.opportunityId} />
+      <div className="inline-flex items-center gap-1">
+        <UserRound size={11} className="text-ink/40" />
+        <select
+          name="lead_assignment_id"
+          defaultValue={row.leadAssignmentId ?? ""}
+          autoFocus
+          onChange={(e) => e.currentTarget.form?.requestSubmit()}
+          onBlur={() => setEditing(false)}
+          className="text-[11px] rounded-md border border-black/10 bg-white px-1 py-0.5 max-w-[150px]"
+        >
+          <option value="">未指名</option>
+          {row.assignees.map((a) => (
+            <option key={a.id} value={a.id}>{a.label}（{KINDLBL[a.kind] ?? a.kind}）</option>
+          ))}
+        </select>
+      </div>
+    </form>
   );
 }
 
