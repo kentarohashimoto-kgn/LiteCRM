@@ -20,16 +20,29 @@ function monthDate(v: FormDataEntryValue | null): string | null {
   return s ? `${s.slice(0, 7)}-01` : null;
 }
 
-/** デリバリー見込みを作成/更新する。 */
+/** デリバリー見込みを作成/更新する。既存案件に紐づけると同一行にマージ表示される。 */
 export async function saveDeliveryForecastAction(formData: FormData) {
   const ctx = await requireProjectCtx();
   const sb = getSupabaseServer();
   const id = str(formData.get("id"));
 
+  // 紐づけ案件(任意)。指定時は顧客も案件から引き継ぐ
+  const oppId = str(formData.get("opportunity_id"));
+  let accountId: string | null = null;
+  let oppName: string | null = null;
+  if (oppId) {
+    const { data } = await sb.from("opportunities").select("account_id, name").eq("id", oppId).maybeSingle();
+    accountId = (data as { account_id: string | null; name: string } | null)?.account_id ?? null;
+    oppName = (data as { name: string } | null)?.name ?? null;
+  }
+
   const prob = num(formData.get("probability"));
   const patch = {
     kind: str(formData.get("kind")) === "new" ? "new" : "continuation",
-    title: str(formData.get("title")) ?? "見込み",
+    opportunity_id: oppId,
+    account_id: accountId,
+    // タイトル未入力で案件に紐づけた場合は「案件名（継続）」を自動採用
+    title: str(formData.get("title")) ?? (oppName ? `${oppName}（継続）` : "見込み"),
     start_month: monthDate(formData.get("start_month")),
     end_month: monthDate(formData.get("end_month")),
     amount: num(formData.get("amount")),
