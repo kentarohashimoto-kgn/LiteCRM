@@ -1,4 +1,5 @@
 import { getExhibitionBreakdown, getExhibitionDealRoi } from "@/lib/data/exhibition-analysis";
+import { MoneyInput } from "@/components/ui/money-input";
 import { saveExhibitionEventAction, saveDealDetailCostAction } from "@/server/actions";
 import { PageHeader, Card, Section } from "@/components/ui/primitives";
 import { SubTabs } from "@/components/ui/sub-tabs";
@@ -117,7 +118,7 @@ export default async function ExhibitionRoiPage() {
                   <td className="td text-right">
                     <form action={saveDealDetailCostAction} className="flex items-center gap-1 justify-end">
                       <input type="hidden" name="detail" value={r.detail} />
-                      <input name="cost" type="number" defaultValue={r.cost || ""} placeholder="原価" className="input text-xs w-24 py-0.5 text-right" />
+                      <MoneyInput name="cost" defaultValue={r.cost || ""} placeholder="原価" className="input text-xs w-24 py-0.5 text-right" />
                       <button className="btn-ghost text-[11px] py-0.5 px-2">保存</button>
                     </form>
                   </td>
@@ -165,7 +166,7 @@ export default async function ExhibitionRoiPage() {
                       <input name="label" defaultValue={r.label ?? ""} placeholder="展示会名" className="input text-xs col-span-2" />
                       <input name="organizer" defaultValue={r.organizer ?? ""} placeholder="主催会社" className="input text-xs" />
                       <input name="theme" defaultValue={r.theme ?? ""} placeholder="テーマ(例:AI/DX/総務)" className="input text-xs" />
-                      <input name="cost" type="number" defaultValue={r.cost ?? ""} placeholder="出展費用(円)" className="input text-xs col-span-2" />
+                      <MoneyInput name="cost" defaultValue={r.cost ?? ""} placeholder="出展費用(円)" className="input text-xs col-span-2" />
                       <button className="btn-primary text-xs col-span-2">保存</button>
                     </form>
                   </details>

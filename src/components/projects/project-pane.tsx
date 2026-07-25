@@ -26,7 +26,12 @@ export function ProjectPane({ oppId, backHref, children }: { oppId: string; back
   const close = () => {
     setShown(false);
     const target = backHref ?? sessionStorage.getItem(STORE_KEY) ?? "/app/projects";
-    setTimeout(() => router.push(target), 180);
+    setTimeout(() => {
+      router.push(target);
+      // ルーターキャッシュに残ったインターセプトルートの状態をリセットする。
+      // これが無いと、同じ案件をもう一度クリックしてもパネルが開かない。
+      router.refresh();
+    }, 180);
   };
 
   useEffect(() => {

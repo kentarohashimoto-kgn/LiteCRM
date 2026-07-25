@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MoneyInput } from "@/components/ui/money-input";
 import { getWorkspaceLite } from "@/lib/data/workspace";
 import { getLeadSources, getProducts, listMembers } from "@/lib/data/select";
 import { CATEGORIES, DEAL_PHASES, YOMI_OPTIONS } from "@/lib/constants";
@@ -61,7 +62,7 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
           </div>
           <div>
             <label className="label">見込み金額(円)</label>
-            <input name="amount" type="number" className="input" placeholder="1500000" />
+            <MoneyInput name="amount" placeholder="1,500,000" className="input" />
           </div>
         </div>
         <p className="text-[11px] text-ink/40">※ ステージ・予測区分はヨミから自動設定されます。</p>

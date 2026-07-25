@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import { MoneyInput } from "@/components/ui/money-input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BarChart3, Trophy, Layers, PencilLine, Search, Repeat } from "lucide-react";
@@ -437,7 +438,7 @@ function InputRowForm({ row }: { row: InputRow }) {
       <td className="td">
         <form action={onSubmit} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="id" value={row.id} />
-          <input name="amount" type="number" defaultValue={row.amount} className="w-28 rounded-lg border border-black/10 bg-white px-2 py-1 text-xs text-right outline-none focus:border-teal-primary" />
+          <MoneyInput name="amount" defaultValue={row.amount} placeholder="" className="w-28 rounded-lg border border-black/10 bg-white px-2 py-1 text-xs text-right outline-none focus:border-teal-primary" />
           <input name="expected_close_date" type="date" defaultValue={row.expectedClose ?? ""} className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs outline-none focus:border-teal-primary" />
           <select name="yomi" defaultValue={row.yomi} className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs outline-none focus:border-teal-primary">
             <option value="">—</option>

@@ -1,4 +1,5 @@
 import { getWorkspaceLite } from "@/lib/data/workspace";
+import { MoneyInput } from "@/components/ui/money-input";
 import { getAccount } from "@/lib/data/select";
 import { listProjectProfitReviews } from "@/lib/data/exec";
 import { saveProjectReviewAction } from "@/server/actions";
@@ -22,8 +23,8 @@ export default async function ExecProjectsPage() {
           <select name="customer_id" className="input"><option value="">顧客</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
           <input name="project_name" placeholder="案件名" className="input md:col-span-2" />
           <input name="contract_amount" type="number" placeholder="契約金額" className="input" />
-          <input name="planned_cost" type="number" placeholder="予定原価" className="input" />
-          <input name="actual_cost" type="number" placeholder="実績原価" className="input" />
+          <MoneyInput name="planned_cost" placeholder="予定原価" className="input" />
+          <MoneyInput name="actual_cost" placeholder="実績原価" className="input" />
           <input name="forecast_cost" type="number" placeholder="着地見込み原価" className="input" />
           <input name="quality_risk" placeholder="品質/納期リスク(あり等)" className="input" />
           <select name="continuation_status" defaultValue="" className="input"><option value="">継続状況</option>{CONTINUATION_STATUS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}</select>
@@ -59,8 +60,8 @@ export default async function ExecProjectsPage() {
                 <input type="hidden" name="customer_id" value={r.customer_id ?? ""} />
                 <input type="hidden" name="project_name" value={r.project_name ?? ""} />
                 <div><label className="label">契約金額</label><input name="contract_amount" type="number" defaultValue={r.contract_amount} className="input text-sm" /></div>
-                <div><label className="label">予定原価</label><input name="planned_cost" type="number" defaultValue={r.planned_cost} className="input text-sm" /></div>
-                <div><label className="label">実績原価</label><input name="actual_cost" type="number" defaultValue={r.actual_cost} className="input text-sm" /></div>
+                <div><label className="label">予定原価</label><MoneyInput name="planned_cost" defaultValue={r.planned_cost} placeholder="" className="input text-sm" /></div>
+                <div><label className="label">実績原価</label><MoneyInput name="actual_cost" defaultValue={r.actual_cost} placeholder="" className="input text-sm" /></div>
                 <div><label className="label">着地見込原価</label><input name="forecast_cost" type="number" defaultValue={r.forecast_cost} className="input text-sm" /></div>
                 <div><label className="label">品質/納期リスク</label><input name="quality_risk" defaultValue={r.quality_risk ?? ""} className="input text-sm" /></div>
                 <div><label className="label">継続状況</label><select name="continuation_status" defaultValue={r.continuation_status ?? ""} className="input text-sm"><option value="">—</option>{CONTINUATION_STATUS.map((c) => <option key={c.key} value={c.key}>{CONTINUATION_LABEL[c.key]}</option>)}</select></div>
