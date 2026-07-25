@@ -24,6 +24,8 @@ import {
   LIMITS,
   addDays,
   autoCollapse,
+  mergeCrmAndCalendar,
+  sourceLabel,
   buildWeeklyMindmap,
   dayLabel,
   detectOverlaps,
@@ -639,5 +641,153 @@ describe("巨大マップの抑制", () => {
     expect(out.collapsed).toBe(false);
     expect(out.children![0].collapsed).toBe(true);
     expect(out.children![1].collapsed).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* CRM ⇔ カレンダーの突合                                              */
+/* ------------------------------------------------------------------ */
+
+describe("mergeCrmAndCalendar", () => {
+  // 実データで起きた重複: 同じ商談がCRMとカレンダーで別タイトルで二重に出ていた
+  const crmAppt = ev({
+    id: "crm1",
+    date: WEEK,
+    title: "初回商談（アポ）",
+    startAt: "2026-07-27T05:00:00Z", // JST 14:00
+    accountName: "ブリックイン福井株式会社",
+    opportunityId: "opp1",
+    source: "crm",
+  });
+  const calAppt = ev({
+    id: "cal1",
+    date: WEEK,
+    title: "㈱カトルセ橋本｜予約スケジュール (斉藤純)",
+    startAt: "2026-07-27T05:00:00Z",
+    source: "calendar",
+  });
+
+  it("同じ時刻の予定を1件に統合する", () => {
+    const merged = mergeCrmAndCalendar([crmAppt], [calAppt]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].title).toBe("初回商談（アポ）"); // CRM側(顧客名つき)を採用
+    expect(merged[0].accountName).toBe("ブリックイン福井株式会社");
+    expect(merged[0].inCrm).toBe(true);
+    expect(merged[0].inCalendar).toBe(true);
+    expect(merged[0].calendarTitle).toContain("斉藤純"); // カレンダー側は併記で残す
+  });
+
+  it("多少の時刻ズレ(許容範囲内)でも統合する", () => {
+    const shifted = { ...calAppt, startAt: "2026-07-27T05:15:00Z" }; // 15分ズレ
+    expect(mergeCrmAndCalendar([crmAppt], [shifted])).toHaveLength(1);
+  });
+
+  it("許容範囲を超えて離れていれば別の予定として扱う", () => {
+    const far = { ...calAppt, id: "cal2", startAt: "2026-07-27T08:00:00Z" }; // 3時間差
+    const merged = mergeCrmAndCalendar([crmAppt], [far]);
+    expect(merged).toHaveLength(2);
+  });
+
+  it("案件IDが一致すれば時刻が離れていても統合する", () => {
+    const byOpp = { ...calAppt, id: "cal3", startAt: "2026-07-27T09:00:00Z", opportunityId: "opp1" };
+    expect(mergeCrmAndCalendar([crmAppt], [byOpp])).toHaveLength(1);
+  });
+
+  it("1つのCRM予定が2つのカレンダー予定を消費しない", () => {
+    const a = { ...calAppt, id: "calA" };
+    const b = { ...calAppt, id: "calB", startAt: "2026-07-27T05:10:00Z" };
+    const merged = mergeCrmAndCalendar([crmAppt], [a, b]);
+    expect(merged).toHaveLength(2); // 1件統合 + 余った1件
+    expect(merged.filter((e) => e.inCrm && e.inCalendar)).toHaveLength(1);
+  });
+
+  it("片方にしかない予定は出どころが分かる", () => {
+    const merged = mergeCrmAndCalendar([crmAppt], []);
+    expect(merged[0]).toMatchObject({ inCrm: true, inCalendar: false });
+    expect(sourceLabel(merged[0])).toBe("CRMのみ（カレンダー未登録）");
+
+    const merged2 = mergeCrmAndCalendar([], [calAppt]);
+    expect(merged2[0]).toMatchObject({ inCrm: false, inCalendar: true });
+    expect(sourceLabel(merged2[0])).toBe("カレンダーのみ");
+
+    expect(sourceLabel(mergeCrmAndCalendar([crmAppt], [calAppt])[0])).toBe("CRM＋カレンダー");
+  });
+
+  it("時刻順に並ぶ", () => {
+    const later = ev({ id: "c2", date: WEEK, title: "夕方", startAt: "2026-07-27T09:00:00Z", source: "calendar" });
+    const earlier = ev({ id: "c3", date: WEEK, title: "朝", startAt: "2026-07-27T00:00:00Z", source: "calendar" });
+    expect(mergeCrmAndCalendar([], [later, earlier]).map((e) => e.title)).toEqual(["朝", "夕方"]);
+  });
+});
+
+describe("CRM ⇔ カレンダーの差分を枝に出す", () => {
+  const base = (over: Partial<WeeklySource>) => source({ calendarConnected: true, ...over });
+
+  it("CRMにあってカレンダーに無い商談を警告する", () => {
+    const spec = buildWeeklyMindmap(
+      base({
+        events: mergeCrmAndCalendar(
+          [ev({ id: "c1", date: WEEK, title: "初回商談", startAt: "2026-07-27T05:00:00Z", accountName: "A社", opportunityId: "o1", source: "crm" })],
+          [],
+        ),
+      }),
+    );
+    const branch = findChild(spec, (t) => t.startsWith("カレンダーに未登録の商談"));
+    expect(branch?.title).toBe("カレンダーに未登録の商談 1件");
+    expect(findChild(branch!, (t) => t.includes("A社"))).toBeTruthy();
+  });
+
+  it("カレンダーにあってCRMに無い商談を警告する", () => {
+    const spec = buildWeeklyMindmap(
+      base({
+        events: mergeCrmAndCalendar(
+          [],
+          [ev({ id: "x1", date: WEEK, title: "マルヤス機械様お打ち合わせ", startAt: "2026-07-27T05:00:00Z", source: "calendar" })],
+        ),
+      }),
+    );
+    const branch = findChild(spec, (t) => t.startsWith("CRMに未登録の商談"));
+    expect(branch?.title).toBe("CRMに未登録の商談 1件");
+  });
+
+  it("商談以外のカレンダー予定(研修・休憩)はCRM未登録として挙げない", () => {
+    const spec = buildWeeklyMindmap(
+      base({
+        events: mergeCrmAndCalendar(
+          [],
+          [
+            ev({ id: "x1", date: WEEK, title: "ランチ休憩", source: "calendar" }),
+            ev({ id: "x2", date: WEEK, title: "展示会", source: "calendar" }),
+          ],
+        ),
+      }),
+    );
+    expect(findChild(spec, (t) => t.startsWith("CRMに未登録の商談"))).toBeUndefined();
+  });
+
+  it("統合済みの予定はどちらの警告にも出ない", () => {
+    const spec = buildWeeklyMindmap(
+      base({
+        events: mergeCrmAndCalendar(
+          [ev({ id: "c1", date: WEEK, title: "初回商談", startAt: "2026-07-27T05:00:00Z", accountName: "A社", opportunityId: "o1", source: "crm" })],
+          [ev({ id: "x1", date: WEEK, title: "予約スケジュール (斉藤純)", startAt: "2026-07-27T05:00:00Z", source: "calendar" })],
+        ),
+      }),
+    );
+    expect(findChild(spec, (t) => t.startsWith("カレンダーに未登録の商談"))).toBeUndefined();
+    expect(findChild(spec, (t) => t.startsWith("CRMに未登録の商談"))).toBeUndefined();
+  });
+
+  it("カレンダー未連携のときは突合の警告を出さない(全部が未登録に見えてしまうため)", () => {
+    const spec = buildWeeklyMindmap(
+      source({
+        calendarConnected: false,
+        events: mergeCrmAndCalendar(
+          [ev({ id: "c1", date: WEEK, title: "初回商談", startAt: "2026-07-27T05:00:00Z", accountName: "A社", opportunityId: "o1", source: "crm" })],
+          [],
+        ),
+      }),
+    );
+    expect(findChild(spec, (t) => t.startsWith("カレンダーに未登録の商談"))).toBeUndefined();
   });
 });

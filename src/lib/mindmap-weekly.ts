@@ -73,6 +73,87 @@ export interface WeeklyEvent {
   stage: string | null;
   yomi: string | null;
   url: string | null;
+  /** CRM(商談・アポ)に存在するか。未指定なら source から推定。 */
+  inCrm?: boolean;
+  /** Googleカレンダーに存在するか。未指定なら source から推定。 */
+  inCalendar?: boolean;
+  /** 統合したときのカレンダー側タイトル(CRM名と違う場合に併記する) */
+  calendarTitle?: string | null;
+}
+
+/** 同一予定とみなす開始時刻のズレ(分)。 */
+export const MATCH_TOLERANCE_MIN = 30;
+
+const inCrmOf = (e: WeeklyEvent) => e.inCrm ?? e.source === "crm";
+const inCalOf = (e: WeeklyEvent) => e.inCalendar ?? e.source === "calendar";
+
+/**
+ * CRMのアポ/商談と、Googleカレンダーの予定を突き合わせて統合する。
+ *
+ * 実データでは同じ商談が
+ *   CRM      「14:00 ブリックイン福井株式会社 初回商談(アポ)」
+ *   カレンダー「14:00 ㈱カトルセ橋本｜予約スケジュール (斉藤純)」
+ * のように別タイトルで二重に出るため、時刻で突き合わせて1件にまとめる。
+ *
+ * 突合の順序:
+ *   ① 同じ案件ID(カレンダー側が顧客名でCRMに紐づいた場合)
+ *   ② 同じ日で開始時刻が MATCH_TOLERANCE_MIN 以内(近いものから貪欲に)
+ *
+ * 統合後は inCrm / inCalendar が立つので、「どちらか一方にしかない予定」を検出できる。
+ */
+export function mergeCrmAndCalendar(crmEvents: WeeklyEvent[], calEvents: WeeklyEvent[]): WeeklyEvent[] {
+  const usedCal = new Set<string>();
+  const merged: WeeklyEvent[] = [];
+
+  const startMs = (e: WeeklyEvent) => (e.startAt ? new Date(e.startAt).getTime() : NaN);
+
+  for (const crm of crmEvents) {
+    // ① 案件IDで一致
+    let partner = calEvents.find(
+      (c) => !usedCal.has(c.id) && c.date === crm.date && !!crm.opportunityId && c.opportunityId === crm.opportunityId,
+    );
+
+    // ② 同じ日・近い開始時刻(最も近いものを採用)
+    if (!partner && crm.startAt) {
+      const t = startMs(crm);
+      const candidates = calEvents
+        .filter((c) => !usedCal.has(c.id) && c.date === crm.date && c.startAt)
+        .map((c) => ({ c, diff: Math.abs(startMs(c) - t) }))
+        .filter((x) => x.diff <= MATCH_TOLERANCE_MIN * 60 * 1000)
+        .sort((a, b) => a.diff - b.diff);
+      partner = candidates[0]?.c;
+    }
+
+    if (partner) {
+      usedCal.add(partner.id);
+      merged.push({
+        ...crm,
+        inCrm: true,
+        inCalendar: true,
+        // CRM側のタイトル(顧客名つき)を主にし、カレンダー側は併記にとどめる
+        calendarTitle: partner.title !== crm.title ? partner.title : null,
+        url: crm.url ?? partner.url,
+      });
+    } else {
+      merged.push({ ...crm, inCrm: true, inCalendar: false, calendarTitle: null });
+    }
+  }
+
+  for (const cal of calEvents) {
+    if (usedCal.has(cal.id)) continue;
+    merged.push({ ...cal, inCrm: false, inCalendar: true, calendarTitle: null });
+  }
+
+  return merged.sort((a, b) => (a.date + (a.startAt ?? "99")).localeCompare(b.date + (b.startAt ?? "99")));
+}
+
+/** 予定の出どころラベル(ノードの注記に出す)。 */
+export function sourceLabel(e: WeeklyEvent): string {
+  const crm = inCrmOf(e);
+  const cal = inCalOf(e);
+  if (crm && cal) return "CRM＋カレンダー";
+  if (crm) return "CRMのみ（カレンダー未登録）";
+  return "カレンダーのみ";
 }
 
 /** 今月・来月のクロージング予定(売上ヨミ)。 */
@@ -126,6 +207,7 @@ export const LIMITS = {
   sequences: 10,
   overlaps: 10,
   prepEvents: 6,
+  mismatch: 12,
 } as const;
 
 /** この数を超える子を持つ枝は既定で折り畳む(開いた直後に全体像が見える状態にする)。 */
@@ -421,7 +503,52 @@ export function buildPrepBranch(src: WeeklySource, months: string[]): NodeSpec {
     });
   }
 
-  // ⑥ 今週の予定ごとの定型準備(ステージ・ヨミ別)
+  // ⑥ CRM ⇔ カレンダーの突合(どちらか一方にしかない予定)
+  const crmOnly = src.events.filter((e) => inCrmOf(e) && !inCalOf(e));
+  const calOnly = src.events.filter(
+    // カレンダーだけにある「商談っぽい」予定＝CRMへの登録漏れの候補。
+    // 研修・展示会・社内定例まで挙げるとノイズになるので商談分類だけに絞る。
+    (e) => !inCrmOf(e) && inCalOf(e) && classifyEvent(e) === "meeting",
+  );
+
+  if (src.calendarConnected && crmOnly.length > 0) {
+    children.push({
+      title: `カレンダーに未登録の商談 ${crmOnly.length}件`,
+      marker: "alert",
+      note: "CRMにアポがあるのにカレンダーに予定が入っていません。時間を押さえ忘れている可能性があります。",
+      children: capped(
+        crmOnly.map((e) => ({
+          title: `${dayLabelOf(e.date, src.weekStart)} ${timeLabel(e.startAt)} ${e.accountName ?? e.title}`.trim(),
+          marker: "p2" as NodeMarker,
+          ref_type: (e.opportunityId ? "opportunity" : "none") as NodeRefType,
+          ref_id: e.opportunityId,
+          ref_url: e.opportunityId ? `/app/opportunities/${e.opportunityId}` : null,
+        })),
+        LIMITS.mismatch,
+        (r) => `他${r}件`,
+      ),
+    });
+  }
+
+  if (src.calendarConnected && calOnly.length > 0) {
+    children.push({
+      title: `CRMに未登録の商談 ${calOnly.length}件`,
+      marker: "alert",
+      note: "カレンダーに商談らしき予定がありますが、CRMに案件がありません。登録漏れの可能性があります。",
+      children: capped(
+        calOnly.map((e) => ({
+          title: `${dayLabelOf(e.date, src.weekStart)} ${timeLabel(e.startAt)} ${e.title}`.trim(),
+          marker: "p2" as NodeMarker,
+          ref_type: "calendar" as NodeRefType,
+          ref_url: e.url,
+        })),
+        LIMITS.mismatch,
+        (r) => `他${r}件`,
+      ),
+    });
+  }
+
+  // ⑦ 今週の予定ごとの定型準備(ステージ・ヨミ別)
   const perEvent: NodeSpec[] = [];
   for (const e of src.events) {
     if (perEvent.length >= LIMITS.prepEvents) break;
@@ -480,7 +607,11 @@ export function buildWeeklyMindmap(input: WeeklySource): NodeSpec {
       const prep = withPrep ? prepForStage(e.stage, e.yomi) : [];
       return {
         title: head.slice(0, 200),
-        note: e.source === "calendar" ? "Googleカレンダー" : "CRM",
+        // 出どころを注記に出す。統合済みなら「CRM＋カレンダー」、
+        // 片方だけなら不足している側が分かる(カレンダー側の別名も併記)。
+        note: [sourceLabel(e), e.calendarTitle ? `カレンダー: ${e.calendarTitle}` : ""].filter(Boolean).join(" / "),
+        // CRMにしかない商談は「カレンダーに押さえ忘れ」なので目印を付ける
+        marker: src.calendarConnected && inCrmOf(e) && !inCalOf(e) ? ("flag" as NodeMarker) : undefined,
         ref_type: (e.opportunityId ? "opportunity" : "calendar") as NodeRefType,
         ref_id: e.opportunityId,
         ref_url: e.opportunityId ? `/app/opportunities/${e.opportunityId}` : e.url,

@@ -23,6 +23,7 @@ import {
 import {
   addDays,
   buildWeeklyMindmap,
+  mergeCrmAndCalendar,
   seminarTemplate,
   weekDays,
   type NodeSpec,
@@ -424,8 +425,8 @@ function matchCalendarToCrm(calEvents: WeeklyEvent[], crmEvents: WeeklyEvent[]):
   });
 }
 
-/** カレンダーとCRMで同じ予定(同日・同案件)が二重に出ないよう間引く。 */
-function dedupeEvents(events: WeeklyEvent[]): WeeklyEvent[] {
+/** CRM内での重複(同じ案件・同じ日時)を先に落とす。カレンダーとの突合は mergeCrmAndCalendar が行う。 */
+function dedupeCrmEvents(events: WeeklyEvent[]): WeeklyEvent[] {
   const out: WeeklyEvent[] = [];
   const seen = new Set<string>();
   for (const e of events) {
@@ -434,7 +435,7 @@ function dedupeEvents(events: WeeklyEvent[]): WeeklyEvent[] {
     seen.add(key);
     out.push(e);
   }
-  return out.sort((a, b) => (a.date + (a.startAt ?? "99")).localeCompare(b.date + (b.startAt ?? "99")));
+  return out;
 }
 
 /**
@@ -454,7 +455,9 @@ export async function generateWeeklyMindmapAction(formData: FormData): Promise<v
 
   const source = {
     weekStart,
-    events: dedupeEvents([...crm.events, ...calMatched]),
+    // CRMとカレンダーを突き合わせて統合(同じ商談が二重に出ないようにする)。
+    // 統合結果には inCrm / inCalendar が入り、片方にしかない予定を検出できる。
+    events: mergeCrmAndCalendar(dedupeCrmEvents(crm.events), calMatched),
     deals: crm.deals,
     tasks: crm.tasks,
     repPlan: crm.repPlan,
