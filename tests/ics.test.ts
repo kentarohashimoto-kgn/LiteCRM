@@ -4,7 +4,17 @@
  * 繰り返し予定だったため、RRULE展開・EXDATE・個別変更(RECURRENCE-ID)を重点的に見る。
  */
 import { describe, expect, it } from "vitest";
-import { expandRRule, parseIcs, parseIcsDate, parseProp, parseRRule, unfoldLines, zonedTimeToUtc } from "@/lib/ics";
+import {
+  expandRRule,
+  filterIcs,
+  parseIcs,
+  parseIcsDate,
+  parseProp,
+  parseRRule,
+  toLines,
+  unfoldLines,
+  zonedTimeToUtc,
+} from "@/lib/ics";
 
 const TZ = "Asia/Tokyo";
 
@@ -231,5 +241,88 @@ describe("parseIcs 全体", () => {
     const events = parseIcs(text, WEEK_FROM, WEEK_TO);
     expect(events).toHaveLength(1);
     expect(events[0].summary).toBe("予定");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 巨大カレンダー対策(ストリーム絞り込み)                              */
+/* ------------------------------------------------------------------ */
+
+async function* chunked(text: string, size = 64): AsyncGenerator<string> {
+  for (let i = 0; i < text.length; i += size) yield text.slice(i, i + size);
+}
+
+describe("toLines", () => {
+  it("チャンク境界をまたいでも行に分割できる", async () => {
+    const out: string[] = [];
+    for await (const l of toLines(chunked("BEGIN:VCALENDAR\r\nUID:a\r\nEND:VCALENDAR", 3))) out.push(l);
+    expect(out).toEqual(["BEGIN:VCALENDAR", "UID:a", "END:VCALENDAR"]);
+  });
+});
+
+describe("filterIcs（対象週に関係する予定だけ残す）", () => {
+  it("窓外の単発予定を落とし、窓内の予定を残す", async () => {
+    const text = ics(
+      vevent(["UID:in", "SUMMARY:今週", "DTSTART;TZID=Asia/Tokyo:20260728T140000"]),
+      vevent(["UID:old", "SUMMARY:去年", "DTSTART;TZID=Asia/Tokyo:20250728T140000"]),
+      vevent(["UID:future", "SUMMARY:来年", "DTSTART;TZID=Asia/Tokyo:20270728T140000"]),
+    );
+    const r = await filterIcs(toLines(chunked(text)), WEEK_FROM, WEEK_TO);
+    expect(r.scanned).toBe(3);
+    expect(r.kept).toBe(1);
+    expect(r.ics).toContain("今週");
+    expect(r.ics).not.toContain("去年");
+  });
+
+  it("何年も前に始まった繰り返し予定は残す", async () => {
+    const text = ics(
+      vevent(["UID:rec", "SUMMARY:週次T会", "DTSTART;TZID=Asia/Tokyo:20200106T130000", "RRULE:FREQ=WEEKLY;BYDAY=MO"]),
+    );
+    const r = await filterIcs(toLines(chunked(text)), WEEK_FROM, WEEK_TO);
+    expect(r.kept).toBe(1);
+  });
+
+  it("繰り返しの個別変更(RECURRENCE-ID)も残す", async () => {
+    const text = ics(
+      vevent(["UID:w", "SUMMARY:変更回", "RECURRENCE-ID;TZID=Asia/Tokyo:20260727T100000", "DTSTART;TZID=Asia/Tokyo:20260727T160000"]),
+    );
+    const r = await filterIcs(toLines(chunked(text)), WEEK_FROM, WEEK_TO);
+    expect(r.kept).toBe(1);
+  });
+
+  it("絞り込んだ結果はそのまま parseIcs に渡せる", async () => {
+    const text = ics(
+      vevent(["UID:a", "SUMMARY:今週の商談", "DTSTART;TZID=Asia/Tokyo:20260728T140000"]),
+      vevent(["UID:b", "SUMMARY:去年の予定", "DTSTART;TZID=Asia/Tokyo:20250728T140000"]),
+      vevent(["UID:c", "SUMMARY:ランチ休憩", "DTSTART;TZID=Asia/Tokyo:20200106T120000", "RRULE:FREQ=WEEKLY;BYDAY=MO"]),
+    );
+    const r = await filterIcs(toLines(chunked(text)), WEEK_FROM, WEEK_TO);
+    const events = parseIcs(r.ics, WEEK_FROM, WEEK_TO);
+    expect(events.map((e) => e.summary).sort()).toEqual(["ランチ休憩", "今週の商談"].sort());
+  });
+
+  it("数年ぶんの巨大カレンダーでも必要な数件だけに絞れる", async () => {
+    // 過去5年ぶん(約1,800件)の単発予定＋繰り返し1件＋今週の予定3件
+    const events: string[] = [];
+    for (let i = 0; i < 1800; i++) {
+      const d = new Date(Date.UTC(2021, 0, 1) + i * 24 * 3600 * 1000);
+      const stamp = d.toISOString().slice(0, 10).replace(/-/g, "");
+      events.push(vevent([`UID:old${i}`, `SUMMARY:過去の予定${i}`, `DTSTART;TZID=Asia/Tokyo:${stamp}T090000`]));
+    }
+    events.push(vevent(["UID:rec", "SUMMARY:定例", "DTSTART;TZID=Asia/Tokyo:20210104T130000", "RRULE:FREQ=WEEKLY;BYDAY=MO"]));
+    for (const day of [28, 29, 30]) {
+      events.push(vevent([`UID:now${day}`, `SUMMARY:今週${day}`, `DTSTART;TZID=Asia/Tokyo:202607${day}T100000`]));
+    }
+    const text = ics(...events);
+    expect(text.length).toBeGreaterThan(150_000);
+
+    const r = await filterIcs(toLines(chunked(text, 4096)), WEEK_FROM, WEEK_TO);
+    expect(r.scanned).toBe(1804);
+    expect(r.kept).toBe(4); // 繰り返し1 + 今週3
+    expect(r.ics.length).toBeLessThan(text.length / 100); // 大幅に縮む
+
+    const parsed = parseIcs(r.ics, WEEK_FROM, WEEK_TO);
+    expect(parsed.map((e) => e.summary)).toContain("定例");
+    expect(parsed.filter((e) => e.summary.startsWith("今週"))).toHaveLength(3);
   });
 });

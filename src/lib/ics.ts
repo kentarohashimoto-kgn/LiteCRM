@@ -333,6 +333,111 @@ function nthWeekdayOfMonth(y: number, mo: number, dow: number, nth: number): num
 }
 
 /* ------------------------------------------------------------------ */
+/* 巨大カレンダー対策(ストリーム絞り込み)                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 文字列チャンクの列を行に分割する(ストリーム処理用)。
+ * 実カレンダーの basic.ics は過去数年ぶんを含み数十MBになるため、
+ * 全文をメモリに載せずに扱えるようにする。
+ */
+export async function* toLines(chunks: AsyncIterable<string>): AsyncGenerator<string> {
+  let carry = "";
+  for await (const chunk of chunks) {
+    carry += chunk;
+    let nl: number;
+    while ((nl = carry.indexOf("\n")) >= 0) {
+      yield carry.slice(0, nl).replace(/\r$/, "");
+      carry = carry.slice(nl + 1);
+    }
+  }
+  if (carry) yield carry.replace(/\r$/, "");
+}
+
+/** ブロック内だけで折り返しを戻す(関連判定にDTSTARTが要るため)。 */
+function unfoldBlock(lines: string[]): string[] {
+  const out: string[] = [];
+  for (const line of lines) {
+    if ((line.startsWith(" ") || line.startsWith("\t")) && out.length > 0) out[out.length - 1] += line.slice(1);
+    else out.push(line);
+  }
+  return out;
+}
+
+/**
+ * 期間に関係しうる VEVENT だけを残した ICS を組み立てて返す。
+ *
+ * 残す条件:
+ *   - RRULE を持つ(何年も前に始まった繰り返しが今週に来ることがある)
+ *   - RECURRENCE-ID を持つ(繰り返しの個別変更)
+ *   - DTSTART が窓の前後1日以内
+ * これによりメモリは「対象週ぶん＋繰り返し予定」に収まり、
+ * カレンダーが何十MBあっても処理できる。
+ */
+export async function filterIcs(
+  lines: AsyncIterable<string>,
+  from: Date,
+  to: Date,
+  defaultTz = "Asia/Tokyo",
+): Promise<{ ics: string; kept: number; scanned: number }> {
+  const header: string[] = [];
+  const kept: string[] = [];
+  let block: string[] | null = null;
+  let scanned = 0;
+  let keptCount = 0;
+
+  const pad = 24 * 3600 * 1000;
+  const lo = from.getTime() - pad;
+  const hi = to.getTime() + pad;
+
+  for await (const line of lines) {
+    const upper = line.toUpperCase();
+    if (upper.startsWith("BEGIN:VEVENT")) {
+      block = [line];
+      continue;
+    }
+    if (block) {
+      block.push(line);
+      if (!upper.startsWith("END:VEVENT")) continue;
+
+      scanned++;
+      const unfolded = unfoldBlock(block);
+      let relevant = false;
+      let start: Date | null = null;
+      for (const l of unfolded) {
+        const u = l.toUpperCase();
+        if (u.startsWith("RRULE") || u.startsWith("RECURRENCE-ID")) {
+          relevant = true;
+          break;
+        }
+        if (u.startsWith("DTSTART")) {
+          const p = parseProp(l);
+          if (p) start = parseIcsDate(p.value, p.params, defaultTz)?.date ?? null;
+        }
+      }
+      if (!relevant && start) {
+        const t = start.getTime();
+        relevant = t >= lo && t <= hi;
+      }
+      if (relevant) {
+        kept.push(...block);
+        keptCount++;
+      }
+      block = null;
+      continue;
+    }
+    // VEVENT の外側: カレンダー既定TZだけ拾う(VTIMEZONE本体は捨ててよい)
+    if (upper.startsWith("X-WR-TIMEZONE") || upper.startsWith("X-WR-CALNAME")) header.push(line);
+  }
+
+  return {
+    ics: ["BEGIN:VCALENDAR", "VERSION:2.0", ...header, ...kept, "END:VCALENDAR"].join("\r\n"),
+    kept: keptCount,
+    scanned,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /* 本体                                                                */
 /* ------------------------------------------------------------------ */
 

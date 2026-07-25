@@ -8,15 +8,19 @@
  */
 
 import "server-only";
-import { parseIcs, type IcsEvent } from "@/lib/ics";
+import { filterIcs, parseIcs, toLines, type IcsEvent } from "@/lib/ics";
 import { validateFeedUrl } from "@/lib/calendar-feed-url";
 
 export { validateFeedUrl } from "@/lib/calendar-feed-url";
 export type { FeedUrlCheck } from "@/lib/calendar-feed-url";
 
-/** 取得サイズの上限(巨大なカレンダーでメモリを潰さない)。 */
-const MAX_BYTES = 8 * 1024 * 1024;
-const TIMEOUT_MS = 15000;
+/**
+ * 読み込みバイト数の上限(暴走防止の安全弁)。
+ * 実カレンダーの basic.ics は過去数年ぶんを含み数十MBになるため、全文はメモリに載せず
+ * ストリームで読みながら対象週に関係するVEVENTだけを拾う(filterIcs)。
+ */
+const MAX_BYTES = 64 * 1024 * 1024;
+const TIMEOUT_MS = 30000;
 
 export type FeedResult =
   | { ok: true; events: IcsEvent[] }
@@ -49,18 +53,40 @@ export async function fetchCalendarFeed(url: string, from: Date, to: Date): Prom
   }
   if (!res.ok) return { ok: false, error: `カレンダーの取得に失敗しました(${res.status})` };
 
-  const len = Number(res.headers.get("content-length") ?? 0);
-  if (len > MAX_BYTES) return { ok: false, error: "カレンダーのデータが大きすぎます" };
+  const body = res.body;
+  if (!body) return { ok: false, error: "カレンダーの取得に失敗しました(応答が空です)" };
 
-  const text = await res.text();
-  if (text.length > MAX_BYTES) return { ok: false, error: "カレンダーのデータが大きすぎます" };
-  if (!text.includes("BEGIN:VCALENDAR")) {
-    return { ok: false, error: "iCal形式のデータではありません。URLを確認してください。" };
+  // 全文をメモリに載せず、読みながら対象週に関係するVEVENTだけを拾う。
+  let bytes = 0;
+  let sawHeader = false;
+  async function* chunks(): AsyncGenerator<string> {
+    const reader = body!.getReader();
+    const decoder = new TextDecoder("utf-8");
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > MAX_BYTES) throw new Error("too_large");
+        const text = decoder.decode(value, { stream: true });
+        if (!sawHeader && text.includes("BEGIN:VCALENDAR")) sawHeader = true;
+        yield text;
+      }
+      const tail = decoder.decode();
+      if (tail) yield tail;
+    } finally {
+      await reader.cancel().catch(() => {});
+    }
   }
 
   try {
-    return { ok: true, events: parseIcs(text, from, to) };
-  } catch {
+    const filtered = await filterIcs(toLines(chunks()), from, to);
+    if (!sawHeader) return { ok: false, error: "iCal形式のデータではありません。URLを確認してください。" };
+    return { ok: true, events: parseIcs(filtered.ics, from, to) };
+  } catch (e) {
+    if (e instanceof Error && e.message === "too_large") {
+      return { ok: false, error: "カレンダーのデータが大きすぎます（64MB超）" };
+    }
     return { ok: false, error: "カレンダーの解析に失敗しました" };
   }
 }
