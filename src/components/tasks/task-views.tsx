@@ -178,7 +178,9 @@ export function TaskViews(props: Props) {
 
   // 絞り込み: 担当者 + 完了を隠すモード + サブタスク表示（プロジェクトのみ）
   const [assignee, setAssignee] = useState<string>("all");
-  const [hideDone, setHideDone] = useState(false);
+  // 完了を隠す: ボードでは既定でON。ユーザーが操作したらビューを問わずその選択を優先する。
+  const [hideDoneChoice, setHideDoneChoice] = useState<boolean | null>(null);
+  const hideDone = hideDoneChoice ?? props.view === "board";
   const [showSubs, setShowSubs] = useState(false);
 
   // 「完了」セクション（プロジェクトのみ）。完了にしたら自動でここへ移す。
@@ -371,7 +373,7 @@ export function TaskViews(props: Props) {
             </select>
           </label>
           <label className="inline-flex items-center gap-1.5 text-xs text-ink/60 cursor-pointer select-none" title="完了したタスクを非表示にします">
-            <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} className="accent-teal-primary" />
+            <input type="checkbox" checked={hideDone} onChange={(e) => setHideDoneChoice(e.target.checked)} className="accent-teal-primary" />
             完了を隠す
           </label>
           {groupMode === "section" && hasSubs && (
