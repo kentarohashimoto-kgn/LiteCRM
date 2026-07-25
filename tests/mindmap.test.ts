@@ -791,3 +791,60 @@ describe("CRM ⇔ カレンダーの差分を枝に出す", () => {
     expect(findChild(spec, (t) => t.startsWith("カレンダーに未登録の商談"))).toBeUndefined();
   });
 });
+
+describe("突合の誤爆防止（実データで見つかった罠）", () => {
+  // 7/27 のCRMアポ 13:00 稲垣工業 と、同時刻の社内定例(週次T会・AI定例会)
+  const crm13 = ev({
+    id: "crm13",
+    date: WEEK,
+    title: "初回商談（アポ）",
+    startAt: "2026-07-27T04:00:00Z", // JST 13:00
+    accountName: "稲垣工業株式会社",
+    opportunityId: "oppA",
+    source: "crm",
+  });
+  const internalA = ev({ id: "int1", date: WEEK, title: "週次T会｜①前週実績②今週以降計画③直近課題", startAt: "2026-07-27T04:00:00Z", source: "calendar" });
+  const internalB = ev({ id: "int2", date: WEEK, title: "AI　定例会", startAt: "2026-07-27T04:00:00Z", source: "calendar" });
+
+  it("同時刻でも社内定例とは統合しない", () => {
+    const merged = mergeCrmAndCalendar([crm13], [internalA, internalB]);
+    expect(merged).toHaveLength(3); // 統合されず3件のまま
+    const appt = merged.find((e) => e.opportunityId === "oppA")!;
+    expect(appt.inCalendar).toBe(false); // カレンダー未登録として扱う
+  });
+
+  it("同時刻に社内定例と予約枠が混在しても、予約枠のほうと統合する", () => {
+    const booking = ev({
+      id: "bk",
+      date: WEEK,
+      title: "㈱カトルセ橋本｜予約スケジュール (斉藤純)",
+      startAt: "2026-07-27T04:00:00Z",
+      source: "calendar",
+    });
+    const merged = mergeCrmAndCalendar([crm13], [internalA, booking, internalB]);
+    expect(merged).toHaveLength(3); // 統合1件 + 社内定例2件
+    const appt = merged.find((e) => e.opportunityId === "oppA")!;
+    expect(appt.inCalendar).toBe(true);
+    expect(appt.calendarTitle).toContain("斉藤純");
+    // 社内定例は両方そのまま残る
+    expect(merged.filter((e) => e.title.includes("定例") || e.title.includes("週次T会"))).toHaveLength(2);
+  });
+
+  it("顧客名がタイトルに入っていれば時刻がずれていても統合する", () => {
+    const named = ev({
+      id: "n1",
+      date: WEEK,
+      title: "稲垣工業株式会社　打ち合わせ",
+      startAt: "2026-07-27T07:00:00Z", // 3時間ズレ
+      source: "calendar",
+    });
+    const merged = mergeCrmAndCalendar([crm13], [named]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].inCalendar).toBe(true);
+  });
+
+  it("許容範囲を超える商談予定とは統合しない", () => {
+    const far = ev({ id: "f1", date: WEEK, title: "別件の訪問", startAt: "2026-07-27T05:00:00Z", source: "calendar" }); // 60分差
+    expect(mergeCrmAndCalendar([crm13], [far])).toHaveLength(2);
+  });
+});

@@ -81,8 +81,12 @@ export interface WeeklyEvent {
   calendarTitle?: string | null;
 }
 
-/** 同一予定とみなす開始時刻のズレ(分)。 */
-export const MATCH_TOLERANCE_MIN = 30;
+/**
+ * 同一予定とみなす開始時刻のズレ(分)。
+ * 予約システム由来の予定はCRMのアポ時刻とぴったり揃うので、広く取る必要はない。
+ * 広げるほど「たまたま同じ時間帯の別予定」を誤って統合してしまう。
+ */
+export const MATCH_TOLERANCE_MIN = 20;
 
 const inCrmOf = (e: WeeklyEvent) => e.inCrm ?? e.source === "crm";
 const inCalOf = (e: WeeklyEvent) => e.inCalendar ?? e.source === "calendar";
@@ -95,9 +99,14 @@ const inCalOf = (e: WeeklyEvent) => e.inCalendar ?? e.source === "calendar";
  *   カレンダー「14:00 ㈱カトルセ橋本｜予約スケジュール (斉藤純)」
  * のように別タイトルで二重に出るため、時刻で突き合わせて1件にまとめる。
  *
- * 突合の順序:
+ * 突合の条件(強い順):
  *   ① 同じ案件ID(カレンダー側が顧客名でCRMに紐づいた場合)
- *   ② 同じ日で開始時刻が MATCH_TOLERANCE_MIN 以内(近いものから貪欲に)
+ *   ② カレンダーのタイトルに顧客名が含まれる
+ *   ③ 商談と分類されるカレンダー予定で、開始時刻が MATCH_TOLERANCE_MIN 以内
+ *
+ * ③で「商談分類」を要求するのが重要。時刻の一致だけを条件にすると、
+ * 実データで 13:00 のCRMアポ(稲垣工業)が同時刻の社内定例(週次T会・AI定例会)と
+ * 誤って統合されてしまう。社内定例・研修・休憩は統合対象から外す。
  *
  * 統合後は inCrm / inCalendar が立つので、「どちらか一方にしかない予定」を検出できる。
  */
@@ -108,16 +117,21 @@ export function mergeCrmAndCalendar(crmEvents: WeeklyEvent[], calEvents: WeeklyE
   const startMs = (e: WeeklyEvent) => (e.startAt ? new Date(e.startAt).getTime() : NaN);
 
   for (const crm of crmEvents) {
-    // ① 案件IDで一致
-    let partner = calEvents.find(
-      (c) => !usedCal.has(c.id) && c.date === crm.date && !!crm.opportunityId && c.opportunityId === crm.opportunityId,
-    );
+    const available = calEvents.filter((c) => !usedCal.has(c.id) && c.date === crm.date);
 
-    // ② 同じ日・近い開始時刻(最も近いものを採用)
+    // ① 案件IDで一致
+    let partner = available.find((c) => !!crm.opportunityId && c.opportunityId === crm.opportunityId);
+
+    // ② タイトルに顧客名が含まれる
+    if (!partner && crm.accountName && crm.accountName.length >= 2) {
+      partner = available.find((c) => c.title.includes(crm.accountName as string));
+    }
+
+    // ③ 商談分類のカレンダー予定で、開始時刻が近い(最も近いものを採用)
     if (!partner && crm.startAt) {
       const t = startMs(crm);
-      const candidates = calEvents
-        .filter((c) => !usedCal.has(c.id) && c.date === crm.date && c.startAt)
+      const candidates = available
+        .filter((c) => c.startAt && classifyEvent(c) === "meeting")
         .map((c) => ({ c, diff: Math.abs(startMs(c) - t) }))
         .filter((x) => x.diff <= MATCH_TOLERANCE_MIN * 60 * 1000)
         .sort((a, b) => a.diff - b.diff);
