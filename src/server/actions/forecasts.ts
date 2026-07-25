@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireProjectCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
@@ -60,6 +61,49 @@ export async function saveDeliveryForecastAction(formData: FormData) {
     await sb.from("delivery_forecasts").insert({ tenant_id: ctx.tenantId, owner_user_id: ctx.userId, created_by: ctx.userId, ...patch });
   }
   revalidatePath("/app/projects");
+}
+
+/**
+ * 商談中(未受注)の案件を「見込み管理」に載せる。
+ * 案件の基礎情報(顧客・案件名・金額・確度・受注予定月)を引き継いで見込みを作成し、
+ * 案件に紐づけたままカレンダーへ。受注して対象化するとそのまま同じ行が確定に切り替わる。
+ */
+export async function startForecastFromOpportunityAction(formData: FormData) {
+  const ctx = await requireProjectCtx();
+  const sb = getSupabaseServer();
+  const oppId = str(formData.get("opportunity_id"));
+  if (!oppId) return;
+
+  // 二重登録防止: 既にこの案件の見込みがあれば作らずカレンダーへ
+  const { data: existing } = await sb
+    .from("delivery_forecasts").select("id").eq("opportunity_id", oppId).eq("status", "active").limit(1);
+  if (!existing || existing.length === 0) {
+    const { data: opp } = await sb
+      .from("opportunities")
+      .select("name, account_id, amount, probability, status, expected_close_date, expected_revenue_month")
+      .eq("id", oppId)
+      .maybeSingle();
+    if (!opp) return;
+    const o = opp as { name: string; account_id: string | null; amount: number | null; probability: number | null; status: string; expected_close_date: string | null; expected_revenue_month: string | null };
+    const start = o.expected_revenue_month ?? (o.expected_close_date ? `${o.expected_close_date.slice(0, 7)}-01` : null);
+    await sb.from("delivery_forecasts").insert({
+      tenant_id: ctx.tenantId,
+      opportunity_id: oppId,
+      account_id: o.account_id,
+      kind: o.status === "won" ? "continuation" : "new",
+      title: o.name,
+      amount: o.amount,
+      amount_basis: "total",
+      probability: Math.max(0, Math.min(100, Math.round(o.probability ?? 50))),
+      start_month: start,
+      end_month: start,
+      staffing_status: "unknown",
+      owner_user_id: ctx.userId,
+      created_by: ctx.userId,
+    });
+  }
+  revalidatePath("/app/projects");
+  redirect("/app/projects?view=calendar");
 }
 
 /** デリバリー見込みを削除する。 */

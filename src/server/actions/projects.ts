@@ -39,15 +39,40 @@ export async function enableProjectManagementAction(formData: FormData) {
   const { data: existing } = await sb.from("project_plans").select("id").eq("opportunity_id", oppId).maybeSingle();
   if (!existing) {
     const { data: opp } = await sb.from("opportunities").select("account_id").eq("id", oppId).maybeSingle();
+    // 見込み管理していた案件なら、見込みの期間を計画に引き継ぐ(受注→対象化で情報を活用)
+    const { data: fcs } = await sb
+      .from("delivery_forecasts")
+      .select("start_month, end_month")
+      .eq("opportunity_id", oppId)
+      .eq("status", "active")
+      .limit(1);
+    const fc = (fcs as { start_month: string | null; end_month: string | null }[] | null)?.[0];
     await sb.from("project_plans").insert({
       tenant_id: ctx.tenantId,
       opportunity_id: oppId,
       account_id: (opp as { account_id: string | null } | null)?.account_id ?? null,
+      start_month: fc?.start_month ?? null,
+      end_month: fc?.end_month ?? null,
       created_by: ctx.userId,
     });
   }
   revalidateProject(oppId);
   redirect(`/app/projects/${oppId}`);
+}
+
+/**
+ * フェーズ紐づけ: この案件が「◯◯案件の続き」であることを設定/解除する。
+ * 紐づいた案件群はカレンダーで1行にマージ表示される(遷移しない)。
+ */
+export async function setProjectFollowsAction(formData: FormData) {
+  await requireProjectCtx();
+  const sb = getSupabaseServer();
+  const oppId = String(formData.get("opportunity_id"));
+  if (!oppId) return;
+  const follows = str(formData.get("follows_opportunity_id")); // 空 => 解除(null)
+  if (follows === oppId) return; // 自己参照は不可
+  await sb.from("project_plans").update({ follows_opportunity_id: follows }).eq("opportunity_id", oppId);
+  revalidatePath("/app/projects");
 }
 
 /** 責任者(対応チームのリーダー)を指名/解除する。一覧のインライン選択から呼ばれる(遷移しない)。 */

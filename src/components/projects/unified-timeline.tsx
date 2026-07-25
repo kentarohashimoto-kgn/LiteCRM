@@ -2,9 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, TriangleAlert, Users, TrendingUp, X, CalendarRange, UserRound } from "lucide-react";
+import { Plus, Pencil, Trash2, TriangleAlert, Users, TrendingUp, X, CalendarRange, UserRound, Link2 } from "lucide-react";
 import { saveDeliveryForecastAction, deleteDeliveryForecastAction } from "@/server/actions/forecasts";
-import { setProjectLeadAction } from "@/server/actions/projects";
+import { setProjectLeadAction, setProjectFollowsAction } from "@/server/actions/projects";
 import type { ForecastAlerts, ForecastRow } from "@/lib/data/forecasts";
 
 /** 確定(原価管理対象)案件の行データ。page.tsx から渡す。 */
@@ -23,6 +23,7 @@ export interface ConfirmedRow {
   monthly: { month: string; revenue: number }[];
   leadAssignmentId: string | null; // 主担当(責任者)に指名したアサイン
   assignees: { id: string; label: string; kind: string }[]; // 指名の選択肢(有効なアサイン)
+  followsOpportunityId: string | null; // この案件が「続き」である元案件(前フェーズ)
 }
 
 export interface LinkOption { id: string; label: string }
@@ -61,8 +62,14 @@ const probBg = (p: number) => (p >= 70 ? "bg-emerald-500/80" : p >= 40 ? "bg-amb
 
 interface Group {
   key: string;
-  confirmed: ConfirmedRow | null;
+  confirmeds: ConfirmedRow[]; // フェーズ紐づけされた確定案件群(先頭=プライマリ: 契約中優先)
   forecasts: ForecastRow[];
+}
+
+/** グループのプライマリ(左列に出す代表): 契約中 → 開始前 → 終了、同ランクは終了月が新しい順。 */
+const phaseRank = (c: ConfirmedRow) => (c.isActive ? 0 : c.isFuture ? 1 : 2);
+function sortPhases(list: ConfirmedRow[]): ConfirmedRow[] {
+  return [...list].sort((a, b) => phaseRank(a) - phaseRank(b) || (b.endMonth ?? "").localeCompare(a.endMonth ?? ""));
 }
 
 type RangeKey = "6m" | "fy" | "all";
@@ -88,22 +95,47 @@ export function UnifiedTimeline({
   linkOptions: LinkOption[];
 }) {
   const [edit, setEdit] = useState<ForecastRow | "new" | null>(null);
+  const [phaseEdit, setPhaseEdit] = useState<ConfirmedRow | null>(null); // フェーズ紐づけモーダル
   const [range, setRange] = useState<RangeKey>("6m");
 
-  // 案件に紐づく見込みは同じグループ(行)へ、未紐づけは単独行
+  // フェーズ紐づけ(follows)チェーンを根まで辿り、同一エンゲージメントを1行にマージ。
+  // 案件に紐づく見込みも同じグループ(行)へ、未紐づけは単独行
   const groups = useMemo<Group[]>(() => {
-    const byOpp = new Map<string, Group>(confirmed.map((c) => [c.opportunityId, { key: c.opportunityId, confirmed: c, forecasts: [] }]));
+    const byId = new Map(confirmed.map((c) => [c.opportunityId, c]));
+    const rootOf = (id: string): string => {
+      let cur = id, guard = 0;
+      while (guard++ < 10) {
+        const next = byId.get(cur)?.followsOpportunityId;
+        if (!next || !byId.has(next) || next === cur) break;
+        cur = next;
+      }
+      return cur;
+    };
+    const groupByRoot = new Map<string, Group>();
+    const rootByOpp = new Map<string, string>(); // 各案件がどのグループ(根)に属すか
+    for (const c of confirmed) {
+      const root = rootOf(c.opportunityId);
+      rootByOpp.set(c.opportunityId, root);
+      const g = groupByRoot.get(root) ?? { key: root, confirmeds: [], forecasts: [] };
+      g.confirmeds.push(c);
+      groupByRoot.set(root, g);
+    }
+    for (const g of groupByRoot.values()) g.confirmeds = sortPhases(g.confirmeds);
     const standalone: Group[] = [];
     for (const f of forecasts) {
-      const g = f.opportunityId ? byOpp.get(f.opportunityId) : undefined;
+      const root = f.opportunityId ? rootByOpp.get(f.opportunityId) : undefined;
+      const g = root ? groupByRoot.get(root) : undefined;
       if (g) g.forecasts.push(f);
-      else standalone.push({ key: `f-${f.id}`, confirmed: null, forecasts: [f] });
+      else standalone.push({ key: `f-${f.id}`, confirmeds: [], forecasts: [f] });
     }
-    const all = [...byOpp.values(), ...standalone];
+    const all = [...groupByRoot.values(), ...standalone];
     // 並び: 契約中 → 見込みあり → 開始前 → 終了のみ。同ランクは終了(または見込み終了)が近い順
-    const rank = (g: Group) => (g.confirmed?.isActive ? 0 : g.forecasts.length > 0 ? 1 : g.confirmed?.isFuture ? 2 : 3);
+    const rank = (g: Group) => {
+      const p = g.confirmeds[0];
+      return p?.isActive ? 0 : g.forecasts.length > 0 ? 1 : p?.isFuture ? 2 : 3;
+    };
     const lastMonth = (g: Group) => {
-      const ends = [g.confirmed?.endMonth, ...g.forecasts.map((f) => f.endMonth)].filter((v): v is string => !!v);
+      const ends = [...g.confirmeds.map((c) => c.endMonth), ...g.forecasts.map((f) => f.endMonth)].filter((v): v is string => !!v);
       return ends.length ? ends.sort().slice(-1)[0] : "0000-00";
     };
     return all.sort((a, b) => rank(a) - rank(b) || lastMonth(b).localeCompare(lastMonth(a)));
@@ -120,9 +152,11 @@ export function UnifiedTimeline({
     // 全期間: 全データの和集合(最大36ヶ月・当月含む)
     const set = new Set<string>([nowMonth]);
     for (const g of groups) {
-      if (g.confirmed?.startMonth) set.add(g.confirmed.startMonth);
-      if (g.confirmed?.endMonth) set.add(g.confirmed.endMonth);
-      for (const c of g.confirmed?.monthly ?? []) set.add(c.month);
+      for (const c of g.confirmeds) {
+        if (c.startMonth) set.add(c.startMonth);
+        if (c.endMonth) set.add(c.endMonth);
+        for (const cell of c.monthly) set.add(cell.month);
+      }
       for (const f of g.forecasts) { if (f.startMonth) set.add(f.startMonth); if (f.endMonth) set.add(f.endMonth); }
     }
     const sorted = [...set].sort();
@@ -136,7 +170,7 @@ export function UnifiedTimeline({
   // 範囲内にバーが1本もないグループは非表示(件数だけ知らせる)
   const overlaps = (s: string | null, e: string | null) => !!s && (e ?? s)! >= winStart && s <= winEnd;
   const visible = useMemo(
-    () => (range === "all" ? groups : groups.filter((g) => overlaps(g.confirmed?.startMonth ?? null, g.confirmed?.endMonth ?? null) || g.forecasts.some((f) => overlaps(f.startMonth, f.endMonth)))),
+    () => (range === "all" ? groups : groups.filter((g) => g.confirmeds.some((c) => overlaps(c.startMonth, c.endMonth)) || g.forecasts.some((f) => overlaps(f.startMonth, f.endMonth)))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [groups, range, winStart, winEnd]
   );
@@ -258,8 +292,11 @@ export function UnifiedTimeline({
             {/* 行 */}
             <div className="divide-y divide-black/[0.04]">
               {visible.map((g) => {
-                const c = g.confirmed;
-                const revBy = new Map((c?.monthly ?? []).map((x) => [x.month, x.revenue]));
+                const c = g.confirmeds[0] ?? null; // プライマリ(代表)フェーズ: 契約中優先
+                const phases = g.confirmeds;
+                const totalRevenue = phases.reduce((s, x) => s + x.revenue, 0);
+                const confAt = (m: string) => phases.find((cc) => cc.startMonth && cc.endMonth && m >= cc.startMonth && m <= cc.endMonth) ?? null;
+                const revAt = (cc: ConfirmedRow, m: string) => cc.monthly.find((x) => x.month === m)?.revenue ?? 0;
                 const statusPill = c?.isActive
                   ? { t: "契約中", cls: "bg-teal-light text-teal-deep" }
                   : c?.isFuture
@@ -273,14 +310,20 @@ export function UnifiedTimeline({
                     <div className="sticky left-0 z-10 flex shrink-0 bg-white border-r border-black/[0.08]" style={{ width: W_FROZEN }}>
                       <div className="px-3 py-1.5 min-w-0" style={{ width: W_NAME }}>
                         {c ? (
-                          <Link href={`/app/projects/${c.opportunityId}?from=calendar`} className="block min-w-0">
-                            <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="min-w-0">
+                            <Link href={`/app/projects/${c.opportunityId}?from=calendar`} className="flex items-center gap-1.5 min-w-0">
                               <span className={`pill ${PRIO[c.priority].cls} text-[10px] font-bold shrink-0`}>{PRIO[c.priority].label}</span>
                               <span className="font-medium text-ink/90 text-sm truncate">{c.accountName}</span>
                               {statusPill && <span className={`pill ${statusPill.cls} text-[10px] shrink-0`}>{statusPill.t}</span>}
+                            </Link>
+                            <div className="flex items-center gap-1 min-w-0">
+                              <Link href={`/app/projects/${c.opportunityId}?from=calendar`} className="text-[11px] text-teal-deep truncate min-w-0 flex-1">{c.oppName}</Link>
+                              {phases.length > 1 && <span className="pill bg-indigo-50 text-indigo-600 text-[10px] font-bold shrink-0" title={phases.map((p) => p.oppName).join(" → ")}>{phases.length}フェーズ</span>}
+                              <button type="button" onClick={() => setPhaseEdit(c)} className="shrink-0 text-ink/25 hover:text-teal-deep" title="前の案件(フェーズ)と紐づけて1行にまとめる">
+                                <Link2 size={11} />
+                              </button>
                             </div>
-                            <div className="text-[11px] text-teal-deep truncate">{c.oppName}</div>
-                          </Link>
+                          </div>
                         ) : (
                           <div className="flex items-center gap-1.5 min-w-0 h-full">
                             <span className={`pill ${KIND[g.forecasts[0].kind].cls} text-[10px] font-bold shrink-0`}>{KIND[g.forecasts[0].kind].label}</span>
@@ -291,8 +334,8 @@ export function UnifiedTimeline({
                       <div className="px-2 py-1.5 text-right" style={{ width: W_AMT }}>
                         {c ? (
                           <>
-                            <div className="text-xs text-ink/75 font-medium tabular-nums">{yenShort(c.revenue)}</div>
-                            <div className="text-[10px] text-ink/40">{(c.grossRate * 100).toFixed(0)}%</div>
+                            <div className="text-xs text-ink/75 font-medium tabular-nums">{yenShort(totalRevenue)}</div>
+                            <div className="text-[10px] text-ink/40">{(c.grossRate * 100).toFixed(0)}%{phases.length > 1 ? `・${phases.length}件計` : ""}</div>
                           </>
                         ) : (
                           <div className="text-xs text-ink/60 tabular-nums">{yenShort(g.forecasts[0]?.monthlyAmount ?? 0)}<span className="text-[9px] text-ink/35">/月</span></div>
@@ -318,24 +361,24 @@ export function UnifiedTimeline({
 
                     {/* 右: タイムラインセル */}
                     {win.map((m) => {
-                      const confIn = !!c?.startMonth && !!c?.endMonth && m >= c.startMonth && m <= c.endMonth;
+                      const cc = confAt(m); // この月をカバーするフェーズ(あれば)
                       const fIns = g.forecasts.filter((f) => f.months.includes(m));
-                      const overlap = confIn && fIns.length > 0;
-                      const isConfStart = m === c?.startMonth, isConfEnd = m === c?.endMonth;
+                      const overlap = !!cc && fIns.length > 0;
+                      const isConfStart = !!cc && m === cc.startMonth, isConfEnd = !!cc && m === cc.endMonth;
                       return (
                         <div key={m} className={`shrink-0 relative border-l ${m === nowMonth ? "bg-teal-light/25" : Number(m.split("-")[1]) === 1 ? "border-black/10" : "border-black/[0.03]"}`} style={{ width: COL, minHeight: 42 }}>
-                          {confIn && c && (
+                          {cc && (
                             <div
-                              className={`absolute flex items-center justify-center text-[10px] font-semibold text-white ${c.isPast ? "bg-ink/35" : c.isFuture ? "bg-teal-primary/45" : "bg-teal-primary"}`}
+                              className={`absolute flex items-center justify-center text-[10px] font-semibold text-white ${cc.isPast ? "bg-ink/35" : cc.isFuture ? "bg-teal-primary/45" : "bg-teal-primary"}`}
                               style={{
                                 top: 5, bottom: overlap ? "52%" : 5,
                                 left: isConfStart ? 5 : 0, right: isConfEnd ? 5 : 0,
                                 borderTopLeftRadius: isConfStart ? 6 : 0, borderBottomLeftRadius: isConfStart ? 6 : 0,
                                 borderTopRightRadius: isConfEnd ? 6 : 0, borderBottomRightRadius: isConfEnd ? 6 : 0,
                               }}
-                              title={`${c.oppName} ${m}${revBy.get(m) ? `: ${yen(revBy.get(m)!)}` : ""}`}
+                              title={`${cc.oppName} ${m}${revAt(cc, m) ? `: ${yen(revAt(cc, m))}` : ""}`}
                             >
-                              {yenShort(revBy.get(m) ?? 0)}
+                              {yenShort(revAt(cc, m))}
                             </div>
                           )}
                           {fIns.map((f, i) => {
@@ -376,6 +419,57 @@ export function UnifiedTimeline({
       )}
 
       {edit !== null && <ForecastForm forecast={edit === "new" ? null : edit} linkOptions={linkOptions} onClose={() => setEdit(null)} />}
+      {phaseEdit !== null && <PhaseLinkForm row={phaseEdit} all={confirmed} onClose={() => setPhaseEdit(null)} />}
+    </div>
+  );
+}
+
+/**
+ * フェーズ紐づけモーダル。「この案件は◯◯案件の続き」を設定すると、
+ * 紐づいた案件群がカレンダーで1行にマージされる(終了フェーズ→現行フェーズが同じ行に並ぶ)。
+ */
+function PhaseLinkForm({ row, all, onClose }: { row: ConfirmedRow; all: ConfirmedRow[]; onClose: () => void }) {
+  const [pending, start] = useTransition();
+  // 同一顧客を先頭に(別顧客への紐づけも一応許可)
+  const options = all
+    .filter((x) => x.opportunityId !== row.opportunityId)
+    .sort((a, b) => (a.accountName === row.accountName ? 0 : 1) - (b.accountName === row.accountName ? 0 : 1) || a.accountName.localeCompare(b.accountName, "ja"));
+
+  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    start(async () => { await setProjectFollowsAction(fd); onClose(); });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-semibold text-ink/90 inline-flex items-center gap-1.5"><Link2 size={15} /> フェーズ紐づけ</h3>
+          <button type="button" onClick={onClose} className="text-ink/40 hover:text-ink/70"><X size={18} /></button>
+        </div>
+        <p className="text-xs text-ink/50 mb-3">
+          「<span className="font-medium text-ink/70">{row.oppName}</span>」がどの案件の<b>続き(次フェーズ)</b>かを選ぶと、カレンダーで同じ行にまとまります（例: 検討企画 → 伴走支援）。
+        </p>
+        <form onSubmit={submit} className="space-y-3 text-sm">
+          <input type="hidden" name="opportunity_id" value={row.opportunityId} />
+          <label className="block">
+            <span className="text-xs text-ink/50">続きの元となる案件（前フェーズ）</span>
+            <select name="follows_opportunity_id" defaultValue={row.followsOpportunityId ?? ""} className="mt-1 w-full rounded-lg border border-black/10 px-2 py-1.5">
+              <option value="">紐づけない（独立した行にする）</option>
+              {options.map((o) => (
+                <option key={o.opportunityId} value={o.opportunityId}>
+                  {o.accountName === row.accountName ? "" : "【別顧客】"}{o.accountName} / {o.oppName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} className="btn-ghost text-xs">キャンセル</button>
+            <button type="submit" disabled={pending} className="rounded-lg bg-teal-primary px-4 py-1.5 text-xs font-semibold text-white hover:bg-teal-deep disabled:opacity-50">{pending ? "保存中…" : "保存"}</button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, TriangleAlert, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { CheckCircle2, TriangleAlert, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp } from "lucide-react";
 import { enableProjectManagementAction } from "@/server/actions/projects";
+import { startForecastFromOpportunityAction } from "@/server/actions/forecasts";
 import { StickyGrid } from "@/components/ui/sticky-grid";
 
 export interface CandidateView {
@@ -135,12 +136,22 @@ export function CandidatesTable({ rows }: { rows: CandidateView[] }) {
                 </td>
                 <td className="td text-ink/60 text-xs">{r.ownerName}</td>
                 <td className="td text-right">
-                  <form action={enableProjectManagementAction}>
-                    <input type="hidden" name="opportunity_id" value={r.opportunityId} />
-                    <button type="submit" className="inline-flex items-center gap-1 rounded-lg bg-teal-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-deep transition-colors">
-                      <CheckCircle2 size={13} /> 対象化
-                    </button>
-                  </form>
+                  <div className="inline-flex items-center gap-1.5">
+                    {r.tier === "large_open" && (
+                      <form action={startForecastFromOpportunityAction} title="未受注のまま見込みとしてカレンダーで管理。基礎情報を引き継ぎ、受注後は対象化でそのまま確定に切り替わります">
+                        <input type="hidden" name="opportunity_id" value={r.opportunityId} />
+                        <button type="submit" className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100 transition-colors">
+                          <TrendingUp size={13} /> 見込み管理
+                        </button>
+                      </form>
+                    )}
+                    <form action={enableProjectManagementAction}>
+                      <input type="hidden" name="opportunity_id" value={r.opportunityId} />
+                      <button type="submit" className="inline-flex items-center gap-1 rounded-lg bg-teal-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-deep transition-colors">
+                        <CheckCircle2 size={13} /> 対象化
+                      </button>
+                    </form>
+                  </div>
                 </td>
               </tr>
             ))}

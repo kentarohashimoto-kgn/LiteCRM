@@ -73,9 +73,13 @@ export default async function ProjectsListPage({ searchParams }: { searchParams:
     monthly: (r.computed?.roll.months ?? []).map((m) => ({ month: m.month, revenue: m.revenue })),
     leadAssignmentId: r.leadAssignmentId,
     assignees: r.assignees,
+    followsOpportunityId: r.followsOpportunityId,
   }));
-  // 見込みフォームの「紐づけ案件」選択肢(原価管理対象の案件)
-  const linkOptions = rows.map((r) => ({ id: r.opportunityId, label: `${r.accountName} / ${r.oppName}` }));
+  // 見込みフォームの「紐づけ案件」選択肢: 原価管理対象 + 未管理の受注済/商談中(NX商事のような先行見込みも紐づけ可能に)
+  const linkOptions = [
+    ...rows.map((r) => ({ id: r.opportunityId, label: `${r.accountName} / ${r.oppName}` })),
+    ...candidates.map((c) => ({ id: c.opportunityId, label: `【${c.status === "won" ? "受注済" : "商談中"}】${c.accountName} / ${c.oppName}` })),
+  ];
 
   const candidateViews: CandidateView[] = candidates.map((c) => ({
     opportunityId: c.opportunityId,
