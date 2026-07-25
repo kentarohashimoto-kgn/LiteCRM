@@ -65,10 +65,194 @@ export function resolveUploadFolder(conn: StorageConnection, category: string): 
   return custom[category] ?? DEFAULT_UPLOAD_FOLDERS[category] ?? null;
 }
 
+/**
+ * P2 権限監査の対象共有ドライブ(カトルセ環境の既定)。
+ * config.auditDrives で上書き可(他テナント/SaaS向け)。boIsolated=営業・外部を入れてはいけないドライブ。
+ */
+export interface AuditDrive { id: string; name: string; boIsolated: boolean; scanFolders: boolean }
+const DEFAULT_AUDIT_DRIVES: AuditDrive[] = [
+  { id: "0AAf9Tw3eZeIgUk9PVA", name: "601_CRM_資料庫", boIsolated: false, scanFolders: false },
+  { id: "0AJ7lOEbLbfXGUk9PVA", name: "602_CRM_案件", boIsolated: false, scanFolders: true },
+  { id: "0AAuIlBViK7PRUk9PVA", name: "603_CRM_BO", boIsolated: true, scanFolders: false },
+];
+export function resolveAuditDrives(conn: StorageConnection): AuditDrive[] {
+  const custom = conn.config?.auditDrives as AuditDrive[] | undefined;
+  return Array.isArray(custom) && custom.length > 0 ? custom : DEFAULT_AUDIT_DRIVES;
+}
+
 /** P1.6 商談録音の保存先フォルダ(601_CRM_資料庫/90_商談録音)。config.recordingsFolder で上書き可。 */
 const DEFAULT_RECORDINGS_FOLDER = "1kedHryueWdFSCCj1C1rXdq5cU5ogCpTM";
 export function resolveRecordingsFolder(conn: StorageConnection): string {
   return String(conn.config?.recordingsFolder ?? DEFAULT_RECORDINGS_FOLDER);
+}
+
+/** P2 フォルダ直下の子(ファイル/フォルダ)を列挙する。 */
+export async function listFolderChildren(
+  conn: StorageConnection,
+  folderId: string,
+  limit = 200,
+): Promise<{ ok: true; files: FileMeta[] } | { ok: false; error: string }> {
+  const tok = await accessTokenOf(conn);
+  if (!tok.ok) return { ok: false, error: tok.error };
+  const fields = "files(id,name,mimeType,size,webViewLink,headRevisionId,modifiedTime,parents)";
+  const params = new URLSearchParams({
+    q: `'${folderId}' in parents and trashed = false`,
+    fields,
+    pageSize: String(Math.min(1000, limit)),
+    supportsAllDrives: "true",
+    includeItemsFromAllDrives: "true",
+    corpora: "allDrives",
+    orderBy: "modifiedTime desc",
+  });
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${tok.token}` },
+  });
+  if (!res.ok) return { ok: false, error: `一覧取得に失敗(${res.status})` };
+  const body = (await res.json()) as { files?: DriveFileResp[] };
+  const files = (body.files ?? []).map((f) => ({
+    externalId: f.id ?? "",
+    title: f.name || "(無題)",
+    mimeType: f.mimeType ?? null,
+    sizeBytes: f.size ? Number(f.size) : null,
+    webUrl: f.webViewLink ?? null,
+    revision: f.headRevisionId || f.modifiedTime || null,
+    modifiedTime: f.modifiedTime ?? null,
+    parentId: f.parents?.[0] ?? null,
+  }));
+  return { ok: true, files };
+}
+
+export interface DrivePermission {
+  permissionId: string;
+  granteeType: string;   // user | group | domain | anyone
+  email: string | null;
+  role: string;
+  deleted: boolean;
+}
+
+/** P2 共有ドライブ/フォルダの権限一覧(監査用)。 */
+export async function listPermissions(
+  conn: StorageConnection,
+  fileOrDriveId: string,
+): Promise<{ ok: true; permissions: DrivePermission[] } | { ok: false; error: string }> {
+  const tok = await accessTokenOf(conn);
+  if (!tok.ok) return { ok: false, error: tok.error };
+  const params = new URLSearchParams({
+    fields: "permissions(id,type,emailAddress,domain,role,deleted)",
+    pageSize: "100",
+    supportsAllDrives: "true",
+    useDomainAdminAccess: "false",
+  });
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileOrDriveId)}/permissions?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${tok.token}` } },
+  );
+  if (!res.ok) return { ok: false, error: `権限取得に失敗(${res.status})` };
+  const body = (await res.json()) as {
+    permissions?: { id?: string; type?: string; emailAddress?: string; domain?: string; role?: string; deleted?: boolean }[];
+  };
+  const permissions = (body.permissions ?? []).map((p) => ({
+    permissionId: p.id ?? "",
+    granteeType: p.type ?? "user",
+    email: p.emailAddress ?? p.domain ?? null,
+    role: p.role ?? "",
+    deleted: !!p.deleted,
+  }));
+  return { ok: true, permissions };
+}
+
+/**
+ * P4 本文テキスト抽出(AI学習インデックス用)。
+ *  - Google形式(Doc/Slide/Sheet) → files.export でそのままテキスト化
+ *  - Office/PDF → 一時的にGoogle形式へ変換コピー(PDFはOCRも効く)→ export → 一時ファイル削除
+ * 新規の外部依存を増やさず、Drive APIだけで完結させる方針。
+ */
+const NATIVE_EXPORT: Record<string, string> = {
+  "application/vnd.google-apps.document": "text/plain",
+  "application/vnd.google-apps.presentation": "text/plain",
+  "application/vnd.google-apps.spreadsheet": "text/csv",
+};
+const CONVERT_TARGET: Record<string, string> = {
+  "application/pdf": "application/vnd.google-apps.document",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/vnd.google-apps.document",
+  "application/msword": "application/vnd.google-apps.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/vnd.google-apps.presentation",
+  "application/vnd.ms-powerpoint": "application/vnd.google-apps.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "application/vnd.google-apps.spreadsheet",
+  "text/plain": "",   // 変換不要(直接DL)
+  "text/markdown": "",
+  "text/csv": "",
+};
+
+/** 抽出できるMIMEかどうか(バッチのスキップ判定に使用)。 */
+export function isExtractableMime(mimeType: string | null): boolean {
+  if (!mimeType) return false;
+  return mimeType in NATIVE_EXPORT || mimeType in CONVERT_TARGET;
+}
+
+export async function extractText(
+  conn: StorageConnection,
+  fileId: string,
+  mimeType: string | null,
+  maxChars = 200_000,
+): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  const tok = await accessTokenOf(conn);
+  if (!tok.ok) return { ok: false, error: tok.error };
+  const auth = { Authorization: `Bearer ${tok.token}` };
+  const mime = mimeType ?? "";
+
+  const exportAs = async (id: string, target: string): Promise<string | null> => {
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}/export?mimeType=${encodeURIComponent(target)}`,
+      { headers: auth },
+    );
+    if (!res.ok) return null;
+    return (await res.text()).slice(0, maxChars);
+  };
+
+  // ① Google形式はそのままエクスポート
+  if (mime in NATIVE_EXPORT) {
+    const text = await exportAs(fileId, NATIVE_EXPORT[mime]);
+    return text === null ? { ok: false, error: "エクスポートに失敗しました" } : { ok: true, text };
+  }
+
+  // ② プレーンテキスト系は直接ダウンロード
+  if (mime in CONVERT_TARGET && CONVERT_TARGET[mime] === "") {
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
+      { headers: auth },
+    );
+    if (!res.ok) return { ok: false, error: `ダウンロード失敗(${res.status})` };
+    return { ok: true, text: (await res.text()).slice(0, maxChars) };
+  }
+
+  // ③ Office/PDF は一時的にGoogle形式へ変換してからエクスポート
+  const target = CONVERT_TARGET[mime];
+  if (!target) return { ok: false, error: `未対応の形式(${mime})` };
+  const copyRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/copy?supportsAllDrives=true&fields=id`,
+    {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ mimeType: target, name: `__tmp_index_${fileId}` }),
+    },
+  );
+  if (!copyRes.ok) {
+    const body = (await copyRes.json().catch(() => ({}))) as { error?: { message?: string } };
+    return { ok: false, error: `変換に失敗(${copyRes.status}): ${body.error?.message ?? ""}`.slice(0, 200) };
+  }
+  const tmpId = ((await copyRes.json()) as { id?: string }).id;
+  if (!tmpId) return { ok: false, error: "変換結果の取得に失敗しました" };
+  try {
+    const text = await exportAs(tmpId, target === "application/vnd.google-apps.spreadsheet" ? "text/csv" : "text/plain");
+    return text === null ? { ok: false, error: "変換後のエクスポートに失敗しました" } : { ok: true, text };
+  } finally {
+    // 一時ファイルは必ず掃除する(ドライブを汚さない)
+    await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(tmpId)}?supportsAllDrives=true`, {
+      method: "DELETE",
+      headers: auth,
+    }).catch(() => undefined);
+  }
 }
 
 /** P1.6 ファイル削除(30日保持期限切れの録音掃除・録音の手動削除に使用)。 */

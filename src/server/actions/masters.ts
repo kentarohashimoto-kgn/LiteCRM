@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createOffboardingChecklist } from "@/server/actions/drive-audit";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -59,8 +60,15 @@ export async function deleteMemberAction(input: { userId: string }): Promise<Res
   const admin = getSupabaseAdmin();
   const { data: m } = await admin.from("memberships").select("role").eq("user_id", input.userId).eq("tenant_id", ctx.tenantId).maybeSingle();
   if (m?.role === "owner") return { ok: false, error: "オーナーは削除できません" };
+
+  // P2: 剥奪漏れを防ぐためオフボーディング・チェックリストを自動生成(削除前に本人情報を取得)
+  const { data: prof } = await admin.from("profiles").select("email, display_name").eq("id", input.userId).maybeSingle();
+  const p = prof as { email: string | null; display_name: string | null } | null;
+
   await admin.from("memberships").delete().eq("user_id", input.userId).eq("tenant_id", ctx.tenantId);
   await admin.auth.admin.deleteUser(input.userId).catch(() => {});
+
+  await createOffboardingChecklist(ctx.tenantId, ctx.userId, p?.email ?? null, p?.display_name ?? null);
   revalidatePath("/app/settings");
   return { ok: true };
 }

@@ -80,6 +80,7 @@ const groups: NavGroup[] = [
       { href: "/app/email/templates", label: "メール", icon: Mail },
       { href: "/app/leads", label: "リード", icon: Sparkles },
       { href: "/app/knowledge", label: "ノウハウ・事例", icon: Lightbulb },
+      { href: "/app/assistant", label: "AIヘルプ", icon: Bot },
     ],
   },
   {

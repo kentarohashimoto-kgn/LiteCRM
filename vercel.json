@@ -32,6 +32,14 @@
     {
       "path": "/api/cron/doc-health",
       "schedule": "30 18 * * *"
+    },
+    {
+      "path": "/api/cron/drive-audit",
+      "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/cron/doc-index",
+      "schedule": "0 17 * * *"
     }
   ]
 }

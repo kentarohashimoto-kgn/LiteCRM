@@ -1,4 +1,4 @@
-import { Link2, Trash2, TriangleAlert, Archive } from "lucide-react";
+import { Link2, Trash2, TriangleAlert, Archive, FolderOpen } from "lucide-react";
 import { Section } from "@/components/ui/primitives";
 import { listDocuments, gdriveConnectionStatus, attachDriveLinkAction, deleteDocumentAction, type DocumentTargetType } from "@/server/actions/documents";
 import { DriveUploadForm } from "@/components/documents/drive-upload-form";
@@ -8,6 +8,8 @@ function fmtDate(value: string): string {
   const d = new Date(value);
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 }
+
+const FOLDER_MIME = "application/vnd.google-apps.folder";
 
 const HEALTH_LABEL: Record<string, string> = {
   deleted: "リンク切れ(削除済み)",
@@ -43,7 +45,11 @@ export async function DocumentSection({
         <ul className="space-y-2 mb-3">
           {docs.map((d) => (
             <li key={d.id} className="flex items-center gap-2.5 text-sm">
-              <Link2 size={14} className="text-ink/35 shrink-0" />
+              {d.mime_type === FOLDER_MIME ? (
+                <FolderOpen size={14} className="text-accent-orange shrink-0" />
+              ) : (
+                <Link2 size={14} className="text-ink/35 shrink-0" />
+              )}
               {d.web_url && d.link_status === "ok" ? (
                 <a href={d.web_url} target="_blank" rel="noreferrer" className="text-teal-deep hover:underline truncate min-w-0">
                   {d.title}
@@ -51,7 +57,11 @@ export async function DocumentSection({
               ) : (
                 <span className="text-ink/70 truncate min-w-0">{d.title}</span>
               )}
-              {d.category ? (
+              {d.mime_type === FOLDER_MIME ? (
+                <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700" title="このフォルダに追加されたファイルは夜間に自動で取り込まれます">
+                  フォルダ・自動取込
+                </span>
+              ) : d.category ? (
                 <span className="shrink-0 rounded-full bg-teal-light px-2 py-0.5 text-[11px] text-teal-deep">{d.category}</span>
               ) : null}
               {d.has_snapshot ? (
@@ -104,7 +114,7 @@ export async function DocumentSection({
               type="url"
               name="drive_url"
               required
-              placeholder="または https://drive.google.com/... のURLを貼り付け"
+              placeholder="または既存ファイル・フォルダのURLを貼り付け（フォルダは中身を自動取込）"
               className="flex-1 min-w-[240px] rounded-xl border border-black/10 px-3 py-1.5 text-sm"
             />
             <button type="submit" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
