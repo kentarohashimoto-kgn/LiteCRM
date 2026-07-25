@@ -382,7 +382,7 @@ describe("buildWeeklyMindmap", () => {
     expect(titles.some((t) => t.startsWith("来月クロージング"))).toBe(true);
   });
 
-  it("予定は日付の枝にぶら下がり、時刻順に並ぶ", () => {
+  it("予定は日付→分類の枝にぶら下がり、時刻順に並ぶ", () => {
     const spec = buildWeeklyMindmap(
       source({
         events: [
@@ -392,7 +392,47 @@ describe("buildWeeklyMindmap", () => {
       }),
     );
     const monday = (spec.children ?? []).find((c) => c.title === "7/27(月)");
-    expect(monday?.children?.map((c) => c.title.includes("A社"))).toEqual([true, false]);
+    const meetings = (monday?.children ?? []).find((c) => c.title.startsWith("商談"));
+    expect(meetings?.title).toBe("商談 2件");
+    expect(meetings?.children?.map((c) => c.title.includes("A社"))).toEqual([true, false]);
+  });
+
+  it("日付の下は 商談 / タスク / カレンダー / その他 に分類される", () => {
+    const spec = buildWeeklyMindmap(
+      source({
+        events: [
+          ev({ id: "1", date: WEEK, title: "NTTデータ関西Mtg", source: "calendar" }),
+          ev({ id: "2", date: WEEK, title: "株式会社きずな様｜生成AI研修①", source: "calendar" }),
+          ev({ id: "3", date: WEEK, title: "ランチ休憩", source: "calendar" }),
+          ev({ id: "4", date: WEEK, title: "ジム", source: "calendar" }),
+          ev({ id: "5", date: WEEK, title: "移動", source: "calendar" }),
+        ],
+        tasks: [
+          { id: "t1", title: "請求書送付", dueDate: WEEK, status: "todo", accountName: null, opportunityId: null },
+        ],
+      }),
+    );
+    const monday = (spec.children ?? []).find((c) => c.title === "7/27(月)");
+    const titles = (monday?.children ?? []).map((c) => c.title);
+    expect(titles).toEqual(["商談 1件", "タスク 1件", "カレンダー 1件", "その他 3件"]);
+    // 「その他」(移動・休憩・ジム)は既定で畳む
+    expect((monday?.children ?? []).find((c) => c.title.startsWith("その他"))?.collapsed).toBe(true);
+  });
+
+  it("予定と同じ内容の自動生成タスクは重複表示しない", () => {
+    const spec = buildWeeklyMindmap(
+      source({
+        events: [ev({ id: "1", date: WEEK, title: "初回商談(アポ)", accountName: "ブラザー工業株式会社", startAt: "2026-07-27T00:30:00Z" })],
+        tasks: [
+          { id: "t1", title: "初回商談（アポ） 09:30", dueDate: WEEK, status: "todo", accountName: null, opportunityId: null },
+          { id: "t2", title: "提案内容をもらう", dueDate: WEEK, status: "todo", accountName: null, opportunityId: null },
+        ],
+      }),
+    );
+    const monday = (spec.children ?? []).find((c) => c.title === "7/27(月)");
+    const tasks = (monday?.children ?? []).find((c) => c.title.startsWith("タスク"));
+    expect(tasks?.title).toBe("タスク 1件"); // 重複した「初回商談(アポ)」は落ちる
+    expect(tasks?.children?.map((c) => c.title)).toEqual(["提案内容をもらう"]);
   });
 
   it("今月クロージング予定なのに週内の接点が無いと警告枝を出す", () => {
@@ -476,9 +516,10 @@ describe("buildWeeklyMindmap", () => {
     );
     expect(findChild(spec, (t) => t.startsWith("期日超過タスク"))).toBeTruthy();
     expect(findChild(spec, (t) => t.includes("(遅延 2026-07-20)"))).toBeTruthy();
-    // 今週期日のタスクは当日の枝に入る
+    // 今週期日のタスクは当日の「タスク」枝に入る
     const monday = (spec.children ?? []).find((c) => c.title === "7/27(月)");
-    expect(monday?.children?.some((c) => c.title === "タスク: 今週の資料")).toBe(true);
+    const tasks = (monday?.children ?? []).find((c) => c.title.startsWith("タスク"));
+    expect(tasks?.children?.some((c) => c.title === "今週の資料")).toBe(true);
   });
 
   it("カレンダー未連携なら注意枝を足す", () => {
@@ -563,9 +604,10 @@ describe("巨大マップの抑制", () => {
     const spec = buildWeeklyMindmap(heavySource());
     const friday = (spec.children ?? []).find((c) => c.title === "7/31(金)");
     expect(friday).toBeTruthy();
-    const more = (friday!.children ?? []).find((c) => c.title.includes("他") && c.title.includes("タスク"));
-    expect(more).toBeTruthy();
-    expect(more!.title).toBe(`他${122 - LIMITS.dayTasks}件のタスク（タスク一覧で確認）`);
+    const taskGroup = (friday!.children ?? []).find((c) => c.title.startsWith("タスク"));
+    expect(taskGroup?.title).toBe("タスク 122件"); // 件数は正直に見出しへ出す
+    const more = (taskGroup!.children ?? []).find((c) => c.title.startsWith("他"));
+    expect(more!.title).toBe(`他${122 - LIMITS.dayTasks}件（タスク一覧で確認）`);
   });
 
   it("期日超過168件も上限まで畳まれる", () => {

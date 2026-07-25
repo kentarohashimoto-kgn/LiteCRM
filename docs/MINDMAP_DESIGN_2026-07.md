@@ -74,8 +74,14 @@ mindmaps ── mindmap_nodes（自己参照ツリー）
 ## 4. 自動生成（週次プラン）
 
 ### 入力
-1. **Googleカレンダー** — 既存の Google OAuth（`user_mail_accounts.auth_method='google_oauth'`）に
-   `calendar.readonly` スコープを追加。未接続/スコープ不足でも CRM だけで生成できる（警告表示）。
+1. **Googleカレンダー** — 2経路を順に試す。未接続でも CRM だけで生成できる（警告表示）。
+   - **① OAuth**（`user_mail_accounts.auth_method='google_oauth'` + `calendar.readonly`）。
+     Google Cloud Console の同意画面にスコープ追加が必要。
+   - **② iCal非公開URL**（`user_calendar_feeds`）。**Console作業が不要**で、
+     「設定 → Googleカレンダー連携」にURLを貼るだけ。URLは実質の認証情報なので
+     AES-256-GCM で暗号化保存し、RLS は `user_id = auth.uid()` で本人限定。
+     取得先は `calendar.google.com` に限定（ユーザー入力URLによるSSRF防止）。
+     繰り返し予定は自前のICSパーサで展開する（`lib/ics.ts`。実カレンダーは50件中18件が繰り返し）。
 2. **CRM/SFA** — 対象週のアポ・商談（`meetings` / `opportunities.appointment_at`）、
    今月・来月クロージング予定（`expected_close_date` × `yomi` × 金額 × 確度）、期日タスク。
 3. **週次報告** — `weekly_rep_reports.next_week_plan` / `month_ahead_plan`。
@@ -84,11 +90,20 @@ mindmaps ── mindmap_nodes（自己参照ツリー）
 ```
 7/27週の予定
 ├ 事前準備（今週の仕込み）      ← 検出した漏れ・段取りが集まる枝
-├ 7/27(月) … 8/2(日)            ← 1日1枝。時刻順に予定、子に準備タスク
+├ 7/27(月) … 8/2(日)            ← 1日1枝。下は4分類（下記）
+│   ├ 商談 3件                   ← CRMの商談/アポ、CRM顧客に紐づいたカレンダー予定
+│   ├ タスク 5件
+│   ├ カレンダー 12件            ← 研修・展示会・社内定例など、商談以外の業務予定
+│   └ その他 4件（既定で折り畳み）← 移動・休憩・ジムなど段取り上のノイズ
 ├ 今月クロージング（7月）        ← 金額降順。確度・期日・次アクション付き
 ├ 来月クロージング（8月）
 └ 週次報告メモ                   ← 来週の予定・1ヶ月先の行動予定
 ```
+
+日付の下を4分類にするのは、実カレンダーでは1日20件超になり、フラットに並べると
+週の全体像が読めなくなるため（`classifyEvent`）。分類は CRM紐づき > タイトルのパターン の順で決める。
+アポ登録時に自動生成される「予定と同じ内容のタスク」は `dedupeTasksAgainstEvents` で落とす
+（「09:30 A社 初回商談(アポ)」と「タスク: 初回商談(アポ) 09:30」の二重表示を防ぐ）。
 
 ### 「事前にやるべきこと」の検出ルール（決定的・AI不要）
 | 検出 | 出力 | マーカー |
@@ -162,3 +177,9 @@ mindmaps ── mindmap_nodes（自己参照ツリー）
   総ノード200未満・初期表示60未満・1枝が上限を超えないこと
 - **カリング**: 境界をまたぐノードは描く / 余白ぶんは先読み / 縮小で可視範囲が広がる /
   500ノード縦2万pxでも実描画50未満
+- **日別4分類**: 商談/タスク/カレンダー/その他への振り分け、重複タスクの除去
+
+`tests/ics.test.ts`
+- 折り返し・パラメータ・値中のコロン、TZID/UTC/終日の解釈、夏時間のあるTZの変換
+- RRULE: 毎日/毎週/隔週/複数曜日/毎月第n曜日、COUNT・UNTIL、古い開始日でも暴走しない
+- EXDATE による個別削除、RECURRENCE-ID による個別変更の差し替え、CANCELLED除外、VTIMEZONE誤読防止

@@ -9,6 +9,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { decryptSecret } from "@/lib/crypto-mail";
 import { refreshAccessToken } from "@/lib/google-oauth";
 import { listCalendarEvents } from "@/lib/google-calendar";
+import { loadFeedEventsForUser } from "@/server/actions/calendar-feed";
 import { collectWeeklyCrmSource } from "@/lib/data/mindmaps";
 import { mondayJst } from "@/lib/data/weekly-snapshot";
 import {
@@ -318,55 +319,87 @@ export async function saveMindmapSnapshotAction(
 /* 週次予定の自動生成                                                  */
 /* ------------------------------------------------------------------ */
 
-/** 接続済みGoogleアカウントから今週のカレンダー予定を取得(未接続なら空)。 */
+/**
+ * 今週のカレンダー予定を取得する。
+ * ① OAuth連携(user_mail_accounts) ② iCal非公開URL(user_calendar_feeds) の順に試す。
+ * どちらも無ければCRMのみで生成する(生成自体は必ず成功させる)。
+ */
 async function fetchCalendar(
   userId: string,
   weekStart: string,
-): Promise<{ events: WeeklyEvent[]; connected: boolean; warning?: string }> {
+): Promise<{ events: WeeklyEvent[]; connected: boolean; via?: "oauth" | "ical"; warning?: string }> {
+  const days = weekDays(weekStart);
+  const from = new Date(`${days[0]}T00:00:00+09:00`);
+  const to = new Date(`${addDays(days[6], 1)}T00:00:00+09:00`);
+  const warnings: string[] = [];
+
+  // ---- ① OAuth 経路 ----
   const sb = getSupabaseServer();
   const { data: acc } = await sb
     .from("user_mail_accounts")
     .select("auth_method, oauth_refresh_token_enc")
     .eq("user_id", userId)
     .maybeSingle();
-  if (!acc || (acc as any).auth_method !== "google_oauth" || !(acc as any).oauth_refresh_token_enc) {
-    return { events: [], connected: false };
+
+  if (acc && (acc as any).auth_method === "google_oauth" && (acc as any).oauth_refresh_token_enc) {
+    try {
+      const tok = await refreshAccessToken(decryptSecret((acc as any).oauth_refresh_token_enc as string));
+      if (tok.ok) {
+        const res = await listCalendarEvents(tok.accessToken, from, to);
+        if (res.ok) {
+          return {
+            connected: true,
+            via: "oauth",
+            events: res.events.map<WeeklyEvent>((e) => ({
+              id: `gcal-${e.id}`,
+              title: e.title,
+              date: e.date,
+              startAt: e.startAt,
+              endAt: e.endAt,
+              source: "calendar",
+              accountName: null,
+              opportunityId: null,
+              opportunityName: null,
+              stage: null,
+              yomi: null,
+              url: e.htmlLink,
+            })),
+          };
+        }
+        warnings.push(res.error);
+      } else {
+        warnings.push(`Googleトークン更新に失敗: ${tok.error}`);
+      }
+    } catch {
+      warnings.push("Google連携の資格情報を復号できませんでした");
+    }
   }
 
-  let refresh: string;
-  try {
-    refresh = decryptSecret((acc as any).oauth_refresh_token_enc as string);
-  } catch {
-    return { events: [], connected: false, warning: "Google連携の資格情報を復号できませんでした" };
+  // ---- ② iCal非公開URL 経路 ----
+  const feed = await loadFeedEventsForUser(userId, from, to);
+  if (feed && "events" in feed) {
+    return {
+      connected: true,
+      via: "ical",
+      events: feed.events.map<WeeklyEvent>((e) => ({
+        id: `ical-${e.uid}-${e.startAt ?? e.date}`,
+        title: e.summary,
+        date: e.date,
+        startAt: e.startAt,
+        endAt: e.endAt,
+        source: "calendar",
+        accountName: null,
+        opportunityId: null,
+        opportunityName: null,
+        stage: null,
+        yomi: null,
+        url: null,
+      })),
+    };
   }
-  const tok = await refreshAccessToken(refresh);
-  if (!tok.ok) return { events: [], connected: false, warning: `Googleトークン更新に失敗: ${tok.error}` };
+  if (feed && "error" in feed) warnings.push(feed.error);
 
-  const days = weekDays(weekStart);
-  const res = await listCalendarEvents(
-    tok.accessToken,
-    new Date(`${days[0]}T00:00:00+09:00`),
-    new Date(`${addDays(days[6], 1)}T00:00:00+09:00`),
-  );
-  if (!res.ok) return { events: [], connected: false, warning: res.error };
-
-  return {
-    connected: true,
-    events: res.events.map<WeeklyEvent>((e) => ({
-      id: `gcal-${e.id}`,
-      title: e.title,
-      date: e.date,
-      startAt: e.startAt,
-      endAt: e.endAt,
-      source: "calendar",
-      accountName: null,
-      opportunityId: null,
-      opportunityName: null,
-      stage: null,
-      yomi: null,
-      url: e.htmlLink,
-    })),
-  };
+  return { events: [], connected: false, warning: warnings[0] };
 }
 
 /** カレンダー予定にCRMの顧客名/案件を突き合わせる(件名に顧客名が含まれる場合)。 */

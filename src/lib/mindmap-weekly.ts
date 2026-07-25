@@ -25,6 +25,37 @@ export interface NodeSpec {
   children?: NodeSpec[];
 }
 
+/**
+ * 予定の分類。日付の下をこの単位でまとめ、開きすぎずに全体を把握できるようにする。
+ *   meeting  = 商談・アポ(CRM由来、またはカレンダーでCRM顧客に紐づいたもの)
+ *   calendar = 上記以外の業務予定(研修・展示会・社内MTGなど)
+ *   other    = 移動・休憩・私用など、段取り上ノイズになるもの
+ */
+export type EventCategory = "meeting" | "calendar" | "other";
+
+/**
+ * 「その他」に落とす予定のタイトル。実カレンダーを見て決めた実務的なルール。
+ * (ランチ休憩・ジム・移動・出社などが商談と同列に並ぶと週の全体像が読めなくなる)
+ */
+const OTHER_PATTERNS =
+  /ランチ|昼食|休憩|ジム|筋トレ|移動|出社|退社|通院|病院|散髪|美容室|予定なし|ブロック|作業時間|集中|バッファ|私用|有給|誕生日/;
+
+/** 商談・アポらしさを示す語(CRMに紐づかなくても商談として扱う)。 */
+const MEETING_PATTERNS = /商談|打合せ|打ち合わせ|お打ち合わせ|訪問|来社|アポ|面談|MTG|Mtg|ミーティング|予約スケジュール|予約訪問|訪問予約/;
+
+/** 予定を分類する。CRM紐づきが最優先、次にタイトルのパターン。 */
+export function classifyEvent(e: {
+  source: "calendar" | "crm";
+  title: string;
+  opportunityId: string | null;
+  accountName: string | null;
+}): EventCategory {
+  if (e.source === "crm" || e.opportunityId) return "meeting";
+  if (OTHER_PATTERNS.test(e.title)) return "other";
+  if (e.accountName || MEETING_PATTERNS.test(e.title)) return "meeting";
+  return "calendar";
+}
+
 /** 週内の予定(カレンダー予定・CRMのアポ/商談を統合したもの)。 */
 export interface WeeklyEvent {
   id: string;
@@ -228,6 +259,36 @@ export function detectSequences(events: WeeklyEvent[]): { account: string; event
   return out.sort((a, b) => a.account.localeCompare(b.account));
 }
 
+/** 比較用にタイトルを正規化(時刻・記号・空白を落とす)。 */
+function normTitle(s: string): string {
+  return s
+    .replace(/\d{1,2}[:：]\d{2}/g, "")
+    .replace(/[\s　（）()【】｜|・:：\-–—]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * 予定と同じ内容のタスクを除く。
+ * アポ登録時に次アクションタスクが自動生成されるため、そのままだと
+ * 「09:30 ブラザー工業 初回商談(アポ)」と「タスク: 初回商談(アポ) 09:30」が並んで出る。
+ */
+export function dedupeTasksAgainstEvents(tasks: WeeklyTask[], events: WeeklyEvent[]): WeeklyTask[] {
+  const byDate = new Map<string, string[]>();
+  for (const e of events) {
+    const list = byDate.get(e.date) ?? [];
+    list.push(normTitle(e.title));
+    byDate.set(e.date, list);
+  }
+  return tasks.filter((t) => {
+    const titles = byDate.get(t.dueDate);
+    if (!titles) return true;
+    const n = normTitle(t.title);
+    if (n.length < 3) return true; // 短すぎる語での誤一致を避ける
+    return !titles.some((e) => e.includes(n) || n.includes(e));
+  });
+}
+
 /** 対象月(YYYY-MM)のクロージング予定を金額降順で。 */
 export function dealsForMonth(deals: WeeklyDeal[], ym: string): WeeklyDeal[] {
   return deals
@@ -394,7 +455,9 @@ function dayLabelOf(date: string, weekStart: string): string {
 /* ------------------------------------------------------------------ */
 
 /** 週次予定マインドマップのノードツリーを組み立てる。 */
-export function buildWeeklyMindmap(src: WeeklySource): NodeSpec {
+export function buildWeeklyMindmap(input: WeeklySource): NodeSpec {
+  // アポ登録で自動生成された「予定と同じ内容のタスク」を先に落とす
+  const src: WeeklySource = { ...input, tasks: dedupeTasksAgainstEvents(input.tasks, input.events) };
   const days = weekDays(src.weekStart);
   const thisMonth = src.weekStart.slice(0, 7);
   const nextMonth = addDays(`${thisMonth}-01`, 32).slice(0, 7);
@@ -409,43 +472,78 @@ export function buildWeeklyMindmap(src: WeeklySource): NodeSpec {
       .sort((a, b) => (a.startAt ?? "99").localeCompare(b.startAt ?? "99"));
     const dayTasks = src.tasks.filter((t) => t.dueDate === date && t.status !== "done");
 
-    const kids: NodeSpec[] = capped(
-      dayEvents.map((e) => {
-        const time = timeLabel(e.startAt);
-        const head = [time, e.accountName ?? "", e.title].filter(Boolean).join(" ");
-        const prep = prepForStage(e.stage, e.yomi);
-        return {
-          title: head.slice(0, 200),
-          note: e.source === "calendar" ? "Googleカレンダー" : "CRM",
-          ref_type: (e.opportunityId ? "opportunity" : "calendar") as NodeRefType,
-          ref_id: e.opportunityId,
-          ref_url: e.opportunityId ? `/app/opportunities/${e.opportunityId}` : e.url,
-          children: prep.slice(0, 2).map((t) => ({ title: t, marker: "p3" as NodeMarker })),
-        };
-      }),
-      LIMITS.dayEvents,
-      (r) => `他${r}件の予定`,
-    );
+    // 日付の下は 商談 / タスク / カレンダー / その他 の4分類にまとめる。
+    // 予定を全部フラットに並べると、1日20件超で週の全体像が読めなくなるため。
+    const eventNode = (e: WeeklyEvent, withPrep: boolean): NodeSpec => {
+      const time = timeLabel(e.startAt);
+      const head = [time, e.accountName ?? "", e.title].filter(Boolean).join(" ");
+      const prep = withPrep ? prepForStage(e.stage, e.yomi) : [];
+      return {
+        title: head.slice(0, 200),
+        note: e.source === "calendar" ? "Googleカレンダー" : "CRM",
+        ref_type: (e.opportunityId ? "opportunity" : "calendar") as NodeRefType,
+        ref_id: e.opportunityId,
+        ref_url: e.opportunityId ? `/app/opportunities/${e.opportunityId}` : e.url,
+        children: prep.slice(0, 2).map((t) => ({ title: t, marker: "p3" as NodeMarker })),
+      };
+    };
 
-    // 月末などタスクが数百件ぶら下がる日があるため、日の枝でも必ず上限を掛ける
-    kids.push(
-      ...capped(
-        dayTasks.map((t) => ({
-          title: `タスク: ${t.title}`,
-          due_date: t.dueDate,
-          marker: "p2" as NodeMarker,
-          ref_type: "task" as NodeRefType,
-          ref_id: t.id,
-        })),
-        LIMITS.dayTasks,
-        (r) => `他${r}件のタスク（タスク一覧で確認）`,
-      ),
-    );
+    const byCategory = { meeting: [] as WeeklyEvent[], calendar: [] as WeeklyEvent[], other: [] as WeeklyEvent[] };
+    for (const e of dayEvents) byCategory[classifyEvent(e)].push(e);
+
+    const groups: NodeSpec[] = [];
+    if (byCategory.meeting.length > 0) {
+      groups.push({
+        title: `商談 ${byCategory.meeting.length}件`,
+        children: capped(
+          byCategory.meeting.map((e) => eventNode(e, true)),
+          LIMITS.dayEvents,
+          (r) => `他${r}件`,
+        ),
+      });
+    }
+    if (dayTasks.length > 0) {
+      groups.push({
+        title: `タスク ${dayTasks.length}件`,
+        children: capped(
+          dayTasks.map((t) => ({
+            title: t.title,
+            due_date: t.dueDate,
+            marker: "p2" as NodeMarker,
+            ref_type: "task" as NodeRefType,
+            ref_id: t.id,
+          })),
+          LIMITS.dayTasks,
+          (r) => `他${r}件（タスク一覧で確認）`,
+        ),
+      });
+    }
+    if (byCategory.calendar.length > 0) {
+      groups.push({
+        title: `カレンダー ${byCategory.calendar.length}件`,
+        children: capped(
+          byCategory.calendar.map((e) => eventNode(e, false)),
+          LIMITS.dayEvents,
+          (r) => `他${r}件`,
+        ),
+      });
+    }
+    if (byCategory.other.length > 0) {
+      groups.push({
+        title: `その他 ${byCategory.other.length}件`,
+        collapsed: true, // 移動・休憩などは既定で畳む
+        children: capped(
+          byCategory.other.map((e) => eventNode(e, false)),
+          LIMITS.dayEvents,
+          (r) => `他${r}件`,
+        ),
+      });
+    }
 
     children.push({
       title: dayLabel(date, i),
-      collapsed: kids.length === 0,
-      children: kids.length > 0 ? kids : [{ title: "予定なし" }],
+      collapsed: groups.length === 0,
+      children: groups.length > 0 ? groups : [{ title: "予定なし" }],
     });
   });
 
@@ -507,7 +605,11 @@ export function buildWeeklyMindmap(src: WeeklySource): NodeSpec {
     children.push({
       title: "Googleカレンダー未連携（CRMのみで生成）",
       marker: "alert",
-      note: "設定→メール連携でGoogleを接続すると、カレンダー予定も取り込まれます。",
+      note:
+        "設定 → Googleカレンダー連携 に「非公開URL(iCal形式)」を貼ると、" +
+        "この枝の代わりに実際の予定が1日ごとに入ります。",
+      ref_type: "none",
+      ref_url: "/app/settings",
     });
   }
 
