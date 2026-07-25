@@ -139,6 +139,33 @@ CATORCE-案件での外部追加ルール（告知に含める）:
 - [ ] 優先1〜2（勝ち提案書・技術資料）の移動完了 ← **AIヘルプ(P4)開始の前提条件**
 - [ ] 旧保存場所を閲覧のみ化
 
+## 4b. 実施記録（2026-07-25 実施済み分）
+
+実際の作成物は設計時の `CATORCE-*` ではなく**既存の連番命名規則**を採用（読み替え表）。ドライブID・フォルダIDはCRM実装（`tenant_storage_connections.config`）でそのまま使用する。
+
+| 設計上の名前 | 実際の共有ドライブ | ドライブID |
+|---|---|---|
+| CATORCE-資料庫 | **601_CRM_資料庫** | `0AAf9Tw3eZeIgUk9PVA` |
+| CATORCE-案件 | **602_CRM_案件** | `0AJ7lOEbLbfXGUk9PVA` |
+| CATORCE-BO | **603_CRM_BO** | `0AAuIlBViK7PRUk9PVA` |
+
+作成済みフォルダ（2026-07-25、Claude が API で作成）:
+
+| ドライブ | フォルダ | フォルダID |
+|---|---|---|
+| 601_CRM_資料庫 | 01_提案書 | `1T7PKT0UTk-_FrZGXi7D-0oJAAdKkPXSB` |
+| 601_CRM_資料庫 | 02_企画書 | `1s9SwmGsmP3-75PJLDz3cn5BOSudeZi1B` |
+| 601_CRM_資料庫 | 03_研修資料 | `1CZrOV4JvmrQbISZmxIb9VB-phYJEDXTW` |
+| 601_CRM_資料庫 | 04_技術資料 | `1ODh5lXXBBZvrYOPjDnqr5zOKIAS9AtoQ` |
+| 601_CRM_資料庫 | 05_営業ツール | `1sQShNdr_ODbEw5xZgJ2sEwWsSC4mBZ8U` |
+| 601_CRM_資料庫 | 09_テンプレート | `1axL2wyi6TFPtbMFOD_n3uh9j_KZpmYqR` |
+| 602_CRM_案件 | （なし・空が正） | — |
+| 603_CRM_BO | 01_契約書類 | `1wI8AGkIjtQHPa174UmS09Vnk4iNeDjac` |
+| 603_CRM_BO | 02_請求 | `1TxxEHBzpYVUcEJ7PXsMfoOucQUv6M6WL` |
+| 603_CRM_BO | 03_人事 | `1q39kyzYoaEg4TT2VFqrVxpZUkPGSP1U_` |
+
+グループ実施メモ: `sales-ext@` は初回作成時に「セキュリティ」ラベルを付けたため外部メンバー追加が拒否され、**ラベルなしで作り直し**た（セキュリティラベルは不可逆のため。他グループへの適用は外部メンバーを持たない限り実害なし）。
+
 ## 5. この後のシステム実装との接続
 
 | 実装フェーズ | このRunbookとの関係 |
