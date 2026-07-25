@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { saveRevenueMonthsAction } from "@/server/actions/projects";
+import { MoneyInput } from "@/components/ui/money-input";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 interface Row { key: number; month: string; amount: string }
@@ -38,7 +39,7 @@ export function ProjectRevenueForm({
             <input type="month" name="rev_month" value={r.month} onChange={(e) => patch(r.key, "month", e.target.value)} className="input py-1 text-sm w-40" />
             <div className="relative flex-1">
               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-ink/40">¥</span>
-              <input type="number" name="rev_amount" value={r.amount} onChange={(e) => patch(r.key, "amount", e.target.value)} className="input py-1 text-sm pl-5" placeholder="販売額" />
+              <MoneyInput name="rev_amount" value={r.amount} onValueChange={(d) => patch(r.key, "amount", d)} className="input py-1 text-sm pl-5" placeholder="販売額" />
             </div>
             <button type="button" onClick={() => remove(r.key)} className="text-ink/35 hover:text-rose-500 shrink-0" aria-label="削除"><X size={15} /></button>
           </div>

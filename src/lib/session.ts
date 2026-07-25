@@ -92,6 +92,16 @@ export async function requireCtx(): Promise<Ctx> {
   return ctx;
 }
 
+/**
+ * 管理者(代表/管理者)専用ページで使用。権限がなければ営業トップへ。
+ * マインドマップなど「橋本個人の段取り」機能はこのゲートで囲う(DB側もRLSで二重に遮断)。
+ */
+export async function requireAdminCtx(): Promise<Ctx> {
+  const ctx = await requireCtx();
+  if (!["owner", "admin"].includes(ctx.role)) redirect("/app/dashboard");
+  return ctx;
+}
+
 /** BO領域(事務/人事/管理者)専用ページで使用。権限がなければ営業トップへ。 */
 export async function requireBoCtx(): Promise<Ctx> {
   const ctx = await requireCtx();

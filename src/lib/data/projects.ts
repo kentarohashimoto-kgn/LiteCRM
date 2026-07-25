@@ -32,6 +32,7 @@ export interface ProjectPlan {
   hours_per_month: number;
   priority: "high" | "middle" | "low";
   lead_assignment_id: string | null; // 責任者として指名したアサイン
+  follows_opportunity_id: string | null; // この案件が「続き」である元案件(前フェーズ)
 }
 export interface RevenueMonth { id: string; plan_id: string; month: string; amount: number; note: string | null; }
 export interface ProjAssignment {
@@ -157,6 +158,7 @@ export interface ManagedProjectRow {
   approvedCost: number; // 承認済み実績の原価換算(円)
   leadAssignmentId: string | null; // 責任者として指名したアサイン
   assignees: { id: string; label: string; kind: string }[]; // 選択肢(有効なアサイン)
+  followsOpportunityId: string | null; // この案件が「続き」である元案件(前フェーズ)
 }
 
 /** 原価管理対象の「候補」として拾う最小金額（これ未満は一覧のノイズになるため既定では強調しない）。 */
@@ -373,6 +375,7 @@ export async function listManagedProjects(): Promise<ManagedProjectRow[]> {
       approvedCost: Math.round(approvedCost),
       leadAssignmentId: plan?.lead_assignment_id ?? null,
       assignees: activeAssignees,
+      followsOpportunityId: plan?.follows_opportunity_id ?? null,
     };
   });
 }

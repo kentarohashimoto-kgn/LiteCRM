@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Plus, X } from "lucide-react";
 import { saveAssignmentAction } from "@/server/actions/projects";
 import { computeCellCost, type RateUnit, type EffortUnit } from "@/lib/project-cost";
@@ -100,11 +101,11 @@ export function ProjectAssignmentForm({
         </div>
         <div>
           <label className="label">{rateUnit === "hourly" ? "時給（円/時）*" : "原価単価（円/人月）*"}</label>
-          <input name="cost_rate" type="number" required value={costRate} onChange={(e) => setCostRate(e.target.value)} className="input" placeholder={rateUnit === "hourly" ? "例：6250" : "例：1000000"} />
+          <MoneyInput name="cost_rate" required value={costRate} onValueChange={setCostRate} className="input" placeholder={rateUnit === "hourly" ? "例：6,250" : "例：1,000,000"} />
         </div>
         <div>
           <label className="label">請求単価（任意）</label>
-          <input name="bill_rate" type="number" defaultValue={existing?.bill_rate ?? ""} className="input" />
+          <MoneyInput name="bill_rate" defaultValue={existing?.bill_rate ?? ""} placeholder="" className="input" />
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { MoneyInput } from "@/components/ui/money-input";
 import Link from "next/link";
 import { ChevronLeft, Trash2 } from "lucide-react";
 import { getWorkspaceForAccount } from "@/lib/data/workspace";
@@ -210,7 +211,7 @@ export default async function AccountDetailPage({ params, searchParams }: { para
                   </div>
                   <div>
                     <label className="label">見込み金額</label>
-                    <input name="amount" type="number" className="input" placeholder="1500000" />
+                    <MoneyInput name="amount" placeholder="1,500,000" className="input" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">

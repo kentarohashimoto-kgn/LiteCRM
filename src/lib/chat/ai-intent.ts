@@ -11,6 +11,7 @@ export type ChatIntent =
   | "meetings_list" // 商談・アポの一覧（期間指定: 明日/今週/来週など）
   | "closing_deals" // 成約見込みの案件（月指定: 今月/来月など）
   | "needs_followup" // 催促・フォローが必要な案件
+  | "create_task" // タスクの追加・起票（断片的な単語の羅列も含む）
   | "none";
 
 export interface ClassifiedIntent {
@@ -28,9 +29,11 @@ const INTENT_SCHEMA = {
   properties: {
     intent: {
       type: "string",
-      enum: ["meetings_list", "closing_deals", "needs_followup", "none"],
+      enum: ["meetings_list", "closing_deals", "needs_followup", "create_task", "none"],
       description:
-        "meetings_list=商談/アポ/予定の一覧(期間付き)。closing_deals=成約・受注できそうな案件。needs_followup=催促/フォロー/放置気味の案件。どれでもなければ none。",
+        "meetings_list=商談/アポ/予定の一覧(期間付き)。closing_deals=成約・受注できそうな案件。needs_followup=催促/フォロー/放置気味の案件。" +
+        "create_task=タスクの追加/起票/登録の指示（「〜に追加」「〜タスク」「なるはや」等を含む断片的な単語の羅列や、やるべき作業内容の列挙もこれ。一覧の要求ではなく作業の登録依頼ならこれ）。" +
+        "どれでもなければ none。",
     },
     start_date: {
       type: ["string", "null"],

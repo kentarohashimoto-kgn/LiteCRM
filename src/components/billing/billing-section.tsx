@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Trash2 } from "lucide-react";
 import type { BillingSchedule, OpportunityCategory } from "@/lib/types";
 import { CATEGORY_MAP } from "@/lib/constants";
@@ -104,7 +105,7 @@ export function BillingSection({
               </div>
               <div>
                 <label className="label">請求額(円)</label>
-                <input name="amount" type="number" className="input" placeholder="1500000" />
+                <MoneyInput name="amount" placeholder="1,500,000" className="input" />
               </div>
             </div>
           ) : (
@@ -119,7 +120,7 @@ export function BillingSection({
               </div>
               <div>
                 <label className="label">月額(円)</label>
-                <input name="amount" type="number" className="input" placeholder="300000" />
+                <MoneyInput name="amount" placeholder="300,000" className="input" />
               </div>
             </div>
           )}

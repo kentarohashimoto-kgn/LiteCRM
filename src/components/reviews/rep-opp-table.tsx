@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MoneyInput } from "@/components/ui/money-input";
 import { ArrowUpDown, PanelRightOpen } from "lucide-react";
 import { formatYen, formatDate, cn } from "@/lib/utils";
 import { YOMI_OPTIONS } from "@/lib/constants";
@@ -176,7 +177,7 @@ export function RepOppTable({
                   })()}
                 </td>
                 <td className="td text-right">
-                  <input type="text" inputMode="numeric" name="amount" form={fid} defaultValue={o.amount ? o.amount.toLocaleString("ja-JP") : ""} placeholder="円" className="w-[110px] rounded border border-black/10 px-1.5 py-1 text-xs text-right" />
+                  <MoneyInput name="amount" form={fid} defaultValue={o.amount || ""} placeholder="円" className="w-[110px] rounded border border-black/10 px-1.5 py-1 text-xs text-right" />
                 </td>
                 <td className="td text-right text-ink/60">{formatYen(o.weighted)}</td>
                 <td className="td">{risk ? <span className={cn("pill text-[10px]", risk.cls)}>{risk.label}</span> : <span className="text-ink/25">—</span>}</td>

@@ -1,4 +1,5 @@
 import { listRevenueForecasts, getForecastYears } from "@/lib/data/revenue-forecast";
+import { MoneyInput } from "@/components/ui/money-input";
 import { saveRevenueForecastAction, deleteRevenueForecastAction } from "@/server/actions";
 import { PageHeader, Card, Section } from "@/components/ui/primitives";
 import { SubTabs } from "@/components/ui/sub-tabs";
@@ -111,8 +112,8 @@ export default async function ForecastPipelinePage({ searchParams }: { searchPar
           <input name="deal" placeholder="案件" className="input text-sm" />
           <input name="product" placeholder="商品(開発/SES/顧問/SaaS/研修)" className="input text-sm" />
           <input name="period" placeholder="期間(例: 7月～8月)" className="input text-sm" />
-          <input name="amount" type="text" placeholder="売上予測(円)" className="input text-sm" />
-          <input name="cost" type="text" placeholder="原価予測(円)" className="input text-sm" />
+          <MoneyInput name="amount" placeholder="売上予測(円)" className="input text-sm" />
+          <MoneyInput name="cost" placeholder="原価予測(円)" className="input text-sm" />
           <input name="prob" placeholder="確度(例: 50%)" className="input text-sm" />
           <input name="owner" placeholder="担当" className="input text-sm" />
           <input name="orderDate" placeholder="受注予定日(任意)" className="input text-sm" />
@@ -145,8 +146,8 @@ function Rlow({ r, fy }: { r: RevForecast; fy: number }) {
             <input name="deal" defaultValue={r.deal_name ?? ""} placeholder="案件" className="input text-xs" />
             <input name="product" defaultValue={r.product ?? ""} placeholder="商品" className="input text-xs" />
             <input name="period" defaultValue={r.period_label ?? ""} placeholder="期間" className="input text-xs" />
-            <input name="amount" defaultValue={r.amount ?? ""} placeholder="売上予測" className="input text-xs" />
-            <input name="cost" defaultValue={r.cost ?? ""} placeholder="原価" className="input text-xs" />
+            <MoneyInput name="amount" defaultValue={r.amount ?? ""} placeholder="売上予測" className="input text-xs" />
+            <MoneyInput name="cost" defaultValue={r.cost ?? ""} placeholder="原価" className="input text-xs" />
             <input name="prob" defaultValue={r.probability != null ? Math.round(r.probability * 100) + "%" : ""} placeholder="確度" className="input text-xs" />
             <input name="owner" defaultValue={r.owner ?? ""} placeholder="担当" className="input text-xs" />
             <input name="memo" defaultValue={r.memo ?? ""} placeholder="メモ" className="input text-xs col-span-2" />

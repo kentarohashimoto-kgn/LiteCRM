@@ -12,10 +12,15 @@ import { ProductMaster, type ProductRow } from "@/components/settings/product-ma
 import { NameMaster } from "@/components/settings/name-master";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { GdriveConnectionCard } from "@/components/settings/gdrive-connection-card";
+import { CalendarFeedSection } from "@/components/settings/calendar-feed-section";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage({ searchParams }: { searchParams: { ok?: string; error?: string; saved?: string; detail?: string } }) {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: { ok?: string; error?: string; saved?: string; detail?: string; calendar?: string; msg?: string };
+}) {
   const ws = await getWorkspaceLite();
   const isAdmin = ["owner", "admin"].includes(ws.ctx.role);
 
@@ -66,6 +71,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
           </div>
         }
       />
+
+      {/* Googleカレンダー連携(マインドマップの週次予定に取り込む) */}
+      <CalendarFeedSection message={searchParams.msg} ok={searchParams.calendar === "ok"} />
 
       {/* メンバー管理 */}
       <Section title="メンバー / ロール" className="mb-5">
