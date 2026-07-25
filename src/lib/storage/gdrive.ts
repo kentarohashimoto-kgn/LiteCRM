@@ -65,6 +65,24 @@ export function resolveUploadFolder(conn: StorageConnection, category: string): 
   return custom[category] ?? DEFAULT_UPLOAD_FOLDERS[category] ?? null;
 }
 
+/** P1.6 商談録音の保存先フォルダ(601_CRM_資料庫/90_商談録音)。config.recordingsFolder で上書き可。 */
+const DEFAULT_RECORDINGS_FOLDER = "1kedHryueWdFSCCj1C1rXdq5cU5ogCpTM";
+export function resolveRecordingsFolder(conn: StorageConnection): string {
+  return String(conn.config?.recordingsFolder ?? DEFAULT_RECORDINGS_FOLDER);
+}
+
+/** P1.6 ファイル削除(30日保持期限切れの録音掃除・録音の手動削除に使用)。 */
+export async function deleteDriveFile(conn: StorageConnection, fileId: string): Promise<{ ok: boolean; error?: string }> {
+  const tok = await accessTokenOf(conn);
+  if (!tok.ok) return { ok: false, error: tok.error };
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?supportsAllDrives=true`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${tok.token}` } },
+  );
+  if (res.status === 204 || res.status === 404) return { ok: true }; // 404=既に無い
+  return { ok: false, error: `削除失敗(${res.status})` };
+}
+
 /** Drive の各種URL/生IDから fileId を取り出す。 */
 export function parseDriveFileId(input: string): string | null {
   const s = input.trim();

@@ -1,10 +1,10 @@
 "use server";
 
-import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { asciiStorageKey } from "@/lib/storage-key";
 
 const BUCKET = "attachments";
 const MAX_SIZE = 15 * 1024 * 1024; // 提案書PDFはやや大きめまで許容
@@ -108,7 +108,8 @@ export async function addProposalVersionAction(formData: FormData): Promise<void
     try {
       const admin = getSupabaseAdmin();
       fileName = file.name.replace(/[\\/]/g, "_").slice(0, 150);
-      storagePath = `${ctx.tenantId}/proposal/${oppId}/${randomUUID()}_${fileName}`;
+      // キーはASCII限定(日本語名は"Invalid key"で拒否)。表示名はfile_name列が保持
+      storagePath = `${ctx.tenantId}/proposal/${oppId}/${asciiStorageKey(file.name)}`;
       const buf = Buffer.from(await file.arrayBuffer());
       const { error } = await admin.storage.from(BUCKET).upload(storagePath, buf, {
         contentType: file.type || "application/octet-stream",

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { checkBearer } from "@/lib/secure-compare";
+import { getActiveConnection } from "@/lib/storage/connections";
+import { deleteDriveFile } from "@/lib/storage/gdrive";
 
 export const dynamic = "force-dynamic";
 
@@ -28,32 +30,42 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const limit = Math.min(30, Math.max(1, parseInt(url.searchParams.get("limit") ?? "10", 10) || 10));
 
-  // 期限切れ音声の掃除（transcript/summary は残す。storage_path を null に）
+  // 期限切れ音声の掃除（transcript/summary は残す。storage_path/drive_file_id を null に）
   let cleaned = 0;
   try {
     const { data: expired } = await admin
       .from("meeting_recordings")
-      .select("id, storage_path")
-      .not("storage_path", "is", null)
+      .select("id, tenant_id, storage_path, drive_file_id")
+      .or("storage_path.not.is.null,drive_file_id.not.is.null")
       .lt("expires_at", new Date().toISOString())
       .limit(200);
-    const rows = (expired ?? []) as { id: string; storage_path: string }[];
+    const rows = (expired ?? []) as { id: string; tenant_id: string; storage_path: string | null; drive_file_id: string | null }[];
     if (rows.length) {
-      await admin.storage.from(BUCKET).remove(rows.map((r) => r.storage_path));
-      await admin.from("meeting_recordings").update({ storage_path: null }).in("id", rows.map((r) => r.id));
+      const sbPaths = rows.map((r) => r.storage_path).filter((p): p is string => !!p);
+      if (sbPaths.length) await admin.storage.from(BUCKET).remove(sbPaths);
+      // ドライブ保存分はテナント毎の組織接続で削除(P1.6)
+      const connCache = new Map<string, Awaited<ReturnType<typeof getActiveConnection>>>();
+      for (const r of rows) {
+        if (!r.drive_file_id) continue;
+        if (!connCache.has(r.tenant_id)) connCache.set(r.tenant_id, await getActiveConnection(r.tenant_id, "gdrive"));
+        const conn = connCache.get(r.tenant_id);
+        if (conn) await deleteDriveFile(conn, r.drive_file_id).catch(() => ({ ok: false }));
+      }
+      await admin.from("meeting_recordings").update({ storage_path: null, drive_file_id: null }).in("id", rows.map((r) => r.id));
       cleaned = rows.length;
     }
   } catch {
     /* 掃除失敗は無視 */
   }
 
-  // 未処理を取得（uploaded 優先、詰まった transcribing(2h超)も回収）
-  const cols = "id, storage_path, mime_type, title, duration_sec, meeting_id, opportunity_id, account_id";
+  // 未処理を取得（uploaded 優先、詰まった transcribing(2h超)も回収）。音声実体はSupabase/ドライブどちらでも可
+  const cols = "id, storage_path, drive_file_id, mime_type, title, duration_sec, meeting_id, opportunity_id, account_id";
+  const hasAudio = "storage_path.not.is.null,drive_file_id.not.is.null";
   const { data: a } = await admin
     .from("meeting_recordings")
     .select(cols)
     .eq("status", "uploaded")
-    .not("storage_path", "is", null)
+    .or(hasAudio)
     .order("created_at", { ascending: true })
     .limit(limit);
   let picked = (a ?? []) as any[]; /* eslint-disable-line @typescript-eslint/no-explicit-any */
@@ -64,7 +76,7 @@ export async function GET(req: Request) {
       .select(cols)
       .eq("status", "transcribing")
       .lt("updated_at", staleIso)
-      .not("storage_path", "is", null)
+      .or(hasAudio)
       .order("created_at", { ascending: true })
       .limit(limit - picked.length);
     picked = picked.concat((b ?? []) as any[]); /* eslint-disable-line @typescript-eslint/no-explicit-any */

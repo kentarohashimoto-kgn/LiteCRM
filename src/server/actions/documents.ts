@@ -14,7 +14,7 @@ import {
 } from "@/lib/storage/gdrive";
 import { INDEX_EXCLUDED, SNAPSHOT_FORCED, SNAPSHOT_MAX_BYTES, DOC_CATEGORIES, type DocCategory } from "@/lib/storage/doc-categories";
 import { logAudit, clientIp } from "@/lib/audit-events";
-import { randomUUID } from "crypto";
+import { asciiStorageKey } from "@/lib/storage-key";
 
 export type DocumentTargetType = "opportunity" | "account" | "lead" | "candidate" | "project" | "knowledge" | "library";
 
@@ -109,7 +109,8 @@ export async function finalizeDriveUploadAction(input: {
     if (dl.ok) {
       try {
         const admin = getSupabaseAdmin();
-        const path = `${ctx.tenantId}/snapshots/${randomUUID()}_${resolved.file.title.replace(/[\\/]/g, "_").slice(0, 120)}`;
+        // キーはASCII限定(日本語名は"Invalid key"で拒否される)。元の名前はdocuments.titleが保持
+        const path = `${ctx.tenantId}/snapshots/${asciiStorageKey(resolved.file.title)}`;
         const { error: upErr } = await admin.storage.from(SNAPSHOT_BUCKET).upload(path, dl.data, {
           contentType: dl.contentType ?? resolved.file.mimeType ?? "application/octet-stream",
           upsert: false,

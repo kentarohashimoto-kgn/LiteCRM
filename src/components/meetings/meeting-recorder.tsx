@@ -162,9 +162,19 @@ export function MeetingRecorder({
     try {
       const up = await getRecordingUploadUrlAction({ id, ext: extFromMime(mime) });
       if (!up.ok) throw new Error(up.error);
-      const put = await fetch(up.signedUrl, { method: "PUT", headers: { "content-type": mime, "x-upsert": "true" }, body: blob });
+      // gdrive=Drive resumable直送(容量制限なし) / supabase=従来の署名URL
+      const headers: Record<string, string> = up.kind === "gdrive"
+        ? { "content-type": mime }
+        : { "content-type": mime, "x-upsert": "true" };
+      const put = await fetch(up.signedUrl, { method: "PUT", headers, body: blob });
       if (!put.ok) throw new Error(`アップロードに失敗しました (${put.status})`);
-      const fin = await finishRecordingAction({ id, durationSec: dur, sizeBytes: blob.size, mimeType: mime });
+      let driveFileId: string | null = null;
+      if (up.kind === "gdrive") {
+        const uploaded = (await put.json().catch(() => ({}))) as { id?: string };
+        if (!uploaded.id) throw new Error("アップロード結果の取得に失敗しました");
+        driveFileId = uploaded.id;
+      }
+      const fin = await finishRecordingAction({ id, durationSec: dur, sizeBytes: blob.size, mimeType: mime, driveFileId });
       if (!fin.ok) throw new Error(fin.error || "保存に失敗しました");
       setPhase("done");
       router.refresh();

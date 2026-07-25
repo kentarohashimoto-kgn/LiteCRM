@@ -1,10 +1,10 @@
 "use server";
 
-import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { asciiStorageKey } from "@/lib/storage-key";
 
 const BUCKET = "attachments";
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
@@ -68,7 +68,8 @@ export async function uploadAttachmentAction(formData: FormData): Promise<void> 
   for (const file of files) {
     if (file.size > MAX_SIZE) continue; // 10MB超はUI側の注意書きで案内。他ファイルは続行。
     const safeName = file.name.replace(/[\\/]/g, "_").slice(0, 150);
-    const path = `${ctx.tenantId}/${targetType}/${targetId}/${randomUUID()}_${safeName}`;
+    // キーはASCII限定(日本語名は"Invalid key"で拒否)。表示名はfile_name列が保持
+    const path = `${ctx.tenantId}/${targetType}/${targetId}/${asciiStorageKey(file.name)}`;
     const buf = Buffer.from(await file.arrayBuffer());
     const { error: upErr } = await admin.storage.from(BUCKET).upload(path, buf, {
       contentType: file.type || "application/octet-stream",
