@@ -28,6 +28,10 @@
     {
       "path": "/api/cron/chat-subscriptions",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/doc-health",
+      "schedule": "30 18 * * *"
     }
   ]
 }

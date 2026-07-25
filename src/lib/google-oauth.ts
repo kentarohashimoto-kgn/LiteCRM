@@ -26,13 +26,13 @@ export function googleOAuthConfigured(): boolean {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
-/** 認可URLを組み立てる。offline+consent で refresh_token を確実に得る。 */
-export function buildGoogleAuthUrl(redirectUri: string, state: string): string {
+/** 認可URLを組み立てる。offline+consent で refresh_token を確実に得る。scopes 省略時はGmail連携用。 */
+export function buildGoogleAuthUrl(redirectUri: string, state: string, scopes?: string): string {
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID ?? "",
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: GOOGLE_SCOPES,
+    scope: scopes ?? GOOGLE_SCOPES,
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "true",

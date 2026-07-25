@@ -11,10 +11,11 @@ import { MemberManager } from "@/components/settings/member-manager";
 import { ProductMaster, type ProductRow } from "@/components/settings/product-master";
 import { NameMaster } from "@/components/settings/name-master";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { GdriveConnectionCard } from "@/components/settings/gdrive-connection-card";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage({ searchParams }: { searchParams: { ok?: string; error?: string } }) {
+export default async function SettingsPage({ searchParams }: { searchParams: { ok?: string; error?: string; saved?: string; detail?: string } }) {
   const ws = await getWorkspaceLite();
   const isAdmin = ["owner", "admin"].includes(ws.ctx.role);
 
@@ -82,6 +83,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: { o
           </ul>
         )}
       </Section>
+
+      {isAdmin && (
+        <Section title="Googleドライブ連携（資料リンク添付・管理者）" className="mb-5">
+          <GdriveConnectionCard searchParams={searchParams} />
+        </Section>
+      )}
 
       {isAdmin && (
         <Section title="メンバーを発行(管理者)" className="mb-5">

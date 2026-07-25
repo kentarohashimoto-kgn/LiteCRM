@@ -34,6 +34,7 @@ import { YOMI_OPTIONS, canReassignOwner, canManageProjects } from "@/lib/constan
 import { deleteOpportunityAction } from "@/server/actions/trash";
 import { ChangeHistory } from "@/components/history/change-history";
 import { AttachmentSection } from "@/components/attachments/attachment-section";
+import { DocumentSection } from "@/components/documents/document-section";
 import { ProposalSection } from "@/components/opportunities/proposal-section";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { SourceSelect, type SourceDetailOption } from "@/components/opportunities/source-select";
@@ -652,6 +653,8 @@ export async function OpportunityDetailView({ id, inPane = false, saved, error }
               </ul>
             )}
           </Section>
+
+          <DocumentSection targetType="opportunity" targetId={o.id} revalidatePath={`/app/opportunities/${o.id}`} />
 
           <AttachmentSection targetType="opportunity" targetId={o.id} revalidatePath={`/app/opportunities/${o.id}`} />
 
