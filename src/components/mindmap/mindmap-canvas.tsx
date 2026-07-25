@@ -27,11 +27,14 @@ import {
   MARKER_LABELS,
   STATUS_LABELS,
   buildTree,
+  edgeInBox,
   layoutMindmap,
   markerBadge,
+  nodeInBox,
   parseMarkdown,
   subtreeIds,
   toMarkdown,
+  visibleBox,
   type MindmapLayout,
   type MindmapLink,
   type MindmapMeta,
@@ -60,6 +63,14 @@ interface Snapshot {
 }
 
 const PAD = 48;
+/** 可視範囲の外側にこの余白ぶんだけ余分に描く(スクロール時のちらつき防止)。 */
+const CULL_MARGIN = 400;
+const MIN_SCALE = 0.1;
+const MAX_SCALE = 2.5;
+
+function clampScale(s: number): number {
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
+}
 
 function uid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -111,8 +122,47 @@ export function MindmapCanvas({
 
   // 表示変換(パン・ズーム)
   const [view, setView] = useState({ tx: 24, ty: 24, scale: 1 });
+  const [viewportSize, setViewportSize] = useState({ w: 1200, h: 700 });
   const viewportRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLTextAreaElement>(null);
+
+  // パン・ズームは1フレーム1回に間引く(ホイールは秒間100回近く発火するため)
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const rafRef = useRef<number | null>(null);
+  const pendingView = useRef<typeof view | null>(null);
+
+  const applyView = useCallback((updater: (v: { tx: number; ty: number; scale: number }) => { tx: number; ty: number; scale: number }) => {
+    pendingView.current = updater(pendingView.current ?? viewRef.current);
+    if (rafRef.current != null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const next = pendingView.current;
+      pendingView.current = null;
+      if (next) setView(next);
+    });
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    },
+    [],
+  );
+
+  // ビューポート実寸(可視範囲の計算に使う)
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setViewportSize({ w: r.width, h: r.height });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Undo/Redo 履歴
   const history = useRef<Snapshot[]>([{ nodes: initialNodes, links: initialLinks }]);
@@ -126,6 +176,27 @@ export function MindmapCanvas({
   const origin = useMemo(() => ({ x: -layout.minX + PAD, y: -layout.minY + PAD }), [layout]);
   const nodeById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const selected = selectedId ? nodeById.get(selectedId) ?? null : null;
+
+  // 可視範囲だけを描く(カリング)。詳細は lib/mindmap.ts の visibleBox() を参照。
+  const viewBox = useMemo(
+    () => visibleBox(view, viewportSize.w, viewportSize.h, origin, CULL_MARGIN),
+    [view, origin, viewportSize],
+  );
+
+  const visibleNodes = useMemo(
+    () =>
+      layout.nodes.filter(
+        (p) =>
+          // 編集中・選択中のノードは画面外でもDOMに残す(フォーカスと操作対象を失わないため)
+          p.node.id === editingId || p.node.id === selectedId || nodeInBox(viewBox, p),
+      ),
+    [layout.nodes, viewBox, editingId, selectedId],
+  );
+
+  const visibleEdges = useMemo(
+    () => layout.edges.filter((e) => edgeInBox(viewBox, e)),
+    [layout.edges, viewBox],
+  );
 
   const childrenOf = useMemo(() => {
     const m = new Map<string, MindmapNode[]>();
@@ -470,11 +541,10 @@ export function MindmapCanvas({
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (panState.current) {
-      setView((v) => ({
-        ...v,
-        tx: (panState.current as { tx: number }).tx + (e.clientX - (panState.current as { x: number }).x),
-        ty: (panState.current as { ty: number }).ty + (e.clientY - (panState.current as { y: number }).y),
-      }));
+      const p = panState.current;
+      const dx = e.clientX - p.x;
+      const dy = e.clientY - p.y;
+      applyView((v) => ({ ...v, tx: p.tx + dx, ty: p.ty + dy }));
       return;
     }
     const d = dragState.current;
@@ -502,13 +572,15 @@ export function MindmapCanvas({
       if (!rect) return;
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
-      setView((v) => {
-        const scale = Math.min(2.5, Math.max(0.2, v.scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+      const dir = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      applyView((v) => {
+        const scale = clampScale(v.scale * dir);
         const k = scale / v.scale;
         return { scale, tx: px - (px - v.tx) * k, ty: py - (py - v.ty) * k };
       });
     } else {
-      setView((v) => ({ ...v, tx: v.tx - e.deltaX, ty: v.ty - e.deltaY }));
+      const { deltaX, deltaY } = e;
+      applyView((v) => ({ ...v, tx: v.tx - deltaX, ty: v.ty - deltaY }));
     }
   };
 
@@ -516,8 +588,8 @@ export function MindmapCanvas({
     const rect = viewportRef.current?.getBoundingClientRect();
     const px = rect ? rect.width / 2 : 0;
     const py = rect ? rect.height / 2 : 0;
-    setView((v) => {
-      const scale = Math.min(2.5, Math.max(0.2, v.scale * factor));
+    applyView((v) => {
+      const scale = clampScale(v.scale * factor);
       const k = scale / v.scale;
       return { scale, tx: px - (px - v.tx) * k, ty: py - (py - v.ty) * k };
     });
@@ -526,7 +598,10 @@ export function MindmapCanvas({
   const fitToScreen = useCallback(() => {
     const rect = viewportRef.current?.getBoundingClientRect();
     if (!rect || layout.width === 0) return;
-    const scale = Math.min(1.2, Math.max(0.2, Math.min(rect.width / (layout.width + PAD * 2), rect.height / (layout.height + PAD * 2))));
+    const scale = Math.min(
+      1.2,
+      Math.max(MIN_SCALE, Math.min(rect.width / (layout.width + PAD * 2), rect.height / (layout.height + PAD * 2))),
+    );
     setView({
       scale,
       tx: (rect.width - (layout.width + PAD * 2) * scale) / 2,
@@ -616,6 +691,14 @@ export function MindmapCanvas({
     commit([...nodes.map((n) => (n.id === selectedId ? { ...n, collapsed: false } : n)), ...added]);
   };
 
+  /** 全体をたたむ/開く。大きなマップを一望したいときの逃げ道。 */
+  const setAllCollapsed = useCallback(
+    (collapsed: boolean) => {
+      commit(nodes.map((n) => (n.parent_id ? { ...n, collapsed } : n)));
+    },
+    [nodes, commit],
+  );
+
   const changeLayout = async (mode: MindmapLayout) => {
     setLayoutMode(mode);
     await updateMindmapMetaAction({ mindmapId: meta.id, layout: mode });
@@ -640,6 +723,8 @@ export function MindmapCanvas({
         <ToolBtn onClick={() => zoomBy(1 / 1.15)} icon={<ZoomOut size={15} />} label="縮小" />
         <ToolBtn onClick={() => zoomBy(1.15)} icon={<ZoomIn size={15} />} label="拡大" />
         <ToolBtn onClick={fitToScreen} icon={<Maximize2 size={15} />} label="全体表示" />
+        <ToolBtn onClick={() => setAllCollapsed(true)} icon={<ChevronRight size={15} />} label="全部たたむ" />
+        <ToolBtn onClick={() => setAllCollapsed(false)} icon={<ChevronDown size={15} />} label="全部開く" />
         <select
           className="input !w-auto !py-1 !px-2 text-xs"
           value={layoutMode}
@@ -693,13 +778,19 @@ export function MindmapCanvas({
             className="absolute top-0 left-0 origin-top-left"
             style={{ transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})` }}
           >
-            {/* エッジ */}
+            {/* エッジ。SVGはマップ全体ではなく「可視範囲ぶん」だけの大きさにする
+                (マップ全体サイズの要素に scale が掛かるとラスタライズでメモリが破綻するため) */}
             <svg
-              className="absolute top-0 left-0 pointer-events-none overflow-visible"
-              width={layout.width + PAD * 2}
-              height={layout.height + PAD * 2}
+              className="absolute pointer-events-none"
+              style={{
+                left: viewBox.x0 + origin.x,
+                top: viewBox.y0 + origin.y,
+                width: Math.max(1, viewBox.x1 - viewBox.x0),
+                height: Math.max(1, viewBox.y1 - viewBox.y0),
+              }}
             >
-              {layout.edges.map((e) => {
+              <g transform={`translate(${-(viewBox.x0 + origin.x)}, ${-(viewBox.y0 + origin.y)})`}>
+              {visibleEdges.map((e) => {
                 const x1 = e.x1 + origin.x;
                 const y1 = e.y1 + origin.y;
                 const x2 = e.x2 + origin.x;
@@ -745,10 +836,11 @@ export function MindmapCanvas({
                   />
                 );
               })}
+              </g>
             </svg>
 
-            {/* ノード */}
-            {layout.nodes.map((p) => {
+            {/* ノード(可視範囲のみ) */}
+            {visibleNodes.map((p) => {
               const n = p.node;
               const isSelected = n.id === selectedId;
               const isDropTarget = dragging?.target === n.id;
@@ -867,6 +959,9 @@ export function MindmapCanvas({
 
           <div className="absolute bottom-2 left-3 text-[11px] text-ink/40 pointer-events-none">
             Tab=子 / Enter=兄弟 / F2=編集 / Delete=削除 / Space=折り畳み / ドラッグで付け替え / Ctrl+ホイール=ズーム
+          </div>
+          <div className="absolute bottom-2 right-3 text-[11px] tabular-nums text-ink/30 pointer-events-none">
+            {nodes.length}ノード（表示 {visibleNodes.length}）/ {Math.round(view.scale * 100)}%
           </div>
         </div>
 

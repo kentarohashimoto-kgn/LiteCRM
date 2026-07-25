@@ -5,9 +5,12 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, X, Maximize } from "lucide-react";
 import {
   buildTree,
+  edgeInBox,
   layoutMindmap,
   markerBadge,
+  nodeInBox,
   subtreeIds,
+  visibleBox,
   type MindmapLayout,
   type MindmapMeta,
   type MindmapNode,
@@ -87,6 +90,17 @@ export function PresentView({
     };
   }, [layout, focusIds, origin, viewport]);
 
+  // プレゼンは折り畳みを無視して全ノードを展開するため、編集画面以上に描画量が増える。
+  // 同じくカリングして、大きなマップでもタブが落ちないようにする。
+  // 余白を広めに取るのは、寄り/引きのアニメーション途中(transform遷移中)に
+  // 通過する範囲まで描いておかないと、移動中に枝が消えて見えるため。
+  const box = useMemo(
+    () => visibleBox(transform, viewport.w, viewport.h, origin, 1200),
+    [transform, viewport, origin],
+  );
+  const shownNodes = useMemo(() => layout.nodes.filter((p) => nodeInBox(box, p)), [layout.nodes, box]);
+  const shownEdges = useMemo(() => layout.edges.filter((e) => edgeInBox(box, e)), [layout.edges, box]);
+
   const next = useCallback(() => setIndex((i) => Math.min(steps.length - 1, i + 1)), [steps.length]);
   const prev = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);
 
@@ -149,11 +163,16 @@ export function PresentView({
           style={{ transform: `translate(${transform.tx}px, ${transform.ty}px) scale(${transform.scale})` }}
         >
           <svg
-            className="pointer-events-none absolute top-0 left-0 overflow-visible"
-            width={layout.width + PAD * 2}
-            height={layout.height + PAD * 2}
+            className="pointer-events-none absolute"
+            style={{
+              left: box.x0 + origin.x,
+              top: box.y0 + origin.y,
+              width: Math.max(1, box.x1 - box.x0),
+              height: Math.max(1, box.y1 - box.y0),
+            }}
           >
-            {layout.edges.map((e) => {
+            <g transform={`translate(${-(box.x0 + origin.x)}, ${-(box.y0 + origin.y)})`}>
+            {shownEdges.map((e) => {
               const active = focusIds.has(e.toId) || focusIds.has(e.fromId);
               const x1 = e.x1 + origin.x;
               const y1 = e.y1 + origin.y;
@@ -172,9 +191,10 @@ export function PresentView({
                 />
               );
             })}
+            </g>
           </svg>
 
-          {layout.nodes.map((p) => {
+          {shownNodes.map((p) => {
             const n = p.node;
             const active = focusIds.has(n.id);
             const isRoot = !n.parent_id;

@@ -79,6 +79,46 @@ export interface WeeklySource {
 
 const DOW = ["月", "火", "水", "木", "金", "土", "日"];
 
+/**
+ * 1枝あたりの表示上限。
+ * 実データでは「期限超過タスク168件」「月末締切タスク122件」のような塊が普通にあり、
+ * 1件1ノードで展開すると数百ノード・縦2万pxの読めないマップになる(実測416ノード)。
+ * 上限を超えた分は「他N件」の1ノードに畳み、詳細は元画面(タスク/案件一覧)で見る方針。
+ */
+export const LIMITS = {
+  dayEvents: 12,
+  dayTasks: 10,
+  overdueTasks: 15,
+  noTouchDeals: 12,
+  noNextAction: 12,
+  dealsPerMonth: 12,
+  sequences: 10,
+  overlaps: 10,
+  prepEvents: 6,
+} as const;
+
+/** この数を超える子を持つ枝は既定で折り畳む(開いた直後に全体像が見える状態にする)。 */
+export const COLLAPSE_OVER = 8;
+
+/** 上限を超えた分を「他N件」ノードにまとめる。 */
+function capped(items: NodeSpec[], max: number, moreLabel: (rest: number) => string): NodeSpec[] {
+  if (items.length <= max) return items;
+  return [...items.slice(0, max), { title: moreLabel(items.length - max) }];
+}
+
+/**
+ * 子が多い枝を既定で折り畳む(ルートは常に開く)。
+ * 生成直後は「週の全体像」が1画面で見え、必要な枝だけ開いて掘る運用にする。
+ */
+export function autoCollapse(spec: NodeSpec, depth = 0): NodeSpec {
+  const children = (spec.children ?? []).map((c) => autoCollapse(c, depth + 1));
+  return {
+    ...spec,
+    collapsed: depth > 0 ? spec.collapsed || children.length > COLLAPSE_OVER : false,
+    children,
+  };
+}
+
 /** YYYY-MM-DD に日数を足す(タイムゾーンに依存しない純計算)。 */
 export function addDays(date: string, days: number): string {
   const [y, m, d] = date.split("-").map(Number);
@@ -218,16 +258,16 @@ export function buildPrepBranch(src: WeeklySource, months: string[]): NodeSpec {
   for (const ym of months) {
     for (const d of dealsForMonth(src.deals, ym)) {
       if (hasTouchThisWeek(d, src.events)) continue;
+      // 「日程を打診する」は子ノードにせず注記に畳む(1件2ノードになるのを避ける)
       noTouch.push({
         title: `${d.accountName ?? "顧客未設定"}｜${d.name}`,
-        note: `${yen(d.amount)}${d.probability != null ? ` / 確度${d.probability}%` : ""}${
+        note: `今週中に日程を打診 / ${yen(d.amount)}${d.probability != null ? ` / 確度${d.probability}%` : ""}${
           d.expectedCloseDate ? ` / 着地${d.expectedCloseDate}` : ""
         }`,
         marker: "alert",
         ref_type: "opportunity",
         ref_id: d.id,
         ref_url: `/app/opportunities/${d.id}`,
-        children: [{ title: "日程を打診する（今週中）", marker: "p1" }],
       });
     }
   }
@@ -235,7 +275,7 @@ export function buildPrepBranch(src: WeeklySource, months: string[]): NodeSpec {
     children.push({
       title: `今週接点なしのクロージング予定 ${noTouch.length}件`,
       marker: "alert",
-      children: noTouch,
+      children: capped(noTouch, LIMITS.noTouchDeals, (r) => `他${r}件（案件一覧で確認）`),
     });
   }
 
@@ -251,7 +291,11 @@ export function buildPrepBranch(src: WeeklySource, months: string[]): NodeSpec {
       ref_url: `/app/opportunities/${d.id}`,
     }));
   if (noNext.length > 0) {
-    children.push({ title: `次アクション未設定 ${noNext.length}件`, marker: "alert", children: noNext });
+    children.push({
+      title: `次アクション未設定 ${noNext.length}件`,
+      marker: "alert",
+      children: capped(noNext, LIMITS.noNextAction, (r) => `他${r}件（案件一覧で確認）`),
+    });
   }
 
   // ③ 予定の重複
@@ -260,27 +304,37 @@ export function buildPrepBranch(src: WeeklySource, months: string[]): NodeSpec {
     children.push({
       title: `予定が重複 ${overlaps.length}件 → 調整`,
       marker: "alert",
-      children: overlaps.map((o) => ({
-        title: `${dayLabelOf(o.a.date, src.weekStart)} ${timeLabel(o.a.startAt)} ${o.a.title} ⇔ ${timeLabel(
-          o.b.startAt,
-        )} ${o.b.title}`,
-      })),
+      children: capped(
+        overlaps.map((o) => ({
+          title: `${dayLabelOf(o.a.date, src.weekStart)} ${timeLabel(o.a.startAt)} ${o.a.title} ⇔ ${timeLabel(
+            o.b.startAt,
+          )} ${o.b.title}`,
+        })),
+        LIMITS.overlaps,
+        (r) => `他${r}件`,
+      ),
     });
   }
 
-  // ④ 期日超過タスク
-  const overdue = src.tasks.filter((t) => t.dueDate < src.weekStart && t.status !== "done");
+  // ④ 期日超過タスク(古い順に効いてくるので、期日が古いものから見せる)
+  const overdue = src.tasks
+    .filter((t) => t.dueDate < src.weekStart && t.status !== "done")
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   if (overdue.length > 0) {
     children.push({
       title: `期日超過タスク ${overdue.length}件`,
       marker: "p1",
-      children: overdue.map((t) => ({
-        title: `(遅延 ${t.dueDate}) ${t.title}`,
-        due_date: t.dueDate,
-        marker: "p1",
-        ref_type: "task",
-        ref_id: t.id,
-      })),
+      children: capped(
+        overdue.map((t) => ({
+          title: `(遅延 ${t.dueDate}) ${t.title}`,
+          due_date: t.dueDate,
+          marker: "p1" as NodeMarker,
+          ref_type: "task" as NodeRefType,
+          ref_id: t.id,
+        })),
+        LIMITS.overdueTasks,
+        (r) => `他${r}件（タスク一覧で確認）`,
+      ),
     });
   }
 
@@ -290,24 +344,26 @@ export function buildPrepBranch(src: WeeklySource, months: string[]): NodeSpec {
     children.push({
       title: "同じ顧客で週内に複数予定（前後関係の確認）",
       marker: "flag",
-      children: seqs.map((s) => ({
-        title: s.account,
-        children: [
-          {
-            title: `${dayLabelOf(s.events[0].date, src.weekStart)} の宿題を ${dayLabelOf(
-              s.events[s.events.length - 1].date,
-              src.weekStart,
-            )} までに提出`,
-            marker: "flag",
-          },
-        ],
-      })),
+      // 宿題の受け渡しは1行で足りるので注記に畳む(顧客ごと2ノードにしない)
+      children: capped(
+        seqs.map((s) => ({
+          title: s.account,
+          marker: "flag" as NodeMarker,
+          note: `${dayLabelOf(s.events[0].date, src.weekStart)} の宿題を ${dayLabelOf(
+            s.events[s.events.length - 1].date,
+            src.weekStart,
+          )} までに提出`,
+        })),
+        LIMITS.sequences,
+        (r) => `他${r}件`,
+      ),
     });
   }
 
   // ⑥ 今週の予定ごとの定型準備(ステージ・ヨミ別)
   const perEvent: NodeSpec[] = [];
   for (const e of src.events) {
+    if (perEvent.length >= LIMITS.prepEvents) break;
     const items = prepForStage(e.stage, e.yomi);
     if (items.length === 0) continue;
     perEvent.push({
@@ -353,29 +409,38 @@ export function buildWeeklyMindmap(src: WeeklySource): NodeSpec {
       .sort((a, b) => (a.startAt ?? "99").localeCompare(b.startAt ?? "99"));
     const dayTasks = src.tasks.filter((t) => t.dueDate === date && t.status !== "done");
 
-    const kids: NodeSpec[] = dayEvents.map((e) => {
-      const time = timeLabel(e.startAt);
-      const head = [time, e.accountName ?? "", e.title].filter(Boolean).join(" ");
-      const prep = prepForStage(e.stage, e.yomi);
-      return {
-        title: head.slice(0, 200),
-        note: e.source === "calendar" ? "Googleカレンダー" : "CRM",
-        ref_type: e.opportunityId ? "opportunity" : ("calendar" as NodeRefType),
-        ref_id: e.opportunityId,
-        ref_url: e.opportunityId ? `/app/opportunities/${e.opportunityId}` : e.url,
-        children: prep.slice(0, 2).map((t) => ({ title: t, marker: "p3" as NodeMarker })),
-      };
-    });
+    const kids: NodeSpec[] = capped(
+      dayEvents.map((e) => {
+        const time = timeLabel(e.startAt);
+        const head = [time, e.accountName ?? "", e.title].filter(Boolean).join(" ");
+        const prep = prepForStage(e.stage, e.yomi);
+        return {
+          title: head.slice(0, 200),
+          note: e.source === "calendar" ? "Googleカレンダー" : "CRM",
+          ref_type: (e.opportunityId ? "opportunity" : "calendar") as NodeRefType,
+          ref_id: e.opportunityId,
+          ref_url: e.opportunityId ? `/app/opportunities/${e.opportunityId}` : e.url,
+          children: prep.slice(0, 2).map((t) => ({ title: t, marker: "p3" as NodeMarker })),
+        };
+      }),
+      LIMITS.dayEvents,
+      (r) => `他${r}件の予定`,
+    );
 
-    for (const t of dayTasks) {
-      kids.push({
-        title: `タスク: ${t.title}`,
-        due_date: t.dueDate,
-        marker: "p2",
-        ref_type: "task",
-        ref_id: t.id,
-      });
-    }
+    // 月末などタスクが数百件ぶら下がる日があるため、日の枝でも必ず上限を掛ける
+    kids.push(
+      ...capped(
+        dayTasks.map((t) => ({
+          title: `タスク: ${t.title}`,
+          due_date: t.dueDate,
+          marker: "p2" as NodeMarker,
+          ref_type: "task" as NodeRefType,
+          ref_id: t.id,
+        })),
+        LIMITS.dayTasks,
+        (r) => `他${r}件のタスク（タスク一覧で確認）`,
+      ),
+    );
 
     children.push({
       title: dayLabel(date, i),
@@ -393,24 +458,29 @@ export function buildWeeklyMindmap(src: WeeklySource): NodeSpec {
       collapsed: list.length === 0,
       children:
         list.length > 0
-          ? list.map((d) => ({
-              title: `${d.accountName ?? "顧客未設定"}｜${d.name}`,
-              note: [
-                yen(d.amount),
-                d.probability != null ? `確度${d.probability}%` : "",
-                d.yomi ?? "",
-                d.expectedCloseDate ? `着地${d.expectedCloseDate}` : "",
-                d.ownerName ? `担当${d.ownerName}` : "",
-              ]
-                .filter(Boolean)
-                .join(" / "),
-              due_date: d.expectedCloseDate,
-              marker: d.nextAction ? "none" : ("alert" as NodeMarker),
-              ref_type: "opportunity",
-              ref_id: d.id,
-              ref_url: `/app/opportunities/${d.id}`,
-              children: d.nextAction ? [{ title: `次アクション: ${d.nextAction}` }] : [],
-            }))
+          ? capped(
+              // 次アクションは子ノードにせず注記に入れる(案件数×2ノードになるのを避ける)
+              list.map((d) => ({
+                title: `${d.accountName ?? "顧客未設定"}｜${d.name}`,
+                note: [
+                  yen(d.amount),
+                  d.probability != null ? `確度${d.probability}%` : "",
+                  d.yomi ?? "",
+                  d.expectedCloseDate ? `着地${d.expectedCloseDate}` : "",
+                  d.ownerName ? `担当${d.ownerName}` : "",
+                  d.nextAction ? `次: ${d.nextAction}` : "次アクション未設定",
+                ]
+                  .filter(Boolean)
+                  .join(" / "),
+                due_date: d.expectedCloseDate,
+                marker: (d.nextAction ? "none" : "alert") as NodeMarker,
+                ref_type: "opportunity" as NodeRefType,
+                ref_id: d.id,
+                ref_url: `/app/opportunities/${d.id}`,
+              })),
+              LIMITS.dealsPerMonth,
+              (r) => `他${r}件（案件一覧で確認）`,
+            )
           : [{ title: "対象なし" }],
     });
   }
@@ -442,7 +512,8 @@ export function buildWeeklyMindmap(src: WeeklySource): NodeSpec {
   }
 
   const [, m, d] = src.weekStart.split("-").map(Number);
-  return { title: `${m}/${d}週の予定`, children };
+  // 子が多い枝は畳んだ状態で返す(開いた直後に週の全体像が1画面で見える)
+  return autoCollapse({ title: `${m}/${d}週の予定`, children });
 }
 
 /** 複数行テキストを箇条書きノード用に分割(最大20行)。 */

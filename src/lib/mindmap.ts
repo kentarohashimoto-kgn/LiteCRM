@@ -440,6 +440,61 @@ function shiftSubtree(entry: PositionedNode, dy: number, positioned: PositionedN
 }
 
 /* ------------------------------------------------------------------ */
+/* 可視範囲(カリング)                                                  */
+/* ------------------------------------------------------------------ */
+
+export interface ViewTransform {
+  tx: number;
+  ty: number;
+  scale: number;
+}
+
+export interface VisibleBox {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/**
+ * 画面に映っているキャンバス座標の範囲を求める。
+ *
+ * 週次マップは数百ノード・縦2万pxに達することがある。全ノードをDOMに置くと
+ * ホイールのたびに全件を再レンダリングして固まり、さらに巨大要素へ transform:scale が
+ * 掛かることでラスタライズ用メモリがGB級に膨らみ、タブごと落ちる。
+ * そこでこの範囲に入るものだけを描画する。
+ */
+export function visibleBox(
+  view: ViewTransform,
+  viewportW: number,
+  viewportH: number,
+  origin: { x: number; y: number },
+  margin = 400,
+): VisibleBox {
+  return {
+    x0: -view.tx / view.scale - origin.x - margin,
+    y0: -view.ty / view.scale - origin.y - margin,
+    x1: (viewportW - view.tx) / view.scale - origin.x + margin,
+    y1: (viewportH - view.ty) / view.scale - origin.y + margin,
+  };
+}
+
+/** ノードの矩形が可視範囲と交差するか。 */
+export function nodeInBox(box: VisibleBox, p: { x: number; y: number; w: number; h: number }): boolean {
+  return p.x < box.x1 && p.x + p.w > box.x0 && p.y < box.y1 && p.y + p.h > box.y0;
+}
+
+/** エッジの外接矩形が可視範囲と交差するか。 */
+export function edgeInBox(box: VisibleBox, e: { x1: number; y1: number; x2: number; y2: number }): boolean {
+  return (
+    Math.min(e.x1, e.x2) < box.x1 &&
+    Math.max(e.x1, e.x2) > box.x0 &&
+    Math.min(e.y1, e.y2) < box.y1 &&
+    Math.max(e.y1, e.y2) > box.y0
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Markdown 入出力                                                     */
 /* ------------------------------------------------------------------ */
 

@@ -9,15 +9,21 @@ import { describe, expect, it } from "vitest";
 import {
   buildTree,
   countDescendants,
+  edgeInBox,
   layoutMindmap,
+  nodeInBox,
   parseMarkdown,
   subtreeIds,
   toMarkdown,
   validateNodes,
+  visibleBox,
   type MindmapNode,
 } from "@/lib/mindmap";
 import {
+  COLLAPSE_OVER,
+  LIMITS,
   addDays,
+  autoCollapse,
   buildWeeklyMindmap,
   dayLabel,
   detectOverlaps,
@@ -25,8 +31,10 @@ import {
   prepForStage,
   weekDays,
   type NodeSpec,
+  type WeeklyDeal,
   type WeeklyEvent,
   type WeeklySource,
+  type WeeklyTask,
 } from "@/lib/mindmap-weekly";
 
 function node(id: string, parent: string | null, title: string, extra: Partial<MindmapNode> = {}): MindmapNode {
@@ -168,6 +176,60 @@ describe("layoutMindmap", () => {
     const a1 = layout.byId.get("a1")!;
     expect(a.color).not.toBe(b.color);
     expect(a1.color).toBe(a.color);
+  });
+});
+
+describe("可視範囲カリング(落ちる原因だった描画量の抑制)", () => {
+  const origin = { x: 0, y: 0 };
+  const view = { tx: 0, ty: 0, scale: 1 };
+
+  it("画面内のノードは描画対象、遠く離れたノードは除外される", () => {
+    const box = visibleBox(view, 1000, 600, origin, 0);
+    expect(nodeInBox(box, { x: 10, y: 10, w: 100, h: 40 })).toBe(true);
+    expect(nodeInBox(box, { x: 10, y: 20000, w: 100, h: 40 })).toBe(false);
+    expect(nodeInBox(box, { x: -5000, y: 10, w: 100, h: 40 })).toBe(false);
+  });
+
+  it("境界にまたがるノードは描画対象に含める(端が切れない)", () => {
+    const box = visibleBox(view, 1000, 600, origin, 0);
+    expect(nodeInBox(box, { x: 960, y: 10, w: 100, h: 40 })).toBe(true); // 右端をまたぐ
+    expect(nodeInBox(box, { x: -50, y: 10, w: 100, h: 40 })).toBe(true); // 左端をまたぐ
+  });
+
+  it("余白ぶんは先読みして描画する(スクロール時のちらつき防止)", () => {
+    const box = visibleBox(view, 1000, 600, origin, 400);
+    expect(nodeInBox(box, { x: 10, y: 800, w: 100, h: 40 })).toBe(true); // 画面外だが余白内
+    expect(nodeInBox(box, { x: 10, y: 1600, w: 100, h: 40 })).toBe(false); // 余白の外
+  });
+
+  it("縮小すると可視範囲が広がり、拡大すると狭まる", () => {
+    const wide = visibleBox({ tx: 0, ty: 0, scale: 0.25 }, 1000, 600, origin, 0);
+    const tight = visibleBox({ tx: 0, ty: 0, scale: 2 }, 1000, 600, origin, 0);
+    expect(wide.y1).toBeGreaterThan(tight.y1);
+    expect(nodeInBox(wide, { x: 10, y: 2000, w: 100, h: 40 })).toBe(true);
+    expect(nodeInBox(tight, { x: 10, y: 2000, w: 100, h: 40 })).toBe(false);
+  });
+
+  it("パンした先のノードが描画対象になる", () => {
+    const panned = visibleBox({ tx: 0, ty: -5000, scale: 1 }, 1000, 600, origin, 0);
+    expect(nodeInBox(panned, { x: 10, y: 5100, w: 100, h: 40 })).toBe(true);
+    expect(nodeInBox(panned, { x: 10, y: 10, w: 100, h: 40 })).toBe(false);
+  });
+
+  it("エッジも外接矩形で判定される", () => {
+    const box = visibleBox(view, 1000, 600, origin, 0);
+    expect(edgeInBox(box, { x1: 10, y1: 10, x2: 200, y2: 300 })).toBe(true);
+    expect(edgeInBox(box, { x1: 10, y1: 9000, x2: 200, y2: 9300 })).toBe(false);
+    expect(edgeInBox(box, { x1: 10, y1: 300, x2: 200, y2: 9000 })).toBe(true); // 画面内から外へ伸びる線
+  });
+
+  it("巨大マップでも描画されるのは一部だけ", () => {
+    // 縦2万px相当に散らばった500ノードを想定
+    const nodes = Array.from({ length: 500 }, (_, i) => ({ x: 0, y: i * 40, w: 200, h: 36 }));
+    const box = visibleBox(view, 1200, 700, origin, 400);
+    const drawn = nodes.filter((n) => nodeInBox(box, n)).length;
+    expect(drawn).toBeLessThan(50);
+    expect(drawn).toBeGreaterThan(0);
   });
 });
 
@@ -436,5 +498,104 @@ describe("buildWeeklyMindmap", () => {
     };
     walk(spec, null);
     expect(validateNodes(rows)).toEqual({ ok: true });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 巨大化の防止(本番で416ノード・縦2万pxになりブラウザが落ちた回帰)      */
+/* ------------------------------------------------------------------ */
+
+function countSpec(spec: NodeSpec): number {
+  return 1 + (spec.children ?? []).reduce((s, c) => s + countSpec(c), 0);
+}
+
+/** 折り畳みを考慮した「最初に描画されるノード数」。 */
+function countVisible(spec: NodeSpec): number {
+  if (spec.collapsed) return 1;
+  return 1 + (spec.children ?? []).reduce((s, c) => s + countVisible(c), 0);
+}
+
+function maxChildren(spec: NodeSpec): number {
+  const kids = spec.children ?? [];
+  return Math.max(kids.length, ...kids.map(maxChildren), 0);
+}
+
+/** 本番と同じ形の高負荷データ: 7/31に122件のタスク、期日超過168件、案件多数。 */
+function heavySource(): WeeklySource {
+  const tasks: WeeklyTask[] = [];
+  for (let i = 0; i < 122; i++) {
+    tasks.push({ id: `t31-${i}`, title: `月末タスク${i}`, dueDate: "2026-07-31", status: "todo", accountName: null, opportunityId: null });
+  }
+  for (let i = 0; i < 168; i++) {
+    tasks.push({ id: `tod-${i}`, title: `遅延タスク${i}`, dueDate: "2026-07-10", status: "todo", accountName: null, opportunityId: null });
+  }
+  const deals: WeeklyDeal[] = [];
+  for (let i = 0; i < 40; i++) {
+    deals.push({
+      id: `d${i}`,
+      name: `案件${i}`,
+      accountName: `顧客${i}`,
+      amount: 1_000_000,
+      probability: 50,
+      yomi: "3.C",
+      stage: "needs_confirmed",
+      expectedCloseDate: i % 2 === 0 ? "2026-07-31" : "2026-08-20",
+      nextAction: i % 3 === 0 ? null : "見積提出",
+      ownerName: "橋本",
+    });
+  }
+  const events: WeeklyEvent[] = [];
+  for (let i = 0; i < 30; i++) {
+    events.push(ev({ id: `e${i}`, date: WEEK, title: `商談${i}`, accountName: `顧客${i}`, stage: "proposal_sent" }));
+  }
+  return source({ tasks, deals, events });
+}
+
+describe("巨大マップの抑制", () => {
+  it("数百件のタスクがあっても1つの枝が上限を超えない", () => {
+    const spec = buildWeeklyMindmap(heavySource());
+    // 上限 + 「他N件」の1ノード が最大
+    const cap = Math.max(LIMITS.dayEvents, LIMITS.dayTasks, LIMITS.overdueTasks, LIMITS.dealsPerMonth) + 1;
+    expect(maxChildren(spec)).toBeLessThanOrEqual(Math.max(cap, 13));
+  });
+
+  it("122件の月末タスクは上限まで畳まれ「他N件」が付く", () => {
+    const spec = buildWeeklyMindmap(heavySource());
+    const friday = (spec.children ?? []).find((c) => c.title === "7/31(金)");
+    expect(friday).toBeTruthy();
+    const more = (friday!.children ?? []).find((c) => c.title.includes("他") && c.title.includes("タスク"));
+    expect(more).toBeTruthy();
+    expect(more!.title).toBe(`他${122 - LIMITS.dayTasks}件のタスク（タスク一覧で確認）`);
+  });
+
+  it("期日超過168件も上限まで畳まれる", () => {
+    const spec = buildWeeklyMindmap(heavySource());
+    const overdue = findChild(spec, (t) => t.startsWith("期日超過タスク"));
+    expect(overdue!.title).toBe("期日超過タスク 168件"); // 件数は正直に出す
+    expect((overdue!.children ?? []).length).toBe(LIMITS.overdueTasks + 1); // 表示は上限+「他N件」
+  });
+
+  it("高負荷データでも総ノード数・初期表示ノード数が実用範囲に収まる", () => {
+    const spec = buildWeeklyMindmap(heavySource());
+    expect(countSpec(spec)).toBeLessThan(200); // 実測416ノードだった回帰
+    expect(countVisible(spec)).toBeLessThan(60); // 開いた直後に読める量
+  });
+
+  it("子が多い枝は既定で折り畳まれ、ルートは常に開く", () => {
+    const spec = buildWeeklyMindmap(heavySource());
+    expect(spec.collapsed).toBe(false);
+    const walk = (s: NodeSpec) => {
+      if ((s.children ?? []).length > COLLAPSE_OVER) expect(s.collapsed).toBe(true);
+      for (const c of s.children ?? []) walk(c);
+    };
+    for (const c of spec.children ?? []) walk(c);
+  });
+
+  it("autoCollapse はルートを開いたまま、閾値超えの枝だけ畳む", () => {
+    const many = Array.from({ length: COLLAPSE_OVER + 1 }, (_, i) => ({ title: `子${i}` }));
+    const out = autoCollapse({ title: "root", children: [{ title: "大きい枝", children: many }, { title: "小さい枝", children: [{ title: "子" }] }] });
+    expect(out.collapsed).toBe(false);
+    expect(out.children![0].collapsed).toBe(true);
+    expect(out.children![1].collapsed).toBe(false);
   });
 });
