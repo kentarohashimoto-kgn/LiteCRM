@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { MoneyInput } from "@/components/ui/money-input";
 import Link from "next/link";
 import { ChevronLeft, FileText, Sparkles, Trash2, FolderKanban } from "lucide-react";
 import { getWorkspaceForOpportunity } from "@/lib/data/workspace";
@@ -359,7 +360,7 @@ export async function OpportunityDetailView({ id, inPane = false, saved, error }
                 </div>
                 <div>
                   <label className="label">金額(円)</label>
-                  <input name="amount" type="number" defaultValue={o.amount} className="input" />
+                  <MoneyInput name="amount" defaultValue={o.amount} placeholder="" className="input" />
                 </div>
                 <div>
                   <label className="label">リスク</label>

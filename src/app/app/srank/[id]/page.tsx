@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { MoneyInput } from "@/components/ui/money-input";
 import Link from "next/link";
 import { ChevronLeft, Trash2 } from "lucide-react";
 import { getSrankDetail } from "@/lib/data/srank";
@@ -39,7 +40,7 @@ export default async function SrankDetailPage({ params }: { params: { id: string
                     <div><label className="label">予算</label><input name="budget_status" defaultValue={d.budget_status ?? ""} className="input text-sm" /></div>
                     <div><label className="label">導入時期</label><input name="timing" defaultValue={d.timing ?? ""} className="input text-sm" /></div>
                     <div><label className="label">提案状況</label><select name="proposal_status" defaultValue={d.proposal_status} className="input text-sm">{PROPOSAL_STATUS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></div>
-                    <div><label className="label">想定金額</label><input name="amount" type="number" defaultValue={d.amount} className="input text-sm" /></div>
+                    <div><label className="label">想定金額</label><MoneyInput name="amount" defaultValue={d.amount} placeholder="" className="input text-sm" /></div>
                     <div><label className="label">横展開可能性</label><select name="expansion_potential" defaultValue={d.expansion_potential ?? ""} className="input text-sm"><option value="">—</option>{LEVEL3.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}</select></div>
                     <div className="md:col-span-2"><label className="label">次アクション</label><input name="next_action" defaultValue={d.next_action ?? ""} className="input text-sm" /></div>
                     <div><label className="label">次アクション日</label><input name="next_action_date" type="date" defaultValue={d.next_action_date ?? ""} className="input text-sm" /></div>
@@ -57,7 +58,7 @@ export default async function SrankDetailPage({ params }: { params: { id: string
                   <input name="decision_maker" placeholder="決裁者" className="input text-sm" />
                   <input name="issue" placeholder="現場課題" className="input text-sm md:col-span-3" />
                   <select name="proposal_status" defaultValue="none" className="input text-sm">{PROPOSAL_STATUS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>
-                  <input name="amount" type="number" placeholder="想定金額" className="input text-sm" />
+                  <MoneyInput name="amount" placeholder="想定金額" className="input text-sm" />
                   <input name="next_action_date" type="date" className="input text-sm" />
                   <SubmitButton className="btn-primary text-sm md:col-span-3" pendingLabel="保存中…">部署を追加</SubmitButton>
                 </form>

@@ -5,6 +5,7 @@ import { getWorkspaceForOpportunity } from "@/lib/data/workspace";
 import { getOpportunity, getUser, listMembers } from "@/lib/data/select";
 import { requireProjectCtx } from "@/lib/session";
 import { getProjectBundle, computeProject, monthRange, monthKey, type ProjAssignment, type CostMonth } from "@/lib/data/projects";
+import { getForecastsForOpportunity } from "@/lib/data/forecasts";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { ProjectRevenueForm } from "@/components/projects/project-revenue-form";
@@ -38,14 +39,32 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
   const members = listMembers(ws).map(({ user }) => user);
   const bundle = await getProjectBundle(params.id);
 
-  // 計画未作成: 案件管理対象化のCTAを出す
+  // 計画未作成: 案件管理対象化のCTA(見込み管理中ならその内容も表示)
   if (!bundle) {
+    const oppForecasts = await getForecastsForOpportunity(o.id);
     return (
       <div>
         <BackLink id={o.id} />
         <PageHeader title={o.account?.name ?? "案件"} subtitle={`${o.name}｜案件管理`} />
+        {oppForecasts.length > 0 && (
+          <Card className="max-w-xl mb-4 border-violet-200 bg-violet-50/40">
+            <div className="text-sm font-semibold text-violet-700 mb-2">📈 この案件は見込み管理中です</div>
+            {oppForecasts.map((f) => (
+              <div key={f.id} className="text-sm text-ink/70 space-y-0.5 mb-2">
+                <div className="font-medium text-ink/85">{f.title}</div>
+                <div className="text-xs text-ink/55">
+                  期間 {f.startMonth ? `${f.startMonth.replace("-", "/")}〜${f.endMonth?.replace("-", "/") ?? ""}` : "未設定"}
+                  ・{f.amountBasis === "monthly" ? `月額 ${formatYen(f.monthlyAmount)}` : `総額 ${formatYen(f.totalAmount)}`}
+                  ・確度 {f.probability}%・必要 {f.requiredHeadcount || 0}名
+                  {f.arrangeDeadline && <span className="text-rose-600">・調整期限 {f.arrangeDeadline}</span>}
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-ink/45">見込みの期間・金額・人員の編集は、カレンダーの「見込み」バッジ(✎)から行えます。</p>
+          </Card>
+        )}
         <Card className="max-w-xl">
-          <p className="text-sm text-ink/70 mb-4">この案件はまだ<b>案件管理対象</b>になっていません。対象にすると、月別の販売・原価・粗利を管理し、提案可否や受注後の予実を追えます。</p>
+          <p className="text-sm text-ink/70 mb-4">この案件はまだ<b>案件管理対象</b>になっていません。対象にすると、月別の販売・原価・粗利を管理し、提案可否や受注後の予実を追えます。{oppForecasts.length > 0 && <>受注したら対象化すると、<b>見込みの期間が計画に引き継がれます</b>。</>}</p>
           <form action={enableProjectManagementAction}>
             <input type="hidden" name="opportunity_id" value={o.id} />
             <SubmitButton className="btn-accent" pendingLabel="準備中…">案件管理を開始する</SubmitButton>

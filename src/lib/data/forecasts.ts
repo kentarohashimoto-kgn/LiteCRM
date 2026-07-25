@@ -58,12 +58,51 @@ export function addMonths(m: string, n: number): string {
   return `${ny}-${String(nm).padStart(2, "0")}`;
 }
 
+/** 案件に紐づく見込み(active)を取得。案件詳細(サイドパネル)での表示用。 */
+export async function getForecastsForOpportunity(oppId: string): Promise<ForecastRow[]> {
+  const sb = getSupabaseServer();
+  const { data, error } = await sb
+    .from("delivery_forecasts")
+    .select("id, kind, opportunity_id, title, start_month, end_month, amount, amount_basis, probability, required_headcount, staffing_status, arrange_deadline, notes")
+    .eq("opportunity_id", oppId)
+    .eq("status", "active")
+    .order("start_month", { ascending: true });
+  if (error) throw new Error(`見込みの取得に失敗: ${error.message}`);
+  return ((data ?? []) as ForecastDbRow[]).map(mapDbRow);
+}
+
 interface ForecastDbRow {
   id: string; kind: string; opportunity_id: string | null; title: string;
   start_month: string | null; end_month: string | null;
   amount: number | null; amount_basis: string; probability: number | null;
   required_headcount: number | null; staffing_status: string;
   arrange_deadline: string | null; notes: string | null;
+}
+
+/** DB行 → ForecastRow(月配列・月額/総額換算を含む)。 */
+function mapDbRow(r: ForecastDbRow): ForecastRow {
+  const startMonth = r.start_month ? monthKey(r.start_month) : null;
+  const endMonth = r.end_month ? monthKey(r.end_month) : null;
+  const months = startMonth && endMonth ? monthRange(r.start_month, r.end_month) : startMonth ? [startMonth] : [];
+  const amount = Number(r.amount) || 0;
+  const basis = (r.amount_basis === "total" ? "total" : "monthly") as AmountBasis;
+  const n = Math.max(1, months.length);
+  const monthlyAmount = basis === "monthly" ? amount : amount / n;
+  const totalAmount = basis === "monthly" ? amount * months.length : amount;
+  return {
+    id: r.id,
+    kind: (r.kind === "new" ? "new" : "continuation") as ForecastKind,
+    opportunityId: r.opportunity_id,
+    title: r.title,
+    startMonth, endMonth, amount, amountBasis: basis,
+    monthlyAmount, totalAmount,
+    probability: r.probability ?? 50,
+    requiredHeadcount: Number(r.required_headcount) || 0,
+    staffingStatus: (["ready", "shortage", "unknown"].includes(r.staffing_status) ? r.staffing_status : "unknown") as StaffingStatus,
+    arrangeDeadline: r.arrange_deadline,
+    notes: r.notes,
+    months,
+  };
 }
 
 /** デリバリー見込みを取得し、月次ロールアップとアラートを算出する。 */
@@ -80,30 +119,7 @@ export async function listDeliveryForecasts(): Promise<ForecastData> {
     .order("start_month", { ascending: true });
   if (error) throw new Error(`デリバリー見込みの取得に失敗: ${error.message}`);
 
-  const rows: ForecastRow[] = ((data ?? []) as ForecastDbRow[]).map((r) => {
-    const startMonth = r.start_month ? monthKey(r.start_month) : null;
-    const endMonth = r.end_month ? monthKey(r.end_month) : null;
-    const months = startMonth && endMonth ? monthRange(r.start_month, r.end_month) : startMonth ? [startMonth] : [];
-    const amount = Number(r.amount) || 0;
-    const basis = (r.amount_basis === "total" ? "total" : "monthly") as AmountBasis;
-    const n = Math.max(1, months.length);
-    const monthlyAmount = basis === "monthly" ? amount : amount / n;
-    const totalAmount = basis === "monthly" ? amount * months.length : amount;
-    return {
-      id: r.id,
-      kind: (r.kind === "new" ? "new" : "continuation") as ForecastKind,
-      opportunityId: r.opportunity_id,
-      title: r.title,
-      startMonth, endMonth, amount, amountBasis: basis,
-      monthlyAmount, totalAmount,
-      probability: r.probability ?? 50,
-      requiredHeadcount: Number(r.required_headcount) || 0,
-      staffingStatus: (["ready", "shortage", "unknown"].includes(r.staffing_status) ? r.staffing_status : "unknown") as StaffingStatus,
-      arrangeDeadline: r.arrange_deadline,
-      notes: r.notes,
-      months,
-    };
-  });
+  const rows: ForecastRow[] = ((data ?? []) as ForecastDbRow[]).map(mapDbRow);
 
   // 今月から12ヶ月のロールアップ
   const windowMonths: string[] = Array.from({ length: 12 }, (_, i) => addMonths(nowMonth, i));

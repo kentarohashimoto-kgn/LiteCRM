@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus, Pencil, Trash2, TriangleAlert, Users, TrendingUp, X, CalendarRange, UserRound, Link2 } from "lucide-react";
 import { saveDeliveryForecastAction, deleteDeliveryForecastAction } from "@/server/actions/forecasts";
 import { setProjectLeadAction, setProjectFollowsAction } from "@/server/actions/projects";
+import { MoneyInput } from "@/components/ui/money-input";
 import type { ForecastAlerts, ForecastRow } from "@/lib/data/forecasts";
 
 /** 確定(原価管理対象)案件の行データ。page.tsx から渡す。 */
@@ -324,11 +325,18 @@ export function UnifiedTimeline({
                               </button>
                             </div>
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 min-w-0 h-full">
+                        ) : g.forecasts[0]?.opportunityId ? (
+                          // 案件に紐づく見込み(未対象化) → サイドパネルで案件詳細を開ける
+                          <Link href={`/app/projects/${g.forecasts[0].opportunityId}?from=calendar`} className="flex items-center gap-1.5 min-w-0 h-full">
                             <span className={`pill ${KIND[g.forecasts[0].kind].cls} text-[10px] font-bold shrink-0`}>{KIND[g.forecasts[0].kind].label}</span>
-                            <span className="font-medium text-ink/90 text-sm truncate">{g.forecasts[0]?.title}</span>
-                          </div>
+                            <span className="font-medium text-ink/90 text-sm truncate hover:text-teal-deep">{g.forecasts[0]?.title}</span>
+                          </Link>
+                        ) : (
+                          // 未紐づけの見込み → クリックで編集モーダル
+                          <button type="button" onClick={() => setEdit(g.forecasts[0])} className="flex items-center gap-1.5 min-w-0 h-full text-left w-full">
+                            <span className={`pill ${KIND[g.forecasts[0].kind].cls} text-[10px] font-bold shrink-0`}>{KIND[g.forecasts[0].kind].label}</span>
+                            <span className="font-medium text-ink/90 text-sm truncate hover:text-teal-deep">{g.forecasts[0]?.title}</span>
+                          </button>
                         )}
                       </div>
                       <div className="px-2 py-1.5 text-right" style={{ width: W_AMT }}>
@@ -602,7 +610,7 @@ function ForecastForm({ forecast, linkOptions, onClose }: { forecast: ForecastRo
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-xs text-ink/50">金額（円）</span>
-              <input name="amount" type="number" min={0} step={10000} defaultValue={f?.amount ?? ""} className="mt-1 w-full rounded-lg border border-black/10 px-2 py-1.5" />
+              <MoneyInput name="amount" defaultValue={f?.amount ?? ""} placeholder="例: 1,500,000" className="mt-1 w-full rounded-lg border border-black/10 px-2 py-1.5" />
             </label>
             <label className="block">
               <span className="text-xs text-ink/50">金額の単位</span>
