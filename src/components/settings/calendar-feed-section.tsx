@@ -33,14 +33,24 @@ export async function CalendarFeedSection({ message, ok }: { message?: string; o
         Googleカレンダーの <strong>非公開URL(iCal形式)</strong> を貼るだけで連携できます（Google側の管理者設定は不要）。
       </p>
 
-      <ol className="text-xs text-ink/60 mb-4 space-y-1 list-decimal list-inside bg-mist-soft rounded-xl p-3">
-        <li>Googleカレンダーを開き、左のカレンダー名の「︙」→ <strong>設定と共有</strong></li>
+      <ol className="text-xs text-ink/60 mb-3 space-y-1 list-decimal list-inside bg-mist-soft rounded-xl p-3">
+        <li>PCのブラウザでGoogleカレンダーを開き、左のカレンダー名の「︙」→ <strong>設定と共有</strong></li>
         <li>下へスクロールして <strong>カレンダーの統合</strong></li>
         <li>
-          <strong>非公開URL（iCal形式）</strong> の値をコピー（<code>.../private-xxxxx/basic.ics</code>）
+          <strong>非公開URL（iCal形式）</strong> の目のアイコンを押して表示し、コピー
         </li>
         <li>下の欄に貼って「連携する」</li>
       </ol>
+
+      <div className="text-xs text-amber-800 bg-amber-50 rounded-xl px-3 py-2 mb-4">
+        <strong>「公開URL」ではなく「非公開URL」です。</strong>
+        同じ画面に2つ並んでいます。正しいURLには <code>/private-</code> が入ります。
+        <br />
+        <span className="text-amber-700">
+          ○ <code>.../ical/xxx%40catorce.jp/<strong>private-xxxxxxxx</strong>/basic.ics</code>
+          <br />× <code>.../ical/xxx%40catorce.jp/<strong>public</strong>/basic.ics</code>（これは公開URL。使えません）
+        </span>
+      </div>
 
       {status.connected ? (
         <div className="space-y-3">

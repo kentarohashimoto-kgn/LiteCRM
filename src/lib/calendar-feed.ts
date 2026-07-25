@@ -9,45 +9,14 @@
 
 import "server-only";
 import { parseIcs, type IcsEvent } from "@/lib/ics";
+import { validateFeedUrl } from "@/lib/calendar-feed-url";
 
-/** 許可するホスト(Googleカレンダーの非公開URLのみ)。 */
-const ALLOWED_HOSTS = ["calendar.google.com"];
+export { validateFeedUrl } from "@/lib/calendar-feed-url";
+export type { FeedUrlCheck } from "@/lib/calendar-feed-url";
 
 /** 取得サイズの上限(巨大なカレンダーでメモリを潰さない)。 */
 const MAX_BYTES = 8 * 1024 * 1024;
 const TIMEOUT_MS = 15000;
-
-export type FeedUrlCheck = { ok: true; url: string } | { ok: false; error: string };
-
-/**
- * 貼り付けられたURLを検証する。
- * Googleの「カレンダーの統合 → 非公開URL(iCal形式)」で得られる
- * https://calendar.google.com/calendar/ical/<id>/private-<key>/basic.ics を想定。
- */
-export function validateFeedUrl(input: string): FeedUrlCheck {
-  const raw = input.trim();
-  if (!raw) return { ok: false, error: "URLを入力してください" };
-
-  let u: URL;
-  try {
-    u = new URL(raw);
-  } catch {
-    return { ok: false, error: "URLの形式が正しくありません" };
-  }
-  // webcal:// で渡されることがあるので https に読み替える
-  if (u.protocol === "webcal:") u.protocol = "https:";
-  if (u.protocol !== "https:") return { ok: false, error: "https のURLを指定してください" };
-  if (!ALLOWED_HOSTS.includes(u.hostname)) {
-    return { ok: false, error: "GoogleカレンダーのURL(calendar.google.com)を指定してください" };
-  }
-  if (!u.pathname.includes("/ical/")) {
-    return { ok: false, error: "「非公開URL(iCal形式)」の .ics で終わるURLを指定してください" };
-  }
-  if (u.pathname.includes("/public/")) {
-    return { ok: false, error: "公開URLではなく「非公開URL(iCal形式)」を指定してください" };
-  }
-  return { ok: true, url: u.toString() };
-}
 
 export type FeedResult =
   | { ok: true; events: IcsEvent[] }

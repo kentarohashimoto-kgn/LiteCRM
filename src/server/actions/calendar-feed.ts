@@ -72,11 +72,15 @@ export async function saveCalendarFeedAction(formData: FormData): Promise<void> 
 
   const fail = (msg: string) => redirectSettings(msg, false);
 
-  if (!mailCredSecretConfigured()) {
-    return fail("MAIL_CRED_SECRET が未設定のため保存できません（環境変数を設定してください）");
-  }
+  const secretMissing = !mailCredSecretConfigured()
+    ? "暗号化キー MAIL_CRED_SECRET が未設定です。Vercel → Settings → Environment Variables に " +
+      "MAIL_CRED_SECRET（openssl rand -base64 48 などで作った長いランダム文字列）を追加し、再デプロイしてください。"
+    : null;
+
+  // 問題は一度にまとめて返す(片方を直したらもう片方で弾かれる、を避ける)
   const checked = validateFeedUrl(url);
-  if (!checked.ok) return fail(checked.error);
+  if (!checked.ok) return fail([checked.error, secretMissing].filter(Boolean).join(" / "));
+  if (secretMissing) return fail(secretMissing);
 
   // 接続テスト: 今日から2週間ぶんを実際に取得
   const now = new Date();
