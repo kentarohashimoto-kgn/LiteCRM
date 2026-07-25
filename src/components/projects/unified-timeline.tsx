@@ -50,7 +50,8 @@ function monthsBetween(a: string, b: string): string[] {
 }
 
 const PRIO = { high: { label: "高", cls: "bg-rose-50 text-rose-600" }, middle: { label: "中", cls: "bg-amber-50 text-amber-700" }, low: { label: "低", cls: "bg-mist-soft text-ink/50" } } as const;
-const KIND = { continuation: { label: "継続見込み", cls: "bg-violet-50 text-violet-700" }, new: { label: "新規見込み", cls: "bg-sky-50 text-sky-700" } } as const;
+const KIND = { continuation: { label: "継続", cls: "bg-violet-50 text-violet-700" }, new: { label: "新規", cls: "bg-sky-50 text-sky-700" } } as const;
+const KIND_LONG = { continuation: "継続見込み", new: "新規見込み" } as const;
 const STAFF = {
   ready: { label: "手当済", cls: "bg-emerald-50 text-emerald-700" },
   shortage: { label: "要手配", cls: "bg-rose-50 text-rose-600" },
@@ -64,10 +65,18 @@ interface Group {
   forecasts: ForecastRow[];
 }
 
+type RangeKey = "6m" | "fy" | "all";
+
+// 左の固定ブロック: フィールドを列に分割して1行の縦を圧縮する
+const W_NAME = 236, W_AMT = 86, W_LEAD = 128, W_FC = 158;
+const W_FROZEN = W_NAME + W_AMT + W_LEAD + W_FC; // 608
+const COL = 62;
+
 /**
  * 原価管理の統合タイムライン。
  * 契約中(確定)・終了・継続見込み・新規見込みを同一表にマージし、
- * 案件に紐づけた見込みは同じ行に描画する。下段に月次の確定売上・加重見込み・必要人員。
+ * 案件に紐づけた見込みは同じ行に描画する。
+ * 月ヘッダー・左の案件情報・下段サマリは固定(スクロール追従)。表示範囲は 前後6ヶ月/年度/全期間 で切替。
  */
 export function UnifiedTimeline({
   confirmed, forecasts, alerts, nowMonth, linkOptions,
@@ -79,6 +88,7 @@ export function UnifiedTimeline({
   linkOptions: LinkOption[];
 }) {
   const [edit, setEdit] = useState<ForecastRow | "new" | null>(null);
+  const [range, setRange] = useState<RangeKey>("6m");
 
   // 案件に紐づく見込みは同じグループ(行)へ、未紐づけは単独行
   const groups = useMemo<Group[]>(() => {
@@ -99,8 +109,15 @@ export function UnifiedTimeline({
     return all.sort((a, b) => rank(a) - rank(b) || lastMonth(b).localeCompare(lastMonth(a)));
   }, [confirmed, forecasts]);
 
-  // 月ウィンドウ(全期間の和集合、過去は当月-6ヶ月まで、最大30列)
+  // 表示範囲(月ウィンドウ)
   const win = useMemo(() => {
+    if (range === "6m") return monthsBetween(addMonths(nowMonth, -6), addMonths(nowMonth, 6));
+    if (range === "fy") {
+      const [y, mo] = nowMonth.split("-").map(Number);
+      const fy = mo >= 4 ? y : y - 1;
+      return monthsBetween(`${fy}-04`, `${fy + 1}-03`);
+    }
+    // 全期間: 全データの和集合(最大36ヶ月・当月含む)
     const set = new Set<string>([nowMonth]);
     for (const g of groups) {
       if (g.confirmed?.startMonth) set.add(g.confirmed.startMonth);
@@ -109,10 +126,21 @@ export function UnifiedTimeline({
       for (const f of g.forecasts) { if (f.startMonth) set.add(f.startMonth); if (f.endMonth) set.add(f.endMonth); }
     }
     const sorted = [...set].sort();
-    let start = sorted[0], end = sorted[sorted.length - 1];
-    if (monthsBetween(start, end).length > 30) start = addMonths(nowMonth, -6) > start ? addMonths(nowMonth, -6) : start;
+    let start = sorted[0];
+    const end = sorted[sorted.length - 1];
+    if (monthsBetween(start, end).length > 36) start = addMonths(nowMonth, -6) > start ? addMonths(nowMonth, -6) : start;
     return monthsBetween(start, end);
-  }, [groups, nowMonth]);
+  }, [groups, nowMonth, range]);
+  const winStart = win[0], winEnd = win[win.length - 1];
+
+  // 範囲内にバーが1本もないグループは非表示(件数だけ知らせる)
+  const overlaps = (s: string | null, e: string | null) => !!s && (e ?? s)! >= winStart && s <= winEnd;
+  const visible = useMemo(
+    () => (range === "all" ? groups : groups.filter((g) => overlaps(g.confirmed?.startMonth ?? null, g.confirmed?.endMonth ?? null) || g.forecasts.some((f) => overlaps(f.startMonth, f.endMonth)))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [groups, range, winStart, winEnd]
+  );
+  const hiddenCount = groups.length - visible.length;
 
   // 終了以外(契約中/開始前)で責任者が未指名の案件数 → 「誰が見ているか」不安な案件
   const noLeadCount = useMemo(
@@ -120,7 +148,7 @@ export function UnifiedTimeline({
     [confirmed]
   );
 
-  // 月次フッタ: 確定売上 / 見込み(加重) / 必要人員(うち要手配)
+  // 月次フッタ: 確定売上 / 見込み(加重) / 合計 / 必要人員(うち要手配)
   const footer = useMemo(() => {
     const map = new Map(win.map((m) => [m, { confirmed: 0, weighted: 0, required: 0, shortage: 0 }]));
     for (const c of confirmed) for (const cell of c.monthly) {
@@ -135,7 +163,9 @@ export function UnifiedTimeline({
     return map;
   }, [confirmed, forecasts, win]);
 
-  const COL = 62, NAME = 250;
+  const RangeSeg = ({ k, label }: { k: RangeKey; label: string }) => (
+    <button type="button" onClick={() => setRange(k)} className={`seg ${range === k ? "seg-on" : "seg-off"} !py-1 !text-xs`}>{label}</button>
+  );
 
   return (
     <div className="space-y-4">
@@ -163,7 +193,7 @@ export function UnifiedTimeline({
           <div className="text-xs font-semibold text-amber-700">🚨 早めの調整が必要な見込み</div>
           {alerts.actionItems.slice(0, 8).map((f) => (
             <button key={f.id} type="button" onClick={() => setEdit(f)} className="flex w-full items-center gap-2 text-left text-xs rounded-lg px-2 py-1 hover:bg-white/70">
-              <span className={`pill ${KIND[f.kind].cls} text-[10px] font-bold`}>{KIND[f.kind].label}</span>
+              <span className={`pill ${KIND[f.kind].cls} text-[10px] font-bold`}>{KIND_LONG[f.kind]}</span>
               <span className="font-medium text-ink/80">{f.title}</span>
               <span className="text-ink/45">開始 {f.startMonth ? ymFull(f.startMonth) : "—"}</span>
               {f.arrangeDeadline && <span className="text-rose-600">調整期限 {f.arrangeDeadline}</span>}
@@ -174,37 +204,51 @@ export function UnifiedTimeline({
         </div>
       )}
 
-      {/* 凡例 + 責任者アラート + 追加 */}
+      {/* 表示範囲 + 凡例 + 責任者アラート + 追加 */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 text-[11px] text-ink/55 flex-wrap">
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-2.5 rounded-sm bg-teal-primary" />契約中</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-2.5 rounded-sm bg-ink/35" />終了</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-2.5 rounded-sm bg-teal-primary/45" />開始前(確定)</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-2.5 rounded-sm border border-dashed border-ink/40 bg-emerald-500/70" />見込み(色=確度: 緑≥70/黄40-69/赤&lt;40)</span>
-          {noLeadCount > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-bold">
-              <TriangleAlert size={11} /> 責任者未指名 {noLeadCount}件
-            </span>
-          )}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="inline-flex items-center gap-0.5 rounded-xl bg-mist-soft p-1">
+            <RangeSeg k="6m" label="前後6ヶ月" />
+            <RangeSeg k="fy" label="年度" />
+            <RangeSeg k="all" label="全期間" />
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-ink/55 flex-wrap">
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-2.5 rounded-sm bg-teal-primary" />契約中</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-2.5 rounded-sm bg-ink/35" />終了</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-2.5 rounded-sm bg-teal-primary/45" />開始前(確定)</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-2.5 rounded-sm border border-dashed border-ink/40 bg-emerald-500/70" />見込み(緑≥70/黄40-69/赤&lt;40)</span>
+            {noLeadCount > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-bold">
+                <TriangleAlert size={11} /> 責任者未指名 {noLeadCount}件
+              </span>
+            )}
+            {hiddenCount > 0 && <span className="text-ink/40">表示範囲外 {hiddenCount}件（「全期間」で表示）</span>}
+          </div>
         </div>
         <button type="button" onClick={() => setEdit("new")} className="inline-flex items-center gap-1 rounded-lg bg-teal-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-deep shrink-0">
           <Plus size={14} /> 見込みを追加
         </button>
       </div>
 
-      {groups.length === 0 ? (
+      {visible.length === 0 ? (
         <div className="py-12 text-center">
           <CalendarRange size={28} className="mx-auto text-ink/25 mb-2" />
-          <p className="text-sm text-ink/50">表示する案件・見込みがありません。</p>
+          <p className="text-sm text-ink/50">この表示範囲に案件・見込みがありません。</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-black/[0.06]">
-          <div style={{ minWidth: NAME + win.length * COL }}>
-            {/* ヘッダ月 */}
-            <div className="flex sticky top-0 z-10 bg-mist-soft/60 backdrop-blur text-xs text-ink/50 border-b border-black/[0.06]">
-              <div className="shrink-0 px-3 py-2 font-medium" style={{ width: NAME }}>案件 / 顧客</div>
+        // 縦横スクロール領域: 月ヘッダーは上に、左の案件情報は左に、サマリは下に固定
+        <div className="overflow-auto rounded-xl border border-black/[0.06]" style={{ maxHeight: "66vh" }}>
+          <div style={{ minWidth: W_FROZEN + win.length * COL }}>
+            {/* ヘッダ */}
+            <div className="flex sticky top-0 z-30 bg-mist-soft text-xs text-ink/50 border-b border-black/[0.06]">
+              <div className="sticky left-0 z-40 flex shrink-0 bg-mist-soft border-r border-black/[0.08]" style={{ width: W_FROZEN }}>
+                <div className="px-3 py-2 font-medium" style={{ width: W_NAME }}>案件 / 顧客</div>
+                <div className="px-2 py-2 font-medium text-right" style={{ width: W_AMT }}>金額</div>
+                <div className="px-2 py-2 font-medium" style={{ width: W_LEAD }}>担当</div>
+                <div className="px-2 py-2 font-medium" style={{ width: W_FC }}>見込み</div>
+              </div>
               {win.map((m) => (
-                <div key={m} className={`shrink-0 text-center py-2 border-l ${m === nowMonth ? "bg-teal-light/60 text-teal-deep font-bold" : Number(m.split("-")[1]) === 1 ? "border-black/10" : "border-black/[0.04]"}`} style={{ width: COL }}>
+                <div key={m} className={`shrink-0 text-center py-2 border-l ${m === nowMonth ? "bg-teal-light/80 text-teal-deep font-bold" : Number(m.split("-")[1]) === 1 ? "border-black/10" : "border-black/[0.04]"}`} style={{ width: COL }}>
                   <div className="leading-tight">{ymLabel(m)}</div>
                   <div className="text-[10px] text-ink/35 leading-tight">{Number(m.split("-")[1]) === 1 || m === win[0] ? m.split("-")[0] : ""}</div>
                 </div>
@@ -213,7 +257,7 @@ export function UnifiedTimeline({
 
             {/* 行 */}
             <div className="divide-y divide-black/[0.04]">
-              {groups.map((g) => {
+              {visible.map((g) => {
                 const c = g.confirmed;
                 const revBy = new Map((c?.monthly ?? []).map((x) => [x.month, x.revenue]));
                 const statusPill = c?.isActive
@@ -225,34 +269,51 @@ export function UnifiedTimeline({
                       : null;
                 return (
                   <div key={g.key} className="flex row-hover items-stretch">
-                    {/* 左: 案件情報 */}
-                    <div className="shrink-0 px-3 py-2" style={{ width: NAME }}>
-                      {c ? (
-                        <Link href={`/app/projects/${c.opportunityId}`} className="block">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={`pill ${PRIO[c.priority].cls} text-[10px] font-bold`}>{PRIO[c.priority].label}</span>
-                            <span className="font-medium text-ink/90 text-sm truncate">{c.accountName}</span>
-                            {statusPill && <span className={`pill ${statusPill.cls} text-[10px]`}>{statusPill.t}</span>}
+                    {/* 左: 固定4列(案件/金額/担当/見込み)に分割して縦を圧縮 */}
+                    <div className="sticky left-0 z-10 flex shrink-0 bg-white border-r border-black/[0.08]" style={{ width: W_FROZEN }}>
+                      <div className="px-3 py-1.5 min-w-0" style={{ width: W_NAME }}>
+                        {c ? (
+                          <Link href={`/app/projects/${c.opportunityId}?from=calendar`} className="block min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className={`pill ${PRIO[c.priority].cls} text-[10px] font-bold shrink-0`}>{PRIO[c.priority].label}</span>
+                              <span className="font-medium text-ink/90 text-sm truncate">{c.accountName}</span>
+                              {statusPill && <span className={`pill ${statusPill.cls} text-[10px] shrink-0`}>{statusPill.t}</span>}
+                            </div>
+                            <div className="text-[11px] text-teal-deep truncate">{c.oppName}</div>
+                          </Link>
+                        ) : (
+                          <div className="flex items-center gap-1.5 min-w-0 h-full">
+                            <span className={`pill ${KIND[g.forecasts[0].kind].cls} text-[10px] font-bold shrink-0`}>{KIND[g.forecasts[0].kind].label}</span>
+                            <span className="font-medium text-ink/90 text-sm truncate">{g.forecasts[0]?.title}</span>
                           </div>
-                          <div className="text-[11px] text-teal-deep truncate">{c.oppName}</div>
-                          <div className="text-[10px] text-ink/40">{yen(c.revenue)}・粗利率 {(c.grossRate * 100).toFixed(0)}%</div>
-                        </Link>
-                      ) : (
-                        <div>
-                          <div className="font-medium text-ink/90 text-sm truncate">{g.forecasts[0]?.title}</div>
-                        </div>
-                      )}
-                      {/* 主担当(責任者): 名前を表示、その場で指名も可能 */}
-                      {c && <LeadBadge row={c} />}
-                      {/* 紐づく見込みのバッジ＋編集 */}
-                      {g.forecasts.map((f) => (
-                        <div key={f.id} className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          <span className={`pill ${KIND[f.kind].cls} text-[10px] font-bold`}>{KIND[f.kind].label} {f.probability}%</span>
-                          <span className={`pill ${STAFF[f.staffingStatus].cls} text-[10px]`}>{STAFF[f.staffingStatus].label}{f.requiredHeadcount ? ` ${f.requiredHeadcount}名` : ""}</span>
-                          {f.arrangeDeadline && <span className="text-[10px] text-rose-600">期限 {f.arrangeDeadline}</span>}
-                          <button type="button" onClick={() => setEdit(f)} className="text-[10px] text-ink/40 hover:text-teal-deep inline-flex items-center gap-0.5"><Pencil size={10} />編集</button>
-                        </div>
-                      ))}
+                        )}
+                      </div>
+                      <div className="px-2 py-1.5 text-right" style={{ width: W_AMT }}>
+                        {c ? (
+                          <>
+                            <div className="text-xs text-ink/75 font-medium tabular-nums">{yenShort(c.revenue)}</div>
+                            <div className="text-[10px] text-ink/40">{(c.grossRate * 100).toFixed(0)}%</div>
+                          </>
+                        ) : (
+                          <div className="text-xs text-ink/60 tabular-nums">{yenShort(g.forecasts[0]?.monthlyAmount ?? 0)}<span className="text-[9px] text-ink/35">/月</span></div>
+                        )}
+                      </div>
+                      <div className="px-2 py-1.5 min-w-0" style={{ width: W_LEAD }}>
+                        {c ? <LeadBadge row={c} /> : <span className="text-[10px] text-ink/25">—</span>}
+                      </div>
+                      <div className="px-2 py-1.5 min-w-0" style={{ width: W_FC }}>
+                        {g.forecasts.length === 0 ? (
+                          <span className="text-[10px] text-ink/25">—</span>
+                        ) : (
+                          g.forecasts.map((f) => (
+                            <button key={f.id} type="button" onClick={() => setEdit(f)} className="flex items-center gap-1 w-full text-left group" title={`${KIND_LONG[f.kind]} ${f.probability}%・${STAFF[f.staffingStatus].label}${f.arrangeDeadline ? `・期限 ${f.arrangeDeadline}` : ""}`}>
+                              <span className={`pill ${KIND[f.kind].cls} text-[10px] font-bold shrink-0`}>{KIND[f.kind].label}{f.probability}%</span>
+                              <span className={`pill ${STAFF[f.staffingStatus].cls} text-[10px] shrink-0`}>{STAFF[f.staffingStatus].label}{f.requiredHeadcount ? `${f.requiredHeadcount}` : ""}</span>
+                              <Pencil size={10} className="text-ink/25 group-hover:text-teal-deep shrink-0" />
+                            </button>
+                          ))
+                        )}
+                      </div>
                     </div>
 
                     {/* 右: タイムラインセル */}
@@ -262,12 +323,12 @@ export function UnifiedTimeline({
                       const overlap = confIn && fIns.length > 0;
                       const isConfStart = m === c?.startMonth, isConfEnd = m === c?.endMonth;
                       return (
-                        <div key={m} className={`shrink-0 relative border-l ${m === nowMonth ? "bg-teal-light/25" : Number(m.split("-")[1]) === 1 ? "border-black/10" : "border-black/[0.03]"}`} style={{ width: COL, minHeight: 44 }}>
+                        <div key={m} className={`shrink-0 relative border-l ${m === nowMonth ? "bg-teal-light/25" : Number(m.split("-")[1]) === 1 ? "border-black/10" : "border-black/[0.03]"}`} style={{ width: COL, minHeight: 42 }}>
                           {confIn && c && (
                             <div
                               className={`absolute flex items-center justify-center text-[10px] font-semibold text-white ${c.isPast ? "bg-ink/35" : c.isFuture ? "bg-teal-primary/45" : "bg-teal-primary"}`}
                               style={{
-                                top: 6, bottom: overlap ? "52%" : 6,
+                                top: 5, bottom: overlap ? "52%" : 5,
                                 left: isConfStart ? 5 : 0, right: isConfEnd ? 5 : 0,
                                 borderTopLeftRadius: isConfStart ? 6 : 0, borderBottomLeftRadius: isConfStart ? 6 : 0,
                                 borderTopRightRadius: isConfEnd ? 6 : 0, borderBottomRightRadius: isConfEnd ? 6 : 0,
@@ -284,7 +345,7 @@ export function UnifiedTimeline({
                                 key={f.id}
                                 className={`absolute flex items-center justify-center text-[10px] font-semibold text-white border border-dashed border-white/70 ${probBg(f.probability)} ${f.staffingStatus === "shortage" ? "ring-1 ring-rose-400" : ""}`}
                                 style={{
-                                  top: overlap || i > 0 ? "52%" : 6, bottom: 6,
+                                  top: overlap || i > 0 ? "52%" : 5, bottom: 5,
                                   left: isS ? 5 : 0, right: isE ? 5 : 0,
                                   borderTopLeftRadius: isS ? 6 : 0, borderBottomLeftRadius: isS ? 6 : 0,
                                   borderTopRightRadius: isE ? 6 : 0, borderBottomRightRadius: isE ? 6 : 0,
@@ -303,8 +364,8 @@ export function UnifiedTimeline({
               })}
             </div>
 
-            {/* フッタ: 月次サマリ */}
-            <div className="border-t-2 border-black/10 bg-mist-soft/20 text-[11px]">
+            {/* フッタ: 月次サマリ(下に固定) */}
+            <div className="sticky bottom-0 z-20 border-t-2 border-black/10 bg-mist-soft text-[11px]">
               <FooterRow label="確定売上(契約)" win={win} nowMonth={nowMonth} render={(m) => { const v = footer.get(m)!.confirmed; return v ? <span className="text-ink/75 font-semibold">{yenShort(v)}</span> : null; }} />
               <FooterRow label="見込み(確度加重)" win={win} nowMonth={nowMonth} render={(m) => { const v = footer.get(m)!.weighted; return v ? <span className="text-violet-600 font-semibold">{yenShort(v)}</span> : null; }} />
               <FooterRow label="合計" win={win} nowMonth={nowMonth} render={(m) => { const x = footer.get(m)!; const v = x.confirmed + x.weighted; return v ? <span className="text-teal-deep font-bold">{yenShort(v)}</span> : null; }} />
@@ -320,12 +381,11 @@ export function UnifiedTimeline({
 }
 
 function FooterRow({ label, win, nowMonth, render }: { label: string; win: string[]; nowMonth: string; render: (m: string) => React.ReactNode }) {
-  const NAME = 250, COL = 62;
   return (
     <div className="flex border-t border-black/[0.05] first:border-t-0">
-      <div className="shrink-0 px-3 py-1.5 font-medium text-ink/60" style={{ width: NAME }}>{label}</div>
+      <div className="sticky left-0 z-30 shrink-0 px-3 py-1.5 font-medium text-ink/60 bg-mist-soft border-r border-black/[0.08]" style={{ width: W_FROZEN }}>{label}</div>
       {win.map((m) => (
-        <div key={m} className={`shrink-0 text-center py-1.5 border-l border-black/[0.03] ${m === nowMonth ? "bg-teal-light/30" : ""}`} style={{ width: COL }}>{render(m)}</div>
+        <div key={m} className={`shrink-0 text-center py-1.5 border-l border-black/[0.03] ${m === nowMonth ? "bg-teal-light/40" : ""}`} style={{ width: COL }}>{render(m)}</div>
       ))}
     </div>
   );
@@ -344,37 +404,37 @@ function LeadBadge({ row }: { row: ConfirmedRow }) {
   if (!editing) {
     if (lead) {
       return (
-        <button type="button" onClick={() => setEditing(true)} className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-teal-deep font-medium hover:underline" title="クリックで担当を変更">
-          <UserRound size={11} /> {lead.label}（{KINDLBL[lead.kind] ?? lead.kind}）
+        <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1 text-[11px] text-teal-deep font-medium hover:underline max-w-full" title="クリックで担当を変更">
+          <UserRound size={11} className="shrink-0" /> <span className="truncate">{lead.label}（{KINDLBL[lead.kind] ?? lead.kind}）</span>
         </button>
       );
     }
     if (row.assignees.length === 0) {
       return (
-        <Link href={`/app/projects/${row.opportunityId}`} className={`mt-0.5 inline-flex items-center gap-1 text-[11px] ${row.isPast ? "text-ink/30" : "text-amber-600 font-medium"} hover:underline`} title="アサインを登録すると責任者を指名できます">
-          <TriangleAlert size={11} /> アサイン未登録
+        <Link href={`/app/projects/${row.opportunityId}?from=calendar`} className={`inline-flex items-center gap-1 text-[11px] ${row.isPast ? "text-ink/30" : "text-amber-600 font-medium"} hover:underline`} title="アサインを登録すると責任者を指名できます">
+          <TriangleAlert size={11} className="shrink-0" /> アサイン未登録
         </Link>
       );
     }
     return (
-      <button type="button" onClick={() => setEditing(true)} className={`mt-0.5 inline-flex items-center gap-1 text-[11px] ${row.isPast ? "text-ink/30" : "text-amber-600 font-medium"} hover:underline`} title="クリックで責任者を指名">
-        <TriangleAlert size={11} /> 責任者未指名
+      <button type="button" onClick={() => setEditing(true)} className={`inline-flex items-center gap-1 text-[11px] ${row.isPast ? "text-ink/30" : "text-amber-600 font-medium"} hover:underline`} title="クリックで責任者を指名">
+        <TriangleAlert size={11} className="shrink-0" /> 責任者未指名
       </button>
     );
   }
 
   return (
-    <form action={setProjectLeadAction} className="mt-0.5">
+    <form action={setProjectLeadAction}>
       <input type="hidden" name="opportunity_id" value={row.opportunityId} />
-      <div className="inline-flex items-center gap-1">
-        <UserRound size={11} className="text-ink/40" />
+      <div className="inline-flex items-center gap-1 max-w-full">
+        <UserRound size={11} className="text-ink/40 shrink-0" />
         <select
           name="lead_assignment_id"
           defaultValue={row.leadAssignmentId ?? ""}
           autoFocus
           onChange={(e) => e.currentTarget.form?.requestSubmit()}
           onBlur={() => setEditing(false)}
-          className="text-[11px] rounded-md border border-black/10 bg-white px-1 py-0.5 max-w-[150px]"
+          className="text-[11px] rounded-md border border-black/10 bg-white px-1 py-0.5 max-w-[110px]"
         >
           <option value="">未指名</option>
           {row.assignees.map((a) => (

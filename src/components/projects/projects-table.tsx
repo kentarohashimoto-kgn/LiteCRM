@@ -121,7 +121,7 @@ export function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
             return (
               <tr key={r.opportunityId} className="row-hover align-top">
                 <td className="td">
-                  <Link href={`/app/projects/${r.opportunityId}`} className="block">
+                  <Link href={`/app/projects/${r.opportunityId}?from=list`} className="block">
                     <div className="font-medium text-ink/90">{r.accountName}</div>
                     <div className="text-xs text-teal-deep">{r.oppName}</div>
                   </Link>
