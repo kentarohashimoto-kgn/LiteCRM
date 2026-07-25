@@ -19,6 +19,7 @@ import { costVariance } from "@/lib/project-cost";
 import { getApprovedWorkByPlan } from "@/lib/data/work-log";
 import { hoursToCost, formatHoursHM } from "@/lib/work-time";
 import { formatYen, formatPercent, formatDateFull } from "@/lib/utils";
+import { DocumentSection } from "@/components/documents/document-section";
 
 export const dynamic = "force-dynamic";
 
@@ -403,6 +404,8 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
               <SubmitButton className="btn-primary" pendingLabel="保存中…">計画を保存</SubmitButton>
             </form>
           </Section>
+
+          <DocumentSection targetType="project" targetId={o.id} revalidatePath={`/app/projects/${o.id}`} />
 
           <Section title="対象設定">
             <p className="text-xs text-ink/50 mb-2">担当営業：{o.owner_user_id ? getUser(ws, o.owner_user_id)?.name ?? "—" : "—"}</p>

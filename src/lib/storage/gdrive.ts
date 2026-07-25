@@ -34,7 +34,36 @@ const DEFAULT_CATEGORY_FOLDERS: Record<string, string> = {
   "0AJ7lOEbLbfXGUk9PVA": "案件",
 };
 
-export const GDRIVE_SCOPES = "https://www.googleapis.com/auth/drive.readonly";
+/**
+ * P1.5でアップロード(書込)に対応したため drive フルスコープ。
+ * readonly時代の接続では書込が403になるため、設定画面の「再接続」で取り直す
+ * (書込可否は接続時に保存する config.scopes で判定する)。
+ */
+export const GDRIVE_SCOPES = "https://www.googleapis.com/auth/drive";
+export const GDRIVE_WRITE_SCOPE = "https://www.googleapis.com/auth/drive";
+
+/**
+ * 種別→アップロード先フォルダの既定マップ(カトルセ環境)。
+ * 「その他」は資料庫ドライブ直下。テナント毎に config.uploadFolders で上書き可能。
+ */
+const DEFAULT_UPLOAD_FOLDERS: Record<string, string> = {
+  提案書: "1T7PKT0UTk-_FrZGXi7D-0oJAAdKkPXSB",
+  企画書: "1s9SwmGsmP3-75PJLDz3cn5BOSudeZi1B",
+  研修資料: "1CZrOV4JvmrQbISZmxIb9VB-phYJEDXTW",
+  技術資料: "1ODh5lXXBBZvrYOPjDnqr5zOKIAS9AtoQ",
+  営業ツール: "1sQShNdr_ODbEw5xZgJ2sEwWsSC4mBZ8U",
+  テンプレート: "1axL2wyi6TFPtbMFOD_n3uh9j_KZpmYqR",
+  契約書類: "1wI8AGkIjtQHPa174UmS09Vnk4iNeDjac",
+  請求: "1TxxEHBzpYVUcEJ7PXsMfoOucQUv6M6WL",
+  人事: "1q39kyzYoaEg4TT2VFqrVxpZUkPGSP1U_",
+  その他: "0AAf9Tw3eZeIgUk9PVA", // 601_CRM_資料庫 直下
+};
+
+/** 種別からアップロード先フォルダIDを解決する。 */
+export function resolveUploadFolder(conn: StorageConnection, category: string): string | null {
+  const custom = (conn.config?.uploadFolders ?? {}) as Record<string, string>;
+  return custom[category] ?? DEFAULT_UPLOAD_FOLDERS[category] ?? null;
+}
 
 /** Drive の各種URL/生IDから fileId を取り出す。 */
 export function parseDriveFileId(input: string): string | null {
@@ -91,6 +120,59 @@ async function accessTokenOf(conn: StorageConnection): Promise<{ ok: true; token
   const t = await refreshAccessToken(conn.refreshToken);
   if (!t.ok) return { ok: false, error: t.error };
   return { ok: true, token: t.accessToken };
+}
+
+/**
+ * P1.5 resumableアップロードセッションを開始し、ブラウザが直接PUTできるURLを返す。
+ * Vercelのリクエストボディ上限(約4.5MB)を回避するため、ファイル本体はブラウザ→Google直送。
+ * CORSのため Origin ヘッダにアプリのオリジンを渡す(返るセッションURLがそのオリジンを許可する)。
+ */
+export async function createResumableUploadSession(
+  conn: StorageConnection,
+  input: { fileName: string; mimeType: string; parentId: string },
+): Promise<{ ok: true; sessionUrl: string } | { ok: false; error: string }> {
+  const tok = await accessTokenOf(conn);
+  if (!tok.ok) return { ok: false, error: `Google認証エラー: ${tok.error}` };
+  const origin = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+  const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${tok.token}`,
+      "Content-Type": "application/json; charset=UTF-8",
+      "X-Upload-Content-Type": input.mimeType || "application/octet-stream",
+      ...(origin ? { Origin: origin } : {}),
+    },
+    body: JSON.stringify({ name: input.fileName, parents: [input.parentId] }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string; errors?: { reason?: string }[] } };
+    const reason = body.error?.errors?.[0]?.reason;
+    if (res.status === 403 && (reason === "insufficientPermissions" || reason === "insufficientScopes" || reason === "forbidden")) {
+      return { ok: false, error: "接続が読み取り専用です。設定画面からGoogleドライブを再接続してください(書込権限の取り直し)" };
+    }
+    return { ok: false, error: body.error?.message || `Drive APIエラー(${res.status})` };
+  }
+  const sessionUrl = res.headers.get("Location");
+  if (!sessionUrl) return { ok: false, error: "アップロードセッションの開始に失敗しました" };
+  return { ok: true, sessionUrl };
+}
+
+/** P1.5 静止点コピー用: ファイル本体をダウンロード(上限バイト保護つき)。 */
+export async function downloadDriveFile(
+  conn: StorageConnection,
+  fileId: string,
+  maxBytes: number,
+): Promise<{ ok: true; data: Buffer; contentType: string | null } | { ok: false; error: string }> {
+  const tok = await accessTokenOf(conn);
+  if (!tok.ok) return { ok: false, error: tok.error };
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
+    { headers: { Authorization: `Bearer ${tok.token}` } },
+  );
+  if (!res.ok) return { ok: false, error: `ダウンロード失敗(${res.status})` };
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.byteLength > maxBytes) return { ok: false, error: `サイズ超過(${Math.round(buf.byteLength / 1024 / 1024)}MB > 上限${Math.round(maxBytes / 1024 / 1024)}MB)` };
+  return { ok: true, data: buf, contentType: res.headers.get("content-type") };
 }
 
 const gdriveAdapter: StorageProviderAdapter = {

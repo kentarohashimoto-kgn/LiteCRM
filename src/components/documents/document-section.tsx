@@ -1,6 +1,8 @@
-import { Link2, Trash2, TriangleAlert } from "lucide-react";
+import { Link2, Trash2, TriangleAlert, Archive } from "lucide-react";
 import { Section } from "@/components/ui/primitives";
-import { listDocuments, gdriveConnected, attachDriveLinkAction, deleteDocumentAction, type DocumentTargetType } from "@/server/actions/documents";
+import { listDocuments, gdriveConnectionStatus, attachDriveLinkAction, deleteDocumentAction, type DocumentTargetType } from "@/server/actions/documents";
+import { DriveUploadForm } from "@/components/documents/drive-upload-form";
+import { CATEGORIES_BY_TARGET, SNAPSHOT_FORCED, SNAPSHOT_DEFAULT_ON } from "@/lib/storage/doc-categories";
 
 function fmtDate(value: string): string {
   const d = new Date(value);
@@ -14,9 +16,10 @@ const HEALTH_LABEL: Record<string, string> = {
 };
 
 /**
- * P1 統合ドキュメント台帳: Googleドライブのファイルを「リンク」で添付する。
- * 実体はドライブ側が原本(コピーしない)。カテゴリはフォルダから自動判定。
- * アップロード添付(実体保存)は従来の AttachmentSection と併存する。
+ * P1/P1.5 統合ドキュメント: Googleドライブを原本とする資料の添付。
+ * ①アップロード: 種別を選ぶだけでドライブの所定フォルダへ自動振り分け(+証跡は静止点保存)
+ * ②リンク貼り付け: ドライブ上のどこにあるファイルでもURLで紐づく
+ * 実体コピーはSupabaseに持たない(静止点を除く)。
  */
 export async function DocumentSection({
   targetType,
@@ -27,13 +30,14 @@ export async function DocumentSection({
   targetId: string;
   revalidatePath: string;
 }) {
-  const [docs, connected] = await Promise.all([listDocuments(targetType, targetId), gdriveConnected()]);
+  const [docs, status] = await Promise.all([listDocuments(targetType, targetId), gdriveConnectionStatus()]);
+  const categories = CATEGORIES_BY_TARGET[targetType] ?? CATEGORIES_BY_TARGET.library;
 
   return (
-    <Section title={`ドライブ資料（${docs.length}）`} action={<span className="text-[11px] text-ink/40">原本はGoogleドライブ・リンクのみ登録</span>}>
+    <Section title={`ドライブ資料（${docs.length}）`} action={<span className="text-[11px] text-ink/40">原本はGoogleドライブ・CRMはリンク管理</span>}>
       {docs.length === 0 ? (
         <p className="text-sm text-ink/40 py-2">
-          共有ドライブ上の提案書・資料のURLを貼ると、リンクとして紐づきます（ファイルはコピーされません）
+          ファイルをアップロード（種別で自動振り分け）するか、ドライブ上の既存ファイルのURLを貼って紐づけます
         </p>
       ) : (
         <ul className="space-y-2 mb-3">
@@ -49,6 +53,11 @@ export async function DocumentSection({
               )}
               {d.category ? (
                 <span className="shrink-0 rounded-full bg-teal-light px-2 py-0.5 text-[11px] text-teal-deep">{d.category}</span>
+              ) : null}
+              {d.has_snapshot ? (
+                <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-black/[0.05] px-2 py-0.5 text-[11px] text-ink/55" title="その時点の固定コピーを保管済み(証跡)">
+                  <Archive size={11} /> 静止点
+                </span>
               ) : null}
               {d.link_status !== "ok" ? (
                 <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] text-rose-600">
@@ -67,26 +76,42 @@ export async function DocumentSection({
           ))}
         </ul>
       )}
-      {connected ? (
-        <form action={attachDriveLinkAction} className="flex items-center gap-2 flex-wrap">
-          <input type="hidden" name="target_type" value={targetType} />
-          <input type="hidden" name="target_id" value={targetId} />
-          <input type="hidden" name="revalidate" value={revalidatePath} />
-          <input
-            type="url"
-            name="drive_url"
-            required
-            placeholder="https://drive.google.com/... のURLを貼り付け"
-            className="flex-1 min-w-[240px] rounded-xl border border-black/10 px-3 py-1.5 text-sm"
-          />
-          <button type="submit" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
-            <Link2 size={14} /> リンクを登録
-          </button>
-        </form>
-      ) : (
+      {!status.connected ? (
         <p className="text-xs text-ink/40">
           Googleドライブ未接続のため利用できません。管理者が設定画面の「Googleドライブ連携」から接続してください。
         </p>
+      ) : (
+        <div className="space-y-3">
+          {status.canWrite ? (
+            <DriveUploadForm
+              targetType={targetType}
+              targetId={targetId}
+              revalidate={revalidatePath}
+              categories={[...categories]}
+              snapshotForced={[...SNAPSHOT_FORCED]}
+              snapshotDefaultOn={[...SNAPSHOT_DEFAULT_ON]}
+            />
+          ) : (
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+              アップロードには書込権限が必要です。管理者が設定画面の「Googleドライブ連携」で<strong>再接続</strong>すると有効になります（リンク貼り付けは下でそのまま使えます）
+            </p>
+          )}
+          <form action={attachDriveLinkAction} className="flex items-center gap-2 flex-wrap">
+            <input type="hidden" name="target_type" value={targetType} />
+            <input type="hidden" name="target_id" value={targetId} />
+            <input type="hidden" name="revalidate" value={revalidatePath} />
+            <input
+              type="url"
+              name="drive_url"
+              required
+              placeholder="または https://drive.google.com/... のURLを貼り付け"
+              className="flex-1 min-w-[240px] rounded-xl border border-black/10 px-3 py-1.5 text-sm"
+            />
+            <button type="submit" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
+              <Link2 size={14} /> リンクを登録
+            </button>
+          </form>
+        </div>
       )}
     </Section>
   );

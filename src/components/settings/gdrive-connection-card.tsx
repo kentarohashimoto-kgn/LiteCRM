@@ -42,8 +42,9 @@ export async function GdriveConnectionCard({ searchParams }: { searchParams: { s
         </p>
       )}
       <p className="text-sm text-ink/60 mb-3">
-        共有ドライブ上の資料を案件・顧客に「リンク」で添付できるようにします（ファイルはコピーしません）。
-        接続アカウントには共有ドライブ（601_CRM_資料庫 / 602_CRM_案件）の閲覧権限が必要です。
+        資料のアップロード（種別でドライブの所定フォルダへ自動振り分け）と、ドライブ上の任意のファイルのリンク添付を有効にします。
+        接続アカウントには対象共有ドライブ（601_CRM_資料庫 / 603_CRM_BO 等）の編集権限が必要です。
+        ※読み取り専用時代に接続した場合、アップロード有効化には「再接続」が必要です。
       </p>
       {conn && conn.status === "active" ? (
         <div className="flex items-center gap-3 flex-wrap">

@@ -10,6 +10,7 @@ import { getLead, getPersonEngagement, getPersonTouchpoints } from "@/lib/data/l
 import { LEAD_DISPOSITIONS } from "@/lib/constants";
 import { ROLE_LEVELS, NEEDS_OPTS, TIMING_OPTS, AUTHORITY_OPTS, BUDGET_OPTS, REVENUE_OPTS } from "@/lib/lead-import";
 import { formatDateFull } from "@/lib/utils";
+import { DocumentSection } from "@/components/documents/document-section";
 import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
 import { SubmitButton } from "@/components/ui/submit-button";
 
@@ -162,6 +163,10 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
 
         <SubmitButton className="btn-primary" pendingLabel="保存中…">保存する</SubmitButton>
       </form>
+
+      <div className="mt-6">
+        <DocumentSection targetType="lead" targetId={l.id} revalidatePath={`/app/leads/${l.id}`} />
+      </div>
 
       {/* 削除(控えめ・確認つき) */}
       <Card className="mt-8 border-l-4 border-l-rose-300">

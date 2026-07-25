@@ -6,6 +6,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { AttachmentSection } from "@/components/attachments/attachment-section";
+import { DocumentSection } from "@/components/documents/document-section";
 import {
   saveCandidateAction,
   updateCandidateStatusAction,
@@ -240,6 +241,7 @@ export default async function CandidateDetailPage({
           </Section>
 
           {/* 書類添付(履歴書・職務経歴書・スキルシート) */}
+          <DocumentSection targetType="candidate" targetId={c.id} revalidatePath={`/app/hr/candidates/${c.id}`} />
           <AttachmentSection targetType="candidate" targetId={c.id} revalidatePath={`/app/hr/candidates/${c.id}`} emptyHint="履歴書・職務経歴書・スキルシートなどを添付できます" />
 
           {/* 削除(確認つき) */}

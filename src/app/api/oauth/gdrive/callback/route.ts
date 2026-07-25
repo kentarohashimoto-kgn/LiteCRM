@@ -29,17 +29,20 @@ export async function GET(req: Request) {
   const sb = getSupabaseServer(); // RLS: owner/admin のみ書込可
   const { data: existing } = await sb
     .from("tenant_storage_connections")
-    .select("id")
+    .select("id, config")
     .eq("tenant_id", ctx.tenantId)
     .eq("provider", "gdrive")
     .maybeSingle();
 
+  // 既存configは保持しつつ、今回付与されたスコープを記録(書込可否の判定に使う)
+  const prevConfig = (existing?.config ?? {}) as Record<string, unknown>;
   const row = {
     tenant_id: ctx.tenantId,
     provider: "gdrive",
     display_name: email,
     auth_kind: "oauth_org",
     credentials: encryptSecret(tok.refreshToken),
+    config: { ...prevConfig, scopes: tok.scope },
     status: "active",
     connected_by: ctx.userId,
   };

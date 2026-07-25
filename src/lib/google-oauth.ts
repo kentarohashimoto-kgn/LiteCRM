@@ -44,10 +44,10 @@ export function buildGoogleAuthUrl(redirectUri: string, state: string, scopes?: 
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
-interface TokenResp { access_token?: string; refresh_token?: string; expires_in?: number; error?: string; error_description?: string }
+interface TokenResp { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string; error?: string; error_description?: string }
 
-/** 認可コードをトークンに交換。refresh_token と access_token を返す。 */
-export async function exchangeCode(code: string, redirectUri: string): Promise<{ ok: true; refreshToken: string; accessToken: string } | { ok: false; error: string }> {
+/** 認可コードをトークンに交換。refresh_token と access_token(+付与スコープ)を返す。 */
+export async function exchangeCode(code: string, redirectUri: string): Promise<{ ok: true; refreshToken: string; accessToken: string; scope: string } | { ok: false; error: string }> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -62,7 +62,7 @@ export async function exchangeCode(code: string, redirectUri: string): Promise<{
   const j = (await res.json()) as TokenResp;
   if (!res.ok || !j.access_token) return { ok: false, error: j.error_description || j.error || `token exchange failed (${res.status})` };
   if (!j.refresh_token) return { ok: false, error: "refresh_tokenが取得できませんでした（Googleアカウント側の権限を一度解除して再接続してください）" };
-  return { ok: true, refreshToken: j.refresh_token, accessToken: j.access_token };
+  return { ok: true, refreshToken: j.refresh_token, accessToken: j.access_token, scope: j.scope ?? "" };
 }
 
 /** refresh_token から access_token を取得。 */
