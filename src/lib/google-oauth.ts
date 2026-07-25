@@ -19,6 +19,9 @@ export function verifyOAuthState(userId: string, state: string | null): boolean 
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.send",
+  // マインドマップの週次自動生成でカレンダー予定を読む(参照のみ)。
+  // 既にGmailのみで接続済みのユーザーは再接続するまで403になり、その旨を画面で案内する。
+  "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/userinfo.email",
 ].join(" ");
 

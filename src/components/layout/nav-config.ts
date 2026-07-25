@@ -30,6 +30,7 @@ import {
   Workflow,
   Mail,
   Telescope,
+  Brain,
 } from "lucide-react";
 import { canManageProjects } from "@/lib/constants";
 import type { Role } from "@/lib/types";
@@ -150,9 +151,19 @@ function injectProjects(base: NavGroup[], role: Role): NavGroup[] {
   );
 }
 
+/** 管理者(代表/管理者)だけの機能を「ホーム」グループに差し込む。RLSでもDB側で遮断済み。 */
+function injectAdminOnly(base: NavGroup[], role: Role): NavGroup[] {
+  if (role !== "owner" && role !== "admin") return base;
+  return base.map((g) =>
+    g.heading === "ホーム"
+      ? { ...g, items: [...g.items, { href: "/app/mindmaps", label: "マインドマップ", icon: Brain }] }
+      : g,
+  );
+}
+
 /** ロールに応じたナビ(営業⇔BOの相互不可視、管理者は全部)。 */
 export function navGroupsFor(role: Role): NavGroup[] {
-  const sales = injectProjects(groups, role);
+  const sales = injectAdminOnly(injectProjects(groups, role), role);
   if (role === "back_office") return boGroups;
   if (role === "hr") return [...boGroups, hrGroup];
   if (role === "owner" || role === "admin") return [...sales, ...boGroups, hrGroup];
