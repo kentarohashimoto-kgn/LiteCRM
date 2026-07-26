@@ -48,6 +48,8 @@ export type MonthPlanOpp = {
   yomi: string | null;
   amount: number; // 担当の読み額(rep_amount_forecast)があれば優先、なければ案件金額
   weighted: number;
+  /** 決着状況: open(進行中) / won(受注) / lost(オチ・失注) */
+  outcome: "open" | "won" | "lost";
 };
 
 /** 月別ヨミモード: 1ヶ月分の成約計画(合計＋対象案件)。 */
@@ -72,8 +74,10 @@ export type RepReport = {
   trendMonthly: TrendPoint[];
   trendWeekly: TrendPoint[];
   opps: RepReportOpp[];
-  /** 今月〜2ヶ月先の成約計画(月別ヨミモード用)。 */
+  /** 今月〜2ヶ月先の成約計画(月別ヨミモード用・進行中のみ)。 */
   monthlyPlan: MonthPlan[];
+  /** 同上だが受注・オチ(決着済み)も含めた全件版。 */
+  monthlyPlanAll: MonthPlan[];
   narrative: RepNarrative | null;
 };
 
@@ -237,28 +241,57 @@ export async function getRepReport(ownerId: string, weekStart: string): Promise<
     const n = parseInt(c, 10);
     return Number.isNaN(n) ? 99 : n;
   };
-  const monthlyPlan: MonthPlan[] = planMonths.map((pm) => {
-    const rows = opps
-      .filter((o) => planKeyOf(o) === pm.key)
-      .map((o): MonthPlanOpp => ({
+  // 決着済み(受注/オチ)も月別ヨミに載せられるよう、進行中と同じ形へ揃える。
+  // 進行中は opps(rep_* を反映済み)、決着済みは元データからそのまま。
+  type PlanEntry = { planKey: string | null; row: MonthPlanOpp };
+  const settledPlanRows: PlanEntry[] = mine
+    .filter((o) => o.status === "won" || o.status === "lost")
+    .map((o) => ({
+      planKey: o.expected_close_date ? o.expected_close_date.slice(0, 7) : null,
+      row: {
         id: o.id,
-        account: o.account,
+        account: o.account_id ? accountsById.get(o.account_id) ?? null : null,
         name: o.name,
-        yomi: o.yomi,
-        amount: o.repAmountForecast ?? o.amount,
-        weighted: o.weighted,
-      }))
-      .sort((a, b) => yomiRank(a.yomi) - yomiRank(b.yomi) || b.amount - a.amount);
-    return {
-      monthKey: pm.key,
-      label: pm.label,
-      isCurrent: pm.isCurrent,
-      total: sum(rows, (r) => r.amount),
-      weighted: sum(rows, (r) => r.weighted),
-      count: rows.length,
-      opps: rows,
-    };
-  });
+        yomi: o.yomi ?? null,
+        amount: o.amount,
+        weighted: o.status === "won" ? o.amount : 0, // 受注は確定、オチは0
+        outcome: o.status === "won" ? "won" : "lost",
+      },
+    }));
+
+  const openPlanRows: PlanEntry[] = opps.map((o) => ({
+    planKey: planKeyOf(o),
+    row: {
+      id: o.id,
+      account: o.account,
+      name: o.name,
+      yomi: o.yomi,
+      amount: o.repAmountForecast ?? o.amount,
+      weighted: o.weighted,
+      outcome: "open",
+    },
+  }));
+
+  const buildPlan = (includeSettled: boolean): MonthPlan[] =>
+    planMonths.map((pm) => {
+      const rows: MonthPlanOpp[] = [...openPlanRows, ...(includeSettled ? settledPlanRows : [])]
+        .filter((x) => x.planKey === pm.key)
+        .map((x) => x.row)
+        .sort((a, b) => yomiRank(a.yomi) - yomiRank(b.yomi) || b.amount - a.amount);
+      return {
+        monthKey: pm.key,
+        label: pm.label,
+        isCurrent: pm.isCurrent,
+        // 合計は決着分を含めても「見込み」として素直に合算(オチは重み0)
+        total: sum(rows, (r) => r.amount),
+        weighted: sum(rows, (r) => r.weighted),
+        count: rows.length,
+        opps: rows,
+      };
+    });
+
+  const monthlyPlan = buildPlan(false);
+  const monthlyPlanAll = buildPlan(true);
 
   const { data: nar } = await sb
     .from("weekly_rep_reports")
@@ -287,6 +320,7 @@ export async function getRepReport(ownerId: string, weekStart: string): Promise<
     trendWeekly,
     opps,
     monthlyPlan,
+    monthlyPlanAll,
     narrative: (nar as RepNarrative) ?? null,
   };
 }

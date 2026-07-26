@@ -20,15 +20,16 @@ export function RepOppSection({
   weekStart,
   members,
   monthlyPlan,
+  monthlyPlanAll,
 }: {
   opps: RepReportOpp[];
   ownerId: string;
   weekStart: string;
   members: { id: string; name: string }[];
   monthlyPlan: MonthPlan[];
+  monthlyPlanAll: MonthPlan[];
 }) {
   const [mode, setMode] = useState<Mode>("list");
-  const planTotal = monthlyPlan.reduce((s, m) => s + m.total, 0);
 
   const toggle = (
     <div className="inline-flex rounded-lg border border-black/10 p-0.5 text-xs">
@@ -66,7 +67,7 @@ export function RepOppSection({
           <RepOppTable opps={opps} ownerId={ownerId} weekStart={weekStart} members={members} />
         )
       ) : (
-        <RepMonthlyPlan plan={monthlyPlan} total={planTotal} ownerId={ownerId} members={members} />
+        <RepMonthlyPlan plan={monthlyPlan} planAll={monthlyPlanAll} ownerId={ownerId} members={members} />
       )}
     </Section>
   );
