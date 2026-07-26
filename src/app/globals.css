@@ -40,6 +40,12 @@
     @apply p-5;
   }
 
+  /* 小さな説明文用: 約物詰め(palt)を解除し、中黒「・」や句読点が潰れないようにする。
+     例「1・3・6ヶ月後」が「136ヶ月後」に読めてしまう誤読を防ぐ。 */
+  .text-legible {
+    font-feature-settings: "palt" 0;
+  }
+
   /* セクション見出し(左上配置) */
   .section-title {
     @apply text-sm font-bold text-teal-deep flex items-center gap-2;

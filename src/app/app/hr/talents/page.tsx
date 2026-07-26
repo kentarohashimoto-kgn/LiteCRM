@@ -87,7 +87,7 @@ export default async function TalentsPage() {
               {Object.entries(EMP_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
-          <div><label className="label">部署</label><input name="department" className="input w-28" placeholder="営業/開発/講師" /></div>
+          <div><label className="label">部署</label><input name="department" className="input w-36" placeholder="営業/開発/講師" /></div>
           <div><label className="label">役割</label><input name="role_text" className="input" placeholder="例: 営業、コンサル" /></div>
           <div><label className="label">時給(円)</label><input name="hourly_rate" inputMode="numeric" className="input w-24 text-right" placeholder="5000" /></div>
           <div><label className="label">メール</label><input name="email" type="email" className="input" /></div>

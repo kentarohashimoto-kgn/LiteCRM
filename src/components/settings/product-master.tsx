@@ -59,16 +59,30 @@ function Row({ p, isNew = false, onDone }: { p: ProductRow; isNew?: boolean; onD
     <div className={cn("rounded-lg border p-2 flex flex-wrap items-end gap-2", isNew ? "border-teal-primary/40 bg-teal-light/20" : "border-black/[0.06]")}>
       <Field label="名称" w="flex-1 min-w-[140px]"><input value={name} onChange={(e) => setName(e.target.value)} className="input py-1 text-sm" /></Field>
       <Field label="分類"><input value={category} onChange={(e) => setCategory(e.target.value)} className="input py-1 text-sm w-24" /></Field>
-      <Field label="種別"><input value={ptype} onChange={(e) => setPtype(e.target.value)} placeholder="研修/開発/顧問" className="input py-1 text-sm w-24" /></Field>
+      {/* 種別はプレースホルダが途中で切れないよう幅を確保 */}
+      <Field label="種別"><input value={ptype} onChange={(e) => setPtype(e.target.value)} placeholder="研修/開発/顧問" className="input py-1 text-sm w-32" /></Field>
       <Field label="標準価格"><input value={price} onChange={(e) => setPrice(e.target.value)} type="number" className="input py-1 text-sm w-24 text-right" /></Field>
       <Field label="原価"><input value={cost} onChange={(e) => setCost(e.target.value)} type="number" className="input py-1 text-sm w-24 text-right" /></Field>
-      <label className="flex items-center gap-1 text-xs text-ink/60 pb-1"><input type="checkbox" checked={prio} onChange={(e) => setPrio(e.target.checked)} className="accent-teal-primary" />優先</label>
-      <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-black/10 bg-white px-2 py-1 text-sm">
-        <option value="active">有効</option>
-        <option value="archived">無効</option>
-      </select>
-      <button type="button" disabled={busy} onClick={save} className="btn-accent text-xs py-1">{isNew ? "追加" : "保存"}</button>
-      {!isNew && <button type="button" disabled={busy} onClick={del} className="text-ink/30 hover:text-rose-500 pb-1" title="削除"><Trash2 size={15} /></button>}
+      {/* ラベル無しのコントロールもFieldで包み、入力欄と行のベースラインを揃える */}
+      <Field label="優先">
+        <label className="flex h-[30px] items-center gap-1 text-xs text-ink/60">
+          <input type="checkbox" checked={prio} onChange={(e) => setPrio(e.target.checked)} className="accent-teal-primary" />優先
+        </label>
+      </Field>
+      <Field label="状態">
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-[30px] rounded-lg border border-black/10 bg-white px-2 py-1 text-sm">
+          <option value="active">有効</option>
+          <option value="archived">無効</option>
+        </select>
+      </Field>
+      <Field label="&nbsp;">
+        <button type="button" disabled={busy} onClick={save} className="btn-accent text-xs h-[30px] py-0">{isNew ? "追加" : "保存"}</button>
+      </Field>
+      {!isNew && (
+        <Field label="&nbsp;">
+          <button type="button" disabled={busy} onClick={del} className="flex h-[30px] items-center text-ink/30 hover:text-rose-500" title="削除"><Trash2 size={15} /></button>
+        </Field>
+      )}
       {err && <span className="text-[11px] text-rose-500 w-full">{err}</span>}
     </div>
   );
