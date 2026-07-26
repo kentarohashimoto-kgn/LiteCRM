@@ -36,7 +36,9 @@ export function RecentList({ collapsed }: { collapsed: boolean }) {
   }, []);
   if (collapsed || items.length === 0) return null;
   return (
-    <div className="px-3 pb-3">
+    // shrink-0: ナビ(flex-1)に押し潰されて最終項目と重なるのを防ぐ。
+    // 上限高さ＋スクロールで、項目が増えてもナビの領域を侵食しない。
+    <div className="shrink-0 border-t border-black/[0.05] bg-white px-3 py-3 max-h-[32vh] overflow-y-auto">
       <div className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink/30 flex items-center gap-1">
         <History size={11} /> 最近見た項目
       </div>

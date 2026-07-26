@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const MODULES = [
   { href: "/app/bo/subsidies", label: "助成金トラッカー", desc: "事前説明会・事前申請・実績報告の納期管理", icon: BadgeCheck },
-  { href: "/app/bo/followups", label: "研修後フォロー", desc: "1・3・6ヶ月後Mtgと活用度・アップセルの追跡", icon: CalendarCheck },
+  { href: "/app/bo/followups", label: "研修後フォロー", desc: "1 / 3 / 6ヶ月後Mtgと、活用度・アップセルの追跡", icon: CalendarCheck },
   { href: "/app/bo/expos", label: "展示会準備WBS", desc: "確定でタスク自動生成・人員アサイン・納期リマインド", icon: Presentation },
   { href: "/app/bo/instructors", label: "AI講師スケジュール", desc: "講師の日程URL登録・研修カレンダー", icon: GraduationCap },
   { href: "/app/bo/cases", label: "事例・インタビュー", desc: "研修受講会社の事例化パイプライン", icon: BookOpen },
@@ -112,7 +112,7 @@ export default async function BoHomePage() {
                   <span className="rounded-lg bg-teal-light p-2 text-teal-deep shrink-0"><Icon size={18} /></span>
                   <span className="min-w-0">
                     <span className="block font-medium text-ink text-sm">{m.label}</span>
-                    <span className="block text-xs text-ink/50 mt-0.5">{m.desc}</span>
+                    <span className="block text-xs text-ink/60 mt-0.5 leading-relaxed break-words text-legible">{m.desc}</span>
                   </span>
                 </Link>
               );

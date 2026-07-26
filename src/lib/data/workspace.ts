@@ -66,16 +66,20 @@ interface ProfileRow {
  * 小さいマスタ群のみ取得（profiles/memberships/lead_sources/campaigns/products）。
  * 詳細ページ用のスコープ付きワークスペース構築に使う。約150KB（fullの2.1MBに対し軽量）。
  */
-async function fetchMasters(sb: ReturnType<typeof getSupabaseServer>) {
+async function fetchMasters(sb: ReturnType<typeof getSupabaseServer>, tenantId: string) {
+  // memberships は tenant_id で明示的に絞る。RLS だけに任せると、複数テナントに
+  // 所属するユーザー(プレゼンモード=デモ所属)で実テナントのメンバーが混ざる。
   const [profilesR, membershipsR, leadSourcesR, campaignsR, productsR] = await Promise.all([
     sb.from("profiles").select("id,email,display_name,avatar_color"),
-    sb.from("memberships").select("*"),
+    sb.from("memberships").select("*").eq("tenant_id", tenantId),
     sb.from("lead_sources").select("*"),
     sb.from("campaigns").select("*"),
     sb.from("products").select("*"),
   ]);
-  const profiles = (profilesR.data ?? []) as ProfileRow[];
   const memberships = (membershipsR.data ?? []) as Membership[];
+  // profiles は tenant を持たないため、当該テナントの在籍者だけに絞り込む。
+  const memberIds = new Set(memberships.map((m) => m.user_id));
+  const profiles = ((profilesR.data ?? []) as ProfileRow[]).filter((p) => memberIds.has(p.id));
   const leadSources = (leadSourcesR.data ?? []) as LeadSource[];
   const campaigns = ((campaignsR.data ?? []) as Campaign[]).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   const products = (productsR.data ?? []) as Product[];
@@ -102,9 +106,11 @@ async function fetchMasters(sb: ReturnType<typeof getSupabaseServer>) {
 export const getMembersLite = cache(
   async (): Promise<{ user: User; role: Membership["role"]; repStatus?: string }[]> => {
     const sb = getSupabaseServer();
+    const ctx = await requireCtx();
+    // tenant_id で明示的に絞る(プレゼンモード時に実テナントのメンバーを出さないため)
     const [profilesR, membershipsR] = await Promise.all([
       sb.from("profiles").select("id,email,display_name,avatar_color"),
-      sb.from("memberships").select("*"),
+      sb.from("memberships").select("*").eq("tenant_id", ctx.tenantId),
     ]);
     if (profilesR.error) throw new Error(`メンバー情報の取得に失敗: ${profilesR.error.message}`);
     if (membershipsR.error) throw new Error(`メンバー情報の取得に失敗: ${membershipsR.error.message}`);
@@ -143,7 +149,7 @@ export const getWorkspaceForOpportunity = cache(async (id: string): Promise<Work
   const accountId = opp?.account_id;
 
   const [masters, accountR, meetingsR, activitiesR, billingR, tasksR, stageR, contactsR] = await Promise.all([
-    fetchMasters(sb),
+    fetchMasters(sb, ctx.tenantId),
     accountId ? sb.from("accounts").select("*").eq("id", accountId).maybeSingle() : Promise.resolve({ data: null }),
     sb.from("meetings").select("*").eq("opportunity_id", id),
     sb.from("activities").select("*").eq("opportunity_id", id),
@@ -176,7 +182,7 @@ export const getWorkspaceForAccount = cache(async (id: string): Promise<Workspac
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const [masters, accountR, oppsR, meetingsR, contactsR] = await Promise.all([
-    fetchMasters(sb),
+    fetchMasters(sb, ctx.tenantId),
     sb.from("accounts").select("*").eq("id", id).maybeSingle(),
     sb.from("opportunities").select("*").eq("account_id", id),
     sb.from("meetings").select("*").eq("account_id", id),
