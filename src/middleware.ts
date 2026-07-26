@@ -36,7 +36,8 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isAppRoute = path.startsWith("/app");
+  // /help 配下はヘルプ資料(静的HTML)。社内向けのためログイン必須にする。
+  const isAppRoute = path.startsWith("/app") || path.startsWith("/help");
   const isLogin = path === "/login";
 
   if (!user && isAppRoute) {
