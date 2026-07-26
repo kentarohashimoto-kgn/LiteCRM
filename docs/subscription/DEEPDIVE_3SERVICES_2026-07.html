@@ -1,0 +1,890 @@
+<title>サブスク3本柱 深堀り — AI顧問／伴走リテナー／伴走型AI営業支援</title>
+
+<style>
+:root{
+  --paper:#FAFAF8; --card:#F0F4F3; --card2:#E9EFEE; --ink:#16211F; --ink2:#54625F; --ink3:#8A9694;
+  --rule:#DDE4E2; --hair:#E9EDEC;
+  --teal:#008C8C; --teal-d:#00615F; --teal-soft:#DDEEED;
+  --orange:#D97F0C; --orange-soft:#FBEBD6;
+  --good:#2C7A52; --good-soft:#E0EFE6;
+  --warn:#B4690E; --warn-soft:#F8EDDC;
+  --crit:#AE3A3F; --crit-soft:#F7E6E5;
+  --shadow:0 1px 2px rgba(22,33,31,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#0E1413; --card:#18211F; --card2:#1F2A28; --ink:#E6EDEB; --ink2:#A2AFAC; --ink3:#6F7C7A;
+    --rule:#2A3634; --hair:#222D2B;
+    --teal:#3FB5B0; --teal-d:#6FCFC9; --teal-soft:#12302F;
+    --orange:#E8A44E; --orange-soft:#2E2313;
+    --good:#63B287; --good-soft:#152A20;
+    --warn:#D9973F; --warn-soft:#2B2214;
+    --crit:#D2757A; --crit-soft:#2E1A1B;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1413; --card:#18211F; --card2:#1F2A28; --ink:#E6EDEB; --ink2:#A2AFAC; --ink3:#6F7C7A;
+  --rule:#2A3634; --hair:#222D2B;
+  --teal:#3FB5B0; --teal-d:#6FCFC9; --teal-soft:#12302F;
+  --orange:#E8A44E; --orange-soft:#2E2313;
+  --good:#63B287; --good-soft:#152A20;
+  --warn:#D9973F; --warn-soft:#2B2214;
+  --crit:#D2757A; --crit-soft:#2E1A1B;
+  --shadow:none;
+}
+:root[data-theme="light"]{
+  --paper:#FAFAF8; --card:#F0F4F3; --card2:#E9EFEE; --ink:#16211F; --ink2:#54625F; --ink3:#8A9694;
+  --rule:#DDE4E2; --hair:#E9EDEC;
+  --teal:#008C8C; --teal-d:#00615F; --teal-soft:#DDEEED;
+  --orange:#D97F0C; --orange-soft:#FBEBD6;
+  --good:#2C7A52; --good-soft:#E0EFE6;
+  --warn:#B4690E; --warn-soft:#F8EDDC;
+  --crit:#AE3A3F; --crit-soft:#F7E6E5;
+  --shadow:0 1px 2px rgba(22,33,31,.05);
+}
+</style>
+
+<style>
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink); margin:0; font-size:15px; line-height:1.8;
+  font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic Medium",YuGothic,Meiryo,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
+
+/* ---- shell ---- */
+.page{max-width:1040px;margin:0 auto;padding:0 22px 110px}
+.masthead{padding:44px 0 26px;border-bottom:2px solid var(--ink)}
+.kicker{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  font-size:11px;letter-spacing:.2em;color:var(--teal);font-weight:600;margin-bottom:12px}
+h1{font-size:clamp(25px,4.2vw,36px);line-height:1.3;letter-spacing:-.02em;margin:0 0 12px;font-weight:700;text-wrap:balance}
+.standfirst{font-size:16.5px;color:var(--ink2);max-width:60ch;margin:0 0 18px;line-height:1.85}
+.dateline{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:12px;color:var(--ink3);
+  font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+
+nav.jump{position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--rule);
+  display:flex;flex-wrap:wrap;gap:0;margin-bottom:8px}
+nav.jump a{flex:1 1 auto;text-align:center;padding:11px 10px;font-size:12.5px;text-decoration:none;
+  color:var(--ink2);border-bottom:2px solid transparent;white-space:nowrap}
+nav.jump a:hover,nav.jump a:focus-visible{color:var(--teal);border-bottom-color:var(--teal)}
+nav.jump a .c{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  font-size:10.5px;letter-spacing:.1em;color:var(--ink3);margin-right:6px}
+a:focus-visible{outline:2px solid var(--teal);outline-offset:3px;border-radius:2px}
+
+/* ---- sections ---- */
+section{padding-top:14px}
+h2{font-size:22px;letter-spacing:-.01em;margin:56px 0 6px;font-weight:700;text-wrap:balance;
+  padding-top:22px;border-top:1px solid var(--rule)}
+h2 .n{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  font-size:12px;color:var(--teal);letter-spacing:.12em;display:block;margin-bottom:6px;font-weight:600}
+h3{font-size:16.5px;margin:34px 0 8px;font-weight:700;text-wrap:balance}
+h4{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  font-size:11px;letter-spacing:.13em;color:var(--ink2);margin:0 0 8px;font-weight:600;text-transform:uppercase}
+p{margin:12px 0;max-width:66ch}
+ul,ol{padding-left:1.3em;max-width:66ch}
+li{margin:5px 0}
+b,strong{font-weight:700}
+em{font-style:normal;background:linear-gradient(transparent 62%,var(--teal-soft) 62%);font-weight:700}
+.lede{font-size:16px;color:var(--ink)}
+.sub{color:var(--ink2);font-size:13.5px}
+
+/* ---- service dossier ---- */
+.dossier{margin:26px 0 0;border:1px solid var(--rule);border-radius:3px;background:var(--card);overflow:hidden}
+.dossier > .bar{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  padding:16px 22px;background:var(--teal);color:#fff}
+.dossier.alt > .bar{background:var(--orange);color:#1B1206}
+.dossier > .bar .code{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  font-size:12px;letter-spacing:.16em;opacity:.85;font-weight:600}
+.dossier > .bar .nm{font-size:19px;font-weight:700;letter-spacing:-.01em}
+.dossier > .bar .tag{margin-left:auto;font-size:11.5px;font-weight:700;
+  border:1px solid currentColor;border-radius:99px;padding:2px 11px;opacity:.9}
+.dossier .body{padding:22px}
+.dossier .body > *:first-child{margin-top:0}
+
+.oneline{font-size:15.5px;color:var(--ink);border-left:3px solid var(--teal);padding-left:14px;margin:0 0 20px;max-width:62ch}
+.dossier.alt .oneline{border-left-color:var(--orange)}
+
+/* ---- price ladder ---- */
+.ladder{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0 6px}
+@media(max-width:700px){.ladder{grid-template-columns:1fr}}
+.plan{background:var(--paper);border:1px solid var(--rule);border-radius:3px;padding:14px 15px}
+.plan .pn{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:2px}
+.plan .price{display:flex;align-items:baseline;gap:3px;margin:4px 0 8px}
+.plan .fig{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  font-size:30px;font-weight:600;letter-spacing:-.03em;color:var(--teal-d);line-height:1}
+.dossier.alt .plan .fig{color:var(--orange)}
+.plan .unit{font-size:11.5px;color:var(--ink3)}
+.plan ul{margin:0;padding-left:1.1em;font-size:12.5px;color:var(--ink2);line-height:1.7}
+.plan li{margin:2px 0}
+.plan .load{margin-top:9px;padding-top:8px;border-top:1px dashed var(--rule);font-size:11.5px;color:var(--ink3);
+  font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+
+/* ---- tables ---- */
+.scroll{overflow-x:auto;margin:16px 0;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:520px}
+caption{text-align:left;font-size:12px;color:var(--ink3);padding-bottom:7px;
+  font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.08em}
+th{text-align:left;font-size:11px;letter-spacing:.06em;color:var(--ink2);font-weight:700;
+  border-bottom:1.5px solid var(--ink3);padding:7px 10px;white-space:nowrap;vertical-align:bottom}
+td{border-bottom:1px solid var(--hair);padding:7px 10px;vertical-align:top}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;
+  font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+tbody tr:hover td{background:var(--card)}
+tr.tot td{font-weight:700;border-top:1.5px solid var(--ink3);border-bottom:none}
+th.lead,td.lead{white-space:normal;min-width:112px}
+td.y{color:var(--good);font-weight:700}
+td.n{color:var(--crit);font-weight:700}
+
+/* ---- pills & callouts ---- */
+.pill{display:inline-block;font-size:10.5px;font-weight:700;border-radius:99px;padding:1.5px 9px;white-space:nowrap;
+  font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.04em}
+.pill.t{background:var(--teal-soft);color:var(--teal-d)}
+.pill.o{background:var(--orange-soft);color:var(--orange)}
+.pill.g{background:var(--good-soft);color:var(--good)}
+.pill.w{background:var(--warn-soft);color:var(--warn)}
+.pill.c{background:var(--crit-soft);color:var(--crit)}
+
+.box{border-radius:3px;padding:14px 18px;margin:20px 0;font-size:13.5px;line-height:1.8;max-width:none;
+  border-left:3px solid var(--teal);background:var(--card)}
+.box.warn{border-left-color:var(--warn);background:var(--warn-soft)}
+.box.crit{border-left-color:var(--crit);background:var(--crit-soft)}
+.box.key{border-left-color:var(--orange);background:var(--orange-soft)}
+.box h4{margin-bottom:5px}
+.box p{margin:5px 0;max-width:none}
+.box ul{max-width:none;margin:6px 0}
+
+/* ---- lifecycle flow ---- */
+.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:22px 0 6px;align-items:stretch}
+@media(max-width:760px){.flow{grid-template-columns:1fr 1fr}}
+@media(max-width:420px){.flow{grid-template-columns:1fr}}
+.node{background:var(--card);border:1px solid var(--rule);border-radius:3px;padding:11px 12px;position:relative}
+.node.on{border-color:var(--teal);border-width:1.5px;background:var(--teal-soft)}
+.node.on2{border-color:var(--orange);border-width:1.5px;background:var(--orange-soft)}
+.node .st{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  font-size:10px;letter-spacing:.1em;color:var(--ink3);display:block;margin-bottom:3px}
+.node .nn{font-size:13px;font-weight:700;line-height:1.4}
+.node .pr{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  font-size:11px;color:var(--ink2);margin-top:4px;display:block}
+.loopnote{font-size:12.5px;color:var(--ink2);margin-top:10px;
+  border-top:1px dashed var(--rule);padding-top:9px}
+
+/* ---- roadmap strip ---- */
+.strip{display:grid;gap:0;margin:18px 0}
+.strip .row{display:grid;grid-template-columns:88px 1fr;gap:16px;padding:11px 0;border-bottom:1px solid var(--hair)}
+.strip .row:last-child{border-bottom:none}
+.strip .when{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  font-size:11.5px;color:var(--teal-d);font-weight:600;letter-spacing:.04em;padding-top:2px}
+.dossier.alt .strip .when{color:var(--orange)}
+.strip .what{font-size:13.5px}
+.strip .what b{display:block;margin-bottom:1px}
+.strip .what span{color:var(--ink2);font-size:12.5px}
+
+/* ---- scope grid ---- */
+.scope{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}
+@media(max-width:640px){.scope{grid-template-columns:1fr}}
+.scope .col{background:var(--paper);border:1px solid var(--rule);border-radius:3px;padding:13px 15px}
+.scope .col.in{border-top:3px solid var(--good)}
+.scope .col.out{border-top:3px solid var(--crit)}
+.scope ul{margin:6px 0 0;padding-left:1.15em;font-size:12.5px;color:var(--ink2);line-height:1.75}
+
+footer{margin-top:70px;padding-top:18px;border-top:2px solid var(--ink);font-size:12px;color:var(--ink3);
+  font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;line-height:1.9}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="page">
+
+<header class="masthead">
+  <div class="kicker mono">CATORCE ／ サブスク検討 DEEP DIVE 01</div>
+  <h1>月額3本柱の深堀り<br>AI顧問・伴走リテナー・伴走型AI営業支援</h1>
+  <p class="standfirst">27施策プレイブック v0.1 のうち、収益の柱になる3つを商品仕様のレベルまで降ろした。3つは「月額の伴走」という点で似ているが、<em>買い手も、納品物も、スケールの制約も違う</em>。混ぜて売った瞬間に全部が売れなくなる商品群なので、まず違いを固定してから中身に入る。</p>
+  <div class="dateline mono">
+    <span>2026-07-26</span><span>v0.1 の #1 / #2 ＋ 新規1本</span><span>前提: 研修受注済38社・商談681件・リード8,271件</span>
+  </div>
+</header>
+
+<nav class="jump" aria-label="セクション">
+  <a href="#pos"><span class="c mono">00</span>3つの違い</a>
+  <a href="#s1"><span class="c mono">S1</span>AI顧問</a>
+  <a href="#s2"><span class="c mono">S2</span>伴走リテナー</a>
+  <a href="#s3"><span class="c mono">S3</span>AI営業支援</a>
+  <a href="#cap"><span class="c mono">04</span>体制と採算</a>
+  <a href="#dec"><span class="c mono">05</span>決めること</a>
+</nav>
+
+<!-- ============ 0 ============ -->
+<section id="pos">
+<h2><span class="n mono">SECTION 00</span>3つはどう違うのか — 先に境界を引く</h2>
+
+<p class="lede">結論から言うと、3つの違いは<em>「顧客の社内で、誰の隣に座るか」</em>で全部説明できる。AI顧問は<b>経営者</b>の隣。伴走リテナーは<b>推進担当</b>の隣。伴走型AI営業支援は<b>営業組織</b>の中。座る場所が違えば、売り先も価格も原価も委譲の可否も変わる。</p>
+
+<div class="scroll">
+<table>
+<caption>3商品のポジショニング</caption>
+<thead><tr>
+  <th class="lead">軸</th>
+  <th class="lead">S1 AI顧問</th>
+  <th class="lead">S2 伴走支援リテナー</th>
+  <th class="lead">S3 伴走型AI営業支援</th>
+</tr></thead>
+<tbody>
+<tr><td class="lead"><b>誰の隣に座るか</b></td><td>経営者・役員</td><td>DX推進部長・情シス</td><td>営業組織そのもの</td></tr>
+<tr><td class="lead"><b>顧客の言葉</b></td><td>「AIで何をやるべきか判断できない」</td><td>「方針は決めたが、進まない」</td><td>「売上が足りない。営業が仕組みで回っていない」</td></tr>
+<tr><td class="lead"><b>売っているもの</b></td><td>意思決定の質と速度</td><td>実行の推進力</td><td>営業組織の実行力と再現性</td></tr>
+<tr><td class="lead"><b>納品物</b></td><td>判断・目利き・ロードマップ・台帳</td><td>動くもの・運用ルール・社内推進者</td><td>パイプライン・営業OS・営業の型</td></tr>
+<tr><td class="lead"><b>握るKPI</b></td><td>投資判断の回数と失敗回避</td><td>ユースケース本数・社内利用率</td><td>次アクション設定率・ヨミ精度・商談数</td></tr>
+<tr><td class="lead"><b>価格帯</b></td><td class="num">30〜100万/月</td><td class="num">80〜180万/月</td><td class="num">80〜250万/月＋初期</td></tr>
+<tr><td class="lead"><b>月あたり実工数</b></td><td class="num">3〜14h</td><td class="num">4〜14人日</td><td class="num">7〜18人日</td></tr>
+<tr><td class="lead"><b>粗利率（目安）</b></td><td class="num">85〜95%</td><td class="num">67〜80%</td><td class="num">34〜55%</td></tr>
+<tr><td class="lead"><b>解約されやすさ</b></td><td><span class="pill w">中</span> 成果が見えにくい</td><td><span class="pill g">低</span> 止めると作業が止まる</td><td><span class="pill g">最低</span> 止めると営業が止まる</td></tr>
+<tr><td class="lead"><b>スケールの制約</b></td><td>橋本の時間（＝委譲設計が全て）</td><td>コンサル人材の採用</td><td>営業部長級人材の採用</td></tr>
+<tr><td class="lead"><b>今期の現実的上限</b></td><td class="num">7社</td><td class="num">2社</td><td class="num">2社</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>顧客のライフサイクル — 3つは並列ではなく、時間軸でつながっている</h3>
+<p>この3つを「3種類のメニュー」として並べるとお互いを食い合う。正しくは<b>顧客の状態が変わるたびに乗り換えていく1本の線</b>で、乗り換えのたびに単価が上下する。特に重要なのが右端の<b>ダウンセル</b>で、ここを設計しないとLTVが半分になる。</p>
+
+<div class="flow">
+  <div class="node"><span class="st mono">ENTRY</span><span class="nn">研修</span><span class="pr mono">単発 80〜300万</span></div>
+  <div class="node on"><span class="st mono">S1</span><span class="nn">AI顧問</span><span class="pr mono">30〜100万/月</span></div>
+  <div class="node on"><span class="st mono">S2</span><span class="nn">伴走リテナー</span><span class="pr mono">80〜180万/月</span></div>
+  <div class="node on2"><span class="st mono">S3</span><span class="nn">AI営業支援</span><span class="pr mono">80〜250万/月</span></div>
+  <div class="node on"><span class="st mono">S1'</span><span class="nn">顧問へダウンセル</span><span class="pr mono">30〜50万/月</span></div>
+</div>
+<p class="loopnote"><b>読み方:</b> 研修で接点を作り、経営層に刺されば顧問（S1）、推進担当に刺されば伴走（S2）、営業課題が主語なら営業支援（S3）へ。S2とS3は<em>永久には続かない前提の商品</em>で、6〜12ヶ月で「内製化して卒業」がゴール。卒業＝解約ではなく、月30〜50万の顧問（S1'）へ着地させる。この最後の1手があるかないかで、1社あたりのLTVが 約900万 か 約1,800万 かに分かれる。</p>
+
+<div class="box key">
+  <h4 class="mono">運用ルール</h4>
+  <p><b>1社1商品。同時に2つ売らない。</b>顧客の課題の主語は必ず1つ（経営／推進／売上）に決まる。3つ並べて「どれにしますか」と聞いた瞬間、顧客は選べず、比較検討は先送りされ、いちばん安いものが選ばれる。商談では<b>ヒアリングで主語を確定させ、1つだけ提示する</b>。他の2つは「その次の話」として匂わせるに留める。</p>
+</div>
+</section>
+
+<!-- ============ S1 ============ -->
+<section id="s1">
+<h2><span class="n mono">SECTION 01 ／ S1</span>AI顧問 — 時間ではなく「意思決定の質」を売る</h2>
+
+<div class="dossier">
+  <div class="bar"><span class="code mono">S1</span><span class="nm">AI顧問</span><span class="tag">v0.1 #1 の改訂</span></div>
+  <div class="body">
+    <p class="oneline">生成AIについて、社内に「相談できる相手」がいない経営者に対し、<b>判断の材料と結論を毎月供給する</b>契約。時間を売るのではなく、<b>やらない判断を含めた意思決定</b>を売る。</p>
+
+    <h3>プランの切り方を「回数」から「同席者」へ変える</h3>
+    <p>v0.1では回数でプランを分けていたが、これは委譲できない設計だった。回数で分けると、ライト（月30万）でも橋本さんが出ることになり、時間単価が最も低い仕事に代表が張り付く。<em>プランの区切りは「橋本が同席するかどうか」に変える。</em>顧客にとっても分かりやすく、値上げの根拠にもなり、委譲が自動的に進む。</p>
+
+    <div class="ladder">
+      <div class="plan">
+        <div class="pn">ライト</div>
+        <div class="price"><span class="fig mono">30</span><span class="unit">万円/月</span></div>
+        <ul>
+          <li>月1回90分（コンサル担当）</li>
+          <li>チャット相談 営業日24h以内</li>
+          <li>四半期ロードマップ更新</li>
+          <li>橋本 非同席</li>
+        </ul>
+        <div class="load mono">実工数 3h／原価率 5%</div>
+      </div>
+      <div class="plan">
+        <div class="pn">スタンダード</div>
+        <div class="price"><span class="fig mono">50</span><span class="unit">万円/月</span></div>
+        <ul>
+          <li>月2回（うち1回 橋本同席）</li>
+          <li>ユースケース伴走 四半期1本</li>
+          <li>活用台帳の運用代行</li>
+          <li>社内勉強会 年2回</li>
+        </ul>
+        <div class="load mono">実工数 6h（橋本2h）</div>
+      </div>
+      <div class="plan">
+        <div class="pn">エグゼクティブ</div>
+        <div class="price"><span class="fig mono">100</span><span class="unit">万円/月</span></div>
+        <ul>
+          <li>週1回（橋本）</li>
+          <li>経営会議・役員合宿 同席</li>
+          <li>投資判断の壁打ち 随時</li>
+          <li>役員向け月次ブリーフィング</li>
+        </ul>
+        <div class="load mono">実工数 14h（橋本12h）</div>
+      </div>
+    </div>
+
+    <div class="box warn">
+      <h4 class="mono">価格の検算 — エグゼクティブは安すぎる</h4>
+      <p>時間あたり単価は ライト <b>10.0万/h</b>、スタンダード <b>8.3万/h</b>、エグゼクティブ <b>7.1万/h</b>。<b>最も橋本さんの時間を使うプランが、最も時間単価が低い</b>という逆転が起きている。エグゼクティブは<b>月150万</b>に上げるか、月100万のまま「経営会議同席は四半期1回まで」と上限を切るかの二択。<b>推奨は後者</b>——今期は値上げより枠の明示でコントロールし、来期の価格改定でまとめて上げる。</p>
+    </div>
+
+    <h3>顧問が6ヶ月で切られる理由と、その対策</h3>
+    <p>顧問契約の典型的な死に方は「毎月何を話すんだっけ」になることだ。原因は<b>初回3ヶ月の設計がない</b>ことに尽きる。最初の90日で「この会社にとってのAI活用地図」を作り切ってしまえば、以降の月次は地図の更新と実行監視になり、議題が枯れない。</p>
+
+    <div class="strip">
+      <div class="row"><div class="when mono">Day 1–30</div><div class="what"><b>現状の棚卸しと地図づくり</b><span>全部門ヒアリング（3〜5部門）／既存ツール・データの棚卸し／AI活用候補を20〜30本リストアップし、投資対効果でマッピング</span></div></div>
+      <div class="row"><div class="when mono">Day 31–60</div><div class="what"><b>優先順位と投資判断</b><span>上位5本に絞り、それぞれの投資額・期待効果・リスクを1枚化／「やらない」と決めた15本の理由も文書に残す（これが顧問の価値の証拠になる）</span></div></div>
+      <div class="row"><div class="when mono">Day 61–90</div><div class="what"><b>ロードマップの合意と着手</b><span>12ヶ月ロードマップを役員会で承認／第1弾の着手（研修 or PoC）／以降の月次アジェンダの型を確定</span></div></div>
+      <div class="row"><div class="when mono">4ヶ月目〜</div><div class="what"><b>月次の定型運用</b><span>①前月の進捗と数字 ②新しいAI動向のうち貴社に効くもの ③今月の判断事項 ④次の一手。この4部構成を崩さない</span></div></div>
+    </div>
+
+    <h3>解約防止＝「持ち出せない資産」を顧客の中に積む</h3>
+    <p>顧問を切りにくくするのは人間関係ではなく<b>蓄積物</b>である。以下の4点セットを毎月更新し、顧問契約を止めると更新が止まる構造にする（v0.1 #27の中核）。</p>
+    <div class="scroll">
+    <table>
+      <caption>顧問の蓄積型成果物 4点</caption>
+      <thead><tr><th class="lead">成果物</th><th class="lead">中身</th><th class="lead">更新頻度</th><th class="lead">失うと困る理由</th></tr></thead>
+      <tbody>
+        <tr><td class="lead"><b>AI活用ロードマップ</b></td><td>12ヶ月の実行計画と投資額</td><td>四半期</td><td>次年度予算の根拠が消える</td></tr>
+        <tr><td class="lead"><b>ユースケース台帳</b></td><td>部門別の活用事例・使用プロンプト・担当者</td><td>毎月</td><td>社内のノウハウが個人に戻る</td></tr>
+        <tr><td class="lead"><b>ROI記録</b></td><td>削減工数・削減額の実測と換算根拠</td><td>毎月</td><td>役員に説明する数字がなくなる</td></tr>
+        <tr><td class="lead"><b>判断ログ</b></td><td>やる／やらないを決めた案件と理由</td><td>都度</td><td>同じ議論を毎年やり直すことになる</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>橋本依存を外すロードマップ</h3>
+    <p>顧問7社（現実ケース）を回すとき、v0.1の見立てでは橋本さんの月間工数は約42hだった。プランを同席者で切り直すと、内訳は次のようになる。</p>
+    <div class="scroll">
+    <table>
+      <caption>現実ケース7社の内訳と橋本工数</caption>
+      <thead><tr><th class="lead">プラン</th><th class="num">社数</th><th class="num">MRR</th><th class="num">橋本工数/月</th><th class="lead">主担当</th></tr></thead>
+      <tbody>
+        <tr><td class="lead">エグゼクティブ</td><td class="num">1</td><td class="num">100万</td><td class="num">12h</td><td class="lead">橋本</td></tr>
+        <tr><td class="lead">スタンダード</td><td class="num">3</td><td class="num">150万</td><td class="num">6h</td><td class="lead">コンサル＋橋本月1</td></tr>
+        <tr><td class="lead">ライト</td><td class="num">3</td><td class="num">90万</td><td class="num">0h</td><td class="lead">コンサル</td></tr>
+        <tr class="tot"><td class="lead">計</td><td class="num">7</td><td class="num">340万</td><td class="num">18h</td><td class="lead">—</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="sub">v0.1想定（42h）に対し<b>橋本工数は約6割減</b>。MRRは330万→340万でほぼ同じ。<b>この差分がS3（営業支援）に投下できる時間になる。</b></p>
+
+    <h3>競合と、勝てる理由</h3>
+    <div class="scroll">
+    <table>
+      <caption>顧客が比較検討する相手</caption>
+      <thead><tr><th class="lead">選択肢</th><th class="lead">価格</th><th class="lead">弱点</th></tr></thead>
+      <tbody>
+        <tr><td class="lead">大手コンサルのAIアドバイザリー</td><td class="lead">月300万〜</td><td class="lead">高い。中堅企業には過剰</td></tr>
+        <tr><td class="lead">フリーランスのAIアドバイザー</td><td class="lead">月10〜30万</td><td class="lead">実行部隊がなく「言うだけ」で終わる</td></tr>
+        <tr><td class="lead">社内でAI人材を採用</td><td class="lead">年収800〜1,200万＋採用費</td><td class="lead">採れない・採っても1人では回らない・辞める</td></tr>
+        <tr><td class="lead"><b>カトルセ AI顧問</b></td><td class="lead"><b>月30〜100万</b></td><td class="lead">—（研修・開発の実行部隊を自社に持つ）</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><b>刺さる一言:</b>「顧問の言うことを、そのまま実行できる会社が顧問をやっています」。研修も開発も自社でできるため、顧問の提案が提案のまま終わらない。これはフリーランス顧問にも大手コンサルにも作れない立ち位置。</p>
+
+    <h3>解約の予兆と、その前に打つ手</h3>
+    <ul>
+      <li><b>MTGの出席者ランクが下がる</b>（役員→部長→担当）→ 次回に役員向けブリーフィングを提案し、席を戻す</li>
+      <li><b>宿題が返ってこない</b>（2回連続）→ 顧客側に実行体力がない。S2伴走リテナーへのアップセルを打診する好機</li>
+      <li><b>チャットの質問が月2件を切る</b>→ 使われていない。QBRを前倒しし、ROI記録を持って役員に会う</li>
+      <li><b>解約申出があったら</b>→ 即受理せず、必ず<b>ライトへの降格</b>を提示する（月100万→30万でも、切れるよりLTVは大きい）</li>
+    </ul>
+
+    <div class="box">
+      <h4 class="mono">S1 シミュレーション（年度末MRR）</h4>
+      <div class="scroll">
+      <table>
+        <thead><tr><th class="lead">ケース</th><th class="lead">前提</th><th class="num">MRR</th><th class="num">今期の年間寄与</th></tr></thead>
+        <tbody>
+          <tr><td class="lead">保守</td><td class="lead">既存3社の月額化のみ（平均50万）</td><td class="num">150万</td><td class="num">1,050万</td></tr>
+          <tr><td class="lead"><b>現実</b></td><td class="lead">＋新規4社（38社×転換11%／上表の内訳）</td><td class="num"><b>340万</b></td><td class="num"><b>1,750万</b></td></tr>
+          <tr><td class="lead">強気</td><td class="lead">＋新規8社（転換21%）</td><td class="num">560万</td><td class="num">2,450万</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="sub" style="margin-top:8px">v0.1（330万）からほぼ変わらないが、<b>橋本工数が42h→18hに下がった分だけ上限が上がった</b>のが実質的な改善。強気ケースはコンサル採用者1名がライト・スタンダード計6社を持てるかで決まる。</p>
+    </div>
+
+    <div class="box crit">
+      <h4 class="mono">やってはいけないこと</h4>
+      <p>①<b>「何でも相談してください」と言わない</b>——提供範囲が無限になり、実質無料コンサルに転落する。相談は「AI・DXの意思決定」に限定し、それ以外は別見積と契約書に書く。②<b>単発の作業を引き受けない</b>——資料作成や実装を顧問の枠内でやり始めると、顧問料でS2の仕事をすることになる。作業が必要になったらS2への切替を提案する（それが正しいアップセル動線）。</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============ S2 ============ -->
+<section id="s2">
+<h2><span class="n mono">SECTION 02 ／ S2</span>伴走支援リテナー — 「卒業させること」をKPIにする</h2>
+
+<div class="dossier">
+  <div class="bar"><span class="code mono">S2</span><span class="nm">伴走支援リテナー</span><span class="tag">v0.1 #2 の改訂</span></div>
+  <div class="body">
+    <p class="oneline">方針は決まったのに社内で進まない会社に対し、<b>推進担当の隣に座って一緒に手を動かし、6〜12ヶ月で内製化させて卒業させる</b>契約。CTCで実施中の週次伴走を、そのまま商品にする。</p>
+
+    <h3>まず #5「AI人材シェアリング」との境界を引く</h3>
+    <p>この2つは放っておくと必ず混同され、営業現場で説明できなくなる。線は<b>「頭を貸すのか、手を貸すのか」</b>で引く。</p>
+    <div class="scroll">
+    <table>
+      <thead><tr><th class="lead"></th><th class="lead">S2 伴走支援リテナー</th><th class="lead">#5 AI人材シェアリング</th></tr></thead>
+      <tbody>
+        <tr><td class="lead"><b>売るもの</b></td><td>推進の頭脳＋手（進め方を決める）</td><td>手だけ（決まった作業をこなす）</td></tr>
+        <tr><td class="lead"><b>顧客の指示</b></td><td>受けない（こちらが計画を立てる）</td><td>受ける（顧客の計画に従う）</td></tr>
+        <tr><td class="lead"><b>成果物</b></td><td>計画・動くもの・運用ルール・社内推進者</td><td>稼働時間と成果物</td></tr>
+        <tr><td class="lead"><b>契約形態</b></td><td>準委任（成果物ベースの月額）</td><td>準委任（人日ベース）</td></tr>
+        <tr><td class="lead"><b>単価</b></td><td class="num">実質 人日20〜30万</td><td class="num">実質 人日20万</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="sub">営業トークとしては「<b>進め方から一緒に決めるならS2、やることが決まっていて人が足りないなら#5</b>」。この一言で切り分ける。</p>
+
+    <h3>プラン設計</h3>
+    <div class="ladder">
+      <div class="plan">
+        <div class="pn">ベーシック（隔週）</div>
+        <div class="price"><span class="fig mono">80</span><span class="unit">万円/月</span></div>
+        <ul>
+          <li>隔週 半日MTG（月2回）</li>
+          <li>月次成果物3点セット</li>
+          <li>チャット相談</li>
+          <li>実装支援なし（設計まで）</li>
+        </ul>
+        <div class="load mono">実工数 月4人日／粗利 79%</div>
+      </div>
+      <div class="plan">
+        <div class="pn">スタンダード（週1）</div>
+        <div class="price"><span class="fig mono">120</span><span class="unit">万円/月</span></div>
+        <ul>
+          <li>週1 半日MTG</li>
+          <li>実装支援 月2人日</li>
+          <li>社内勉強会 月1回</li>
+          <li>月次成果物3点セット</li>
+        </ul>
+        <div class="load mono">実工数 月6人日／粗利 79%</div>
+      </div>
+      <div class="plan">
+        <div class="pn">フル</div>
+        <div class="price"><span class="fig mono">180</span><span class="unit">万円/月</span></div>
+        <ul>
+          <li>週1日 常駐相当</li>
+          <li>実装支援 月4人日</li>
+          <li>推進担当の育成込み</li>
+          <li>役員報告への同席</li>
+        </ul>
+        <div class="load mono">実工数 月14人日／粗利 67%</div>
+      </div>
+    </div>
+    <p class="sub">v0.1では「週1日＝150万／隔週＝80万」だったが、<b>週1日を120万に下げ、実装枠込みのフルを180万に新設</b>する。理由は2つ——①週1日150万は中堅企業の稟議で止まりやすい価格帯であること、②実際に重いのはMTGではなく実装で、そこを別枠にしないとスコープが無限に膨らむこと。</p>
+
+    <h3>最大の死因はスコープクリープ。契約書で線を引く</h3>
+    <p>この商品は「一緒にやります」と言った瞬間に何でも屋になる。含む／含まないを提案時点で紙にして合意しておく。<b>これを口頭で済ませた案件は必ず赤字になる。</b></p>
+    <div class="scope">
+      <div class="col in">
+        <h4 class="mono">含む</h4>
+        <ul>
+          <li>推進計画の立案と更新</li>
+          <li>週次／隔週の定例MTGとその準備</li>
+          <li>月次成果物3点セットの作成</li>
+          <li>PoC設計・プロンプト設計・ツール選定</li>
+          <li>プラン枠内の実装支援（人日で明示）</li>
+          <li>社内勉強会の実施（回数明示）</li>
+        </ul>
+      </div>
+      <div class="col out">
+        <h4 class="mono">含まない（＝別見積）</h4>
+        <ul>
+          <li>本番システムの開発・保守</li>
+          <li>枠を超える実装（超過分は人日精算）</li>
+          <li>顧客社内の会議への恒常的な出席</li>
+          <li>他ベンダーの管理・調整代行</li>
+          <li>ドキュメントの清書・議事録作成代行</li>
+          <li>研修の実施（別商品として提案）</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>月次成果物3点セット — 「何をやってくれたのか」問題への解答</h3>
+    <p>伴走型の商品は、うまくいっているときほど<b>顧客側に「自分たちでやった感」が残り、契約価値が見えなくなる</b>。毎月同じ形式で3点を出し続けることで、価値を可視化したまま卒業まで持っていく。</p>
+    <ol>
+      <li><b>進捗ダッシュボード</b> — 計画に対する進み具合、稼働したユースケース数、社内利用者数の推移</li>
+      <li><b>今月できるようになったこと</b> — 動いたもの・削減できた工数・その換算金額</li>
+      <li><b>来月の計画と、そちらにお願いしたいこと</b> — 顧客側のタスクを明示（これが顧客を動かす装置になる）</li>
+    </ol>
+
+    <h3>6ヶ月の標準ロードマップ — 最初から出口を見せる</h3>
+    <div class="strip">
+      <div class="row"><div class="when mono">Month 1</div><div class="what"><b>診断と優先順位づけ</b><span>業務棚卸し／ユースケース候補の洗い出し／効果と難易度でマッピング／推進体制の合意</span></div></div>
+      <div class="row"><div class="when mono">Month 2–3</div><div class="what"><b>PoC 2本を並走</b><span>最も効果が出やすい2本を実装／効果測定の設計と実測／社内へのお披露目</span></div></div>
+      <div class="row"><div class="when mono">Month 4–5</div><div class="what"><b>全社展開と推進者の育成</b><span>横展開／運用ルール策定／社内推進者2名にノウハウ移管／社内勉強会</span></div></div>
+      <div class="row"><div class="when mono">Month 6</div><div class="what"><b>卒業判定と引き渡し</b><span>運用手順書の引き渡し／次年度計画の策定／<b>顧問（S1）への移行提案</b></span></div></div>
+    </div>
+
+    <div class="box key">
+      <h4 class="mono">「卒業」を掲げると、なぜ売れるのか</h4>
+      <p>伴走型サービスの提案で顧客が最も警戒するのは「ずっと払い続けることになるのでは」という点だ。<b>初回提案の1枚目に「6ヶ月で卒業していただきます」と書く</b>と、この警戒が消えて意思決定が速くなる。そして実際に卒業させたあと、月30〜50万の顧問（S1）へ移行させる。<b>売上を捨てているのではなく、120万×6ヶ月で終わる関係を、120万×6＋40万×24ヶ月の関係に変えている。</b>LTVは約720万から約1,680万になる。</p>
+    </div>
+
+    <h3>原価と粗利の検算</h3>
+    <p class="sub">前提: コンサル人材の年収800万＋法定福利等で年間原価1,000万 → 月83万 → 稼働20日として<b>日単価4.2万</b>。</p>
+    <div class="scroll">
+    <table>
+      <thead><tr><th class="lead">プラン</th><th class="num">月額</th><th class="num">実工数</th><th class="num">人件費原価</th><th class="num">粗利</th><th class="num">粗利率</th></tr></thead>
+      <tbody>
+        <tr><td class="lead">ベーシック</td><td class="num">80万</td><td class="num">4人日</td><td class="num">17万</td><td class="num">63万</td><td class="num">79%</td></tr>
+        <tr><td class="lead">スタンダード</td><td class="num">120万</td><td class="num">6人日</td><td class="num">25万</td><td class="num">95万</td><td class="num">79%</td></tr>
+        <tr><td class="lead">フル</td><td class="num">180万</td><td class="num">14人日</td><td class="num">59万</td><td class="num">121万</td><td class="num">67%</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="sub">※実工数にはMTG本体だけでなく準備・成果物作成・チャット対応を含む（MTG時間の約3倍で見積もっている）。<b>橋本さんが担当した場合はこの表は成立しない</b>——代表の1人日は営業活動の機会費用が乗るため、実質的な原価は3〜5倍になる。橋本担当は1社目のみ。</p>
+
+    <h3>CTC事例を資産化する手順</h3>
+    <ol>
+      <li>現在の週次伴走の中身を棚卸しし、<b>体制図・週次アジェンダ・成果物一覧</b>の3点に落とす（2人日）</li>
+      <li>先方に事例掲載の許諾を取る。<b>金額は伏せ、成果は数字で</b>（1人日）</li>
+      <li>「CTC様で実施中の伴走を、御社向けに標準化しました」という提案の1枚目を作る（1人日）</li>
+      <li>提案先リスト: AI開発受注4社＋研修上位10社。<b>研修を受けて「その後どうすれば」となっている会社が最短距離</b></li>
+    </ol>
+
+    <div class="box">
+      <h4 class="mono">S2 シミュレーション（年度末MRR）</h4>
+      <div class="scroll">
+      <table>
+        <thead><tr><th class="lead">ケース</th><th class="lead">前提</th><th class="num">MRR</th><th class="num">今期の年間寄与</th></tr></thead>
+        <tbody>
+          <tr><td class="lead">保守</td><td class="lead">1社（ベーシック80万）</td><td class="num">80万</td><td class="num">480万</td></tr>
+          <tr><td class="lead"><b>現実</b></td><td class="lead">2社（ベーシック80万＋スタンダード120万）</td><td class="num"><b>200万</b></td><td class="num"><b>1,000万</b></td></tr>
+          <tr><td class="lead">強気</td><td class="lead">3社（＋フル180万）</td><td class="num">380万</td><td class="num">1,600万</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="sub" style="margin-top:8px">v0.1（180万）から+20万。<b>3社目はコンサル採用者が主担当に立てることが受注条件</b>——売り先行でデリバリーを壊さない。10月時点で採用が決まっていなければ、3社目は意図的に見送る。</p>
+    </div>
+
+    <div class="box crit">
+      <h4 class="mono">リスク</h4>
+      <p>①<b>属人化の再生産</b>——伴走で入った担当者が抜けられなくなる。月次成果物と運用手順書を最初から書き続けることでしか防げない。②<b>顧客側の推進担当が異動する</b>——中堅企業では十分起こる。契約は必ず<b>役員決裁で結び、推進担当個人との関係に依存させない</b>。③<b>卒業のタイミングで一切合切切られる</b>——6ヶ月目の卒業判定MTGは必ず<b>役員同席</b>で行い、その場で顧問移行を提案する。担当者レベルで話すと「もう大丈夫です」で終わる。</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============ S3 ============ -->
+<section id="s3">
+<h2><span class="n mono">SECTION 03 ／ S3</span>伴走型AI営業支援 — 自社でやっていることを、そのまま売る</h2>
+
+<div class="dossier alt">
+  <div class="bar"><span class="code mono">S3</span><span class="nm">伴走型AI営業支援</span><span class="tag">新規・要意思決定</span></div>
+  <div class="body">
+    <p class="oneline">営業組織に対して<b>①営業部長（頭）②FS担当（手）③AI駆動の営業ツール（仕組み）</b>の3点を同時に入れ、6〜12ヶ月で「AIで回る営業組織」を置いてくる契約。3つの中で最も重く、最も解約されにくく、<b>最も他社が真似できない</b>。</p>
+
+    <div class="box key">
+      <h4 class="mono">なぜこれが3つの中でいちばん筋がいいのか</h4>
+      <p>カトルセは今まさに<b>自社の営業をAIで作り直している当事者</b>である。商談681件・受注46件・受注額8,772万円・リード8,271件・商談ログ626件を LiteCRM（CATORCE Sales OS）で運用し、週次レビュー会議で今月の着地と打ち手を決めている。着手時点の「次回アクション設定率 31.9%（414件中132件）」という数字まで残っている。<br><br><b>「うちも31.9%でした」と言えるコンサルは他にいない。</b>営業コンサルは仕組みを語るがツールを作れない。SFAベンダーはツールを売るが営業をやらない。営業代行は人を貸すが仕組みが残らない。<em>3つを1本で、しかも自社の実データで実証しながら提供できるのはカトルセだけ</em>という立ち位置がすでに手元にある。</p>
+    </div>
+
+    <h3>顧客像 — 日本の中堅BtoBの標準的な状態</h3>
+    <ul>
+      <li>年商10〜50億／営業5〜20名／社長または役員が営業トップを兼務している</li>
+      <li>SFA・CRMを入れたが<b>入力されず形骸化</b>している（またはExcel・kintoneで管理している）</li>
+      <li>売上予測が「営業の感覚」でしか出せず、月末まで着地が読めない</li>
+      <li>トップセールス1〜2名に売上が集中し、<b>型が横展開されていない</b></li>
+      <li>営業部長を採用したいが、年収1,200万クラスの人材が採れない／採っても当たり外れが大きい</li>
+    </ul>
+    <p class="sub">研修受注済38社のうち<b>営業部門向けにAI研修を実施した会社</b>が最短の提案先。「研修で使い方は分かったが、営業の成果には繋がっていない」というのが提案のフックになる（実際、研修だけで営業成果が変わることはまずない）。</p>
+
+    <h3>提供の3層 — 何を、誰が、どれだけやるのか</h3>
+
+    <div class="scroll">
+    <table>
+      <caption>Layer 1 ／ 営業部長（fractional sales manager）</caption>
+      <thead><tr><th class="lead">やること</th><th class="lead">頻度</th><th class="lead">アウトプット</th></tr></thead>
+      <tbody>
+        <tr><td class="lead">パイプラインレビュー</td><td class="lead">月2回（各2h）</td><td class="lead">案件ごとの打ち手・落とす案件の判断</td></tr>
+        <tr><td class="lead">ヨミ精度の管理</td><td class="lead">月次</td><td class="lead">Commit／Best Caseの査定・着地予測</td></tr>
+        <tr><td class="lead">メンバー1on1</td><td class="lead">月1回×人数</td><td class="lead">個人別の課題と行動指示</td></tr>
+        <tr><td class="lead">勝ち筋の言語化</td><td class="lead">四半期</td><td class="lead">業種×規模別のプレイブック</td></tr>
+        <tr><td class="lead">採用・評価の設計</td><td class="lead">随時</td><td class="lead">営業の評価指標・採用要件・面接同席</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="scroll">
+    <table>
+      <caption>Layer 2 ／ FS担当（フィールドセールス）</caption>
+      <thead><tr><th class="lead">やること</th><th class="lead">頻度</th><th class="lead">アウトプット</th></tr></thead>
+      <tbody>
+        <tr><td class="lead">重要商談への同行</td><td class="lead">週1〜2件</td><td class="lead">商談そのもの（＝売上に直接効く）</td></tr>
+        <tr><td class="lead">提案書・見積の作成支援</td><td class="lead">随時</td><td class="lead">勝てる提案書のテンプレ化</td></tr>
+        <tr><td class="lead">クロージング設計</td><td class="lead">案件単位</td><td class="lead">決裁ルート・稟議文面・落とし方</td></tr>
+        <tr><td class="lead">ロープレ・同行フィードバック</td><td class="lead">月2回</td><td class="lead">メンバーの商談品質の底上げ</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="scroll">
+    <table>
+      <caption>Layer 3 ／ AI営業ツール（LiteCRMを顧客専用に構築）</caption>
+      <thead><tr><th class="lead">機能</th><th class="lead">中身</th><th class="lead">自社での状態</th></tr></thead>
+      <tbody>
+        <tr><td class="lead">商談・ヨミ管理</td><td class="lead">金額・ステージ・確度・次アクション・リスク</td><td class="lead">商談681件で運用中</td></tr>
+        <tr><td class="lead">週次レビュー画面</td><td class="lead">会議で「今週の打ち手」まで決め切る画面</td><td class="lead">毎週の営業会議で使用中</td></tr>
+        <tr><td class="lead">売上予測</td><td class="lead">今月／来月／四半期／12ヶ月ローリング</td><td class="lead">稼働中</td></tr>
+        <tr><td class="lead">危険案件の自動検知</td><td class="lead">放置案件・次アクション未設定・フォロー漏れ</td><td class="lead">夜間バッチで稼働中</td></tr>
+        <tr><td class="lead">AI商談前リサーチ</td><td class="lead">企業仮説・業界課題・初回質問リスト・トーク案</td><td class="lead">実装済み</td></tr>
+        <tr><td class="lead">AI議事録要約</td><td class="lead">文字起こし→課題／予算／決裁者／次アクションを構造化</td><td class="lead">実装済み（tl;dv連携）</td></tr>
+        <tr><td class="lead">AIフォロー文面</td><td class="lead">御礼・提案送付・再フォロー等6種を自動生成</td><td class="lead">実装済み（Gmail下書きまで）</td></tr>
+        <tr><td class="lead">AI会議アジェンダ</td><td class="lead">アラート＋実績から週次会議の議題を自動生成</td><td class="lead">実装済み</td></tr>
+        <tr><td class="lead">担当者別アクセス制御</td><td class="lead">外部営業は自分の案件のみ（DBレベルで担保）</td><td class="lead">RLSで実装済み</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="box">
+      <h4 class="mono">技術的な現実性 — ここが想像よりずっと軽い</h4>
+      <p>v0.1の #16「LiteCRM外販」は<b>マルチテナント本番化に20〜30人日</b>という重い投資が前提だった。しかしS3では<b>顧客ごとに専用インスタンス（Supabaseプロジェクト＋Vercelプロジェクト）を立てればよく、SaaSとしてのテナント分離を作り込む必要がない</b>。インフラ費用は1社あたり月1万円程度で、月額150万に対して無視できる。</p>
+      <p>初期構築の内訳: 専用インスタンス立ち上げ3人日／商品マスタ・ステージ・ヨミ定義のカスタム3人日／既存データ移行4人日／ダッシュボードの顧客仕様調整4人日／AI機能のプロンプト調整2人日／営業メンバー向けオンボーディング2人日 = <b>計18人日・約4週間</b>。初期構築費150万なら人日8.3万で、開発チームの空き工数として十分成立する。</p>
+    </div>
+
+    <h3>プラン設計</h3>
+    <div class="ladder">
+      <div class="plan">
+        <div class="pn">ライト（仕組みのみ）</div>
+        <div class="price"><span class="fig mono">80</span><span class="unit">万円/月</span></div>
+        <ul>
+          <li>営業部長 月2回</li>
+          <li>営業OSの構築・運用</li>
+          <li>週次レビューの型の移植</li>
+          <li>FS同行なし</li>
+        </ul>
+        <div class="load mono">実工数 月7人日／初期150万</div>
+      </div>
+      <div class="plan">
+        <div class="pn">スタンダード</div>
+        <div class="price"><span class="fig mono">150</span><span class="unit">万円/月</span></div>
+        <ul>
+          <li>営業部長 月2回＋1on1</li>
+          <li>FS担当 週1日（同行・提案・クロージング）</li>
+          <li>営業OSの構築・継続改修</li>
+          <li>プレイブックの整備</li>
+        </ul>
+        <div class="load mono">実工数 月11人日／初期150万</div>
+      </div>
+      <div class="plan">
+        <div class="pn">フル</div>
+        <div class="price"><span class="fig mono">250</span><span class="unit">万円/月</span></div>
+        <ul>
+          <li>営業部長 週1</li>
+          <li>FS担当 週2日</li>
+          <li>採用・評価制度の設計</li>
+          <li>ツール専任改修枠 月4人日</li>
+        </ul>
+        <div class="load mono">実工数 月18人日／初期200万</div>
+      </div>
+    </div>
+    <p class="sub">契約期間は<b>6ヶ月以上</b>（12ヶ月推奨）。初期構築費は<b>別途請求を原則</b>とする——「6ヶ月契約なら初期無償」にすると、3ヶ月で解約された場合に構築原価150万が丸ごと損失になる。</p>
+
+    <div class="box warn">
+      <h4 class="mono">価格の説得材料</h4>
+      <p>顧客にとっての比較対象は<b>「営業部長を1人採用すること」</b>である。年収1,200万＋法定福利＋採用手数料（年収の35%）＝<b>初年度 約1,940万＝月162万</b>。しかも採れるかどうか分からず、外れても辞めさせられない。<br>対してスタンダードは<b>月150万で、部長＋FS＋営業ツールの3点が即日から動く</b>。この比較を1枚の表にして提案の2ページ目に置く。値引き交渉が始まったら、この表に戻る。</p>
+    </div>
+
+    <h3>12ヶ月のロードマップ</h3>
+    <div class="strip">
+      <div class="row"><div class="when mono">Month 0</div><div class="what"><b>営業診断（初期構築の前）</b><span>過去1年の商談データ棚卸し／勝率・失注理由・リードソース別成果の分析／営業メンバー全員に1on1ヒアリング／<b>診断レポートを役員会で報告</b>（ここで契約を取りに行く）</span></div></div>
+      <div class="row"><div class="when mono">Month 1</div><div class="what"><b>営業OSの構築とデータ移行</b><span>専用インスタンス構築／既存データ移行／ステージ・ヨミ定義の合意／営業メンバー向けオンボーディング研修（半日×2）</span></div></div>
+      <div class="row"><div class="when mono">Month 2–3</div><div class="what"><b>入力の定着と週次レビューの立ち上げ</b><span>次回アクション設定率を90%まで引き上げる／週次レビュー会議をカトルセ主導で開始／FS同行を開始し、その場で入力習慣を作る</span></div></div>
+      <div class="row"><div class="when mono">Month 4–6</div><div class="what"><b>型の抽出とAI活用の本格化</b><span>勝ちパターンをプレイブック化／AI議事録・AIフォロー文面を全員が使う状態に／ヨミ精度の管理を開始／<b>6ヶ月目にKPIレビュー</b></span></div></div>
+      <div class="row"><div class="when mono">Month 7–12</div><div class="what"><b>自走化と引き渡し</b><span>週次レビューの司会を顧客側へ移管／社内の営業マネージャーを育成／評価制度への組み込み／<b>卒業判定と顧問（S1）への移行提案</b></span></div></div>
+    </div>
+
+    <h3>KPIは先行指標で握る。売上そのものは約束しない</h3>
+    <p>この商品の最大のリスクは<b>「成果＝売上」で握ってしまうこと</b>だ。売上は景気・競合・顧客の商品力に左右され、こちらがコントロールできない。契約では<b>営業プロセスの構築をコミットし、売上結果は保証しない</b>と明記したうえで、コントロール可能な先行指標でKPIを握る。</p>
+    <div class="scroll">
+    <table>
+      <caption>6ヶ月で握るKPI（すべて営業OS上で自動計測できる）</caption>
+      <thead><tr><th class="lead">指標</th><th class="num">開始時（典型）</th><th class="num">6ヶ月目標</th><th class="lead">意味</th></tr></thead>
+      <tbody>
+        <tr><td class="lead">次回アクション設定率</td><td class="num">30%前後</td><td class="num">90%以上</td><td class="lead">案件が放置されない状態</td></tr>
+        <tr><td class="lead">商談ログ記録率</td><td class="num">50%前後</td><td class="num">90%以上</td><td class="lead">属人化の解消・AIが効く前提</td></tr>
+        <tr><td class="lead">30日無接触の案件比率</td><td class="num">30%前後</td><td class="num">5%以下</td><td class="lead">失注の最大要因の除去</td></tr>
+        <tr><td class="lead">パイプライン総額 ÷ 目標</td><td class="num">1.5倍前後</td><td class="num">3倍以上</td><td class="lead">来月以降の売上の担保</td></tr>
+        <tr><td class="lead">ヨミ精度（予測 vs 着地）</td><td class="num">計測不能</td><td class="num">±10%以内</td><td class="lead">経営が数字で意思決定できる</td></tr>
+        <tr><td class="lead">週次レビューの自走</td><td class="num">なし</td><td class="num">カトルセ非同席で成立</td><td class="lead">卒業の判定条件</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="sub">開始時の数値は<b>カトルセ自身の着手時点の実績</b>（次回アクション設定率31.9%）を典型例として使える。「うちも同じ状態から始めました」は、この商談で最も強い一言になる。</p>
+
+    <h3>原価と粗利 — この商品は3社目から儲かる</h3>
+    <p class="sub">前提: 営業部長級人材の年収1,200万＋法定福利等で年間原価1,500万 → 月125万／FS担当は業務委託 週1日で月30万／開発は月100万・稼働160hとして時給6,250円。</p>
+    <div class="scroll">
+    <table>
+      <caption>スタンダード（月150万）の粗利は、部長を何社で按分できるかで決まる</caption>
+      <thead><tr><th class="lead">状況</th><th class="num">部長按分</th><th class="num">FS</th><th class="num">ツール＋インフラ</th><th class="num">原価計</th><th class="num">粗利</th><th class="num">粗利率</th></tr></thead>
+      <tbody>
+        <tr><td class="lead">1社のみ</td><td class="num">125万</td><td class="num">30万</td><td class="num">6万</td><td class="num">161万</td><td class="num" style="color:var(--crit)">▲11万</td><td class="num" style="color:var(--crit)">赤字</td></tr>
+        <tr><td class="lead">2社</td><td class="num">63万</td><td class="num">30万</td><td class="num">6万</td><td class="num">99万</td><td class="num">51万</td><td class="num">34%</td></tr>
+        <tr><td class="lead"><b>3社</b></td><td class="num">42万</td><td class="num">30万</td><td class="num">6万</td><td class="num">78万</td><td class="num"><b>72万</b></td><td class="num"><b>48%</b></td></tr>
+        <tr><td class="lead">4社</td><td class="num">31万</td><td class="num">30万</td><td class="num">6万</td><td class="num">67万</td><td class="num">83万</td><td class="num">55%</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="box crit">
+      <h4 class="mono">この表から出る、いちばん重要な結論</h4>
+      <p><b>営業部長級を採用してから売り始めると、1社目は必ず赤字になる。</b>したがって順番は逆でなければならない——<b>1社目と2社目は橋本さんが営業部長を兼務し、そのあいだに採用する。</b>3社目が見えた時点で採用に踏み切れば、赤字期間を通らずに立ち上がる。<br>ただしこれは、橋本さんの時間を月16h×2社＝32h/月使うという意味である。S1のプラン再設計で浮く24h（42h→18h）と、営業活動の圧縮でしか捻出できない。<b>S3をやるということは、S1の委譲を先にやり切るということ</b>と同義。</p>
+    </div>
+
+    <h3>#16「LiteCRM外販」との関係 — 順番を逆にしてはいけない</h3>
+    <p>v0.1では #16 として「LiteCRMを月5,000円/人のSaaSとして外販する」を Wave 3 に置いていた。S3を作るなら、<b>#16は今期落とす</b>のが正しい。理由は3つ。</p>
+    <ol>
+      <li><b>SaaS外販は、サポート・セキュリティ・ロードマップ運営という別事業を立ち上げること</b>を意味し、20名の会社が本業と並行してやると必ず本業が痩せる。</li>
+      <li><b>S3ならテナント分離の作り込みが不要</b>で、20〜30人日の投資が丸ごと消える（顧客ごとに専用インスタンスでよい）。</li>
+      <li><b>S3を5〜10社やったあとの副産物として #16を出すのが正しい順番</b>。そのころには「10社の営業組織で使われた実績のあるツール」になっており、外販の説得力も、必要な機能の解像度も段違いになる。</li>
+    </ol>
+    <p>同じ理由で v0.1 #19「商談支援AIパック外販（月8万）」も、S3の中に機能として吸収する。単体で月8万を売りに行くより、月150万の中の一部として提供したほうが、売る手間も導入支援の手間も1回で済む。</p>
+
+    <h3>営業導線 — 誰に、どう当てるか</h3>
+    <div class="scroll">
+    <table>
+      <thead><tr><th class="lead">母集団</th><th class="num">件数</th><th class="lead">当て方</th><th class="lead">確度</th></tr></thead>
+      <tbody>
+        <tr><td class="lead">研修受注済38社のうち営業部門研修を実施した会社</td><td class="num">要抽出</td><td class="lead">「研修後、営業成果は変わりましたか」から入る診断提案</td><td class="lead"><span class="pill g">最短</span></td></tr>
+        <tr><td class="lead">アクティブ商談168件のうち営業責任者が窓口の案件</td><td class="num">要抽出</td><td class="lead">既存商談の中で課題の主語を営業に切り替える</td><td class="lead"><span class="pill g">高</span></td></tr>
+        <tr><td class="lead">失注案件（「予算がない」以外の理由）</td><td class="num">要抽出</td><td class="lead">営業診断（Month 0）を単体50万で提案し直す</td><td class="lead"><span class="pill t">中</span></td></tr>
+        <tr><td class="lead">展示会リード 8,271件のうち役職が営業責任者</td><td class="num">要抽出</td><td class="lead">「営業のAI活用」をテーマにしたセミナー→診断</td><td class="lead"><span class="pill t">中</span></td></tr>
+        <tr><td class="lead">パートナー経由（ビジネスタンク・KDDI）</td><td class="num">—</td><td class="lead">単価が高く紹介手数料を出しやすい商品として提示</td><td class="lead"><span class="pill w">中長期</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><b>入口商品は「営業診断」</b>にする。Month 0の診断を<b>単体50万・2週間</b>で切り出して売り、レポートを役員会で報告する場を作る。そこで課題が数字で見えれば、月額契約はその場で決まる。いきなり月150万の契約を提案しても稟議が通らないが、50万の診断なら部長決裁で通る。</p>
+
+    <div class="box">
+      <h4 class="mono">S3 シミュレーション（年度末MRR）</h4>
+      <p class="sub" style="margin-top:0">着火は10月（8〜9月に商品設計と自社実証の仕上げ）。1社目は事例化を条件に特別価格。</p>
+      <div class="scroll">
+      <table>
+        <thead><tr><th class="lead">ケース</th><th class="lead">前提</th><th class="num">MRR</th><th class="num">今期の年間寄与</th></tr></thead>
+        <tbody>
+          <tr><td class="lead">保守</td><td class="lead">1社（10月・特別価格100万＋初期100万）</td><td class="num">100万</td><td class="num">700万</td></tr>
+          <tr><td class="lead"><b>現実</b></td><td class="lead">2社（10月100万＋12月150万／初期計250万）</td><td class="num"><b>250万</b></td><td class="num"><b>1,450万</b></td></tr>
+          <tr><td class="lead">強気</td><td class="lead">3社（＋2月にフル250万／初期計400万）</td><td class="num">500万</td><td class="num">2,250万</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="sub" style="margin-top:8px">診断単体（50万×想定4件＝200万）は上表に含めていない。強気ケースは<b>営業部長級の採用が11月までに完了していること</b>が絶対条件。</p>
+    </div>
+
+    <div class="box crit">
+      <h4 class="mono">リスクと、契約上のガード</h4>
+      <ul>
+        <li><b>売上未達で炎上する</b> → 契約書に「営業プロセスの構築を業務範囲とし、売上結果を保証しない」と明記。KPIは上表の先行指標で握り、月次で可視化する。</li>
+        <li><b>1社目でつまずくと事例が作れない</b> → 1社目は「関係が壊れても致命傷にならず、かつ事例として最高の相手」を選ぶ。<b>関係の深さより、営業組織の課題が明確で、社長が本気であることを優先する。</b></li>
+        <li><b>顧客の営業データを預かる責任</b> → 専用インスタンス（顧客名義のクラウド契約も可）を標準とし、データの所在・退去時の返却手順を契約に明記する。</li>
+        <li><b>FS担当が売上を作りすぎて依存される</b> → FSは「同行して型を移す」役であり、代行ではない。同行比率を月次で下げていく計画を最初に提示する。</li>
+        <li><b>自社の営業リソースを食う</b> → S3のFSを自社の営業メンバーで賄うと、3億の達成が遠のく。<b>FSは業務委託で確保する</b>のが原則。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="cap">
+<h2><span class="n mono">SECTION 04</span>3つを同時にやると、体制はどうなるか</h2>
+
+<p>v0.1 §5では、現実ケース全体で月186h（フルタイム1.2人分）という検算だった。S3を2社追加すると、ここに<b>月104h（1社あたり約52h×2社）</b>が乗る。</p>
+
+<div class="scroll">
+<table>
+  <caption>現実ケースのデリバリー負荷（S3追加後）</caption>
+  <thead><tr><th class="lead">商品</th><th class="num">月間工数</th><th class="lead">主担当</th><th class="lead">v0.1からの差分</th></tr></thead>
+  <tbody>
+    <tr><td class="lead">S1 顧問7社</td><td class="num">約30h</td><td class="lead">コンサル中心（橋本18h）</td><td class="lead"><span class="pill g">▲12h</span> プラン再設計の効果</td></tr>
+    <tr><td class="lead">S2 伴走リテナー2社</td><td class="num">約80h</td><td class="lead">橋本1社＋コンサル1社</td><td class="lead">±0</td></tr>
+    <tr><td class="lead"><b>S3 AI営業支援2社</b></td><td class="num"><b>約104h</b></td><td class="lead"><b>橋本（部長）＋FS業務委託</b></td><td class="lead"><span class="pill c">+104h</span> 新規</td></tr>
+    <tr><td class="lead">ヘルプデスク3社</td><td class="num">約24h</td><td class="lead">コンサル</td><td class="lead">±0</td></tr>
+    <tr><td class="lead">研修年間契約・経営塾・コミュニティ</td><td class="num">約40h</td><td class="lead">講師陣（業務委託3名）</td><td class="lead">±0</td></tr>
+    <tr><td class="lead">ブリーフィング・定期便・OEM</td><td class="num">約16h</td><td class="lead">平石＋AIパイプライン</td><td class="lead">±0</td></tr>
+    <tr><td class="lead">S3 営業OSの構築・改修</td><td class="num">約16h</td><td class="lead">開発チーム</td><td class="lead"><span class="pill c">新規</span></td></tr>
+    <tr class="tot"><td class="lead">合計</td><td class="num">約310h/月</td><td class="lead">≒ フルタイム2.0人分</td><td class="lead">v0.1: 186h</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="box crit">
+  <h4 class="mono">採用要件が変わる</h4>
+  <p>v0.1の結論は「コンサル1名採用＋業務委託講師3名で回る」だった。S3を入れると<b>これでは回らない</b>。必要な体制は次のとおり。</p>
+  <ul>
+    <li><b>コンサル 1名（正社員）</b> — S1のライト/スタンダード計6社＋S2の1社＋ヘルプデスク。<span class="pill w">10月までに入社</span></li>
+    <li><b>FS担当 1名（業務委託・週2日）</b> — S3の2社の同行・提案支援。<span class="pill w">10月までに確保</span></li>
+    <li><b>講師 3名（業務委託）</b> — 研修・経営塾・コミュニティ。<span class="pill t">既定路線</span></li>
+    <li><b>営業部長級 1名（正社員）</b> — S3の3社目以降に必要。<span class="pill c">今期は採用せず、3社目が見えてから</span></li>
+  </ul>
+  <p>そして<b>1〜2社目のS3営業部長は橋本さんが兼務する</b>。これが成立する条件は、S1の委譲（42h→18h）が8〜9月中に完了していること。<em>S1の委譲設計はS3の前提条件であり、順番を飛ばせない。</em></p>
+</div>
+
+<h3>収益への影響 — v0.1 との差分</h3>
+<div class="scroll">
+<table>
+  <caption>年度末MRR（現実ケース・万円）</caption>
+  <thead><tr><th class="lead">項目</th><th class="num">v0.1</th><th class="num">本書</th><th class="num">差分</th><th class="lead">理由</th></tr></thead>
+  <tbody>
+    <tr><td class="lead">S1 AI顧問</td><td class="num">330</td><td class="num">340</td><td class="num">+10</td><td class="lead">プラン再設計（同席者で区分）</td></tr>
+    <tr><td class="lead">S2 伴走リテナー</td><td class="num">180</td><td class="num">200</td><td class="num">+20</td><td class="lead">プラン刻みの見直し</td></tr>
+    <tr><td class="lead"><b>S3 AI営業支援</b></td><td class="num">—</td><td class="num">250</td><td class="num">+250</td><td class="lead">新規</td></tr>
+    <tr><td class="lead">#16 LiteCRM外販</td><td class="num">10</td><td class="num">0</td><td class="num">▲10</td><td class="lead">S3に統合、今期は見送り</td></tr>
+    <tr><td class="lead">#19 商談支援AIパック</td><td class="num">16</td><td class="num">0</td><td class="num">▲16</td><td class="lead">S3の機能として吸収</td></tr>
+    <tr><td class="lead">#5 AI人材シェアリング</td><td class="num">60</td><td class="num">0</td><td class="num">▲60</td><td class="lead">要員がS3のFSに回るため後ろ倒し</td></tr>
+    <tr><td class="lead">その他（v0.1のまま）</td><td class="num">901</td><td class="num">901</td><td class="num">±0</td><td class="lead">—</td></tr>
+    <tr class="tot"><td class="lead">年度末MRR 合計</td><td class="num">1,497</td><td class="num">1,691</td><td class="num">+194</td><td class="lead">—</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="sub">S3を入れても合計は+194万にしかならない。<b>今期の売上効果だけで判断するとS3はやる意味が薄い。</b>やる理由は来期以降にある——S3は1社あたり年間1,800万〜3,000万（初期含む）の商品で、解約されにくく、営業部長人材を1名採るごとに3社ずつ積める。<em>来期10億の中で最も伸び代が大きいのはこの商品</em>であり、今期は「2社の実績と事例」を作ることそのものが目的になる。</p>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="dec">
+<h2><span class="n mono">SECTION 05</span>決めるべきこと・次の2週間</h2>
+
+<h3>いま決める3つ</h3>
+<div class="scroll">
+<table>
+  <thead><tr><th class="lead">決めること</th><th class="lead">選択肢</th><th class="lead">推奨</th><th class="lead">期限</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="lead"><b>S3をやるか</b></td>
+      <td class="lead">A: 今期2社やる／B: 今期は自社実証のみで来期から</td>
+      <td class="lead"><b>A</b>。ただし1社目は事例化前提の特別価格。Bを選ぶなら #16外販も同時に落とす</td>
+      <td class="lead"><span class="pill c">8月第1週</span></td>
+    </tr>
+    <tr>
+      <td class="lead"><b>S1エグゼクティブの価格</b></td>
+      <td class="lead">A: 月150万に値上げ／B: 月100万のまま同席範囲に上限を切る</td>
+      <td class="lead"><b>B</b>。今期は既存顧客の切替期なので値上げは摩擦が大きい。来期改定でまとめて上げる</td>
+      <td class="lead"><span class="pill w">8月第2週</span></td>
+    </tr>
+    <tr>
+      <td class="lead"><b>S2の1社目を誰が持つか</b></td>
+      <td class="lead">A: 橋本が持って9月着火／B: コンサル入社を待って11月着火</td>
+      <td class="lead"><b>A</b>。ただし橋本担当は1社目のみと明文化し、2社目は必ずコンサルに渡す</td>
+      <td class="lead"><span class="pill w">8月第2週</span></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3>次の2週間でやること</h3>
+<div class="strip">
+  <div class="row"><div class="when mono">Week 1</div><div class="what"><b>S1プラン定義書の改訂</b><span>同席者ベースの3プラン定義／既存顧問3社への切替打診の資料／料金表1枚<span class="sub"> — 2人日・橋本＋平石</span></span></div></div>
+  <div class="row"><div class="when mono">Week 1</div><div class="what"><b>S2のスコープ表を作る</b><span>含む／含まないの1枚。CTCの実運用を棚卸ししてそのまま転記する<span class="sub"> — 2人日・橋本</span></span></div></div>
+  <div class="row"><div class="when mono">Week 1</div><div class="what"><b>S3の対象リスト抽出</b><span>研修38社のうち営業部門研修を実施した会社／アクティブ商談168件のうち営業責任者が窓口の案件を LiteCRM から抽出<span class="sub"> — 0.5人日</span></span></div></div>
+  <div class="row"><div class="when mono">Week 2</div><div class="what"><b>S3「営業診断」メニューの商品化</b><span>単体50万・2週間の診断メニュー。診断レポートの雛形（勝率・失注理由・リードソース別成果・1on1所見）を自社データで1本試作する<span class="sub"> — 3人日</span></span></div></div>
+  <div class="row"><div class="when mono">Week 2</div><div class="what"><b>自社ベンチマークの整備</b><span>次回アクション設定率31.9%を起点に、自社の改善実績を毎月記録する。<b>これがS3の提案資料そのものになる</b><span class="sub"> — 0.5人日・以降毎月</span></span></div></div>
+  <div class="row"><div class="when mono">Week 2</div><div class="what"><b>FS担当・営業部長級の人材ソーシング開始</b><span>FSは業務委託で週2日。営業部長級は今期採らないが、母集団形成だけ始める<span class="sub"> — 1人日</span></span></div></div>
+</div>
+
+<div class="box key">
+  <h4 class="mono">この文書の一行まとめ</h4>
+  <p>S1は<b>委譲の設計</b>が全て（橋本42h→18hを作れば、他の全部が動く）。S2は<b>スコープと卒業</b>の設計が全て（線を引き、顧問へ着地させる）。S3は<b>順番</b>が全て（自社実証 → 診断商品 → 1社目を橋本が持つ → 3社目で部長採用 → その副産物としてSaaS外販）。<em>3つとも、いま足りないのは商品ではなく、それを回すための人と順番である。</em></p>
+</div>
+</section>
+
+<footer>
+CATORCE ／ サブスク3本柱 深堀り v0.1 ／ 2026-07-26<br>
+前提データ: 研修受注済38社・アクティブ商談168件・展示会リード8,271件・LiteCRM実績（商談681件／受注46件／受注額¥87.7M／リード8,271件／商談ログ626件／次回アクション設定率31.9%）<br>
+基礎資料: サブスク27施策 ローンチプラン＆収益シミュレーション v0.1
+</footer>
+
+</div>
