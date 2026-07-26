@@ -158,13 +158,15 @@ function StatMini({ label, value, tone }: { label: string; value: number; tone?:
 function MiniTable({ head, rows }: { head: string[]; rows: string[][] }) {
   if (rows.length === 0) return <p className="text-sm text-ink/40 py-2">データがありません</p>;
   return (
-    <table className="w-full text-sm">
-      <thead><tr>{head.map((h, i) => <th key={h} className={`th ${i > 0 ? "text-right" : ""}`}>{h}</th>)}</tr></thead>
-      <tbody className="divide-y divide-black/[0.04]">
-        {rows.map((r, ri) => (
-          <tr key={ri}>{r.map((c, ci) => <td key={ci} className={`td ${ci > 0 ? "text-right tabular-nums" : "font-medium"}`}>{c}</td>)}</tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead><tr>{head.map((h, i) => <th key={h} className={`th ${i > 0 ? "text-right" : ""}`}>{h}</th>)}</tr></thead>
+        <tbody className="divide-y divide-black/[0.04]">
+          {rows.map((r, ri) => (
+            <tr key={ri}>{r.map((c, ci) => <td key={ci} className={`td ${ci > 0 ? "text-right tabular-nums" : "font-medium"}`}>{c}</td>)}</tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

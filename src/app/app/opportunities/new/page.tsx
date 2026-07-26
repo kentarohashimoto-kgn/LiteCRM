@@ -37,7 +37,7 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
             {owners.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="label">ヨミ</label>
             <select name="yomi" defaultValue="4.アポ" className="input">
@@ -66,7 +66,7 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
           </div>
         </div>
         <p className="text-[11px] text-ink/40">※ ステージ・予測区分はヨミから自動設定されます。</p>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="label">案件予測 *</label>
             <select name="deal_phase" required className="input" defaultValue="">
@@ -83,7 +83,7 @@ export default async function NewOpportunityPage({ searchParams }: { searchParam
             <input name="expected_close_date" type="date" className="input" />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="label">次回アクション日 *</label>
             <input name="next_action_date" type="date" required className="input" />

@@ -135,6 +135,10 @@ export function AppointmentRegisterForm({
   });
 
   async function submit() {
+    // このフォームは button+state 送信のため native required が効かない。送信前に必須項目を検証。
+    if (!owner) { setError("営業担当を選択してください"); return; }
+    if (!date) { setError("アポ日を入力してください"); return; }
+    if (mode === "new" && !newCompany.trim()) { setError("会社名を入力してください"); return; }
     setSaving(true);
     setError(null);
     const res = await registerAppointmentAction({

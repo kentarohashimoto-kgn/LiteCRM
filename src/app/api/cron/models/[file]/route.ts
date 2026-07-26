@@ -1,6 +1,8 @@
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
+import { checkBearerEdge } from "@/lib/secure-compare-edge";
+
 /**
  * faster-whisper モデルファイルのアプリ経由配信（夜間バッチ用）。
  * 夜間バッチ(CCR実行環境)は huggingface.co へ直接到達できない一方、アプリ(Vercel)は到達できる。
@@ -19,9 +21,7 @@ const REPO: Record<string, string> = {
 const ALLOWED = new Set(["config.json", "model.bin", "tokenizer.json", "vocabulary.txt", "preprocessor_config.json", "vocabulary.json"]);
 
 export async function GET(req: Request, { params }: { params: { file: string } }): Promise<Response> {
-  const secret = process.env.CRON_SECRET;
-  const authz = req.headers.get("authorization") ?? "";
-  if (!secret || authz !== `Bearer ${secret}`) return new Response("unauthorized", { status: 401 });
+  if (!checkBearerEdge(req, process.env.CRON_SECRET)) return new Response("unauthorized", { status: 401 });
 
   const file = params.file;
   if (!ALLOWED.has(file)) return new Response("not allowed", { status: 400 });

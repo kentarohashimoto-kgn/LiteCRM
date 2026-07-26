@@ -17,6 +17,22 @@ const nextConfig = {
       bodySizeLimit: "12mb",
     },
   },
+  // セキュリティレスポンスヘッダ(包括レビュー2026-07-26 P3-e)。
+  // クリックジャッキング・リファラ漏れ・MIMEスニッフィング等の基本防御。
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=()" },
+        ],
+      },
+    ];
+  },
 };
 
 // E-4 エラー監視: NEXT_PUBLIC_SENTRY_DSN 未設定なら Sentry.init は走らず no-op。

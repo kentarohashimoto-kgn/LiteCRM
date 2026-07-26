@@ -30,14 +30,14 @@ export function QuickLogForm({ opportunityId, accountId }: { opportunityId: stri
       <input type="hidden" name="opportunity_id" value={opportunityId} />
       {accountId && <input type="hidden" name="account_id" value={accountId} />}
       <input type="hidden" name="redirect_to" value="/app/today" />
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <select name="activity_type" defaultValue="meeting" className="input">
           {ACTIVITY_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
         </select>
         <input name="title" required className="input" placeholder="例：商談実施" />
       </div>
       <textarea name="body" rows={3} className="input" placeholder="反応・課題・決まったことをメモ" />
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <input name="next_action_date" type="date" className="input" aria-label="次アクション日" />
         <input name="next_action_text" className="input" placeholder="次アクション内容" />
       </div>

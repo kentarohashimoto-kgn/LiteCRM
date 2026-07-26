@@ -48,7 +48,7 @@ import { LOST_REASONS } from "@/lib/constants";
 import { leadCandidatesQuery, buildLeadCandidates, type LeadCandRow } from "@/lib/data/lead-candidates";
 import { formatYen, formatPercent, formatDateFull, formatMonth, daysSince, toJstDate } from "@/lib/utils";
 
-const SAVED_MSG: Record<string, string> = { "1": "保存しました", activity: "活動を記録しました", memo: "現状メモ・ヨミを更新しました", meeting_moved: "商談日を変更しました", meeting_deleted: "商談を削除しました" };
+const SAVED_MSG: Record<string, string> = { "1": "保存しました", created: "案件を作成しました", activity: "活動を記録しました", memo: "現状メモ・ヨミを更新しました", meeting_moved: "商談日を変更しました", meeting_deleted: "商談を削除しました" };
 
 /**
  * 案件詳細の本体。フルページ（/app/opportunities/[id]）と、案件一覧の

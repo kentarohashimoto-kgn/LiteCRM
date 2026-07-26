@@ -262,7 +262,7 @@ export async function createOpportunityAction(formData: FormData) {
     reason: "新規作成",
   });
   revalidatePath("/app/opportunities");
-  redirect(`/app/opportunities/${newOppId}`);
+  redirect(`/app/opportunities/${newOppId}?saved=created`);
 }
 
 export async function updateOpportunityAction(formData: FormData) {

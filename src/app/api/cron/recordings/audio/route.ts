@@ -11,11 +11,10 @@ export const dynamic = "force-dynamic";
  */
 
 import { decryptSecretEdge } from "@/lib/crypto-mail-edge";
+import { checkBearerEdge } from "@/lib/secure-compare-edge";
 
 export async function GET(req: Request): Promise<Response> {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") ?? "";
-  if (!secret || auth !== `Bearer ${secret}`) return new Response("unauthorized", { status: 401 });
+  if (!checkBearerEdge(req, process.env.CRON_SECRET)) return new Response("unauthorized", { status: 401 });
 
   const id = new URL(req.url).searchParams.get("id") ?? "";
   if (!id) return new Response("id required", { status: 400 });

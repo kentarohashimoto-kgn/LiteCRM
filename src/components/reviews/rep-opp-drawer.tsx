@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { X, ChevronLeft, ChevronRight, ExternalLink, Save, Loader2, CheckCircle2, Plus, Circle } from "lucide-react";
 import { YOMI_OPTIONS } from "@/lib/constants";
+import { MoneyInput } from "@/components/ui/money-input";
 import { formatYen, formatDate, cn } from "@/lib/utils";
 import { getRepOppDetailAction, saveRepOppFieldsAction, listOppTasksAction, addOppTaskAction, type OppTask } from "@/server/actions/rep-report";
 import type { RepOppDetail } from "@/lib/data/rep-report";
@@ -203,7 +204,7 @@ export function RepOppDrawer({
                       </select>
                     </label>
                     <label className="text-xs text-ink/60">金額(円)
-                      <input inputMode="numeric" value={edit.amount} onChange={(e) => set({ amount: e.target.value })} placeholder="円" className="input text-sm mt-0.5 w-full text-right" />
+                      <MoneyInput name="rep_opp_amount" value={edit.amount} onValueChange={(raw) => set({ amount: raw })} placeholder="円" className="input text-sm mt-0.5 w-full text-right" />
                     </label>
                     <label className="text-xs text-ink/60">成約予定(月)
                       <input type="month" value={edit.expectedCloseMonth} onChange={(e) => set({ expectedCloseMonth: e.target.value })} className="input text-sm mt-0.5 w-full" />
