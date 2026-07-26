@@ -84,6 +84,7 @@ export function RepReportView({ report, weekStart }: { report: RepReport; weekSt
         weekStart={weekStart}
         members={report.members}
         monthlyPlan={report.monthlyPlan}
+        monthlyPlanAll={report.monthlyPlanAll}
       />
 
       {/* ナラティブ入力(保存時に上部サマリーもスナップショット) */}

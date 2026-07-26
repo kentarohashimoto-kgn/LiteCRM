@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { PanelRightOpen } from "lucide-react";
-import { formatYen } from "@/lib/utils";
+import { PanelRightOpen, Activity, CheckCheck } from "lucide-react";
+import { formatYen, cn } from "@/lib/utils";
 import { YomiBadge } from "@/components/ui/badges";
 import { RepOppDrawer } from "@/components/reviews/rep-opp-drawer";
 import type { MonthPlan } from "@/lib/data/rep-report";
+
+type Scope = "active" | "all";
 
 /**
  * 月別ヨミモード: 今月〜2ヶ月先の各月に「いつ・どの顧客を・どのヨミで成約する予定か」を
@@ -14,32 +16,59 @@ import type { MonthPlan } from "@/lib/data/rep-report";
  */
 export function RepMonthlyPlan({
   plan,
-  total,
+  planAll,
   ownerId,
   members,
 }: {
-  plan: MonthPlan[];
-  total: number;
+  plan: MonthPlan[]; // 進行中のみ
+  planAll: MonthPlan[]; // 受注・オチ(決着済み)を含む全件
   ownerId: string;
   members: { id: string; name: string }[];
 }) {
+  // 表示スコープ: active(進行中だけ) / all(当月の決着=受注・オチも含む全件)
+  const [scope, setScope] = useState<Scope>("active");
+  const shown = scope === "all" ? planAll : plan;
+  const total = shown.reduce((s, m) => s + m.total, 0);
   // ドロワーのナビ(前/次)は「月順に並べた全案件」を走査する。
-  const flat = plan.flatMap((m) => m.opps);
+  const flat = shown.flatMap((m) => m.opps);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  const settledCount = planAll.reduce((s, m) => s + m.opps.filter((o) => o.outcome !== "open").length, 0);
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
         <p className="text-xs text-ink/50">
           受注見込月で集計。案件をクリックすると右のパネルでヨミ・成約予定(月)・金額をその場で編集できます（保存で列に即反映）。
         </p>
-        <div className="text-xs text-ink/50 whitespace-nowrap">
-          3ヶ月見込 合計 <span className="font-semibold text-ink tabular-nums">{formatYen(total)}</span>
+        <div className="flex items-center gap-3">
+          <div className="inline-flex rounded-lg border border-black/10 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setScope("active")}
+              className={cn("inline-flex items-center gap-1 rounded-md px-2.5 py-1 transition-colors", scope === "active" ? "bg-teal-primary text-white" : "text-ink/55 hover:text-ink")}
+              title="進行中(未決着)の案件だけを表示"
+            >
+              <Activity size={13} /> 進行中のみ
+            </button>
+            <button
+              type="button"
+              onClick={() => setScope("all")}
+              className={cn("inline-flex items-center gap-1 rounded-md px-2.5 py-1 transition-colors", scope === "all" ? "bg-teal-primary text-white" : "text-ink/55 hover:text-ink")}
+              title="受注・オチ(決着済み)も含めた全件を表示"
+            >
+              <CheckCheck size={13} /> 決着含む全件
+              {settledCount > 0 && <span className={cn("ml-0.5 rounded-full px-1.5 text-[10px] font-bold", scope === "all" ? "bg-white/25" : "bg-ink/10 text-ink/60")}>{settledCount}</span>}
+            </button>
+          </div>
+          <div className="text-xs text-ink/50 whitespace-nowrap">
+            3ヶ月{scope === "all" ? "合計" : "見込"} <span className="font-semibold text-ink tabular-nums">{formatYen(total)}</span>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {plan.map((m) => (
+        {shown.map((m) => (
           <div
             key={m.monthKey}
             className={
@@ -62,7 +91,7 @@ export function RepMonthlyPlan({
 
             {/* 対象案件(ヨミ順)。クリックでサイドパネルを開く。 */}
             {m.opps.length === 0 ? (
-              <p className="text-xs text-ink/35 py-4 text-center">成約予定の案件はありません</p>
+              <p className="text-xs text-ink/35 py-4 text-center">{scope === "all" ? "対象の案件はありません" : "成約予定の案件はありません"}</p>
             ) : (
               <ul className="space-y-1">
                 {m.opps.map((o) => (
@@ -74,8 +103,10 @@ export function RepMonthlyPlan({
                       title="クリックで内容を確認しながら編集(サイドパネル)"
                     >
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1 text-xs font-medium text-ink group-hover:text-teal-deep">
+                        <div className={cn("flex items-center gap-1 text-xs font-medium group-hover:text-teal-deep", o.outcome === "lost" ? "text-ink/45 line-through" : "text-ink")}>
                           <span className="truncate" title={o.account ?? o.name}>{o.account ?? o.name}</span>
+                          {o.outcome === "won" && <span className="pill bg-emerald-50 text-emerald-700 text-[9px] font-bold shrink-0">受注</span>}
+                          {o.outcome === "lost" && <span className="pill bg-rose-50 text-rose-600 text-[9px] font-bold shrink-0">オチ</span>}
                           <PanelRightOpen size={12} className="shrink-0 text-ink/25 group-hover:text-teal-deep" />
                         </div>
                         {o.account && o.name !== o.account && (
@@ -84,7 +115,7 @@ export function RepMonthlyPlan({
                       </div>
                       <div className="flex flex-col items-end gap-0.5 shrink-0">
                         <YomiBadge yomi={o.yomi} />
-                        <span className="text-[10px] text-ink/55 tabular-nums">{formatYen(o.amount)}</span>
+                        <span className={cn("text-[10px] tabular-nums", o.outcome === "lost" ? "text-ink/35 line-through" : "text-ink/55")}>{formatYen(o.amount)}</span>
                       </div>
                     </button>
                   </li>
