@@ -1,0 +1,1112 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CATORCE Sales OS 操作ガイド（プレゼンモード）</title>
+</head>
+<body>
+<style>
+  :root{
+    --ground:#F4F6F6; --surface:#FFFFFF; --surface-2:#FAFBFB;
+    --ink:#273A3A; --ink-70:rgba(39,58,58,.70); --ink-45:rgba(39,58,58,.45); --ink-25:rgba(39,58,58,.25);
+    --line:rgba(39,58,58,.10); --line-soft:rgba(39,58,58,.06);
+    --teal:#008C8C; --teal-deep:#006C6A; --teal-light:#DDF3F0;
+    --accent:#F59A2A; --accent-ink:#8A4E00;
+    --good:#0F9D74; --warn:#C8811B; --bad:#D2544B; --violet:#6D5BD0;
+    --shadow:0 1px 2px rgba(39,58,58,.04), 0 10px 30px rgba(39,58,58,.08);
+    --radius:14px;
+    --sans:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",Meiryo,system-ui,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --ground:#101616; --surface:#182020; --surface-2:#1D2626;
+      --ink:#E7EEED; --ink-70:rgba(231,238,237,.72); --ink-45:rgba(231,238,237,.48); --ink-25:rgba(231,238,237,.26);
+      --line:rgba(231,238,237,.14); --line-soft:rgba(231,238,237,.08);
+      --teal:#2FB3AE; --teal-deep:#7FD6D0; --teal-light:rgba(47,179,174,.16);
+      --accent:#F5A742; --accent-ink:#FFD9A6;
+      --good:#3BC496; --warn:#E0A54A; --bad:#E8756B; --violet:#9C8CF0;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#101616; --surface:#182020; --surface-2:#1D2626;
+    --ink:#E7EEED; --ink-70:rgba(231,238,237,.72); --ink-45:rgba(231,238,237,.48); --ink-25:rgba(231,238,237,.26);
+    --line:rgba(231,238,237,.14); --line-soft:rgba(231,238,237,.08);
+    --teal:#2FB3AE; --teal-deep:#7FD6D0; --teal-light:rgba(47,179,174,.16);
+    --accent:#F5A742; --accent-ink:#FFD9A6;
+    --good:#3BC496; --warn:#E0A54A; --bad:#E8756B; --violet:#9C8CF0;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+  :root[data-theme="light"]{
+    --ground:#F4F6F6; --surface:#FFFFFF; --surface-2:#FAFBFB;
+    --ink:#273A3A; --ink-70:rgba(39,58,58,.70); --ink-45:rgba(39,58,58,.45); --ink-25:rgba(39,58,58,.25);
+    --line:rgba(39,58,58,.10); --line-soft:rgba(39,58,58,.06);
+    --teal:#008C8C; --teal-deep:#006C6A; --teal-light:#DDF3F0;
+    --accent:#F59A2A; --accent-ink:#8A4E00;
+    --good:#0F9D74; --warn:#C8811B; --bad:#D2544B; --violet:#6D5BD0;
+    --shadow:0 1px 2px rgba(39,58,58,.04), 0 10px 30px rgba(39,58,58,.08);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-feature-settings:"palt";
+    -webkit-font-smoothing:antialiased; line-height:1.7;
+    overflow-x:hidden;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:20px 20px 120px;}
+
+  /* ---------- deck chrome ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:60; background:color-mix(in srgb, var(--ground) 88%, transparent);
+    backdrop-filter:blur(10px); border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:14px; padding:10px 20px; margin:-20px -20px 26px;
+  }
+  .brand{display:flex; flex-direction:column; line-height:1.25;}
+  .brand b{font-size:14px; letter-spacing:.02em;}
+  .brand span{font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-45);}
+  .topbar .sp{flex:1;}
+  .progress{height:3px; background:var(--line); border-radius:99px; flex:1; max-width:280px; overflow:hidden;}
+  .progress i{display:block; height:100%; background:var(--teal); width:0; transition:width .3s ease;}
+  .counter{font-family:var(--mono); font-size:12px; color:var(--ink-45); font-variant-numeric:tabular-nums; white-space:nowrap;}
+  .navbtn{
+    font:inherit; font-size:13px; padding:6px 12px; border-radius:9px; cursor:pointer;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink-70);
+  }
+  .navbtn:hover{border-color:var(--teal); color:var(--teal-deep);}
+  .navbtn:focus-visible, .dot:focus-visible, .hot:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .navbtn[disabled]{opacity:.4; cursor:not-allowed;}
+
+  /* ---------- slides ---------- */
+  .slide{display:none; animation:in .28s ease both;}
+  .slide.on{display:block;}
+  @keyframes in{from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;}}
+  @media (prefers-reduced-motion:reduce){ .slide{animation:none;} .progress i{transition:none;} }
+
+  .eyebrow{
+    font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--teal-deep); display:flex; align-items:center; gap:8px; margin-bottom:8px;
+  }
+  .eyebrow::before{content:""; width:22px; height:2px; background:var(--teal); border-radius:2px;}
+  h1{font-size:clamp(30px,4.6vw,50px); line-height:1.2; letter-spacing:-.02em; margin:0 0 14px; text-wrap:balance;}
+  h2{font-size:clamp(22px,2.9vw,32px); line-height:1.28; letter-spacing:-.015em; margin:0 0 6px; text-wrap:balance;}
+  .lede{font-size:15px; color:var(--ink-70); max-width:62ch; margin:0 0 22px;}
+
+  /* ---------- cover ---------- */
+  .cover{
+    background:var(--surface); border:1px solid var(--line); border-radius:22px;
+    padding:clamp(28px,5vw,60px); box-shadow:var(--shadow); position:relative; overflow:hidden;
+  }
+  .cover::after{
+    content:""; position:absolute; right:-90px; top:-90px; width:320px; height:320px; border-radius:50%;
+    background:radial-gradient(circle at 30% 30%, var(--teal-light), transparent 70%); pointer-events:none;
+  }
+  .cover .meta{display:flex; flex-wrap:wrap; gap:10px; margin-top:26px;}
+  .chip{
+    font-size:12px; padding:5px 11px; border-radius:99px; border:1px solid var(--line);
+    background:var(--surface-2); color:var(--ink-70);
+  }
+  .chip b{color:var(--teal-deep);}
+  .note{
+    margin-top:26px; padding:14px 16px; border-radius:12px; font-size:13px; color:var(--ink-70);
+    background:color-mix(in srgb, var(--accent) 10%, transparent); border:1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  }
+  .toc{display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:8px; margin-top:26px;}
+  .toc button{
+    font:inherit; text-align:left; cursor:pointer; padding:9px 12px; border-radius:10px;
+    border:1px solid var(--line); background:var(--surface-2); color:var(--ink-70); font-size:13px;
+    display:flex; gap:9px; align-items:baseline; transition:border-color .15s, color .15s;
+  }
+  .toc button:hover{border-color:var(--teal); color:var(--teal-deep);}
+  .toc button:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .toc button i{font-family:var(--mono); font-size:11px; color:var(--ink-25); font-style:normal;}
+
+  /* ---------- explain layout ---------- */
+  .split{display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr); gap:22px; align-items:start;}
+  @media (max-width:900px){ .split{grid-template-columns:1fr;} }
+
+  .shot{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); overflow:hidden; position:relative;
+  }
+  .shot-cap{
+    font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-45); padding:7px 12px; border-bottom:1px solid var(--line-soft); background:var(--surface-2);
+    display:flex; align-items:center; gap:8px;
+  }
+  .shot-body{position:relative; padding:12px; overflow-x:auto;}
+
+  /* numbered callouts */
+  .hot{
+    position:absolute; z-index:5; width:23px; height:23px; border-radius:50%;
+    background:var(--accent); color:#3B2200; border:2px solid var(--surface);
+    font-family:var(--mono); font-size:12px; font-weight:700; line-height:19px; text-align:center;
+    box-shadow:0 2px 7px rgba(0,0,0,.24); cursor:pointer; padding:0; font-variant-numeric:tabular-nums;
+    transition:transform .15s ease;
+  }
+  .hot:hover, .hot.lit{transform:scale(1.22);}
+  .hot.lit{box-shadow:0 0 0 5px color-mix(in srgb, var(--accent) 34%, transparent);}
+
+  .steps{display:flex; flex-direction:column; gap:10px;}
+  .step{
+    display:grid; grid-template-columns:24px 1fr; gap:11px; padding:11px 13px; border-radius:11px;
+    background:var(--surface); border:1px solid var(--line); align-items:start; cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .step:hover, .step.lit{border-color:var(--accent); background:color-mix(in srgb, var(--accent) 7%, var(--surface));}
+  .step b{
+    width:23px; height:23px; border-radius:50%; background:var(--accent); color:#3B2200;
+    font-family:var(--mono); font-size:12px; line-height:23px; text-align:center; font-variant-numeric:tabular-nums;
+  }
+  .step p{margin:0; font-size:13.5px; color:var(--ink-70);}
+  .step p em{font-style:normal; color:var(--ink); font-weight:700;}
+  .step h4{margin:0 0 2px; font-size:13.5px; letter-spacing:.01em;}
+
+  .callbox{
+    margin-top:16px; border-radius:12px; padding:13px 15px; font-size:13px; color:var(--ink-70);
+    background:var(--teal-light); border:1px solid color-mix(in srgb, var(--teal) 30%, transparent);
+  }
+  .callbox b{color:var(--teal-deep);}
+  .callbox.warn{background:color-mix(in srgb, var(--accent) 11%, transparent); border-color:color-mix(in srgb, var(--accent) 36%, transparent);}
+  .callbox.warn b{color:var(--accent-ink);}
+
+  /* ---------- mini app UI ---------- */
+  .app{display:grid; grid-template-columns:118px 1fr; font-size:11px; border-radius:9px; overflow:hidden; border:1px solid var(--line-soft); min-width:520px;}
+  .app-side{background:var(--surface-2); border-right:1px solid var(--line-soft); padding:8px 6px; display:flex; flex-direction:column; gap:2px;}
+  .app-side .lbl{font-family:var(--mono); font-size:8px; letter-spacing:.1em; color:var(--ink-25); padding:5px 6px 2px; text-transform:uppercase;}
+  .app-side .it{padding:4px 7px; border-radius:6px; color:var(--ink-70); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .app-side .it.on{background:var(--teal); color:#fff; font-weight:700;}
+  .app-main{padding:9px 11px; background:var(--surface); min-width:0;}
+  .app-top{display:flex; align-items:center; gap:7px; padding-bottom:8px; border-bottom:1px solid var(--line-soft); margin-bottom:9px;}
+  .app-search{flex:1; border:1px solid var(--line); border-radius:99px; padding:3px 9px; color:var(--ink-25); font-size:10px; background:var(--surface-2);}
+  .app-add{background:var(--teal); color:#fff; border-radius:8px; padding:3px 9px; font-weight:700; font-size:10px; white-space:nowrap;}
+  .app-h{font-size:13px; font-weight:700; margin:0 0 2px;}
+  .app-sub{font-size:9.5px; color:var(--ink-45); margin:0 0 9px;}
+
+  .tabs{display:inline-flex; gap:2px; background:var(--surface-2); padding:2.5px; border-radius:9px; margin-bottom:9px;}
+  .tabs span{padding:3.5px 9px; border-radius:7px; color:var(--ink-45); white-space:nowrap;}
+  .tabs span.on{background:var(--surface); color:var(--teal-deep); font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,.08);}
+
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-bottom:9px;}
+  .kpi{border:1px solid var(--line-soft); border-radius:9px; padding:7px 9px; background:var(--surface);}
+  .kpi .k{font-size:8.5px; color:var(--ink-45);}
+  .kpi .v{font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:-.02em;}
+  .kpi .v small{font-size:9px; color:var(--ink-45); font-weight:500;}
+  .kpi.acc .v{color:var(--accent);}
+  .kpi.bad{border-color:color-mix(in srgb,var(--bad) 40%,transparent); background:color-mix(in srgb,var(--bad) 7%,transparent);}
+  .kpi.bad .v{color:var(--bad);}
+
+  table.g{width:100%; border-collapse:collapse; font-size:10px;}
+  table.g th{
+    text-align:left; font-family:var(--mono); font-size:8.5px; letter-spacing:.07em; text-transform:uppercase;
+    color:var(--ink-45); font-weight:600; padding:5px 6px; border-bottom:1px solid var(--line); background:var(--surface-2);
+  }
+  table.g td{padding:6px; border-bottom:1px solid var(--line-soft); vertical-align:top;}
+  table.g td.num{text-align:right; font-variant-numeric:tabular-nums;}
+  .acct{font-weight:700;}
+  .oppn{font-size:9px; color:var(--teal-deep);}
+
+  .pill{display:inline-block; padding:1.5px 6px; border-radius:99px; font-size:8.5px; font-weight:700; white-space:nowrap;}
+  .p-teal{background:var(--teal-light); color:var(--teal-deep);}
+  .p-good{background:color-mix(in srgb,var(--good) 15%,transparent); color:var(--good);}
+  .p-warn{background:color-mix(in srgb,var(--warn) 17%,transparent); color:var(--warn);}
+  .p-bad{background:color-mix(in srgb,var(--bad) 14%,transparent); color:var(--bad);}
+  .p-vio{background:color-mix(in srgb,var(--violet) 14%,transparent); color:var(--violet);}
+  .p-grey{background:var(--surface-2); color:var(--ink-45); border:1px solid var(--line-soft);}
+
+  /* gantt */
+  .gantt{min-width:560px;}
+  .g-head{display:flex; font-family:var(--mono); font-size:8.5px; color:var(--ink-45); border-bottom:1px solid var(--line);}
+  .g-head .g-name{width:172px; flex:none; padding:5px 7px;}
+  .g-head .m{width:44px; flex:none; text-align:center; padding:5px 0; border-left:1px solid var(--line-soft);}
+  .g-head .m.now{background:var(--teal-light); color:var(--teal-deep); font-weight:700;}
+  .g-row{display:flex; align-items:stretch; border-bottom:1px solid var(--line-soft); min-height:36px;}
+  .g-name{width:172px; flex:none; padding:5px 7px; min-width:0;}
+  .g-name .t{font-size:10px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .g-name .s{font-size:8.5px; color:var(--ink-45); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .g-cell{width:44px; flex:none; border-left:1px solid var(--line-soft); position:relative;}
+  .g-cell.now{background:color-mix(in srgb,var(--teal) 8%,transparent);}
+  .bar{
+    position:absolute; left:0; right:0; top:6px; bottom:6px; display:flex; align-items:center; justify-content:center;
+    font-size:8px; font-weight:700; color:#fff; font-variant-numeric:tabular-nums;
+  }
+  .bar.b-live{background:var(--teal);}
+  .bar.b-done{background:var(--ink-25);}
+  .bar.b-soon{background:color-mix(in srgb,var(--teal) 48%,transparent);}
+  .bar.b-fc{background:color-mix(in srgb,var(--good) 78%,transparent); border:1px dashed rgba(255,255,255,.85);}
+  .bar.b-fc-mid{background:color-mix(in srgb,var(--warn) 80%,transparent); border:1px dashed rgba(255,255,255,.85);}
+  .bar.s{border-top-left-radius:5px; border-bottom-left-radius:5px; left:4px;}
+  .bar.e{border-top-right-radius:5px; border-bottom-right-radius:5px; right:4px;}
+  .g-foot{display:flex; border-top:2px solid var(--line); background:var(--surface-2); font-size:9px;}
+  .g-foot .g-name{padding:5px 7px; font-weight:700; color:var(--ink-70); font-size:9px;}
+  .g-foot .m{width:44px; flex:none; text-align:center; padding:5px 0; border-left:1px solid var(--line-soft); font-variant-numeric:tabular-nums;}
+
+  .legend{display:flex; flex-wrap:wrap; gap:11px; font-size:9.5px; color:var(--ink-70); margin-top:8px; padding:0 2px;}
+  .legend i{display:inline-block; width:15px; height:9px; border-radius:3px; vertical-align:middle; margin-right:4px;}
+
+  /* concept diagram */
+  .layers{display:flex; flex-direction:column; gap:0; align-items:stretch;}
+  .layer{
+    border:1px solid var(--line); border-radius:12px; padding:13px 16px; background:var(--surface);
+    position:relative; box-shadow:var(--shadow);
+  }
+  .layer + .layer{margin-top:26px;}
+  .layer + .layer::before{
+    content:""; position:absolute; left:38px; top:-20px; width:2px; height:20px; background:var(--teal); opacity:.5;
+  }
+  .layer .lname{font-weight:700; font-size:15px; display:flex; align-items:center; gap:9px;}
+  .layer .lname span{font-family:var(--mono); font-size:10px; color:var(--ink-45); letter-spacing:.1em;}
+  .layer p{margin:5px 0 0; font-size:13px; color:var(--ink-70);}
+
+  table.doc{width:100%; border-collapse:collapse; font-size:13.5px; margin:6px 0 4px;}
+  table.doc th{
+    text-align:left; font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-45); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--line);
+  }
+  table.doc td{padding:9px 10px; border-bottom:1px solid var(--line-soft); vertical-align:top; color:var(--ink-70);}
+  table.doc td:first-child{color:var(--ink); font-weight:700; white-space:nowrap;}
+  table.doc td.num{font-variant-numeric:tabular-nums; text-align:right;}
+  .scroll{overflow-x:auto;}
+
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(228px,1fr)); gap:13px;}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:15px 16px; box-shadow:var(--shadow);}
+  .card h4{margin:0 0 5px; font-size:14px; display:flex; align-items:center; gap:8px;}
+  .card h4 i{
+    font-style:normal; font-family:var(--mono); font-size:10px; width:20px; height:20px; line-height:20px; text-align:center;
+    border-radius:50%; background:var(--teal-light); color:var(--teal-deep); flex:none;
+  }
+  .card p{margin:0; font-size:12.5px; color:var(--ink-70);}
+
+  .rules{display:flex; flex-direction:column; gap:11px;}
+  .rule{
+    display:grid; grid-template-columns:34px 1fr; gap:14px; align-items:start;
+    background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--teal);
+    border-radius:11px; padding:14px 16px; box-shadow:var(--shadow);
+  }
+  .rule b{
+    font-family:var(--mono); font-size:15px; color:var(--teal-deep); font-variant-numeric:tabular-nums;
+  }
+  .rule h4{margin:0 0 3px; font-size:14.5px;}
+  .rule p{margin:0; font-size:13px; color:var(--ink-70);}
+
+  .kbd{
+    font-family:var(--mono); font-size:11px; padding:1px 6px; border-radius:5px;
+    border:1px solid var(--line); background:var(--surface-2); color:var(--ink-70);
+  }
+  .foot-hint{
+    position:fixed; left:0; right:0; bottom:0; z-index:55; text-align:center; padding:9px;
+    font-size:11.5px; color:var(--ink-45); background:color-mix(in srgb,var(--ground) 90%, transparent);
+    backdrop-filter:blur(8px); border-top:1px solid var(--line);
+  }
+</style>
+
+<div class="topbar">
+  <div class="brand"><b>CATORCE Sales OS</b><span>操作ガイド / プレゼンモード</span></div>
+  <div class="sp"></div>
+  <div class="progress"><i id="bar"></i></div>
+  <span class="counter" id="count">1 / 16</span>
+  <button class="navbtn" id="prev" type="button">←</button>
+  <button class="navbtn" id="next" type="button">→</button>
+</div>
+
+<div class="wrap">
+
+<!-- 1 COVER -->
+<section class="slide on">
+  <div class="cover">
+    <div class="eyebrow">Onboarding Guide</div>
+    <h1>画面を見ながら覚える<br>CATORCE Sales OS</h1>
+    <p class="lede">新しく参加する営業担当・バックオフィス担当のための操作ガイドです。各機能を「画面のどこを見て、何をするか」の対応で説明します。番号バッジ <b style="color:var(--accent)">①②③</b> が画面上の位置を指しています。</p>
+    <div class="meta">
+      <span class="chip">対象：<b>営業担当・BO担当・管理職</b></span>
+      <span class="chip">所要：<b>約25分</b></span>
+      <span class="chip">全 <b>16</b> スライド</span>
+    </div>
+    <div class="note">
+      <b>画面について：</b>本資料の画面は、実装コードとデザイントークンに基づく<b>再現図（模式図）</b>です。実データのスクリーンショットではありません。配置・色・バッジの意味は製品と同一に揃えてあります。
+    </div>
+    <div class="toc" id="toc"></div>
+  </div>
+</section>
+
+<!-- 2 全体像 -->
+<section class="slide">
+  <div class="eyebrow">Foundation</div>
+  <h2>まず覚える：データの3階層</h2>
+  <p class="lede">すべての営業データはこの構造に乗ります。ここだけは最初に理解してください。</p>
+  <div class="split">
+    <div>
+      <div class="layers">
+        <div class="layer">
+          <div class="lname">顧客 <span>ACCOUNT</span></div>
+          <p>会社そのもの。<b>同じ会社を二重に作らない</b>のが最重要ルール。登録前に必ず検索します。</p>
+        </div>
+        <div class="layer">
+          <div class="lname">案件 <span>OPPORTUNITY</span></div>
+          <p>その会社との取引1件（例：<code>日本トムソン株式会社 / AI研修</code>）。金額・ヨミ・担当を持ち、<b>売上予測の最小単位</b>になります。</p>
+        </div>
+        <div class="layer">
+          <div class="lname">商談 / 活動 <span>ACTIVITY</span></div>
+          <p>訪問・電話・メールなど「やったこと」の記録。<b>次アクションとセット</b>で残します。</p>
+        </div>
+      </div>
+      <div class="callbox">
+        <b>手前にあるのがリード。</b>展示会・セミナーで獲得した見込み客リストです。アポが取れた時点で「顧客＋案件」に昇格します。
+      </div>
+    </div>
+    <div>
+      <h4 style="margin:0 0 8px; font-size:14px;">ヨミ ＝ 確からしさの共通言語</h4>
+      <div class="scroll">
+        <table class="doc">
+          <thead><tr><th>ヨミ</th><th>状態</th><th class="num">確度</th></tr></thead>
+          <tbody>
+            <tr><td>0.受注</td><td>受注確定</td><td class="num">100%</td></tr>
+            <tr><td>1.A(80%)</td><td>社内検討・稟議中</td><td class="num">80%</td></tr>
+            <tr><td>2.B(50%)</td><td>提案済み</td><td class="num">50%</td></tr>
+            <tr><td>3.C(30%)</td><td>商談実施・継続協議</td><td class="num">30%</td></tr>
+            <tr><td>4.アポ</td><td>初回商談待ち</td><td class="num">20%</td></tr>
+            <tr><td>9.調整中</td><td>日程調整中</td><td class="num">15%</td></tr>
+            <tr><td>5.リスケ / 6.定期追い</td><td>延期・中長期</td><td class="num">10%</td></tr>
+            <tr><td>7.オチ / 8.キャンセル</td><td>失注・消滅</td><td class="num">0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callbox warn">
+        <b>ヨミを変えるだけでOK。</b>ステージ・確度・ステータスは自動で連動します。売上予測は <code>Weighted = 金額 × 確度</code> で計算されるため、<b>ヨミのズレ＝会社の着地予測のズレ</b>です。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 画面の共通操作 -->
+<section class="slide">
+  <div class="eyebrow">Basics</div>
+  <h2>画面の共通操作</h2>
+  <p class="lede">どの画面でも共通の部品です。最初にここを押さえると迷いません。</p>
+  <div class="split">
+    <div class="shot">
+      <div class="shot-cap">再現図 — 画面全体の構成</div>
+      <div class="shot-body">
+        <button class="hot" data-n="1" style="left:22px; top:78px;">1</button>
+        <button class="hot" data-n="2" style="left:196px; top:34px;">2</button>
+        <button class="hot" data-n="3" style="right:96px; top:34px;">3</button>
+        <button class="hot" data-n="4" style="left:210px; top:108px;">4</button>
+        <button class="hot" data-n="5" style="right:40px; top:150px;">5</button>
+        <div class="app">
+          <div class="app-side">
+            <div class="lbl">ホーム</div>
+            <div class="it">ダッシュボード</div>
+            <div class="it">今日のアポ・AC</div>
+            <div class="it">タスク</div>
+            <div class="lbl">案件</div>
+            <div class="it">アポ・商談登録</div>
+            <div class="it on">案件（表・ボード）</div>
+            <div class="it">売上予測</div>
+            <div class="lbl">顧客</div>
+            <div class="it">顧客</div>
+            <div class="it">リード</div>
+          </div>
+          <div class="app-main">
+            <div class="app-top">
+              <div class="app-search">顧客・案件・リードを検索（/ でフォーカス）</div>
+              <div class="app-add">＋ 追加</div>
+            </div>
+            <p class="app-h">案件</p>
+            <p class="app-sub">顧客 › 案件 › 商談。ヨミ・金額・次アクションはその場編集できます。</p>
+            <div class="tabs"><span class="on">案件一覧</span><span>ボード</span><span>カレンダー</span></div>
+            <table class="g">
+              <thead><tr><th>顧客 / 案件</th><th>ヨミ</th><th class="num">金額</th><th>次アクション</th></tr></thead>
+              <tbody>
+                <tr><td><div class="acct">日本トムソン株式会社</div><div class="oppn">AI開発</div></td><td><span class="pill p-good">0.受注</span></td><td class="num">4,800,000</td><td>キックオフ</td></tr>
+                <tr><td><div class="acct">株式会社ケイテック</div><div class="oppn">AI研修</div></td><td><span class="pill p-teal">1.A(80%)</span></td><td class="num">3,600,000</td><td>稟議フォロー</td></tr>
+                <tr><td><div class="acct">GoodPlus</div><div class="oppn">AI研修</div></td><td><span class="pill p-warn">2.B(50%)</span></td><td class="num">1,540,000</td><td class="num" style="color:var(--bad)">未設定</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="steps" data-steps>
+      <div class="step" data-n="1"><b>1</b><div><h4>サイドバー（メニュー）</h4><p>ロールによって表示が変わります。BO担当に営業メニューが出ないのは<em>仕様</em>です。</p></div></div>
+      <div class="step" data-n="2"><b>2</b><div><h4>横断検索</h4><p>顧客・案件・リードをまとめて検索。<span class="kbd">/</span> キーですぐフォーカスできます。</p></div></div>
+      <div class="step" data-n="3"><b>3</b><div><h4>＋追加</h4><p>どの画面からでも新規作成。迷ったらここです。</p></div></div>
+      <div class="step" data-n="4"><b>4</b><div><h4>表示モード切替</h4><p>一覧／ボード／カレンダーなど。条件は<em>保存ビュー</em>として登録できます。</p></div></div>
+      <div class="step" data-n="5"><b>5</b><div><h4>その場編集</h4><p>ヨミ・金額・次アクションは<em>クリックして直接編集</em>。行クリックで右にサイドパネルが開き、<span class="kbd">Esc</span> で閉じます。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 ダッシュボード -->
+<section class="slide">
+  <div class="eyebrow">Home / 毎朝</div>
+  <h2>ダッシュボード｜今月の着地と打ち手</h2>
+  <p class="lede">朝いちばんに開く画面。目標との差と、危険案件をここで掴みます。</p>
+  <div class="split">
+    <div class="shot">
+      <div class="shot-cap">再現図 — ダッシュボード</div>
+      <div class="shot-body">
+        <button class="hot" data-n="1" style="left:150px; top:96px;">1</button>
+        <button class="hot" data-n="2" style="right:130px; top:96px;">2</button>
+        <button class="hot" data-n="3" style="right:34px; top:96px;">3</button>
+        <button class="hot" data-n="4" style="left:150px; top:186px;">4</button>
+        <div class="app">
+          <div class="app-side">
+            <div class="lbl">ホーム</div>
+            <div class="it on">ダッシュボード</div>
+            <div class="it">今日のアポ・AC</div>
+            <div class="it">AI確認キュー</div>
+            <div class="it">タスク</div>
+          </div>
+          <div class="app-main">
+            <p class="app-h">ダッシュボード</p>
+            <p class="app-sub">今月の着地と打ち手を一目で。未来の売上を作るための起点です。</p>
+            <div class="kpis">
+              <div class="kpi"><div class="k">今月 目標</div><div class="v">1,800<small>万円</small></div></div>
+              <div class="kpi acc"><div class="k">実績（受注）</div><div class="v">1,075<small>万円</small></div></div>
+              <div class="kpi"><div class="k">月末見込み</div><div class="v">1,726<small>万円</small></div></div>
+              <div class="kpi bad"><div class="k">Gap</div><div class="v">−74<small>万円</small></div></div>
+            </div>
+            <table class="g">
+              <thead><tr><th>要対応の案件</th><th>検知理由</th><th class="num">金額</th></tr></thead>
+              <tbody>
+                <tr><td><div class="acct">株式会社NTTデータ関西</div><div class="oppn">AI研修</div></td><td><span class="pill p-bad">放置 12日</span></td><td class="num">1,500,000</td></tr>
+                <tr><td><div class="acct">GoodPlus</div><div class="oppn">AI研修</div></td><td><span class="pill p-warn">次アクション未設定</span></td><td class="num">1,540,000</td></tr>
+                <tr><td><div class="acct">和光紙器株式会社</div><div class="oppn">AI研修</div></td><td><span class="pill p-warn">提案後フォロー漏れ</span></td><td class="num">1,800,000</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="steps" data-steps>
+      <div class="step" data-n="1"><b>1</b><div><h4>今月の目標</h4><p>目標入力で設定した値。年度は<em>7月始まり</em>（決算6月）です。</p></div></div>
+      <div class="step" data-n="2"><b>2</b><div><h4>月末見込み</h4><p>実績＋<em>Weighted（金額×確度）</em>。ヨミが最新でないとここが狂います。</p></div></div>
+      <div class="step" data-n="3"><b>3</b><div><h4>Gap</h4><p>目標との差。<em>マイナスなら「どの案件を上げるか」をその場で決めます。</em></p></div></div>
+      <div class="step" data-n="4"><b>4</b><div><h4>危険案件（自動検知）</h4><p>放置7日以上・次アクション未設定・提案後フォロー漏れ。<em>その日のうちに手を打つ</em>か、ヨミを実態に落とします。</p></div></div>
+    </div>
+    <div></div>
+  </div>
+</section>
+
+<!-- 5 今日のアポ・AC -->
+<section class="slide">
+  <div class="eyebrow">Home / 商談直後</div>
+  <h2>今日のアポ・AC｜商談後5分ルール</h2>
+  <p class="lede">この資料でいちばん守ってほしい習慣です。記録がない商談は「無かったこと」になります。</p>
+  <div class="split">
+    <div class="shot">
+      <div class="shot-cap">再現図 — 今日のアポ・AC</div>
+      <div class="shot-body">
+        <button class="hot" data-n="1" style="left:150px; top:82px;">1</button>
+        <button class="hot" data-n="2" style="left:150px; top:150px;">2</button>
+        <button class="hot" data-n="3" style="right:120px; top:150px;">3</button>
+        <button class="hot" data-n="4" style="right:34px; top:150px;">4</button>
+        <div class="app">
+          <div class="app-side">
+            <div class="lbl">ホーム</div>
+            <div class="it">ダッシュボード</div>
+            <div class="it on">今日のアポ・AC</div>
+            <div class="it">タスク</div>
+          </div>
+          <div class="app-main">
+            <p class="app-h">今日のアポ・AC</p>
+            <p class="app-sub">商談が終わったら、その場で活動を記録しましょう。</p>
+            <table class="g">
+              <thead><tr><th>時刻 / 顧客</th><th>活動の記録</th><th>次アクション</th><th>ヨミ</th></tr></thead>
+              <tbody>
+                <tr><td><div class="acct">10:00 敷島製パン</div><div class="oppn">AI研修 初回</div></td><td>提案書を提示。効果測定に関心</td><td>7/30 見積提出</td><td><span class="pill p-warn">2.B(50%)</span></td></tr>
+                <tr><td><div class="acct">14:00 名港海運</div><div class="oppn">AI研修 2回目</div></td><td style="color:var(--bad)">未記録</td><td style="color:var(--bad)">未設定</td><td><span class="pill p-teal">1.A(80%)</span></td></tr>
+                <tr><td><div class="acct">16:30 株式会社きずな</div><div class="oppn">AI開発</div></td><td>要件ヒアリング完了</td><td>8/5 概算提示</td><td><span class="pill p-warn">3.C(30%)</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="steps" data-steps>
+      <div class="step" data-n="1"><b>1</b><div><h4>当日の商談が並ぶ</h4><p>朝いちで確認し、移動の合間に記録していきます。</p></div></div>
+      <div class="step" data-n="2"><b>2</b><div><h4>活動を記録</h4><p><em>誰が何を言ったか（事実）</em>と<em>次に何をするか（判断）</em>を分けて書きます。</p></div></div>
+      <div class="step" data-n="3"><b>3</b><div><h4>次アクション（必須）</h4><p><em>日付＋内容</em>を必ず入力。空だと自動で危険案件として検知されます。</p></div></div>
+      <div class="step" data-n="4"><b>4</b><div><h4>ヨミを更新</h4><p>手応えが変わったらその場で変更。ステージ・確度は自動連動します。</p></div></div>
+    </div>
+  </div>
+  <div class="callbox warn"><b>「あとでまとめて」は必ず抜けます。</b>移動中で構いません。記憶が新しいうちが最も速く、最も正確です。</div>
+</section>
+
+<!-- 6 アポ・商談登録 -->
+<section class="slide">
+  <div class="eyebrow">案件 / アポ獲得時</div>
+  <h2>アポ・商談登録｜案件をつくる入口</h2>
+  <p class="lede">アポが取れたらここから。案件と初回商談を同時に作成します。</p>
+  <div class="split">
+    <div class="shot">
+      <div class="shot-cap">再現図 — アポ・商談登録</div>
+      <div class="shot-body">
+        <button class="hot" data-n="1" style="left:150px; top:86px;">1</button>
+        <button class="hot" data-n="2" style="left:150px; top:132px;">2</button>
+        <button class="hot" data-n="3" style="left:150px; top:178px;">3</button>
+        <button class="hot" data-n="4" style="right:40px; top:214px;">4</button>
+        <div class="app">
+          <div class="app-side">
+            <div class="lbl">案件</div>
+            <div class="it on">アポ・商談登録</div>
+            <div class="it">案件（表・ボード）</div>
+            <div class="it">売上予測</div>
+          </div>
+          <div class="app-main">
+            <p class="app-h">アポ・商談登録</p>
+            <p class="app-sub">リード・既存顧客・新規のいずれからでも登録できます。</p>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div style="border:1px solid var(--teal); background:var(--teal-light); border-radius:8px; padding:7px 9px;">
+                <b style="font-size:10px; color:var(--teal-deep);">① リードから</b>
+                <div style="font-size:9px; color:var(--ink-70);">展示会・セミナーで獲得した相手 → 詳細情報を自動コピー</div>
+              </div>
+              <div style="border:1px solid var(--line); border-radius:8px; padding:7px 9px;">
+                <b style="font-size:10px;">② 既存顧客から</b>
+                <div style="font-size:9px; color:var(--ink-70);">取引実績のある会社 → 顧客情報を引き継ぐ</div>
+              </div>
+              <div style="border:1px solid var(--line); border-radius:8px; padding:7px 9px;">
+                <b style="font-size:10px;">③ 新規</b>
+                <div style="font-size:9px; color:var(--ink-70);">どちらにも無い場合のみ → 顧客を新規作成</div>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:3px;">
+                <div><div style="font-size:8.5px; color:var(--ink-45);">金額</div><div style="border:1px solid var(--line); border-radius:7px; padding:4px 7px; font-variant-numeric:tabular-nums; text-align:right;">1,500,000</div></div>
+                <div><div style="font-size:8.5px; color:var(--ink-45);">受注予定日</div><div style="border:1px solid var(--line); border-radius:7px; padding:4px 7px;">2026/09/30</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="steps" data-steps>
+      <div class="step" data-n="1"><b>1</b><div><h4>リード起点が基本</h4><p>リードの詳細情報が案件に自動コピーされ、<em>リードは「アポ決着」に更新</em>されます。</p></div></div>
+      <div class="step" data-n="2"><b>2</b><div><h4>既存顧客から</h4><p>取引のある会社は必ずこちら。顧客情報を引き継ぎます。</p></div></div>
+      <div class="step" data-n="3"><b>3</b><div><h4>新規は最後の手段</h4><p><em>先に検索してから</em>使ってください。安易な新規作成が重複の最大の原因です。</p></div></div>
+      <div class="step" data-n="4"><b>4</b><div><h4>金額と受注予定日</h4><p>金額は<em>税抜</em>、入力中に3桁カンマが自動表示。受注予定日は月次集計の基準なので必ず入れます。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 7 案件一覧 -->
+<section class="slide">
+  <div class="eyebrow">案件 / 日常</div>
+  <h2>案件（表・ボード）｜ヨミを最新に保つ</h2>
+  <p class="lede">担当案件の管理はここが中心。一覧のまま直接編集できます。</p>
+  <div class="split">
+    <div class="shot">
+      <div class="shot-cap">再現図 — 案件一覧</div>
+      <div class="shot-body">
+        <button class="hot" data-n="1" style="left:150px; top:106px;">1</button>
+        <button class="hot" data-n="2" style="right:190px; top:106px;">2</button>
+        <button class="hot" data-n="3" style="left:290px; top:150px;">3</button>
+        <button class="hot" data-n="4" style="right:34px; top:150px;">4</button>
+        <div class="app">
+          <div class="app-side">
+            <div class="lbl">案件</div>
+            <div class="it">アポ・商談登録</div>
+            <div class="it on">案件（表・ボード）</div>
+            <div class="it">営業ビュー</div>
+            <div class="it">売上予測</div>
+          </div>
+          <div class="app-main">
+            <p class="app-h">案件</p>
+            <div class="tabs"><span class="on">案件一覧</span><span>商談一覧</span><span>ボード</span><span>カレンダー</span></div>
+            <div style="display:flex; gap:5px; margin-bottom:7px; flex-wrap:wrap;">
+              <span class="pill p-grey">担当：すべて</span><span class="pill p-grey">商材：すべて</span>
+              <span class="pill p-warn">次アクション未設定</span><span class="pill p-bad">放置案件</span>
+              <span class="pill p-grey">＋現在の条件を保存</span>
+            </div>
+            <table class="g">
+              <thead><tr><th>顧客 / 案件</th><th>ヨミ</th><th class="num">金額</th><th>次アクション</th></tr></thead>
+              <tbody>
+                <tr><td><div class="acct">スミセイ情報システム</div><div class="oppn">メディケアPhase.2</div></td><td><span class="pill p-good">0.受注</span></td><td class="num">8,680,000</td><td>体制確定</td></tr>
+                <tr><td><div class="acct">株式会社NTTデータ関西</div><div class="oppn">AI研修</div></td><td><span class="pill p-warn">2.B(50%)</span></td><td class="num">1,500,000</td><td>8/10 再提案</td></tr>
+                <tr><td><div class="acct">ロンシール工業</div><div class="oppn">AI開発</div></td><td><span class="pill p-teal">1.A(80%)</span></td><td class="num">5,000,000</td><td>8/21 契約書</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="steps" data-steps>
+      <div class="step" data-n="1"><b>1</b><div><h4>表示モード</h4><p>一覧／商談／ボード／カレンダー／提案。用途で切り替えます。</p></div></div>
+      <div class="step" data-n="2"><b>2</b><div><h4>危険案件で絞る</h4><p><em>「次アクション未設定」「放置案件」</em>で抜けを一括で洗い出せます。</p></div></div>
+      <div class="step" data-n="3"><b>3</b><div><h4>ヨミをその場で変更</h4><p>クリックして直接編集。<em>動きがなければ落とす勇気</em>を持ってください。</p></div></div>
+      <div class="step" data-n="4"><b>4</b><div><h4>次アクションを埋める</h4><p>ここが空の案件をゼロにするのが日々のゴールです。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 8 週報 -->
+<section class="slide">
+  <div class="eyebrow">レビュー / 毎週</div>
+  <h2>営業マン別週報｜月別ヨミで成約計画を見る</h2>
+  <p class="lede">数字は自動集計されます。あなたが書くのは「先週の差分」と「今週の予定」だけ。</p>
+  <div class="split">
+    <div class="shot">
+      <div class="shot-cap">再現図 — 営業マン別週報（月別ヨミ）</div>
+      <div class="shot-body">
+        <button class="hot" data-n="1" style="left:150px; top:80px;">1</button>
+        <button class="hot" data-n="2" style="right:34px; top:126px;">2</button>
+        <button class="hot" data-n="3" style="left:200px; top:180px;">3</button>
+        <button class="hot" data-n="4" style="right:120px; top:222px;">4</button>
+        <div class="app">
+          <div class="app-side">
+            <div class="lbl">レビュー</div>
+            <div class="it">週次レビュー</div>
+            <div class="it on">営業マン別週報</div>
+          </div>
+          <div class="app-main">
+            <p class="app-h">営業マン別 週報</p>
+            <div class="kpis" style="grid-template-columns:repeat(4,1fr);">
+              <div class="kpi"><div class="k">今月 目標</div><div class="v">1,800<small>万</small></div></div>
+              <div class="kpi acc"><div class="k">実績(受注)</div><div class="v">1,075<small>万</small></div></div>
+              <div class="kpi"><div class="k">月末見込み</div><div class="v">1,726<small>万</small></div></div>
+              <div class="kpi"><div class="k">達成率</div><div class="v">96<small>%</small></div></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <b style="font-size:10px;">月別ヨミ（今月〜2ヶ月先）</b>
+              <div class="tabs" style="margin:0;"><span class="on">進行中のみ</span><span>決着含む全件 8</span></div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px;">
+              <div style="border:1px solid var(--teal); background:var(--teal-light); border-radius:8px; padding:7px;">
+                <div style="display:flex; justify-content:space-between; font-size:9px;"><b>7月 <span class="pill p-teal">今月</span></b><b>950万</b></div>
+                <div style="font-size:8.5px; margin-top:4px; color:var(--ink-70);">ケイテック <span class="pill p-teal">1.A</span></div>
+                <div style="font-size:8.5px; color:var(--ink-70);">KDDI Biz <span class="pill p-teal">1.A</span></div>
+                <div style="font-size:8.5px; color:var(--ink-45); text-decoration:line-through;">和光紙器 <span class="pill p-bad">オチ</span></div>
+              </div>
+              <div style="border:1px solid var(--line); border-radius:8px; padding:7px;">
+                <div style="display:flex; justify-content:space-between; font-size:9px;"><b>8月</b><b>990万</b></div>
+                <div style="font-size:8.5px; margin-top:4px; color:var(--ink-70);">旭油業NEXT <span class="pill p-teal">1.A</span></div>
+                <div style="font-size:8.5px; color:var(--ink-70);">NTTデータ関西 <span class="pill p-warn">2.B</span></div>
+              </div>
+              <div style="border:1px solid var(--line); border-radius:8px; padding:7px;">
+                <div style="display:flex; justify-content:space-between; font-size:9px;"><b>9月</b><b>2,810万</b></div>
+                <div style="font-size:8.5px; margin-top:4px; color:var(--ink-70);">ロンシール工業 <span class="pill p-teal">1.A</span></div>
+                <div style="font-size:8.5px; color:var(--ink-70);">スターティア <span class="pill p-warn">2.B</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="steps" data-steps>
+      <div class="step" data-n="1"><b>1</b><div><h4>数字は自動集計</h4><p>目標・実績・月末見込み・達成率。入力の手間はありません。</p></div></div>
+      <div class="step" data-n="2"><b>2</b><div><h4>表示スコープの切替</h4><p><em>進行中のみ</em>＝残っている案件だけ。<em>決着含む全件</em>＝受注（緑）とオチ（取り消し線）も表示し、当月の決着を振り返れます。</p></div></div>
+      <div class="step" data-n="3"><b>3</b><div><h4>月別の成約計画</h4><p>今月〜2ヶ月先に「いつ・どの顧客を・どのヨミで決めるか」が並びます。</p></div></div>
+      <div class="step" data-n="4"><b>4</b><div><h4>クリックでその場編集</h4><p>右のサイドパネルでヨミ・成約予定月・金額を修正でき、<em>保存すると列に即反映</em>されます。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 9 週次レビュー -->
+<section class="slide">
+  <div class="eyebrow">レビュー / 会議</div>
+  <h2>週次レビュー｜「確認」で終わらせない</h2>
+  <p class="lede">この画面の目的は報告ではなく、<b>今週の打ち手を決めること</b>です。</p>
+  <div class="cards">
+    <div class="card"><h4><i>1</i>数字を確認</h4><p>目標・着地見込み・Gapを見る。ここは3分で終える。</p></div>
+    <div class="card"><h4><i>2</i>危険案件を洗う</h4><p>放置・停滞・フォロー漏れを一覧で突き合わせる。</p></div>
+    <div class="card"><h4><i>3</i>打ち手を決める</h4><p><b>誰が・いつまでに・何をするか</b>を案件ごとに言語化する。</p></div>
+    <div class="card"><h4><i>4</i>翌週に確認</h4><p>決めた対策はアクションとして登録し、翌週の頭で消込む。</p></div>
+  </div>
+  <div class="callbox" style="margin-top:20px;">
+    <b>関連画面：</b>ヨミ変更履歴（受注・オチへの変更理由を記入 → 成約/失注分析の元データ）、週報スナップショット（その瞬間の数字を保存して過去と比較）。
+  </div>
+  <div class="callbox warn">
+    <b>受注・オチにしたら、必ず理由を書く。</b>ここが空だと、組織に勝ち筋・負け筋が残りません。失注案件は<b>消さずにオチとして残す</b>のがルールです。
+  </div>
+</section>
+
+<!-- 10 原価管理 一覧 -->
+<section class="slide">
+  <div class="eyebrow">原価管理 / 管理職</div>
+  <h2>原価管理｜売れて、かつ利益が残る状態に</h2>
+  <p class="lede">受注後のデリバリー原価・粗利を、計画から完了実績まで管理します（代表・管理者・Sales Ops・経理・講師/PM が利用）。</p>
+  <div class="split">
+    <div class="shot">
+      <div class="shot-cap">再現図 — 原価管理 一覧</div>
+      <div class="shot-body">
+        <button class="hot" data-n="1" style="left:262px; top:118px;">1</button>
+        <button class="hot" data-n="2" style="right:190px; top:118px;">2</button>
+        <button class="hot" data-n="3" style="right:112px; top:118px;">3</button>
+        <button class="hot" data-n="4" style="right:34px; top:118px;">4</button>
+        <div class="app">
+          <div class="app-side">
+            <div class="lbl">案件</div>
+            <div class="it">売上予測</div>
+            <div class="it on">原価管理</div>
+            <div class="it">稼働承認</div>
+          </div>
+          <div class="app-main">
+            <p class="app-h">原価管理（デリバリー原価・粗利）</p>
+            <div class="tabs"><span class="on">一覧</span><span>カレンダー（契約＋見込み）</span><span>対象候補 90</span></div>
+            <table class="g">
+              <thead><tr><th>顧客 / 案件</th><th>担当（責任者）</th><th class="num">粗利率</th><th>提案可否</th><th class="num">予実差</th></tr></thead>
+              <tbody>
+                <tr><td><div class="acct">伊藤忠テクノソリューションズ</div><div class="oppn">AI問い合わせチャットボット伴走</div></td><td>安藤（外注）</td><td class="num" style="color:var(--good); font-weight:700;">58.0%</td><td><span class="pill p-good">GO</span></td><td class="num">—</td></tr>
+                <tr><td><div class="acct">日本トムソン株式会社</div><div class="oppn">AI開発</div></td><td>LinkAI（外注）</td><td class="num" style="color:var(--warn); font-weight:700;">35.0%</td><td><span class="pill p-warn">条件付き</span></td><td class="num">—</td></tr>
+                <tr><td><div class="acct">LinkAI</div><div class="oppn">宇宙トイレPJ</div></td><td><span style="color:var(--warn)">⚠ 責任者未指名</span></td><td class="num" style="color:var(--bad); font-weight:700;">12.0%</td><td><span class="pill p-bad">要協議</span></td><td class="num" style="color:var(--bad)">+70万</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="steps" data-steps>
+      <div class="step" data-n="1"><b>1</b><div><h4>担当（責任者）</h4><p>アサインした外注／社員から<em>対応チームのリーダーを指名</em>。「この案件は誰が見ているか」が一目で分かります。クリックでその場変更。</p></div></div>
+      <div class="step" data-n="2"><b>2</b><div><h4>粗利率</h4><p>40%以上=緑／25〜40%=黄／25%未満=赤。<em>色で危険を検知</em>します。</p></div></div>
+      <div class="step" data-n="3"><b>3</b><div><h4>提案可否</h4><p>粗利率・リスク・本部関与から <em>GO／条件付き／要協議</em>を自動判定。</p></div></div>
+      <div class="step" data-n="4"><b>4</b><div><h4>予実差</h4><p>終了時の着地と計画原価の差。プラス（赤）は原価超過です。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 11 原価管理 カレンダー -->
+<section class="slide">
+  <div class="eyebrow">原価管理 / 先読み</div>
+  <h2>カレンダー｜契約と見込みを1つの時間軸で</h2>
+  <p class="lede">「半年後にこれだけ受注予定 → 人が足りない → だから今、採用と契約を急ぐ」を1画面で判断します。</p>
+  <div class="shot">
+    <div class="shot-cap">再現図 — 原価管理カレンダー（契約＋見込み）</div>
+    <div class="shot-body">
+      <button class="hot" data-n="1" style="left:120px; top:24px;">1</button>
+      <button class="hot" data-n="2" style="left:376px; top:24px;">2</button>
+      <button class="hot" data-n="3" style="left:196px; top:96px;">3</button>
+      <button class="hot" data-n="4" style="left:394px; top:96px;">4</button>
+      <button class="hot" data-n="5" style="left:120px; top:224px;">5</button>
+      <div class="gantt">
+        <div class="g-head">
+          <div class="g-name">案件 / 顧客</div>
+          <div class="m">6月</div><div class="m now">7月</div><div class="m">8月</div><div class="m">9月</div><div class="m">10月</div><div class="m">11月</div><div class="m">12月</div>
+        </div>
+        <div class="g-row">
+          <div class="g-name"><div class="t">伊藤忠テクノソリューションズ <span class="pill p-teal">契約中</span></div><div class="s">淡下部長 伴走支援 ／ 宇佐美（外注）</div></div>
+          <div class="g-cell"></div>
+          <div class="g-cell now"><div class="bar b-live s">250k</div></div>
+          <div class="g-cell"><div class="bar b-live">250k</div></div>
+          <div class="g-cell"><div class="bar b-live e">250k</div></div>
+          <div class="g-cell"><div class="bar b-fc s">250k</div></div>
+          <div class="g-cell"><div class="bar b-fc">250k</div></div>
+          <div class="g-cell"><div class="bar b-fc e">250k</div></div>
+        </div>
+        <div class="g-row">
+          <div class="g-name"><div class="t">スミセイ情報システム <span class="pill p-teal">契約中</span></div><div class="s">メディケアPhase.2 ／ 池田（外注）</div></div>
+          <div class="g-cell"></div>
+          <div class="g-cell now"><div class="bar b-live s">4.3M</div></div>
+          <div class="g-cell"><div class="bar b-live e">4.3M</div></div>
+          <div class="g-cell"><div class="bar b-fc-mid s">5M</div></div>
+          <div class="g-cell"><div class="bar b-fc-mid">5M</div></div>
+          <div class="g-cell"><div class="bar b-fc-mid e">5M</div></div>
+          <div class="g-cell"></div>
+        </div>
+        <div class="g-row">
+          <div class="g-name"><div class="t">コベルコ建機株式会社 <span class="pill p-grey">2フェーズ</span></div><div class="s">検討企画 → 伴走支援 ／ 宇佐美（外注）</div></div>
+          <div class="g-cell"><div class="bar b-done s e">1M</div></div>
+          <div class="g-cell now"><div class="bar b-live s">500k</div></div>
+          <div class="g-cell"><div class="bar b-live">1M</div></div>
+          <div class="g-cell"><div class="bar b-live e">1M</div></div>
+          <div class="g-cell"></div><div class="g-cell"></div><div class="g-cell"></div>
+        </div>
+        <div class="g-row">
+          <div class="g-name"><div class="t">NTTデータ関西 <span class="pill p-vio">新規見込み</span></div><div class="s">要手配 1.5名 ／ 調整期限 8/10</div></div>
+          <div class="g-cell"></div><div class="g-cell now"></div><div class="g-cell"></div>
+          <div class="g-cell"><div class="bar b-fc-mid s">500k</div></div>
+          <div class="g-cell"><div class="bar b-fc-mid">500k</div></div>
+          <div class="g-cell"><div class="bar b-fc-mid e">500k</div></div>
+          <div class="g-cell"></div>
+        </div>
+        <div class="g-foot">
+          <div class="g-name">確定売上（契約）</div>
+          <div class="m">1M</div><div class="m">5.1M</div><div class="m">5.6M</div><div class="m">5.6M</div><div class="m"></div><div class="m"></div><div class="m"></div>
+        </div>
+        <div class="g-foot" style="border-top:1px solid var(--line-soft);">
+          <div class="g-name">見込み（確度加重）</div>
+          <div class="m"></div><div class="m"></div><div class="m"></div><div class="m" style="color:var(--violet)">3.9M</div><div class="m" style="color:var(--violet)">4.2M</div><div class="m" style="color:var(--violet)">4.2M</div><div class="m" style="color:var(--violet)">175k</div>
+        </div>
+        <div class="g-foot" style="border-top:1px solid var(--line-soft);">
+          <div class="g-name">必要人員（うち要手配）</div>
+          <div class="m">2</div><div class="m">3</div><div class="m">3</div><div class="m" style="color:var(--bad)">5.5(1.5)</div><div class="m" style="color:var(--bad)">5.5(1.5)</div><div class="m" style="color:var(--bad)">5.5(1.5)</div><div class="m">4</div>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--teal)"></i>契約中</span>
+        <span><i style="background:var(--ink-25)"></i>終了</span>
+        <span><i style="background:color-mix(in srgb,var(--teal) 48%,transparent)"></i>開始前（確定）</span>
+        <span><i style="background:color-mix(in srgb,var(--good) 78%,transparent); border:1px dashed var(--ink-45)"></i>見込み 確度≥70%</span>
+        <span><i style="background:color-mix(in srgb,var(--warn) 80%,transparent); border:1px dashed var(--ink-45)"></i>見込み 40〜69%</span>
+      </div>
+    </div>
+  </div>
+  <div class="split" style="margin-top:18px;">
+    <div class="steps" data-steps>
+      <div class="step" data-n="1"><b>1</b><div><h4>表示範囲の切替</h4><p>前後6ヶ月（既定）／年度／全期間。<em>月ヘッダーと案件情報は固定</em>されスクロールしても見えます。</p></div></div>
+      <div class="step" data-n="2"><b>2</b><div><h4>当月を強調</h4><p>今どこにいるかが常に分かります。</p></div></div>
+    </div>
+    <div class="steps" data-steps>
+      <div class="step" data-n="3"><b>3</b><div><h4>実線＝契約、破線＝見込み</h4><p>見込みバーの<em>色が確度</em>（緑≥70%／黄40-69%／赤&lt;40%）。要手配は赤いリングが付きます。</p></div></div>
+      <div class="step" data-n="4"><b>4</b><div><h4>フェーズ紐づけ</h4><p>「検討企画 → 伴走支援」のような連続案件は<em>1行にまとめて</em>表示できます（🔗から設定）。</p></div></div>
+      <div class="step" data-n="5"><b>5</b><div><h4>月別サマリー</h4><p>確定売上／見込み（加重）／<em>必要人員（うち要手配）</em>。赤字が出た月は採用・契約を前倒しします。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 12 対象候補 -->
+<section class="slide">
+  <div class="eyebrow">原価管理 / 抜け漏れ防止</div>
+  <h2>対象候補｜管理すべき案件を自動で拾う</h2>
+  <p class="lede">「受注したのに原価管理していない」案件をシステムが見つけて教えてくれます。</p>
+  <div class="split">
+    <div class="shot">
+      <div class="shot-cap">再現図 — 対象候補</div>
+      <div class="shot-body">
+        <button class="hot" data-n="1" style="left:150px; top:90px;">1</button>
+        <button class="hot" data-n="2" style="right:106px; top:134px;">2</button>
+        <button class="hot" data-n="3" style="right:36px; top:134px;">3</button>
+        <div class="app">
+          <div class="app-side">
+            <div class="lbl">案件</div>
+            <div class="it on">原価管理</div>
+            <div class="it">稼働承認</div>
+          </div>
+          <div class="app-main">
+            <p class="app-h">原価管理</p>
+            <div class="tabs"><span>一覧</span><span>カレンダー</span><span class="on">対象候補 90</span></div>
+            <table class="g">
+              <thead><tr><th>顧客 / 案件</th><th>状況</th><th>候補理由</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><div class="acct">株式会社松岡建設工業</div><div class="oppn">AI研修</div></td>
+                  <td><span class="pill p-good">受注済み</span></td>
+                  <td style="color:var(--warn); font-size:9px;">⚠ 受注済み原価未管理</td>
+                  <td><span class="pill" style="background:var(--teal); color:#fff;">対象化</span></td>
+                </tr>
+                <tr>
+                  <td><div class="acct">株式会社NTTデータ関西</div><div class="oppn">AI研修</div></td>
+                  <td><span class="pill p-teal">商談中</span></td>
+                  <td style="font-size:9px; color:var(--ink-45);">大型商談・先行計画候補</td>
+                  <td><span class="pill p-vio">見込み管理</span> <span class="pill" style="background:var(--teal); color:#fff;">対象化</span></td>
+                </tr>
+                <tr>
+                  <td><div class="acct">Atlas Technologies</div><div class="oppn">AI研修</div></td>
+                  <td><span class="pill p-good">受注済み</span></td>
+                  <td style="color:var(--warn); font-size:9px;">⚠ 受注済み原価未管理</td>
+                  <td><span class="pill" style="background:var(--teal); color:#fff;">対象化</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="steps" data-steps>
+      <div class="step" data-n="1"><b>1</b><div><h4>2種類の候補</h4><p><em>受注済み</em>＝デリバリーが発生するので要対応。<em>大型商談</em>＝先行して計画すべきもの。</p></div></div>
+      <div class="step" data-n="2"><b>2</b><div><h4>見込み管理</h4><p>未受注のまま<em>案件の基礎情報を引き継いで</em>カレンダーの見込みに載せます。受注したら対象化するだけで、見込みの期間が計画に引き継がれます。</p></div></div>
+      <div class="step" data-n="3"><b>3</b><div><h4>対象化</h4><p>原価計画を作成して管理を開始します。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 稼働報告 -->
+<section class="slide">
+  <div class="eyebrow">案件 / デリバリー担当</div>
+  <h2>稼働報告 → 稼働承認</h2>
+  <p class="lede">承認された稼働実績が、原価管理の実績原価と月次請求の根拠になります。</p>
+  <div class="split">
+    <div class="shot">
+      <div class="shot-cap">再現図 — 稼働報告</div>
+      <div class="shot-body">
+        <button class="hot" data-n="1" style="left:200px; top:104px;">1</button>
+        <button class="hot" data-n="2" style="right:150px; top:104px;">2</button>
+        <button class="hot" data-n="3" style="right:36px; top:60px;">3</button>
+        <div class="app">
+          <div class="app-side">
+            <div class="lbl">案件</div>
+            <div class="it on">稼働報告</div>
+          </div>
+          <div class="app-main">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <p class="app-h" style="margin:0;">稼働報告</p>
+              <span class="pill p-warn">下書き → 提出</span>
+            </div>
+            <p class="app-sub">日次で記入し、週ごとに提出してください。</p>
+            <table class="g">
+              <thead><tr><th>日付</th><th>案件（原価の紐づけ先）</th><th class="num">稼働</th><th>内容</th></tr></thead>
+              <tbody>
+                <tr><td>7/21 (月)</td><td>伊藤忠 / 伴走支援</td><td class="num">4:00</td><td>定例・要件整理</td></tr>
+                <tr><td>7/22 (火)</td><td>スミセイ / メディケア</td><td class="num">7:30</td><td>実装レビュー</td></tr>
+                <tr><td>7/23 (水)</td><td style="color:var(--ink-45)">（全般稼働）</td><td class="num">2:00</td><td>社内MTG</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="steps" data-steps>
+      <div class="step" data-n="1"><b>1</b><div><h4>案件を必ず選ぶ</h4><p>ここが原価の紐づけ先です。<em>「全般稼働」は承認のみで原価に反映されません。</em></p></div></div>
+      <div class="step" data-n="2"><b>2</b><div><h4>稼働時間を日次で</h4><p>まとめ書きせず、その日のうちに入れるのが正確です。</p></div></div>
+      <div class="step" data-n="3"><b>3</b><div><h4>週ごとに提出</h4><p>下書き → 提出 → 承認。差戻しされたら修正して再提出します。</p></div></div>
+    </div>
+  </div>
+  <div class="callbox"><b>管理職の方へ：</b>提出された実績は<b>稼働承認</b>画面で承認／差戻しします。承認すると原価管理の「稼働実績（承認）」に反映され、計画原価と比較できます。</div>
+</section>
+
+<!-- 14 バックオフィス -->
+<section class="slide">
+  <div class="eyebrow">Back Office</div>
+  <h2>バックオフィス｜納期を横断で見張る</h2>
+  <p class="lede">BO業務の共通点は「納期がある」こと。BOダッシュボードを毎日見るのが基本動作です。</p>
+  <div class="split">
+    <div class="shot">
+      <div class="shot-cap">再現図 — BOダッシュボード</div>
+      <div class="shot-body">
+        <button class="hot" data-n="1" style="left:22px; top:66px;">1</button>
+        <button class="hot" data-n="2" style="left:200px; top:126px;">2</button>
+        <div class="app">
+          <div class="app-side">
+            <div class="lbl">バックオフィス</div>
+            <div class="it on">BOダッシュボード</div>
+            <div class="it">助成金トラッカー</div>
+            <div class="it">研修後フォロー</div>
+            <div class="it">展示会準備WBS</div>
+            <div class="it">AI講師スケジュール</div>
+            <div class="it">事例・インタビュー</div>
+            <div class="it">講師アンケート</div>
+          </div>
+          <div class="app-main">
+            <p class="app-h">バックオフィス</p>
+            <p class="app-sub">納期のある事務作業を横断で見張る場所。</p>
+            <table class="g">
+              <thead><tr><th>期日</th><th>対応</th><th>対象</th><th>状態</th></tr></thead>
+              <tbody>
+                <tr><td style="color:var(--bad); font-weight:700;">7/28</td><td>助成金 事前申請</td><td>敷島製パン AI研修</td><td><span class="pill p-bad">期限間近</span></td></tr>
+                <tr><td>8/05</td><td>展示会WBS 出展物入稿</td><td>202609_AI World</td><td><span class="pill p-warn">進行中</span></td></tr>
+                <tr><td>8/12</td><td>研修後フォロー（1ヶ月）</td><td>名港海運</td><td><span class="pill p-grey">予定</span></td></tr>
+                <tr><td>8/20</td><td>助成金 実績報告</td><td>共和電子 AI研修</td><td><span class="pill p-grey">予定</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="steps" data-steps>
+      <div class="step" data-n="1"><b>1</b><div><h4>BO専用メニュー</h4><p>営業データは表示されません（<em>仕様であり故障ではありません</em>）。</p></div></div>
+      <div class="step" data-n="2"><b>2</b><div><h4>期日で並ぶ</h4><p>助成金は<em>事前申請＝研修1ヶ月前／実績報告＝研修後2ヶ月</em>。展示会は「確定」にするとWBSが自動生成されます。研修後フォローは受注時に自動追加されます。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 15 運用ルール -->
+<section class="slide">
+  <div class="eyebrow">Rules</div>
+  <h2>全員が守る5原則</h2>
+  <p class="lede">品質はルールの遵守で決まります。これはチームの約束です。</p>
+  <div class="rules">
+    <div class="rule"><b>01</b><div><h4>商談後5分以内に活動を記録する</h4><p>記録がない商談は「無かったこと」になります。移動中で構いません。</p></div></div>
+    <div class="rule"><b>02</b><div><h4>次アクション（日付＋内容）を必ず設定する</h4><p>未設定の案件は自動で危険案件として検知されます。</p></div></div>
+    <div class="rule"><b>03</b><div><h4>ヨミは事実で判断し、常に最新に保つ</h4><p>願望でAにしない。動きがなければ落とす勇気を持つ。</p></div></div>
+    <div class="rule"><b>04</b><div><h4>受注・オチにしたら理由を記入する</h4><p>成約分析・失注分析の元データ。ここが空だと組織に学びが残りません。</p></div></div>
+    <div class="rule"><b>05</b><div><h4>顧客・案件を二重に作らない</h4><p>登録前に必ず検索。同名があれば既存を使います。</p></div></div>
+  </div>
+  <div class="split" style="margin-top:20px;">
+    <div class="callbox warn">
+      <b>自動検知される危険案件：</b>放置（最終活動から7日以上）／提案後フォロー漏れ（7日以上）／次アクション未設定。
+    </div>
+    <div class="callbox">
+      <b>入力の粒度：</b>顧客名は正式名称・案件名は<code>顧客名 / 商材</code>・金額は<b>税抜</b>・受注予定日は必ず入力。
+    </div>
+  </div>
+</section>
+
+<!-- 16 最初の1週間 -->
+<section class="slide">
+  <div class="eyebrow">Getting Started</div>
+  <h2>最初の1週間でやること</h2>
+  <p class="lede">この順でなぞれば、2週目には自然に回り始めます。</p>
+  <div class="cards">
+    <div class="card"><h4><i>1</i>Day 1｜環境</h4><p>ログイン／自分のロールと表示メニューを確認／表示名を確認。</p></div>
+    <div class="card"><h4><i>2</i>Day 2｜構造</h4><p>3階層モデルとヨミを理解。顧客→案件→商談を1件ずつ開いてみる。</p></div>
+    <div class="card"><h4><i>3</i>Day 3｜入力</h4><p>担当案件のヨミ・次アクションを最新化。アポ・商談登録を1件試す。</p></div>
+    <div class="card"><h4><i>4</i>Day 4-5｜習慣</h4><p>商談後5分ルールを実践。週報を記入し、週次レビューに参加する。</p></div>
+    <div class="card"><h4><i>5</i>2週目｜定着</h4><p>危険案件をゼロに。営業レントゲンで自分の弱い因数を把握する。</p></div>
+    <div class="card"><h4><i>6</i>困ったら</h4><p>使い方＝リーダー／Sales Ops、権限＝管理者、重複＝設定→重複の検出とマージ。</p></div>
+  </div>
+  <div class="callbox" style="margin-top:22px;">
+    <b>覚えておいてほしいこと。</b>このシステムの価値は、入力の量ではなく <b>「打ち手が早くなること」</b> で測られます。記録のための記録にせず、次に何をするかを決めるために使ってください。
+  </div>
+  <div class="split" style="margin-top:18px;">
+    <div class="callbox warn"><b>詳しい手順は：</b>操作マニュアル（MANUAL.md）に画面ごとの操作と逆引きインデックスがあります。</div>
+    <div class="callbox"><b>背景と運用ルールは：</b>オンボーディング資料（ONBOARDING.md）に全文があります。</div>
+  </div>
+</section>
+
+</div>
+
+<div class="foot-hint"><span class="kbd">←</span> <span class="kbd">→</span> でスライド移動　／　番号バッジ <b style="color:var(--accent)">①</b> と右の解説は対応しています（クリックで強調）</div>
+
+<script>
+  var slides = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+  var cur = 0;
+  var bar = document.getElementById("bar");
+  var count = document.getElementById("count");
+  var titles = ["表紙","データの3階層","画面の共通操作","ダッシュボード","今日のアポ・AC","アポ・商談登録","案件（表・ボード）","営業マン別週報","週次レビュー","原価管理 一覧","原価管理 カレンダー","対象候補","稼働報告・承認","バックオフィス","運用ルール5原則","最初の1週間"];
+
+  var toc = document.getElementById("toc");
+  titles.forEach(function (t, i) {
+    if (i === 0) return;
+    var b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = '<i>' + String(i).padStart(2, "0") + '</i><span>' + t + '</span>';
+    b.addEventListener("click", function () { go(i); });
+    toc.appendChild(b);
+  });
+
+  function go(i) {
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function (s, n) { s.classList.toggle("on", n === cur); });
+    bar.style.width = ((cur + 1) / slides.length * 100) + "%";
+    count.textContent = (cur + 1) + " / " + slides.length;
+    document.getElementById("prev").disabled = cur === 0;
+    document.getElementById("next").disabled = cur === slides.length - 1;
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+  document.getElementById("prev").addEventListener("click", function () { go(cur - 1); });
+  document.getElementById("next").addEventListener("click", function () { go(cur + 1); });
+  document.addEventListener("keydown", function (e) {
+    if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    if (e.key === "ArrowRight" || e.key === "PageDown") { go(cur + 1); }
+    if (e.key === "ArrowLeft" || e.key === "PageUp") { go(cur - 1); }
+  });
+
+  // callout <-> step linking
+  function link(scope) {
+    var hots = scope.querySelectorAll(".hot");
+    var steps = scope.querySelectorAll(".step");
+    function lightUp(n, on) {
+      scope.querySelectorAll('.hot[data-n="' + n + '"]').forEach(function (h) { h.classList.toggle("lit", on); });
+      scope.querySelectorAll('.step[data-n="' + n + '"]').forEach(function (s) { s.classList.toggle("lit", on); });
+    }
+    function bind(el) {
+      var n = el.getAttribute("data-n");
+      el.addEventListener("mouseenter", function () { lightUp(n, true); });
+      el.addEventListener("mouseleave", function () { lightUp(n, false); });
+      el.addEventListener("focus", function () { lightUp(n, true); });
+      el.addEventListener("blur", function () { lightUp(n, false); });
+      el.addEventListener("click", function () {
+        var lit = el.classList.contains("lit");
+        scope.querySelectorAll(".lit").forEach(function (x) { x.classList.remove("lit"); });
+        if (!lit) lightUp(n, true);
+      });
+    }
+    hots.forEach(bind);
+    steps.forEach(function (s) { s.setAttribute("tabindex", "0"); bind(s); });
+  }
+  slides.forEach(link);
+
+  go(0);
+</script>
+
+</body>
+</html>

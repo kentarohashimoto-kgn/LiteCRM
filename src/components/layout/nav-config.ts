@@ -31,6 +31,7 @@ import {
   Mail,
   Telescope,
   Brain,
+  HelpCircle,
 } from "lucide-react";
 import { canManageProjects } from "@/lib/constants";
 import type { Role } from "@/lib/types";
@@ -102,6 +103,7 @@ const groups: NavGroup[] = [
   {
     heading: "設定",
     items: [
+      { href: "/app/help", label: "ヘルプ・マニュアル", icon: HelpCircle },
       { href: "/app/settings", label: "設定", icon: Settings },
       { href: "/app/opportunities/import", label: "データ取込", icon: ClipboardList },
       { href: "/app/exec/batch", label: "AIバッチ運用", icon: Bot },
@@ -162,11 +164,17 @@ function injectAdminOnly(base: NavGroup[], role: Role): NavGroup[] {
   );
 }
 
-/** ロールに応じたナビ(営業⇔BOの相互不可視、管理者は全部)。 */
+/** ヘルプはロールを問わず必要なため、BO専任ロールにも独立グループで差し込む。 */
+const helpGroup: NavGroup = {
+  heading: "ヘルプ",
+  items: [{ href: "/app/help", label: "ヘルプ・マニュアル", icon: HelpCircle }],
+};
+
+/** ロールに応じたナビ(営業⇔BOの相互不可視、管理者は全部)。ヘルプは全ロール共通。 */
 export function navGroupsFor(role: Role): NavGroup[] {
-  const sales = injectAdminOnly(injectProjects(groups, role), role);
-  if (role === "back_office") return boGroups;
-  if (role === "hr") return [...boGroups, hrGroup];
+  const sales = injectAdminOnly(injectProjects(groups, role), role); // 「設定」グループにヘルプを内包
+  if (role === "back_office") return [...boGroups, helpGroup];
+  if (role === "hr") return [...boGroups, hrGroup, helpGroup];
   if (role === "owner" || role === "admin") return [...sales, ...boGroups, hrGroup];
   return sales; // 営業系ロール(管理職は案件管理が入る)
 }

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CATORCE Sales OS オンボーディング資料</title>
+<style>
+:root{--ink:#273A3A;--mut:rgba(39,58,58,.68);--line:rgba(39,58,58,.12);--soft:rgba(39,58,58,.06);
+--teal:#008C8C;--deep:#006C6A;--light:#DDF3F0;--accent:#F59A2A;--bg:#F4F6F6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);line-height:1.85;
+font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",Meiryo,system-ui,sans-serif;
+font-feature-settings:"palt";-webkit-font-smoothing:antialiased}
+.wrap{max-width:960px;margin:0 auto;background:#fff;padding:0 0 80px;min-height:100vh;
+box-shadow:0 0 40px rgba(39,58,58,.06)}
+header{background:linear-gradient(135deg,var(--teal),var(--deep));color:#fff;padding:44px 48px 34px}
+header h1{margin:0;font-size:26px;letter-spacing:-.01em}
+header p{margin:10px 0 0;font-size:14px;opacity:.93}
+main{padding:10px 48px}
+h1{font-size:25px;letter-spacing:-.01em;margin:38px 0 10px}
+h2{font-size:20px;margin:38px 0 10px;padding-bottom:8px;border-bottom:2px solid var(--light);color:var(--deep)}
+h3{font-size:16px;margin:26px 0 8px}
+h4{font-size:14px;margin:20px 0 6px;color:var(--mut)}
+p{margin:10px 0}
+hr{border:0;border-top:1px solid var(--line);margin:32px 0}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+li.check{list-style:none;position:relative}
+li.check::before{content:"";position:absolute;left:-20px;top:.5em;width:11px;height:11px;
+border:1.5px solid var(--teal);border-radius:3px}
+code{background:var(--light);color:var(--deep);padding:1px 6px;border-radius:5px;font-size:.9em;
+font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+blockquote{margin:16px 0;padding:12px 18px;background:#FFF8EE;border-left:4px solid var(--accent);border-radius:0 8px 8px 0}
+blockquote p{margin:4px 0;font-size:14px;color:#6b4a12}
+.scroll{overflow-x:auto;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:420px}
+th{background:var(--light);color:var(--deep);font-weight:700;padding:9px 12px;border:1px solid var(--line);white-space:nowrap}
+td{padding:9px 12px;border:1px solid var(--line);vertical-align:top;color:var(--mut)}
+tr:nth-child(even) td{background:#FAFBFB}
+a{color:var(--deep)}
+strong{color:var(--ink)}
+@media(max-width:640px){header,main{padding-left:22px;padding-right:22px}}
+@media print{body{background:#fff}.wrap{box-shadow:none;max-width:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>CATORCE Sales OS オンボーディング資料</h1>
+<p>背景・目的・活用法・運用ルール ／ 新しく参加する営業担当・バックオフィス担当の方へ</p>
+</header>
+<main>
+<p><strong>対象</strong>：新しく参加する営業担当者・バックオフィス担当者 <strong>所要</strong>：通読 20分 ／ 初期セットアップ 30分 ／ 定着まで 2週間</p>
+<blockquote><p>操作の詳細は別紙 <strong><a href="./manual.html">MANUAL.md（マニュアル）</a></strong> を参照してください。</p><p>本資料は「なぜ使うのか・どう活かすのか・何を守るのか」を扱います。</p></blockquote>
+<hr>
+<h2>1. 背景 — なぜこのシステムがあるのか</h2>
+<h3>1-1. 解決したかった課題</h3>
+<p>以前は商談情報がNotion・スプレッドシート・個人の頭の中に分散していました。その結果：</p>
+<div class="scroll"><table><thead><tr><th style="text-align:left">起きていたこと</th><th style="text-align:left">何が問題か</th></tr></thead><tbody><tr><td style="text-align:left">案件の最新状況が担当者に聞かないと分からない</td><td style="text-align:left">会議が「報告会」になり、対策を打つ時間が残らない</td></tr><tr><td style="text-align:left">月末にならないと着地見込みが分からない</td><td style="text-align:left">手遅れになってから気づく。打ち手が間に合わない</td></tr><tr><td style="text-align:left">「なぜ勝ったか・負けたか」が残らない</td><td style="text-align:left">勝ち筋が個人に閉じ、組織の型にならない</td></tr><tr><td style="text-align:left">提案後のフォロー漏れ・放置案件</td><td style="text-align:left">取れたはずの案件を落とす</td></tr><tr><td style="text-align:left">受注後の原価・稼働が見えない</td><td style="text-align:left">売れているのに利益が残らない。人員手配が後手に回る</td></tr></tbody></table></div>
+<h3>1-2. コンセプト</h3>
+<blockquote><p><strong>営業活動を「記録するだけ」のCRMから、「未来の売上を作る」営業OSへ。</strong></p></blockquote>
+<p>このシステムは<strong>入力させるための管理ツールではなく、意思決定のための道具</strong>です。 入力されたデータは必ず、次の判断（誰に・いつ・何をするか）に還元されます。</p>
+<hr>
+<h2>2. 目的 — このシステムで実現すること</h2>
+<h3>2-1. 3つのゴール</h3>
+<ol><li><strong>今月の着地を、月初に分かるようにする</strong></li></ol>
+<p>   ヨミ（確度）× 金額で加重した予測を常に最新化し、目標とのギャップを可視化する。</p>
+<ol><li><strong>打ち手を早く・具体的に決める</strong></li></ol>
+<p>   放置案件・フォロー漏れ・停滞案件を自動検知し、週次レビューで対策まで決める。</p>
+<ol><li><strong>売れて、かつ利益が残る状態をつくる</strong></li></ol>
+<p>   受注後のデリバリー原価・稼働・継続見込みまで管理し、採用/契約の判断を前倒しする。</p>
+<h3>2-2. 売上を分解して考える（共通言語）</h3>
+<p>このシステムは、売上を次の掛け算として捉えています（<strong>営業レントゲン</strong>画面の考え方）。</p>
+<p>``<code> 売上 = リード数 × アポ獲得率 × 商談実施率 × 受注率 × 平均単価 </code>``</p>
+<p>数字が落ちたとき「気合いが足りない」ではなく、<strong>どの因数が悪化したか</strong>を特定し、 そこに効く打ち手を選びます。この分解が全社の共通言語です。</p>
+<hr>
+<h2>3. 全体像 — データの構造を理解する</h2>
+<h3>3-1. 3階層モデル</h3>
+<p>すべての営業データはこの3階層に乗ります。ここだけは必ず覚えてください。</p>
+<p>``<code> 顧客（会社）   └─ 案件（その会社との取引1件。金額・ヨミ・担当を持つ）        └─ 商談 / 活動（訪問・電話・メール等の記録） </code>``</p>
+<ul><li><strong>顧客</strong>＝会社。同じ会社を二重に作らない（重複は名寄せの手間になります）</li><li><strong>案件</strong>＝「〇〇社／AI研修」のような取引単位。<strong>売上予測の最小単位</strong></li><li><strong>活動</strong>＝やったこと。<strong>次アクションとセットで記録</strong>する</li></ul>
+<p>さらにその手前に <strong>リード</strong>（展示会・セミナーで獲得した見込み客リスト）があり、 アポが取れた時点で「顧客＋案件」に昇格します。</p>
+<h3>3-2. ヨミ（最重要）</h3>
+<p><strong>ヨミ</strong>は案件の確からしさを表す全社共通の物差しです。<strong>ヨミを正しく入れることが、 このシステムを使ううえで最も重要な仕事</strong>です。</p>
+<div class="scroll"><table><thead><tr><th style="text-align:left">ヨミ</th><th style="text-align:left">意味</th><th style="text-align:left">確度</th></tr></thead><tbody><tr><td style="text-align:left"><code>0.受注</code></td><td style="text-align:left">受注確定</td><td style="text-align:left">100%</td></tr><tr><td style="text-align:left"><code>1.A(80%)</code></td><td style="text-align:left">ほぼ確実。社内検討・稟議中</td><td style="text-align:left">80%</td></tr><tr><td style="text-align:left"><code>2.B(50%)</code></td><td style="text-align:left">有望。提案済み</td><td style="text-align:left">50%</td></tr><tr><td style="text-align:left"><code>3.C(30%)</code></td><td style="text-align:left">商談実施済み。継続協議</td><td style="text-align:left">30%</td></tr><tr><td style="text-align:left"><code>4.アポ</code></td><td style="text-align:left">アポ獲得済み・初回商談待ち</td><td style="text-align:left">20%</td></tr><tr><td style="text-align:left"><code>5.リスケ</code></td><td style="text-align:left">日程延期</td><td style="text-align:left">10%</td></tr><tr><td style="text-align:left"><code>6.定期追い</code></td><td style="text-align:left">中長期フォロー対象</td><td style="text-align:left">10%</td></tr><tr><td style="text-align:left"><code>7.オチ</code></td><td style="text-align:left">失注</td><td style="text-align:left">0%</td></tr><tr><td style="text-align:left"><code>8.キャンセル</code></td><td style="text-align:left">案件消滅</td><td style="text-align:left">0%</td></tr><tr><td style="text-align:left"><code>9.調整中</code></td><td style="text-align:left">日程調整中</td><td style="text-align:left">15%</td></tr></tbody></table></div>
+<blockquote><p><strong>ヨミを変えると、ステージ・確度・ステータスが自動で連動します。</strong></p><p>担当者が触るのはヨミだけでOK。ステージを個別に管理する必要はありません。</p></blockquote>
+<p><strong>売上予測はこの式で計算されます：</strong></p>
+<p>``<code> Weighted（加重見込み）= 案件金額 × 確度 </code>``</p>
+<p>つまり <strong>ヨミが実態とズレていると、会社全体の着地予測がズレます</strong>。 「行けそうな気がする」でAにせず、事実（誰が・何を・いつまでに決めるか）で判断してください。</p>
+<h3>3-3. 年度の考え方</h3>
+<p>カトルセは <strong>決算6月＝7月始まり</strong> です。 「FY2026」は <strong>2026年7月〜2027年6月</strong> を指します。目標入力・売上予測はこの区切りです。</p>
+<hr>
+<h2>4. あなたの役割と見える範囲</h2>
+<p>ロールによって表示されるメニューとデータ範囲が変わります（DBレベルで制御）。</p>
+<div class="scroll"><table><thead><tr><th style="text-align:left">ロール</th><th style="text-align:left">主な役割</th><th style="text-align:left">見える範囲</th></tr></thead><tbody><tr><td style="text-align:left">代表(Owner) / 管理者</td><td style="text-align:left">全社統括・設定</td><td style="text-align:left">全て</td></tr><tr><td style="text-align:left">Sales Ops</td><td style="text-align:left">全案件のレビュー・分析</td><td style="text-align:left">営業データ全て</td></tr><tr><td style="text-align:left"><strong>営業担当</strong></td><td style="text-align:left">案件を進める</td><td style="text-align:left"><strong>自分の担当案件</strong></td></tr><tr><td style="text-align:left">外部営業 / パートナー</td><td style="text-align:left">割当・紹介案件を進める</td><td style="text-align:left">割り当てられた案件のみ</td></tr><tr><td style="text-align:left">講師/PM</td><td style="text-align:left">受注後のデリバリー</td><td style="text-align:left">受注後案件・顧客情報</td></tr><tr><td style="text-align:left">経理</td><td style="text-align:left">契約・請求</td><td style="text-align:left">契約・請求関連</td></tr><tr><td style="text-align:left"><strong>事務(バックオフィス)</strong></td><td style="text-align:left">納期のある事務作業</td><td style="text-align:left"><strong>BO領域のみ（営業データは不可視）</strong></td></tr><tr><td style="text-align:left">人事</td><td style="text-align:left">採用・人材台帳</td><td style="text-align:left">BO領域＋タレント</td></tr><tr><td style="text-align:left">閲覧者</td><td style="text-align:left">閲覧のみ</td><td style="text-align:left">閲覧のみ</td></tr></tbody></table></div>
+<blockquote><p><strong>営業とバックオフィスは相互に不可視</strong>です。BO担当の方に営業メニューが見えないのは</p><p>仕様であり、故障ではありません。</p></blockquote>
+<hr>
+<h2>5. 活用法 — 業務リズムに組み込む</h2>
+<p>システムは「思い出したときに開く」のでは機能しません。<strong>次のリズムで習慣化</strong>してください。</p>
+<h3>5-1. 営業担当のリズム</h3>
+<h4>毎日（合計10分）</h4>
+<div class="scroll"><table><thead><tr><th style="text-align:left">タイミング</th><th style="text-align:left">やること</th><th style="text-align:left">画面</th></tr></thead><tbody><tr><td style="text-align:left">朝</td><td style="text-align:left">今日のアポと次アクションを確認</td><td style="text-align:left"><strong>今日のアポ・AC</strong></td></tr><tr><td style="text-align:left"><strong>商談直後（5分以内）</strong></td><td style="text-align:left"><strong>活動を記録し、次アクションを必ず入れる</strong></td><td style="text-align:left">今日のアポ・AC / 活動を登録</td></tr><tr><td style="text-align:left">夕方</td><td style="text-align:left">ヨミが変わった案件を更新</td><td style="text-align:left">案件（表・ボード）</td></tr></tbody></table></div>
+<blockquote><p>💡 <strong>商談後5分ルール</strong>：移動中でも構いません。記憶が新しいうちに書くのが最も速く、</p><p>最も正確です。「あとでまとめて」は必ず抜けます。</p></blockquote>
+<h4>毎週</h4>
+<div class="scroll"><table><thead><tr><th style="text-align:left">タイミング</th><th style="text-align:left">やること</th><th style="text-align:left">画面</th></tr></thead><tbody><tr><td style="text-align:left">週初</td><td style="text-align:left">自分の週報を記入（先週の差分・今週の予定）</td><td style="text-align:left"><strong>営業マン別週報</strong></td></tr><tr><td style="text-align:left">週次会議</td><td style="text-align:left">打ち手を決める（報告ではなく意思決定）</td><td style="text-align:left"><strong>週次レビュー</strong></td></tr><tr><td style="text-align:left">週末</td><td style="text-align:left">稼働実績を提出（デリバリー担当のみ）</td><td style="text-align:left">稼働報告</td></tr></tbody></table></div>
+<h4>毎月</h4>
+<div class="scroll"><table><thead><tr><th style="text-align:left">タイミング</th><th style="text-align:left">やること</th><th style="text-align:left">画面</th></tr></thead><tbody><tr><td style="text-align:left">月初</td><td style="text-align:left">当月の目標と着地見込みのギャップを確認</td><td style="text-align:left">ダッシュボード / 売上予測</td></tr><tr><td style="text-align:left">月中</td><td style="text-align:left">ヨミの棚卸し（古いヨミを実態に合わせる）</td><td style="text-align:left">案件（表・ボード）</td></tr><tr><td style="text-align:left">月末</td><td style="text-align:left">決着（受注・オチ）の理由を記入</td><td style="text-align:left">ヨミ変更履歴</td></tr></tbody></table></div>
+<h3>5-2. バックオフィス担当のリズム</h3>
+<div class="scroll"><table><thead><tr><th style="text-align:left">タイミング</th><th style="text-align:left">やること</th><th style="text-align:left">画面</th></tr></thead><tbody><tr><td style="text-align:left">毎日</td><td style="text-align:left">期日が近い事務作業を確認</td><td style="text-align:left"><strong>BOダッシュボード</strong></td></tr><tr><td style="text-align:left">研修受注時</td><td style="text-align:left">助成金の期日を登録（事前申請＝研修1ヶ月前）</td><td style="text-align:left">助成金トラッカー</td></tr><tr><td style="text-align:left">展示会確定時</td><td style="text-align:left">WBSを自動生成し、準備タスクを進める</td><td style="text-align:left">展示会準備WBS</td></tr><tr><td style="text-align:left">研修実施後</td><td style="text-align:left">1・3・6ヶ月後フォローの日程調整</td><td style="text-align:left">研修後フォロー</td></tr><tr><td style="text-align:left">随時</td><td style="text-align:left">講師スケジュール調整・アンケート取込・事例化</td><td style="text-align:left">AI講師スケジュール ほか</td></tr></tbody></table></div>
+<blockquote><p>BO業務の共通点は <strong>「納期がある」</strong> ことです。BOダッシュボードで期日を横断的に</p><p>見張るのが基本動作になります。</p></blockquote>
+<h3>5-3. AIによる自動処理</h3>
+<p>以下は<strong>あなたが操作しなくても自動で動きます</strong>（結果の確認だけお願いします）。</p>
+<div class="scroll"><table><thead><tr><th style="text-align:left">自動処理</th><th style="text-align:left">タイミング</th><th style="text-align:left">あなたがすること</th></tr></thead><tbody><tr><td style="text-align:left">商談AI要約の下書き作成</td><td style="text-align:left">夜間</td><td style="text-align:left"><strong>AI確認キュー</strong>で内容を確認し「確認済み」に</td></tr><tr><td style="text-align:left">日次ダイジェスト通知</td><td style="text-align:left">毎朝</td><td style="text-align:left">通知を見て当日の動きを決める</td></tr><tr><td style="text-align:left">ワークフロー自動化（ヨミ転落→通知等）</td><td style="text-align:left">30分ごと</td><td style="text-align:left">ルールに沿った通知に反応する</td></tr><tr><td style="text-align:left">メールシーケンス（多段フォロー）</td><td style="text-align:left">毎日</td><td style="text-align:left">投入した案件の自動送信結果を確認</td></tr><tr><td style="text-align:left">営業レントゲンのスナップショット保存</td><td style="text-align:left">毎月1日</td><td style="text-align:left">前月との比較を見る</td></tr></tbody></table></div>
+<blockquote><p>⚠️ AIの要約は<strong>下書き</strong>です。事実確認をせずに確認済みにしないでください。</p></blockquote>
+<hr>
+<h2>6. 運用ルール（全員が守ること）</h2>
+<p>品質はルールの遵守で決まります。以下は<strong>チームの約束</strong>です。</p>
+<h3>6-1. 必ず守る5原則</h3>
+<ol><li><strong>商談後5分以内に活動を記録する</strong></li></ol>
+<p>   → 記録がない商談は「無かったこと」になります。</p>
+<ol><li><strong>次アクション（日付＋内容）を必ず設定する</strong></li></ol>
+<p>   → 未設定の案件は自動で「危険案件」として検知されます。</p>
+<ol><li><strong>ヨミは事実で判断し、常に最新に保つ</strong></li></ol>
+<p>   → 願望でAにしない。動きがなければ落とす勇気を持つ。</p>
+<ol><li><strong>受注・オチに変更したら、必ず理由を記入する</strong></li></ol>
+<p>   → 成約分析・失注分析の元データになります。ここが空だと組織に学びが残りません。</p>
+<ol><li><strong>顧客・案件を二重に作らない</strong></li></ol>
+<p>   → 登録前に必ず検索する。同名があれば既存を使う。</p>
+<h3>6-2. 自動検知される「危険案件」</h3>
+<p>以下は放置するとシステムが自動で警告します。</p>
+<div class="scroll"><table><thead><tr><th style="text-align:left">検知</th><th style="text-align:left">条件</th></tr></thead><tbody><tr><td style="text-align:left">放置案件</td><td style="text-align:left">最終活動から <strong>7日以上</strong> 動きがない</td></tr><tr><td style="text-align:left">提案後フォロー漏れ</td><td style="text-align:left">提案から <strong>7日以上</strong> フォローがない</td></tr><tr><td style="text-align:left">次アクション未設定</td><td style="text-align:left">次アクションが空</td></tr></tbody></table></div>
+<h3>6-3. 入力の粒度ガイド</h3>
+<div class="scroll"><table><thead><tr><th style="text-align:left">項目</th><th style="text-align:left">ルール</th></tr></thead><tbody><tr><td style="text-align:left">顧客名</td><td style="text-align:left">正式名称（株式会社を含む）。略称・部署名を混ぜない</td></tr><tr><td style="text-align:left">案件名</td><td style="text-align:left"><code>顧客名 / 商材</code> を基本形にする（例：<code>日本トムソン株式会社 / AI研修</code>）</td></tr><tr><td style="text-align:left">金額</td><td style="text-align:left"><strong>税抜</strong>で統一。入力欄は自動で3桁カンマ表示されます</td></tr><tr><td style="text-align:left">受注予定日</td><td style="text-align:left">「いつ決まるか」の想定日。月次集計の基準になるので必ず入れる</td></tr><tr><td style="text-align:left">活動メモ</td><td style="text-align:left">誰が・何を言ったか（事実）と、次に何をするか（判断）を分けて書く</td></tr></tbody></table></div>
+<h3>6-4. やってはいけないこと</h3>
+<ul><li>❌ ヨミを更新せずに放置する（着地予測が壊れます）</li><li>❌ 失注案件を消す（<strong>オチとして残す</strong>。分析の元データです）</li><li>❌ 個人メモに商談内容を溜める（組織資産になりません）</li><li>❌ 顧客名を都度書き換える（重複・名寄せの原因になります）</li></ul>
+<hr>
+<h2>7. 最初の1週間でやること（チェックリスト）</h2>
+<h3>Day 1 — 環境を整える</h3>
+<ul><li class="check">ログインし、パスワードを設定する</li><li class="check">自分のロールと見えるメニューを確認する</li><li class="check"><strong>設定 → メンバー</strong>で自分の表示名を確認する</li><li class="check">（営業）メール送信アカウントを接続する（任意）</li></ul>
+<h3>Day 2 — 構造を理解する</h3>
+<ul><li class="check">本資料の「3. 全体像」を読み、3階層モデルとヨミを理解する</li><li class="check"><strong>顧客 → 案件 → 商談</strong>の順に既存データを1件ずつ開いてみる</li><li class="check">ダッシュボードで今月の目標と着地見込みを見る</li></ul>
+<h3>Day 3 — 実際に入力する</h3>
+<ul><li class="check">（営業）自分の担当案件を1件開き、ヨミ・次アクションを最新化する</li><li class="check">（営業）<strong>アポ・商談登録</strong>から新規案件を1件作ってみる</li><li class="check">（BO）BOダッシュボードで自分の担当領域の期日を確認する</li></ul>
+<h3>Day 4-5 — サイクルに乗る</h3>
+<ul><li class="check">商談後5分以内の活動記録を実践する</li><li class="check">（営業）<strong>営業マン別週報</strong>に今週分を記入する</li><li class="check">週次レビューに参加し、画面を見ながら打ち手を決める</li></ul>
+<h3>2週目 — 定着</h3>
+<ul><li class="check">危険案件（放置・フォロー漏れ）をゼロにする</li><li class="check">分析画面（営業レントゲン・分析ハブ）を開き、自分の因数を把握する</li><li class="check">困りごとを洗い出し、改善要望として共有する</li></ul>
+<hr>
+<h2>8. よくある質問</h2>
+<p><strong>Q. 入力が面倒です。どこまで入れればいいですか？</strong> A. 最低限は <strong>①ヨミ ②金額 ③次アクション（日付＋内容） ④活動記録</strong> の4点です。 ここさえ埋まれば、予測・検知・分析はすべて動きます。</p>
+<p><strong>Q. ヨミの判断に迷います。</strong> A. 「<strong>次に何が起きれば前に進むか</strong>」が言えるならC以上、言えないなら定期追いです。 Aは「決裁が通る見込みが立っている」状態に限定してください。</p>
+<p><strong>Q. 間違えて削除しました。</strong> A. リード・案件・顧客は <strong>ゴミ箱に30日間</strong>保管されます（設定 → ゴミ箱）。復元できます。</p>
+<p><strong>Q. 同じ会社が2つ登録されています。</strong> A. <strong>設定 → 重複の検出とマージ</strong>で統合できます。関連データは残す側に付け替わります。</p>
+<p><strong>Q. 自分に見えない画面があります。</strong> A. ロールによる制御です（4章参照）。業務上必要であれば管理者に相談してください。</p>
+<p><strong>Q. AIの要約が間違っています。</strong> A. AI確認キューで修正してから確認済みにしてください。修正内容が正データになります。</p>
+<hr>
+<h2>9. 困ったときの連絡先</h2>
+<div class="scroll"><table><thead><tr><th style="text-align:left">内容</th><th style="text-align:left">相談先</th></tr></thead><tbody><tr><td style="text-align:left">使い方・運用ルール</td><td style="text-align:left">チームリーダー / Sales Ops</td></tr><tr><td style="text-align:left">権限・アカウント</td><td style="text-align:left">管理者</td></tr><tr><td style="text-align:left">データの誤り・重複</td><td style="text-align:left">管理者（設定 → 重複の検出とマージ）</td></tr><tr><td style="text-align:left">不具合・改善要望</td><td style="text-align:left">管理者へ共有（画面名と操作手順を添えて）</td></tr></tbody></table></div>
+<hr>
+<blockquote><p><strong>最後に。</strong></p><p>このシステムの価値は、入力の量ではなく <strong>「打ち手が早くなること」</strong> で測られます。</p><p>記録のための記録にせず、「次に何をするか」を決めるために使ってください。</p></blockquote>
+</main>
+</div>
+</body>
+</html>
