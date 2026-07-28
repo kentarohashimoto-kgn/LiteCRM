@@ -25,6 +25,7 @@ export interface MimeInput {
   text: string;
   html: string;
   messageId: string;   // "<...>" 形式
+  listUnsubscribeUrl?: string;  // 一括送信のワンクリック配信停止(RFC8058)。Gmail一括送信ガイドライン対応
 }
 
 /**
@@ -44,6 +45,9 @@ export function buildMime(p: MimeInput): string {
     ...(p.bcc ? [`Bcc: ${p.bcc}`] : []),
     `Subject: ${encodeHeaderWord(p.subject)}`,
     `Message-ID: ${p.messageId}`,
+    ...(p.listUnsubscribeUrl
+      ? [`List-Unsubscribe: <${p.listUnsubscribeUrl}>`, "List-Unsubscribe-Post: List-Unsubscribe=One-Click"]
+      : []),
     "MIME-Version: 1.0",
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ].join("\r\n");

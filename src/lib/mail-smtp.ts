@@ -23,6 +23,7 @@ export interface SendInput {
   html: string;
   bcc?: string | null;
   messageId?: string; // 指定すると送信メールの Message-ID に使う(返信照合の鍵)
+  listUnsubscribeUrl?: string; // 一括送信のワンクリック配信停止(RFC8058)
 }
 
 export type SendResult = { ok: true; messageId: string } | { ok: false; error: string };
@@ -61,6 +62,9 @@ export async function sendMail(acc: SmtpAccount, input: SendInput): Promise<Send
       text: input.text,
       html: input.html,
       messageId: input.messageId,
+      headers: input.listUnsubscribeUrl
+        ? { "List-Unsubscribe": `<${input.listUnsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }
+        : undefined,
     });
     return { ok: true, messageId: input.messageId || info.messageId };
   } catch (e) {

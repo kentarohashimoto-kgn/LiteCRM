@@ -230,6 +230,7 @@ export async function GET(req: Request) {
 
   let leadsUpdated = 0;
   let notified = 0;
+  const chat = { sent: 0, failed: 0, skipped: 0, lastError: "" }; // DM配信の診断(batch_runsに記録)
   const nowIso = new Date().toISOString();
   for (const [leadId, evList] of eventsByLead) {
     const lead = leadRows.get(leadId);
@@ -270,8 +271,14 @@ export async function GET(req: Request) {
       // Chat DM は強シグナル(クリック/資料/返信/P1)のみ。開封だけはアプリ内に留める(通知疲れ防止)
       if (strong) {
         try {
-          await sendChatMessage({ type: "dm", tenantId, userId: uid }, textMessage(`${title}\n${body}\n${process.env.NEXT_PUBLIC_APP_URL ?? ""}${href}`));
-        } catch { /* DM失敗は無視(アプリ内通知は出ている) */ }
+          const r = await sendChatMessage({ type: "dm", tenantId, userId: uid }, textMessage(`${title}\n${body}\n${process.env.NEXT_PUBLIC_APP_URL ?? ""}${href}`));
+          if (r.sent > 0) chat.sent += r.sent;
+          else if (r.failed > 0) { chat.failed += r.failed; chat.lastError = "createMessage失敗"; }
+          else { chat.skipped++; chat.lastError = r.skipped ?? "no space"; }
+        } catch (e) {
+          chat.failed++;
+          chat.lastError = String(e).slice(0, 200);
+        }
       }
     }
   }
@@ -283,7 +290,7 @@ export async function GET(req: Request) {
         tenant_id: tenantId, job_kind: "engagement", run_date: jstDate(startedAt),
         started_at: startedAt, ended_at: new Date().toISOString(), status: "success",
         targets_total: evs.length, items_generated: inserted, items_failed: 0,
-        detail: { inserted, leads_updated: leadsUpdated, notified },
+        detail: { inserted, leads_updated: leadsUpdated, notified, chat },
       });
     }
   } catch { /* ログ失敗は無視 */ }

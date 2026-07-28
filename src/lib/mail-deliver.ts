@@ -86,6 +86,7 @@ export async function deliverTrackedEmail(sb: SupabaseClient, p: DeliverParams):
   }
 
   // フッターはリンクトークン割当(p.body基準)の後に足す=停止URLは計測ラップされない
+  const unsubUrl = p.unsubscribeFooter ? `${p.baseUrl.replace(/\/$/, "")}/api/track/u/${openToken}` : undefined;
   const bodyOut = p.unsubscribeFooter ? p.body + unsubscribeFooterText(p.baseUrl, openToken) : p.body;
   const html = buildTrackedHtml({ bodyText: bodyOut, baseUrl: p.baseUrl, openToken, linkTokens });
   const fromHeader = p.from.name ? `${p.from.name} <${p.from.email}>` : p.from.email;
@@ -95,13 +96,13 @@ export async function deliverTrackedEmail(sb: SupabaseClient, p: DeliverParams):
   if (p.authMethod === "google_oauth") {
     if (!p.oauthAccessToken) sent = { ok: false, error: "Googleアクセストークンがありません" };
     else {
-      const mime = buildMime({ from: fromHeader, to: p.to, bcc, subject: p.subject, text: bodyOut, html, messageId });
+      const mime = buildMime({ from: fromHeader, to: p.to, bcc, subject: p.subject, text: bodyOut, html, messageId, listUnsubscribeUrl: unsubUrl });
       const r = await sendGmail(p.oauthAccessToken, mime);
       sent = r.ok ? { ok: true } : { ok: false, error: r.error };
     }
   } else {
     if (!p.smtp) sent = { ok: false, error: "SMTP設定がありません" };
-    else sent = await sendMail(p.smtp, { to: p.to, subject: p.subject, text: bodyOut, html, bcc, messageId });
+    else sent = await sendMail(p.smtp, { to: p.to, subject: p.subject, text: bodyOut, html, bcc, messageId, listUnsubscribeUrl: unsubUrl });
   }
 
   if (!sent.ok) {

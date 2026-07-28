@@ -13,6 +13,7 @@ import { NameMaster } from "@/components/settings/name-master";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { GdriveConnectionCard } from "@/components/settings/gdrive-connection-card";
 import { CalendarFeedSection } from "@/components/settings/calendar-feed-section";
+import { ChatDmTest } from "@/components/settings/chat-dm-test";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,11 @@ export default async function SettingsPage({
 
       {/* Googleカレンダー連携(マインドマップの週次予定に取り込む) */}
       <CalendarFeedSection message={searchParams.msg} ok={searchParams.calendar === "ok"} />
+
+      {/* Google Chat DM 通知の疎通テスト */}
+      <Section title="Google Chat 通知テスト" className="mb-5">
+        <ChatDmTest />
+      </Section>
 
       {/* メンバー管理 */}
       <Section title="メンバー / ロール" className="mb-5">
