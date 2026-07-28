@@ -50,8 +50,10 @@ alter table public.business_cards
 create index if not exists idx_business_cards_lead on public.business_cards(lead_id) where lead_id is not null;
 
 -- ---- 6) engagement ジョブの停止スイッチ行（既定OFF。設定画面でONにして開始） ----
+--   デモテナントは block_demo_writes() が書込を拒否するため除外(0153/0154)。
 insert into public.batch_job_settings (tenant_id, job_kind, label, description, enabled)
 select t.id, 'engagement', 'メール反応スコアリング',
        'メールの開封・クリック・返信を15分間隔でエンゲージメントに反映し、ホットリードを通知します。', false
 from public.tenants t
+where t.is_demo = false
 on conflict (tenant_id, job_kind) do nothing;
