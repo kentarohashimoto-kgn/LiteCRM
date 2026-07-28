@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Search, Phone, List, Building2, BarChart3, History, Trash2, Upload, ChevronLeft, ChevronRight, Download, Filter, Inbox } from "lucide-react";
 import { DownloadPanel } from "@/components/leads/download-panel";
 import { LEAD_DISPOSITIONS, LEAD_DISPOSITION_MAP } from "@/lib/constants";
-import { setLeadDispositionAction, setLeadCallOwnerAction, setLeadFunnelStageAction, deleteImportBatchAction, setAcquirerAliasAction, upsertLeadsBatchAction, recomputeEngagementAction } from "@/server/actions";
+import { setLeadDispositionAction, setLeadCallOwnerAction, setLeadFunnelStageAction, setLeadHearingAction, deleteImportBatchAction, setAcquirerAliasAction, upsertLeadsBatchAction, recomputeEngagementAction } from "@/server/actions";
 import { parseDelimited, detectDelim, rowToRawInput, dedupLeads, LEAD_KINDS } from "@/lib/lead-import";
 import { FUNNEL_STAGES, FUNNEL_STAGE_MAP, FUNNEL_MAIN, nextFunnelStage, SQL_CRITERIA, NURTURE_CRITERIA } from "@/lib/lead-funnel";
 import { PromoteLeadButton } from "@/components/leads/promote-button";
@@ -298,11 +298,32 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
 }
 
 // ============ 架電キュー ============
+/** 架電キューのヒアリング項目インライン入力(選ぶと保存→そのリードだけ即再スコア)。 */
+function HearingSel({ id, field, value, opts, ph }: { id: string; field: string; value: string; opts: { key: string; label: string }[]; ph: string }) {
+  return (
+    <form action={setLeadHearingAction}>
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="field" value={field} />
+      <select
+        name="value"
+        defaultValue={value}
+        onChange={(e) => e.currentTarget.form?.requestSubmit()}
+        className={cn("rounded-lg border px-1.5 py-1 text-[11px] outline-none focus:border-teal-primary max-w-[104px]", value ? "border-teal-primary/40 bg-teal-light/20 text-teal-deep" : "border-black/10 bg-white text-ink/50")}
+        title={`${ph}(選ぶと保存され、スコアに即反映)`}
+      >
+        <option value="">{ph}</option>
+        {opts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+      </select>
+    </form>
+  );
+}
+
 function CallQueue({ queue }: { queue: QueueData }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-4 text-sm text-ink/60 px-1">
         <span>架電対象 <b className="text-ink">{queue.total}</b> 件（未着手・不通／優先度降順・上位{queue.rows.length}件）</span>
+        <span className="text-xs text-ink/40">架電で聞けた「課題・時期・予算」はその場で選択 → スコアに即反映されます</span>
       </div>
       <div className="card overflow-x-auto">
         <table className="w-full">
@@ -312,6 +333,7 @@ function CallQueue({ queue }: { queue: QueueData }) {
               <th className="th">会社 / 担当者</th>
               <th className="th">役職</th>
               <th className="th">流入</th>
+              <th className="th">ヒアリング（課題 / 時期 / 予算）</th>
               <th className="th">決着</th>
               <th className="th">電話</th>
               <th className="th">架電担当</th>
@@ -324,6 +346,13 @@ function CallQueue({ queue }: { queue: QueueData }) {
                 <td className="td max-w-[240px]"><Link href={`/app/leads/${r.id}`} className="font-medium block truncate hover:text-teal-deep">{r.company}</Link><span className="text-xs text-ink/45">{r.name} {r.rank && `(${r.rank})`}</span></td>
                 <td className="td text-xs text-ink/60">{r.jobTitle || "—"}</td>
                 <td className="td text-xs">{evLabel(r.event)}</td>
+                <td className="td">
+                  <div className="flex items-center gap-1">
+                    <HearingSel id={r.id} field="needs" value={r.needs} ph="課題" opts={[{ key: "high", label: "具体的に興味" }, { key: "mid", label: "関心あり" }, { key: "low", label: "低い/不明" }]} />
+                    <HearingSel id={r.id} field="timing" value={r.timing} ph="時期" opts={[{ key: "now", label: "すぐ導入" }, { key: "soon", label: "数ヶ月内" }, { key: "unknown", label: "未定" }]} />
+                    <HearingSel id={r.id} field="budget_band" value={r.budgetBand} ph="予算" opts={[{ key: "yes", label: "予算あり" }, { key: "considering", label: "検討中" }, { key: "no", label: "なし/不明" }]} />
+                  </div>
+                </td>
                 <td className="td"><DispBadge d={r.disposition} /></td>
                 <td className="td text-xs tabular-nums">{r.phone || "—"}{r.mobilePhone && <span className="block text-ink/40">{r.mobilePhone}</span>}</td>
                 <td className="td text-xs text-ink/60">{r.callOwner || "—"}</td>

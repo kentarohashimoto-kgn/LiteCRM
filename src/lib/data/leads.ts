@@ -99,7 +99,7 @@ export async function queryCallQueue(): Promise<{ rows: WsQueueRow[]; total: num
   const sb = getSupabaseServer();
   const { data, count } = await sb
     .from("leads")
-    .select("id,company_name,contact_name,rank,job_title,raw_event,priority_score,disposition,phone,mobile_phone,call_owner", { count: "exact" })
+    .select("id,company_name,contact_name,rank,job_title,raw_event,priority_score,disposition,phone,mobile_phone,call_owner,needs,timing,budget_band", { count: "exact" })
     .in("disposition", ["untouched", "no_answer"])
     .order("priority_score", { ascending: false, nullsFirst: false })
     .order("id")
@@ -109,6 +109,7 @@ export async function queryCallQueue(): Promise<{ rows: WsQueueRow[]; total: num
     id: l.id, score: l.priority_score ?? 0, company: l.company_name ?? "", name: l.contact_name ?? "",
     rank: l.rank ?? "", jobTitle: l.job_title ?? "", event: l.raw_event ?? "", disposition: l.disposition ?? "untouched",
     phone: l.phone ?? "", mobilePhone: l.mobile_phone ?? "", callOwner: l.call_owner ?? "",
+    needs: l.needs ?? "", timing: l.timing ?? "", budgetBand: l.budget_band ?? "",
   }));
   /* eslint-enable @typescript-eslint/no-explicit-any */
   return { rows, total: count ?? 0 };
