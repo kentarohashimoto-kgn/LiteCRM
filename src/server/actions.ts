@@ -1101,6 +1101,24 @@ export async function updateLeadAction(formData: FormData) {
   redirect("/app/leads/" + id);
 }
 
+/** 架電キューからのヒアリング3項目(課題/時期/予算)のインライン入力。保存と同時に単票を再スコア。 */
+export async function setLeadHearingAction(formData: FormData) {
+  const ctx = await requireCtx();
+  const id = String(formData.get("id"));
+  const field = String(formData.get("field"));
+  const value = str(formData.get("value"));
+  const ALLOWED: Record<string, string[]> = {
+    needs: ["high", "mid", "low"],
+    timing: ["now", "soon", "unknown"],
+    budget_band: ["yes", "considering", "no"],
+  };
+  if (!(field in ALLOWED) || (value !== null && !ALLOWED[field].includes(value))) return;
+  const sb = getSupabaseServer();
+  await sb.from("leads").update({ [field]: value }).eq("id", id).eq("tenant_id", ctx.tenantId);
+  await sb.rpc("rescore_leads", { p_lead_id: id });
+  revalidatePath("/app/leads");
+}
+
 /** リード1件を削除(論理削除・30日間は設定のゴミ箱から復元可能)。
  *  論理削除は SECURITY DEFINER RPC 経由(RLS 適用の直接 update では
  *  SELECT ポリシーの deleted_at is null により拒否され削除が効かないため)。 */

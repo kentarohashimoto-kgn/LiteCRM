@@ -26,6 +26,7 @@ export interface FunnelData { stages: Record<string, FunnelStageData>; total: nu
 export interface WsQueueRow {
   id: string; score: number; company: string; name: string; rank: string; jobTitle: string;
   event: string; disposition: string; phone: string; mobilePhone: string; callOwner: string;
+  needs: string; timing: string; budgetBand: string;   // ヒアリング3項目(架電キューから個別入力)
 }
 export interface WsCompanyRow {
   norm: string; name: string; contacts: number; events: string[]; maxScore: number; best: string; multi: boolean;
