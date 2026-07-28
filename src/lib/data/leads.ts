@@ -53,7 +53,12 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
   if (f.media) qy = qy.eq("inquiry_media", f.media);
   if (f.event) qy = qy.eq("raw_event", f.event);
   if (f.disposition) qy = qy.eq("disposition", f.disposition);
-  if (f.rank) qy = qy.eq("rank", f.rank);
+  if (f.rank) {
+    // ランクは複数選択可(CSV: "S,A")。1つなら等価、複数なら IN で絞る
+    const ranks = f.rank.split(",").map((r) => r.trim()).filter(Boolean);
+    if (ranks.length === 1) qy = qy.eq("rank", ranks[0]);
+    else if (ranks.length > 1) qy = qy.in("rank", ranks);
+  }
   // 並べ替え。f.sort 指定時はそのカラムで(HP問合せタブ用)、無ければ優先度降順(既定)。
   const SORT_COLS: Record<string, string> = {
     date: "created_at", media: "inquiry_media", detail: "raw_event", tags: "inquiry_tags", disposition: "disposition",

@@ -20,16 +20,20 @@ import { EMAIL_CATEGORY_LABEL } from "@/lib/email";
 
 interface TemplateOpt { id: string; name: string; category: string }
 
-export function BulkMailPanel({ filters }: { filters: LeadMailFilters }) {
+export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMailFilters; selectedIds?: string[] }) {
   const [open, setOpen] = useState(false);
   const [templates, setTemplates] = useState<TemplateOpt[] | null>(null);
   const [templateId, setTemplateId] = useState("");
+  const [segTitle, setSegTitle] = useState("");
   const [preview, setPreview] = useState<BulkMailPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState({ sent: 0, failed: 0, target: 0 });
   const [done, setDone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // チェック選択があればそれを対象に、無ければ現在の絞り込み条件を対象にする
+  const effectiveFilters: LeadMailFilters = selectedIds.length > 0 ? { leadIds: selectedIds } : filters;
 
   const openPanel = async () => {
     setOpen(true);
@@ -45,7 +49,7 @@ export function BulkMailPanel({ filters }: { filters: LeadMailFilters }) {
     if (!id) return;
     setLoading(true);
     try {
-      const p = await previewLeadBulkMailAction(filters, id);
+      const p = await previewLeadBulkMailAction(effectiveFilters, id);
       if (!p.ok) setError(p.error ?? "プレビューに失敗しました");
       else setPreview(p);
     } finally {
@@ -60,12 +64,15 @@ export function BulkMailPanel({ filters }: { filters: LeadMailFilters }) {
     setError(null);
     let sent = 0;
     let failed = 0;
+    let batchId: string | undefined;
     const target = preview.sendable;
     setProgress({ sent, failed, target });
     try {
       // 20件ずつ完了までループ。送信済みはサーバー側で自動除外されるため冪等。
+      // 初回チャンクがセグメント履歴を作り、以降は同じbatchIdへ積む。
       for (let guard = 0; guard < 30; guard++) {
-        const r = await sendLeadBulkMailAction(filters, templateId, 20);
+        const r = await sendLeadBulkMailAction(effectiveFilters, templateId, 20, { batchId, segmentTitle: segTitle });
+        batchId = r.batchId ?? batchId;
         if (!r.ok) {
           if (sent === 0) { setError(r.error ?? "送信に失敗しました"); return; }
           break; // 途中から対象0になった等 → 完了扱い
@@ -85,14 +92,16 @@ export function BulkMailPanel({ filters }: { filters: LeadMailFilters }) {
 
   return (
     <>
-      <button onClick={openPanel} className="btn-ghost inline-flex items-center gap-1.5 text-xs" title="絞り込み結果へテンプレメールを一括送信">
-        <Mail size={14} /> 一括メール
+      <button onClick={openPanel} className={selectedIds.length > 0 ? "btn-accent inline-flex items-center gap-1.5 text-xs" : "btn-ghost inline-flex items-center gap-1.5 text-xs"} title="チェック選択 or 絞り込み結果へテンプレメールを一括送信">
+        <Mail size={14} /> {selectedIds.length > 0 ? `選択${selectedIds.length}件へ一括メール` : "一括メール"}
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => !sending && setOpen(false)}>
           <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-ink flex items-center gap-2"><Mail size={16} /> 一括メール送信（現在の絞り込み対象）</h2>
+              <h2 className="font-semibold text-ink flex items-center gap-2">
+                <Mail size={16} /> 一括メール送信（{selectedIds.length > 0 ? `チェック選択 ${selectedIds.length}件` : "現在の絞り込み対象"}）
+              </h2>
               <button onClick={() => !sending && setOpen(false)} className="text-ink/40 hover:text-ink"><X size={18} /></button>
             </div>
 
@@ -104,6 +113,18 @@ export function BulkMailPanel({ filters }: { filters: LeadMailFilters }) {
                   <option key={t.id} value={t.id}>[{EMAIL_CATEGORY_LABEL[t.category] ?? t.category}] {t.name}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-ink/50">セグメント名（履歴・反応分析に表示。空欄なら自動命名）</label>
+              <input
+                value={segTitle}
+                onChange={(e) => setSegTitle(e.target.value)}
+                disabled={sending}
+                placeholder="例: AIDX展1日目・S/Aランクお礼"
+                maxLength={100}
+                className="input"
+              />
             </div>
 
             {loading && <p className="text-sm text-ink/50 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> 対象を確認中…</p>}
@@ -138,7 +159,12 @@ export function BulkMailPanel({ filters }: { filters: LeadMailFilters }) {
                 送信中… {progress.sent + progress.failed} / {progress.target} 件（このまま閉じずにお待ちください）
               </div>
             )}
-            {done && <p className="text-sm text-teal-deep flex items-center gap-1.5"><CheckCircle2 size={15} /> {done}</p>}
+            {done && (
+              <p className="text-sm text-teal-deep flex items-center gap-1.5">
+                <CheckCircle2 size={15} /> {done}
+                <a href="/app/email/segments" className="underline text-xs" target="_blank">送信履歴・反応分析を見る</a>
+              </p>
+            )}
 
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setOpen(false)} disabled={sending} className="btn-ghost text-sm">閉じる</button>

@@ -104,6 +104,21 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
   const router = useRouter();
   const [q, setQ] = useState(filters.q ?? "");
   const isInquiries = tabKey === "inquiries";
+  // チェックボックスによる対象の個別絞り込み(一括メールの対象指定に使う)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggleSelect = (id: string) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const pageIds = list.rows.map((r) => r.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const togglePage = () => setSelected((prev) => {
+    const next = new Set(prev);
+    if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+    else pageIds.forEach((id) => next.add(id));
+    return next;
+  });
 
   const go = (next: Partial<LeadsFilters>) => {
     const f = { ...filters, ...next };
@@ -149,8 +164,18 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
         {isInquiries && <Sel value={filters.media ?? ""} onChange={(v) => go({ media: v, page: 1 })} ph="流入元" opts={mediaOptions.map((m) => ({ id: m, name: m }))} />}
         <Sel value={filters.event ?? ""} onChange={(v) => go({ event: v, page: 1 })} ph={isInquiries ? "流入詳細" : "流入"} opts={events.map((e) => ({ id: e, name: evLabel(e) }))} />
         <Sel value={filters.disposition ?? ""} onChange={(v) => go({ disposition: v, page: 1 })} ph="決着" opts={LEAD_DISPOSITIONS.map((d) => ({ id: d.key, name: d.label }))} />
-        {!isInquiries && <Sel value={filters.rank ?? ""} onChange={(v) => go({ rank: v, page: 1 })} ph="ランク" opts={["S", "A", "B", "C", "D"].map((x) => ({ id: x, name: x }))} />}
-        {!isInquiries && <BulkMailPanel filters={{ q: filters.q, event: filters.event, disposition: filters.disposition, rank: filters.rank }} />}
+        {!isInquiries && <MultiRankSel value={filters.rank ?? ""} onChange={(v) => go({ rank: v, page: 1 })} />}
+        {!isInquiries && (
+          <BulkMailPanel
+            filters={{ q: filters.q, event: filters.event, disposition: filters.disposition, rank: filters.rank }}
+            selectedIds={[...selected]}
+          />
+        )}
+        {!isInquiries && selected.size > 0 && (
+          <button onClick={() => setSelected(new Set())} className="text-xs text-teal-deep underline">
+            {selected.size}件選択中（解除）
+          </button>
+        )}
         <span className="text-sm text-ink/50 ml-auto">{list.total}件</span>
       </div>
       <div className="card">
@@ -205,6 +230,9 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
         <table className="w-full">
           <thead className="border-b border-black/[0.06]">
             <tr>
+              <th className="th w-8">
+                <input type="checkbox" checked={allPageSelected} onChange={togglePage} title="このページを全選択/解除" className="accent-teal-primary" />
+              </th>
               <th className="th">会社 / 担当者</th>
               <th className="th">役職 / 規模</th>
               <th className="th">流入</th>
@@ -219,7 +247,10 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
           </thead>
           <tbody className="divide-y divide-black/[0.04]">
             {list.rows.map((r) => (
-              <tr key={r.id} className="row-hover">
+              <tr key={r.id} className={cn("row-hover", selected.has(r.id) && "bg-teal-light/20")}>
+                <td className="td">
+                  <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="accent-teal-primary" />
+                </td>
                 <td className="td max-w-[240px]">
                   <Link href={`/app/leads/${r.id}`} className="font-medium text-ink hover:text-teal-deep block truncate">{r.company}</Link>
                   <span className="text-xs text-ink/45 truncate block">{r.name}{r.rank && <span className="ml-1 pill bg-mist-soft text-ink/50 text-[9px]">{r.rank}</span>}</span>
@@ -249,7 +280,7 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
                 </td>
               </tr>
             ))}
-            {list.rows.length === 0 && <tr><td colSpan={10} className="td text-center text-ink/40 py-8">該当するリードがありません</td></tr>}
+            {list.rows.length === 0 && <tr><td colSpan={11} className="td text-center text-ink/40 py-8">該当するリードがありません</td></tr>}
           </tbody>
         </table>
         )}
@@ -715,6 +746,41 @@ function SortTh({ label, col, sortKey, sortDir, onSort }: { label: string; col: 
         <span className="text-[9px] leading-none">{active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}</span>
       </button>
     </th>
+  );
+}
+
+/** ランクの複数選択(チェックボックス式ドロップダウン)。値はCSV("S,A")でURL/サーバーへ渡す。 */
+function MultiRankSel({ value, onChange }: { value: string; onChange: (csv: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const picked = new Set(value.split(",").map((r) => r.trim()).filter(Boolean));
+  const toggle = (r: string) => {
+    const next = new Set(picked);
+    if (next.has(r)) next.delete(r); else next.add(r);
+    onChange(["S", "A", "B", "C", "D"].filter((x) => next.has(x)).join(","));
+  };
+  const label = picked.size === 0 ? "ランク：すべて" : `ランク：${["S", "A", "B", "C", "D"].filter((x) => picked.has(x)).join(",")}`;
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)} className={cn("rounded-xl border bg-white px-3 py-1.5 text-sm outline-none", picked.size > 0 ? "border-teal-primary text-teal-deep" : "border-black/10")}>
+        {label} ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute z-20 mt-1 w-40 rounded-xl border border-black/10 bg-white p-2 shadow-lg space-y-1">
+            {["S", "A", "B", "C", "D"].map((r) => (
+              <label key={r} className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-mist-soft/60 cursor-pointer text-sm">
+                <input type="checkbox" checked={picked.has(r)} onChange={() => toggle(r)} className="accent-teal-primary" />
+                {r}
+              </label>
+            ))}
+            {picked.size > 0 && (
+              <button onClick={() => { onChange(""); setOpen(false); }} className="w-full text-left px-2 py-1 text-xs text-ink/50 hover:text-ink">クリア</button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

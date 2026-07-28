@@ -62,6 +62,7 @@ export default async function EmailAnalyticsPage() {
       <div className="mb-4 flex flex-wrap gap-2">
         <Link href="/app/email/compose" className="btn-accent inline-flex items-center gap-1 text-sm"><PenSquare size={14} /> メールを作成</Link>
         <Link href="/app/email/history" className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/70">送信履歴</Link>
+        <Link href="/app/email/segments" className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/70">セグメント分析</Link>
         <Link href="/app/email/sequences" className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/70">シーケンス</Link>
       </div>
 
