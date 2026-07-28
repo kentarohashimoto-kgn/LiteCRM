@@ -5,6 +5,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, LinkButton, Card } from "@/components/ui/primitives";
 import { queryBusinessCards, getCardStats, getAccountIndustries, type CardListFilters } from "@/lib/data/business-cards";
 import { MatchRunButton } from "@/components/business-cards/match-run-button";
+import { ConvertToLeadsButton } from "@/components/business-cards/convert-to-leads-button";
 import { CardLinkCell } from "@/components/business-cards/card-link-cell";
 import { CardPrioritySelect } from "@/components/business-cards/card-priority-select";
 import { StickyGrid } from "@/components/ui/sticky-grid";
@@ -83,6 +84,7 @@ export default async function BusinessCardsPage({
         subtitle="メンバーが名刺交換したデータを組織で共有します。会社名・氏名・メールでCRM顧客と自動マッチングできます。"
         action={
           <div className="flex items-center gap-2">
+            <ConvertToLeadsButton tag={filters.tag || undefined} from={filters.from || undefined} />
             <MatchRunButton />
             <LinkButton href="/app/business-cards/import" variant="accent">
               <Upload size={15} className="mr-1 inline" />

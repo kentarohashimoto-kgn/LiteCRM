@@ -12,11 +12,13 @@ import { ROLE_LEVELS, NEEDS_OPTS, TIMING_OPTS, AUTHORITY_OPTS, BUDGET_OPTS, REVE
 import { formatDateFull } from "@/lib/utils";
 import { DocumentSection } from "@/components/documents/document-section";
 import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
+import { MAIL_TOUCH_LABEL, GRADE_DEFS, type PriorityGrade } from "@/lib/engagement";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 const TP_LABEL: Record<string, string> = {
   exhibition: "展示会で名刺交換", call: "架電ログ", seminar: "セミナー参加", survey: "アンケート回答",
   doc_request: "資料請求", meeting: "商談実施", meeting_repeat: "再商談", visit: "訪問", proposal: "見積・提案提出",
+  ...MAIL_TOUCH_LABEL, // メール反応(開封/クリック/資料閲覧/返信) — /api/cron/engagement が記録
 };
 const ENG_COLOR: Record<string, string> = {
   S: "bg-rose-100 text-rose-600", A: "bg-amber-100 text-amber-700", B: "bg-teal-light text-teal-deep",
@@ -32,6 +34,8 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
     lead_score?: number | null;
     lead_score_detail?: { size?: number; role?: number; issue?: number; timing?: number; fit?: number; auto_rank?: string } | null;
     first_contact_due_date?: string | null;
+    priority_grade?: PriorityGrade | null;
+    last_engaged_at?: string | null;
   };
   const converted = !!l.account_id || l.status === "converted";
   // E-1軽量化: workspace_full(2.1MB)ではなく、このリードに紐づく案件のみ直接取得
@@ -100,6 +104,11 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
             <span className="text-sm font-semibold text-ink">エンゲージメント</span>
             <span className={`pill text-sm font-bold ${ENG_COLOR[eng?.rank ?? "D"]}`}>{eng?.rank ?? "D"}</span>
             <span className="text-xs text-ink/50 tabular-nums">{eng?.score ?? 0} pt・接点 {eng?.touch_count ?? touchpoints.length} 件</span>
+            {sc.priority_grade && (
+              <span className="pill text-xs font-bold bg-rose-100 text-rose-700" title="Fit(属性)×Engagement(反応)の優先グレード">
+                {GRADE_DEFS[sc.priority_grade].label} — {GRADE_DEFS[sc.priority_grade].action}
+              </span>
+            )}
           </div>
           <span className="text-[11px] text-ink/40">名刺→架電→セミナー→アンケート→商談→提案…と接点が増えるほど高ランク</span>
         </div>

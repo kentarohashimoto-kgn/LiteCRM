@@ -28,11 +28,21 @@ export interface DeliverParams {
   contactId?: string | null;
   accountId?: string | null;
   opportunityId?: string | null;
+  leadId?: string | null;
   templateId?: string | null;
   sequenceEnrollmentId?: string | null;
   sequenceStep?: number | null;
   createActivity?: boolean;
+  /** 配信停止フッターを付ける(リード宛の一括送信では必須。特定電子メール法対応)。
+   *  フッターURLはクリック計測でラップしない(停止操作をエンゲージメント誤計上しないため)。 */
+  unsubscribeFooter?: boolean;
   baseUrl: string;
+}
+
+/** 配信停止フッター。リンクトークン割当の後に本文へ足すこと(計測ラップ回避)。 */
+function unsubscribeFooterText(baseUrl: string, openToken: string): string {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/track/u/${openToken}`;
+  return `\n\n――――――――――――――――\n本メールは、名刺交換・展示会・お問い合わせ等で接点をいただいた方にお送りしています。\n配信停止をご希望の方はこちら: ${url}`;
 }
 
 export type DeliverResult = { ok: true; id: string } | { ok: false; error: string; id?: string };
@@ -60,6 +70,7 @@ export async function deliverTrackedEmail(sb: SupabaseClient, p: DeliverParams):
     subject: p.subject.trim() || null, snippet: emailSnippet(p.body),
     to_addrs: [p.to], from_addr: p.from.email,
     contact_id: p.contactId ?? null, account_id: p.accountId ?? null, opportunity_id: p.opportunityId ?? null,
+    lead_id: p.leadId ?? null,
     template_id: p.templateId ?? null, activity_id: activityId,
     source: "compose", sent_via: p.authMethod === "google_oauth" ? "gmail_api" : "smtp", status: "queued",
     track_token: openToken,
@@ -73,7 +84,9 @@ export async function deliverTrackedEmail(sb: SupabaseClient, p: DeliverParams):
     await sb.from("email_links").insert(linkTokens.map((l) => ({ tenant_id: p.tenantId, email_message_id: messageRowId, token: l.token, url: l.url })));
   }
 
-  const html = buildTrackedHtml({ bodyText: p.body, baseUrl: p.baseUrl, openToken, linkTokens });
+  // フッターはリンクトークン割当(p.body基準)の後に足す=停止URLは計測ラップされない
+  const bodyOut = p.unsubscribeFooter ? p.body + unsubscribeFooterText(p.baseUrl, openToken) : p.body;
+  const html = buildTrackedHtml({ bodyText: bodyOut, baseUrl: p.baseUrl, openToken, linkTokens });
   const fromHeader = p.from.name ? `${p.from.name} <${p.from.email}>` : p.from.email;
   const bcc = p.bccSelf ? p.from.email : null;
 
@@ -81,13 +94,13 @@ export async function deliverTrackedEmail(sb: SupabaseClient, p: DeliverParams):
   if (p.authMethod === "google_oauth") {
     if (!p.oauthAccessToken) sent = { ok: false, error: "Googleアクセストークンがありません" };
     else {
-      const mime = buildMime({ from: fromHeader, to: p.to, bcc, subject: p.subject, text: p.body, html, messageId });
+      const mime = buildMime({ from: fromHeader, to: p.to, bcc, subject: p.subject, text: bodyOut, html, messageId });
       const r = await sendGmail(p.oauthAccessToken, mime);
       sent = r.ok ? { ok: true } : { ok: false, error: r.error };
     }
   } else {
     if (!p.smtp) sent = { ok: false, error: "SMTP設定がありません" };
-    else sent = await sendMail(p.smtp, { to: p.to, subject: p.subject, text: p.body, html, bcc, messageId });
+    else sent = await sendMail(p.smtp, { to: p.to, subject: p.subject, text: bodyOut, html, bcc, messageId });
   }
 
   if (!sent.ok) {

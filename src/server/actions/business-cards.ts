@@ -276,3 +276,95 @@ export async function deleteCardCommentAction(input: { commentId: string; cardId
   revalidatePath(`${LIST_PATH}/${input.cardId}`);
   return { ok: true };
 }
+
+export interface ConvertCardsResult {
+  ok: boolean;
+  created: number;
+  linkedExisting: number;
+  skippedConverted: number;
+  error?: string;
+}
+
+/**
+ * 名刺→リード化(D1: 展示会MVP)。指定タグ(イベント)・交換日以降の未リード化名刺をリードに変換し、
+ * 名刺に lead_id を紐付ける。同一メールの既存リードがあれば新規作成せずそのリードへ紐付け(重複防止)。
+ * 変換後は rescore_leads で Fit スコアを自動付与。
+ */
+export async function convertCardsToLeadsAction(input: { tag?: string; from?: string }): Promise<ConvertCardsResult> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const { normCompany, deriveRoleLevel } = await import("@/lib/lead-import");
+
+  let qy = sb
+    .from("business_cards")
+    .select("id, company_name, full_name, last_name, first_name, email, title, department, tel_direct, tel_company, mobile_phone, exchanged_on, rank, tags, memo")
+    .is("lead_id", null)
+    .limit(500);
+  const tag = (input.tag ?? "").trim();
+  if (tag) qy = qy.contains("tags", [tag]);
+  if (input.from) qy = qy.gte("exchanged_on", input.from);
+  const { data: cards, error } = await qy;
+  if (error) return { ok: false, created: 0, linkedExisting: 0, skippedConverted: 0, error: error.message };
+  if (!cards || cards.length === 0) return { ok: false, created: 0, linkedExisting: 0, skippedConverted: 0, error: "対象の名刺がありません（未リード化・タグ/期間一致）" };
+
+  // 同一メールの既存リードへは紐付けのみ(新規を作らない)
+  const emails = [...new Set(cards.map((c) => (c.email as string | null)?.toLowerCase()).filter(Boolean) as string[])];
+  const existingByEmail = new Map<string, string>();
+  for (let i = 0; i < emails.length; i += 200) {
+    const { data: ex } = await sb.from("leads").select("id, email").in("email", emails.slice(i, i + 200));
+    for (const l of ex ?? []) if (l.email) existingByEmail.set(String(l.email).toLowerCase(), l.id as string);
+  }
+
+  const rawEvent = tag || "名刺取込";
+  const today = new Date().toISOString().slice(0, 10);
+  let created = 0;
+  let linkedExisting = 0;
+  const seenInBatch = new Set<string>();
+  for (const c of cards) {
+    const email = (c.email as string | null)?.toLowerCase() ?? null;
+    const existing = email ? existingByEmail.get(email) : undefined;
+    if (existing) {
+      await sb.from("business_cards").update({ lead_id: existing }).eq("id", c.id);
+      linkedExisting++;
+      continue;
+    }
+    if (email) {
+      if (seenInBatch.has(email)) continue; // 同一バッチ内の同一メールは先頭のみ
+      seenInBatch.add(email);
+    }
+    const company = (c.company_name as string) ?? "";
+    const jobTitle = (c.title as string | null) ?? null;
+    const { data: ins, error: insErr } = await sb.from("leads").insert({
+      tenant_id: ctx.tenantId,
+      title: `${company || "(会社名なし)"} / ${rawEvent}`.slice(0, 200),
+      status: "new",
+      disposition: "untouched",
+      company_name: company || null,
+      company_norm: normCompany(company),
+      contact_name: (c.full_name as string) || null,
+      last_name: (c.last_name as string | null) ?? null,
+      first_name: (c.first_name as string | null) ?? null,
+      email,
+      phone: (c.tel_direct as string | null) ?? (c.tel_company as string | null) ?? null,
+      mobile_phone: (c.mobile_phone as string | null) ?? null,
+      department: (c.department as string | null) ?? null,
+      job_title: jobTitle,
+      role_level: deriveRoleLevel(jobTitle ?? undefined),
+      rank: (c.rank as string | null) ?? null,
+      raw_event: rawEvent,
+      notes: (c.memo as string | null) ?? null,
+      acquired_at: (c.exchanged_on as string | null) ?? today,
+    }).select("id").single();
+    if (insErr || !ins) continue;
+    await sb.from("business_cards").update({ lead_id: ins.id as string }).eq("id", c.id);
+    created++;
+  }
+
+  // Fit スコア付与(既存ランクは rescore_leads 側で保護される)
+  try { await sb.rpc("rescore_leads"); } catch { /* スコアは後から再実行ボタンでも可 */ }
+
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "cards.convert_to_leads", target: rawEvent, meta: { created, linkedExisting, tag, from: input.from ?? null }, ip: clientIp() });
+  revalidatePath(LIST_PATH);
+  revalidatePath("/app/leads");
+  return { ok: true, created, linkedExisting, skippedConverted: 0 };
+}

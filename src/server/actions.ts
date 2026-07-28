@@ -1142,7 +1142,7 @@ export async function importLeadsBatchAction(
   opts: { campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null; acquiredDate?: string | null; importBatchId?: string | null },
 ): Promise<{ inserted: number; error?: string }> {
   const ctx = await requireCtx();
-  if (!["owner", "admin", "sales_manager", "sales_rep", "external_sales"].includes(ctx.role)) {
+  if (!["owner", "admin", "sales_manager", "sales_rep", "external_sales", "inside_sales"].includes(ctx.role)) {
     return { inserted: 0, error: "権限がありません" };
   }
   const sb = getSupabaseServer();
@@ -1154,6 +1154,8 @@ export async function importLeadsBatchAction(
   if (error) return { inserted: 0, error: error.message };
   const tps = buildLeadTouchpoints(ctx.tenantId, data ?? []);
   if (tps.length) await sb.from("touchpoints").insert(tps);
+  // 取込直後にFitスコアを自動付与(展示会MVP: 取込→即スコア→一括お礼メールの前提)
+  try { await sb.rpc("rescore_leads"); } catch { /* 失敗時は一覧の再スコアリングボタンで再実行可 */ }
   revalidatePath("/app/leads");
   return { inserted: recs.length };
 }
@@ -1172,7 +1174,7 @@ export async function upsertLeadsBatchAction(
   opts: { campaignId?: string | null; leadSourceId?: string | null; rawEvent: string; base: number; eventDate?: string | null; acquiredDate?: string | null; importBatchId?: string | null },
 ): Promise<{ inserted: number; updated: number; error?: string }> {
   const ctx = await requireCtx();
-  if (!["owner", "admin", "sales_manager", "sales_rep", "external_sales"].includes(ctx.role)) {
+  if (!["owner", "admin", "sales_manager", "sales_rep", "external_sales", "inside_sales"].includes(ctx.role)) {
     return { inserted: 0, updated: 0, error: "権限がありません" };
   }
   const sb = getSupabaseServer();
@@ -1430,7 +1432,7 @@ async function promoteLeadCore(
 /** リードを案件化(手動ボタン)。 */
 export async function promoteLeadToOpportunityAction(leadId: string): Promise<{ ok: boolean; opportunityId: string | null }> {
   const ctx = await requireCtx();
-  if (!["owner", "admin", "sales_manager", "sales_rep", "external_sales"].includes(ctx.role)) {
+  if (!["owner", "admin", "sales_manager", "sales_rep", "external_sales", "inside_sales"].includes(ctx.role)) {
     return { ok: false, opportunityId: null };
   }
   const sb = getSupabaseServer();
