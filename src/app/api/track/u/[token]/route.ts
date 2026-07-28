@@ -18,6 +18,24 @@ function page(title: string, body: string) {
  * トークンは email_messages.track_token(送信ごとに一意)。以後の一括送信・シーケンスは
  * mail_suppressions を必ず突合して該当宛先をスキップする。
  */
+/** RFC8058 ワンクリック配信停止(List-Unsubscribe-Post)。メールクライアントの「配信停止」ボタンからのPOST。 */
+export async function POST(_req: Request, { params }: { params: { token: string } }) {
+  const token = (params.token ?? "").trim();
+  if (token) {
+    try {
+      const admin = getSupabaseAdmin();
+      const { data: msg } = await admin.from("email_messages").select("id, tenant_id, to_addrs").eq("track_token", token).maybeSingle();
+      const to = (msg?.to_addrs as string[] | null)?.[0]?.trim().toLowerCase();
+      if (msg && to) {
+        await admin.from("mail_suppressions").insert({
+          tenant_id: msg.tenant_id as string, email: to, reason: "unsubscribe", source_message_id: msg.id as string,
+        });
+      }
+    } catch { /* 冪等: 既登録・失敗でも200(クライアント仕様上リトライされるだけ) */ }
+  }
+  return new NextResponse(null, { status: 200 });
+}
+
 export async function GET(_req: Request, { params }: { params: { token: string } }) {
   const token = (params.token ?? "").trim();
   if (!token) return page("無効なリンクです", "URLが正しくありません。お手数ですが、メールに記載の送信者までご連絡ください。");
