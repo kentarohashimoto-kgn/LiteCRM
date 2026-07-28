@@ -18,6 +18,22 @@ import { logAudit, clientIp } from "@/lib/audit-events";
 
 const SEND_ROLES = ["owner", "admin", "sales_manager", "sales_rep", "external_sales", "partner", "inside_sales"];
 const MAX_PER_RUN = 300;
+/** 送信者1人あたりの日次上限(ドメイン評価・Gmail送信上限の保護。運用決定 2026-07-29)。 */
+const DAILY_CAP_PER_SENDER = 300;
+
+/** 送信者の本日(JST)の送信数。 */
+async function countTodaySent(userId: string): Promise<number> {
+  const sb = getSupabaseServer();
+  const jstDayStartUtc = new Date(Math.floor((Date.now() + 9 * 3600 * 1000) / 86400000) * 86400000 - 9 * 3600 * 1000).toISOString();
+  const { count } = await sb
+    .from("email_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("logged_by", userId)
+    .eq("direction", "out")
+    .in("status", ["sent", "queued"])
+    .gte("sent_at", jstDayStartUtc);
+  return count ?? 0;
+}
 
 export interface LeadMailFilters {
   q?: string;
@@ -125,6 +141,7 @@ export interface BulkMailPreview {
   sampleCompany?: string;
   senderName?: string;
   senderReady?: boolean;
+  dailyRemaining?: number;   // 本日の残り送信可能数(送信者単位・上限300/日)
 }
 
 /** テンプレ一覧(一括送信パネル用)。 */
@@ -141,10 +158,11 @@ export async function previewLeadBulkMailAction(filters: LeadMailFilters, templa
   if (!SEND_ROLES.includes(ctx.role)) return { ok: false, error: "送信権限がありません" };
   if (!templateId) return { ok: false, error: "テンプレートを選択してください" };
   const sb = getSupabaseServer();
-  const [{ data: tpl }, { data: acc }, r] = await Promise.all([
+  const [{ data: tpl }, { data: acc }, r, todaySent] = await Promise.all([
     sb.from("email_templates").select("subject_tmpl, body_tmpl").eq("id", templateId).maybeSingle(),
     sb.from("user_mail_accounts").select("status, from_name").eq("user_id", ctx.userId).maybeSingle(),
     resolveTargets(filters, templateId),
+    countTodaySent(ctx.userId),
   ]);
   if (!tpl) return { ok: false, error: "テンプレートが見つかりません" };
   const sample = r.targets[0];
@@ -166,6 +184,7 @@ export async function previewLeadBulkMailAction(filters: LeadMailFilters, templa
     sampleCompany: sample?.company || "",
     senderName: (acc?.from_name as string) || "",
     senderReady: acc?.status === "active",
+    dailyRemaining: Math.max(0, DAILY_CAP_PER_SENDER - todaySent),
   };
 }
 
@@ -242,7 +261,14 @@ export async function sendLeadBulkMailAction(
 
   const r = await resolveTargets(filters, templateId);
   if (r.targets.length === 0) return { ok: false, error: "送信対象がありません（メールなし/停止済み/送信済みを除外した結果0件）", batchId: opts?.batchId };
-  const batch = r.targets.slice(0, Math.min(Math.max(1, batchSize), 50));
+
+  // 日次上限(送信者単位・JST)。ドメイン評価とGmail送信上限の保護
+  const todaySent = await countTodaySent(ctx.userId);
+  const dailyRemaining = DAILY_CAP_PER_SENDER - todaySent;
+  if (dailyRemaining <= 0) {
+    return { ok: false, error: `本日の送信上限 ${DAILY_CAP_PER_SENDER}通 に達しました（本日 ${todaySent}通 送信済み）。明日再開するか、別の送信者アカウントで送信してください。`, batchId: opts?.batchId };
+  }
+  const batch = r.targets.slice(0, Math.min(Math.max(1, batchSize), 50, dailyRemaining));
 
   // セグメント履歴: 初回チャンクで作成(タイトル未指定は自動命名)。継続チャンクは同じ行へ積む
   let batchId = opts?.batchId ?? null;

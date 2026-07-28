@@ -152,6 +152,11 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
                     絞り込み一致 {preview.totalMatched}件 / メールなし {preview.noEmail} / アドレス重複 {preview.duplicateEmail} /
                     配信停止 {preview.suppressed} / 送信済み {preview.alreadySent} を除外
                   </p>
+                  {typeof preview.dailyRemaining === "number" && (
+                    <p className={`text-xs ${preview.dailyRemaining < (preview.sendable ?? 0) ? "text-amber-600 font-medium" : "text-ink/45"}`}>
+                      本日の残り送信枠: {preview.dailyRemaining}通（送信者ごとに1日300通まで。超える分は明日 or 別の送信者で）
+                    </p>
+                  )}
                   {!preview.senderReady && (
                     <p className="text-xs text-rose-600 font-medium">
                       ⚠ 送信メールアカウントが未接続です。<a href="/app/email/account" className="underline" target="_blank">メール設定</a>から接続してください。

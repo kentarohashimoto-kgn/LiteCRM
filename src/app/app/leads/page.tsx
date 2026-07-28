@@ -79,8 +79,11 @@ export default async function LeadsPage({
         subtitle="展示会・セミナーのリストを優先度付けし、架電→アポ獲得まで管理・分析します。"
         action={
           <div className="flex items-center gap-2">
+            <LinkButton href="/app/leads/scoring" variant="ghost">
+              <Gauge size={16} /> スコア設計
+            </LinkButton>
             <form action={rescoreAllLeadsAction}>
-              <button type="submit" className="btn-ghost inline-flex items-center gap-1.5" title="全リードをスコアリング(要件書4.10)。ランクは未設定のみ自動補完">
+              <button type="submit" className="btn-ghost inline-flex items-center gap-1.5" title="全リードを現在のルールでスコアリング。手動設定ランクは保持">
                 <Gauge size={16} /> 再スコアリング
               </button>
             </form>
