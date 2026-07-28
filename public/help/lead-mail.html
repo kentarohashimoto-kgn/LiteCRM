@@ -1,0 +1,245 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>リード→アポ獲得 実践マニュアル（取込・一括メール・反応スコア・通知）</title>
+<style>
+:root{--ink:#1b2733;--mut:#5f6f7e;--line:#e4e9ef;--accent:#0f766e;--accent2:#0b5c55;--violet:#7c3aed;--bg:#f7f9fb;--hot:#e11d48;--warm:#d97706;--cool:#0f766e}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;color:var(--ink);background:var(--bg);line-height:1.75}
+.wrap{max-width:1100px;margin:0 auto;background:#fff}
+header.hero{padding:48px 40px 36px;background:linear-gradient(135deg,#0f766e,#0b5c55);color:#fff}
+header.hero h1{margin:0;font-size:25px;letter-spacing:-.01em}
+header.hero .s{margin-top:10px;font-size:14px;opacity:.92;line-height:1.9}
+.pill{display:inline-block;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:3px 12px;font-size:12px;margin:2px 4px 2px 0}
+main{padding:8px 40px 72px}
+.toc{background:#fbfdfe;border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:26px 0}
+.toc h2{margin:0 0 10px;font-size:14px;color:var(--accent)}
+.toc ol{margin:0;padding-left:20px;columns:2;column-gap:34px;font-size:13px}
+.toc a{color:var(--ink);text-decoration:none}
+.toc a:hover{color:var(--accent);text-decoration:underline}
+h2.grp{font-size:19px;margin:44px 0 10px;padding-top:14px;border-top:3px solid var(--accent);color:var(--accent2)}
+h3{font-size:15px;margin:22px 0 8px;color:var(--accent2)}
+p{font-size:14px;margin:8px 0}
+ul,ol{font-size:13.5px;color:#2b3a47}
+li{margin:4px 0}
+table.t{border-collapse:collapse;width:100%;font-size:13px;margin:12px 0}
+table.t th,table.t td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+table.t th{background:#f0fbf9;color:var(--accent2);font-weight:700}
+.tip{margin:12px 0;font-size:12.5px;background:#f0fbf9;border:1px solid #cdeae6;border-radius:8px;padding:9px 12px;color:#0b5c55}
+.warn{margin:12px 0;font-size:12.5px;background:#fff7ed;border:1px solid #fde3c4;border-radius:8px;padding:9px 12px;color:#b45309}
+.mono{font-family:ui-monospace,monospace;background:#f4f7f9;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:12.5px;white-space:pre-wrap;color:#233}
+/* ---- フロー図 ---- */
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;margin:16px 0}
+.flow .st{flex:1 1 150px;min-width:150px;background:#fbfdfe;border:1.5px solid var(--accent);border-radius:12px;padding:12px 14px;position:relative;margin-right:26px;margin-bottom:10px}
+.flow .st:last-child{margin-right:0}
+.flow .st::after{content:"▶";position:absolute;right:-21px;top:50%;transform:translateY(-50%);color:var(--accent);font-size:13px}
+.flow .st:last-child::after{content:""}
+.flow .st .no{display:inline-block;background:var(--accent);color:#fff;border-radius:999px;font-size:11px;padding:1px 8px;margin-bottom:5px}
+.flow .st b{display:block;font-size:13.5px}
+.flow .st span{display:block;font-size:11.5px;color:var(--mut);margin-top:3px;line-height:1.6}
+.flow .st.hot{border-color:var(--hot)} .flow .st.hot .no{background:var(--hot)} .flow .st.hot::after{color:var(--hot)}
+/* ---- マトリクス ---- */
+table.mx{border-collapse:collapse;margin:12px 0;font-size:13px;width:100%}
+table.mx th,table.mx td{border:1px solid var(--line);padding:10px 12px;text-align:center}
+table.mx th{background:#f0fbf9;color:var(--accent2)}
+table.mx td b{display:block;font-size:14px}
+table.mx td span{font-size:11px;color:var(--mut)}
+.p1{background:#ffe4e6;color:#9f1239} .p2{background:#fef3c7;color:#92400e}
+.p3{background:#ccfbf1;color:#0f766e} .p4{background:#f1f5f9;color:#475569} .p5{background:#f8fafc;color:#94a3b8}
+/* ---- 点数バー ---- */
+.wbar{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:13px}
+.wbar .lbl{width:150px;flex-shrink:0}
+.wbar .bar{height:16px;border-radius:4px;background:var(--accent);min-width:8px}
+.wbar .pt{color:var(--mut);font-size:12px}
+/* ---- メール構造図 ---- */
+.mail{border:1.5px solid var(--line);border-radius:12px;max-width:560px;margin:14px 0;overflow:hidden;font-size:12.5px}
+.mail .row{padding:9px 14px;border-bottom:1px dashed var(--line);display:flex;gap:10px;align-items:baseline}
+.mail .row:last-child{border-bottom:0}
+.mail .tag{flex-shrink:0;font-size:10.5px;border-radius:999px;padding:1px 9px;white-space:nowrap}
+.tag.var{background:#f7f2ff;color:var(--violet);border:1px solid #e0d4ff}
+.tag.fix{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}
+.tag.auto{background:#f0fbf9;color:var(--accent2);border:1px solid #cdeae6}
+.foot{padding:30px 40px;color:var(--mut);font-size:12px;border-top:1px solid var(--line);background:#fbfdfe}
+@media(max-width:860px){.toc ol{columns:1}main{padding:8px 20px 60px}header.hero{padding:36px 20px}}
+</style></head><body><div class="wrap">
+<header class="hero">
+<h1>リード→アポ獲得 実践マニュアル</h1>
+<div class="s">展示会・名刺のリードを取り込み、優先順位を付け、一括お礼メールを送り、反応した相手にすぐ電話する——そのすべての操作と仕組み。<br>
+<span class="pill">対象：インサイドセールス・営業・管理者</span>
+<span class="pill">関連画面：リード / 名刺情報 / メール / 今日のアポ・AC</span>
+<span class="pill">2026-07 展示会MVP対応版</span>
+</div></header>
+<main>
+
+<div class="toc">
+<h2>目次</h2>
+<ol>
+<li><a href="#flow">全体フロー（1枚図）</a></li>
+<li><a href="#import">リードの取込（2つの入口）</a></li>
+<li><a href="#score">優先順位付けの仕組み（2軸スコア）</a></li>
+<li><a href="#matrix">優先グレード P1〜P5（マトリクス）</a></li>
+<li><a href="#mail">一括メールの送り方（絞り込み・チェック選択）</a></li>
+<li><a href="#template">メールテンプレ — どこが自動で変わるか</a></li>
+<li><a href="#react">反応の計測とスコア加点</a></li>
+<li><a href="#notify">閾値を超えた時のアクション・通知</a></li>
+<li><a href="#segment">セグメント履歴・流入別分析の見方</a></li>
+<li><a href="#optout">配信停止と法令対応（必読）</a></li>
+</ol>
+</div>
+
+<h2 class="grp" id="flow">1. 全体フロー（1枚図）</h2>
+<p>リード獲得からアポまでは、次の6ステップが自動と手動を織り交ぜて流れます。<b>人がやるのは「取込」「送信ボタン」「電話」だけ</b>で、優先順位付け・計測・通知はシステムが行います。</p>
+<div class="flow">
+<div class="st"><span class="no">1 手動</span><b>リード取込</b><span>展示会CSV or 名刺→リード化。取込と同時にFitスコア自動付与</span></div>
+<div class="st"><span class="no">2 自動</span><b>優先順位付け</b><span>Fit(属性)×Engagement(反応)でP1〜P5のグレード判定</span></div>
+<div class="st"><span class="no">3 手動</span><b>一括お礼メール</b><span>絞り込み or チェック選択→テンプレ差し込み→送信</span></div>
+<div class="st"><span class="no">4 自動</span><b>反応の計測</b><span>開封・クリック・資料閲覧・返信を15分ごとにスコア化</span></div>
+<div class="st hot"><span class="no">5 自動</span><b>ホット通知</b><span>ベル通知＋Chat DM。「今日のアポ・AC」の🔥リストにも表示</span></div>
+<div class="st hot"><span class="no">6 手動</span><b>架電→アポ</b><span>通知から2タップで発信。アポが取れたら「案件化」</span></div>
+</div>
+<div class="tip">💡 鉄則：<b>開封・クリックの通知が来たら、その場で電話</b>。相手が今まさにこちらを見ているタイミングが最も繋がりやすく、話が早い。</div>
+
+<h2 class="grp" id="import">2. リードの取込（2つの入口）</h2>
+<h3>入口A：展示会リストのCSV取込</h3>
+<ol>
+<li><b>リード</b> 画面右上の「<b>取込</b>」→ CSVをアップロード</li>
+<li>列マッピングを確認（会社名・氏名・メール・役職などは自動で対応付け。手で修正も可能）</li>
+<li>流入イベント名（例: AIDX展）と獲得日を指定して実行</li>
+<li>取込完了と同時に<b>全リードへFitスコアとランク(S〜D)が自動付与</b>される</li>
+</ol>
+<h3>入口B：名刺（Eight等）→リード化</h3>
+<ol>
+<li><b>名刺情報</b> 画面で「名刺を取込」（Eight CSVなど）</li>
+<li>タグ（展示会名）や交換日で絞り込む</li>
+<li>右上の「<b>リード化</b>」ボタン → 未リード化の名刺がまとめてリードに変換される</li>
+</ol>
+<table class="t">
+<tr><th>リード化の挙動</th><th>内容</th></tr>
+<tr><td>重複防止</td><td>同じメールアドレスのリードが既にある場合は<b>新規作成せず既存リードへ紐付け</b>（二重アプローチを防ぐ）</td></tr>
+<tr><td>引き継ぐ情報</td><td>会社・氏名・メール・電話・部署・役職・交換日・メモ・ランク</td></tr>
+<tr><td>スコア</td><td>変換後に自動でFitスコアを付与</td></tr>
+</table>
+
+<h2 class="grp" id="score">3. 優先順位付けの仕組み（2軸スコア）</h2>
+<p>1つの点数に混ぜると「大企業だが無反応」と「小規模だが今すぐ客」が同点になってしまうため、<b>2つの軸を分けて</b>持っています。</p>
+<h3>軸1：Fitスコア（属性の良さ・0〜100点）— 登録情報から自動計算</h3>
+<table class="t">
+<tr><th>観点</th><th>配点</th><th>判定材料</th></tr>
+<tr><td>規模</td><td>20</td><td>従業員数（1000名以上=20 / 300以上=15 / 100以上=10 / 30以上=5）</td></tr>
+<tr><td>役職</td><td>20</td><td>役員クラス=20 / 部課長=10（役職名から自動判定）</td></tr>
+<tr><td>課題</td><td>25</td><td>ニーズの強さ（高=25 / 中=12）</td></tr>
+<tr><td>時期</td><td>15</td><td>導入時期（今すぐ=15 / 近々=10）</td></tr>
+<tr><td>予算</td><td>20</td><td>予算の有無（あり=20 / 検討中=10）</td></tr>
+</table>
+<p>合計点でランクが決まります：<b>S(80+) / A(65+) / B(50+) / C(35+) / D</b>。手動で設定したランクは自動計算で上書きされません。内訳（なぜこの点数か）はリード詳細に表示されます。</p>
+<h3>軸2：Engagementスコア（行動の熱さ）— メール反応・接点から自動加点</h3>
+<div class="wbar"><span class="lbl">メール開封</span><span class="bar" style="width:24px"></span><span class="pt">+1（同じメールは1日1回まで）</span></div>
+<div class="wbar"><span class="lbl">リンククリック</span><span class="bar" style="width:72px"></span><span class="pt">+3</span></div>
+<div class="wbar"><span class="lbl">資料閲覧（PDF/Driveリンク）</span><span class="bar" style="width:120px"></span><span class="pt">+5</span></div>
+<div class="wbar"><span class="lbl">メール返信</span><span class="bar" style="width:192px;background:var(--hot)"></span><span class="pt">+8（最強のシグナル）</span></div>
+<p>このほか、セミナー参加・展示会名刺交換・架電などの接点も加点されます。合計点でエンゲージランク：<b>S(30+) / A(15+) / B(7+) / C(3+) / D</b>。</p>
+<div class="tip">💡 テンプレの資料リンクを<b>PDFまたはGoogle DriveのURL</b>にすると、クリックが「資料閲覧(+5)」として高く評価され、ホット検知の精度が上がります。</div>
+
+<h2 class="grp" id="matrix">4. 優先グレード P1〜P5（マトリクス）</h2>
+<p>2つの軸を掛け合わせて、<b>「今日誰に何をするか」</b>を1つのグレードに落とします。リード詳細・🔥リストに表示されます。</p>
+<table class="mx">
+<tr><th style="width:170px"></th><th>反応 高（15pt以上）</th><th>反応 中（3pt以上）</th><th>反応 なし（3pt未満）</th></tr>
+<tr><th>Fit S/A（65点以上）</th><td class="p1"><b>P1 今すぐ</b><span>本日中に架電</span></td><td class="p2"><b>P2 今週</b><span>今週中に接触（架電優先）</span></td><td class="p3"><b>P3 育成</b><span>メール中心でナーチャリング</span></td></tr>
+<tr><th>Fit B（50点以上）</th><td class="p2"><b>P2 今週</b><span>今週中に接触</span></td><td class="p3"><b>P3 育成</b><span>標準フォロー</span></td><td class="p4"><b>P4 低頻度</b><span>低頻度メールのみ</span></td></tr>
+<tr><th>Fit C/D・不明</th><td class="p3"><b>P3 育成</b><span>メールで反応を確認</span></td><td class="p4"><b>P4 低頻度</b><span>低頻度メールのみ</span></td><td class="p5"><b>P5 見直し</b><span>四半期見直しで対象外検討</span></td></tr>
+</table>
+<p>考え方：<b>属性が良くても無反応なら追いかけ過ぎない（P3）。属性が低くても反応があれば低コストで確認する（P3）。両方揃った相手（P1）に電話の時間を集中する。</b></p>
+
+<h2 class="grp" id="mail">5. 一括メールの送り方</h2>
+<h3>手順</h3>
+<ol>
+<li><b>リード</b> 画面のリード一覧タブで対象を絞り込む
+  <ul>
+  <li><b>流入</b>（展示会名）、<b>決着</b>、<b>ランク</b>で絞る。ランクは<b>複数選択可</b>（例: SとAだけ）</li>
+  <li>さらに細かく選びたい時は、行頭の<b>チェックボックス</b>で対象を個別に選ぶ（ヘッダーのチェックでページ全選択）。チェックがある場合は<b>チェックした相手だけ</b>に送られます</li>
+  </ul></li>
+<li>「<b>✉️ 一括メール</b>」ボタン → テンプレートを選択</li>
+<li><b>セグメント名</b>を入力（例:「AIDX展1日目・S/Aランクお礼」。後の反応分析でこの名前で集計されます。空欄なら自動命名）</li>
+<li>対象内訳と差し込みプレビューを確認 → 「N件に送信」</li>
+</ol>
+<h3>送信前に自動で除外されるもの（安全ガード）</h3>
+<table class="t">
+<tr><th>除外対象</th><th>理由</th></tr>
+<tr><td>メールアドレスなし・形式不正</td><td>送れないため（電話でアプローチ）</td></tr>
+<tr><td>同一アドレスの重複</td><td>同じ人に2通送らない（優先度の高い方だけ残す）</td></tr>
+<tr><td>配信停止済み</td><td>本人が停止を希望（法令対応。解除は管理者へ）</td></tr>
+<tr><td>同じテンプレを送信済み</td><td>再実行しても二重送信にならない（安心して押し直せる）</td></tr>
+</table>
+<p>1回の送信は最大300件。20件ずつ順に送られ、画面に進捗が表示されます。途中でエラーが出ても送信済み分は記録され、再実行すると残りだけが送られます。</p>
+
+<h2 class="grp" id="template">6. メールテンプレ — どこが自動で変わるか</h2>
+<p>テンプレは <b>メール → テンプレート</b> で編集します。1通のメールは次の3種類の部品でできています。</p>
+<div class="mail">
+<div class="row"><span class="tag var">自動で変わる</span><span>件名・本文中の <b>{contact}</b>（相手の氏名）・<b>{company}</b>（会社名）・<b>{sender}</b>（差出人名）が、リードごとに差し込まれる</span></div>
+<div class="row"><span class="tag fix">固定（自分で書く）</span><span>挨拶文・展示会名・案内文・<b>資料リンクのURL</b>など、テンプレに書いた本文はそのまま送られる</span></div>
+<div class="row"><span class="tag auto">システムが自動付与</span><span>開封計測（見えない1pxの画像）／クリック計測（URLの自動ラップ）／<b>配信停止フッター</b>。テンプレに書く必要はなく、消すこともできない</span></div>
+</div>
+<table class="t">
+<tr><th>差し込み変数</th><th>展開される内容</th><th>データ元</th></tr>
+<tr><td class="mono" style="border:0;background:none;padding:4px 11px">{contact}</td><td>相手の氏名（例: 山田 太郎）</td><td>リードの担当者名</td></tr>
+<tr><td class="mono" style="border:0;background:none;padding:4px 11px">{company}</td><td>会社名（例: 株式会社〇〇）</td><td>リードの会社名</td></tr>
+<tr><td class="mono" style="border:0;background:none;padding:4px 11px">{sender}</td><td>差出人名（例: 橋本 健太郎）</td><td>メール送信アカウントの差出人名</td></tr>
+</table>
+<div class="warn">⚠ 変数のスペルを間違えると（例: {contct}）そのまま文字として送られます。送信前のプレビューで、先頭リードでの実際の差し込み結果を必ず確認してください。</div>
+
+<h2 class="grp" id="react">7. 反応の計測とスコア加点</h2>
+<p>送信後、相手の行動は次の流れで自動的にスコアへ変わります（<b>15分間隔</b>で処理）。</p>
+<div class="flow">
+<div class="st"><span class="no">相手の行動</span><b>開封・クリック・返信</b><span>メール内の計測が反応を検知</span></div>
+<div class="st"><span class="no">15分ごと</span><b>スコア加点</b><span>+1〜+8を接点履歴に記録（同じ反応は二重計上しない）</span></div>
+<div class="st"><span class="no">同時</span><b>グレード再判定</b><span>Fit×Engagementのマトリクスを再計算</span></div>
+<div class="st hot"><span class="no">条件一致</span><b>通知</b><span>ベル＋Chat DM＋🔥リスト</span></div>
+</div>
+<ul>
+<li>反応の履歴は<b>リード詳細のエンゲージメント欄</b>に「メール開封 +1」「資料閲覧 +5」のように日付つきで並びます</li>
+<li>開封はメールソフトの仕様上<b>近似値</b>です（画像を表示しない相手は検知できない）。クリック・返信は確実に取れるため、重み付けもクリック・返信を重くしています</li>
+<li>返信はシーケンス（多段フォロー）の<b>自動停止条件</b>にもなります（返信をくれた人に機械的な追客を続けない）</li>
+</ul>
+
+<h2 class="grp" id="notify">8. 閾値を超えた時のアクション・通知</h2>
+<table class="t">
+<tr><th>何が起きたら</th><th>どこに通知されるか</th><th>あなたがすること</th></tr>
+<tr><td>リンククリック / 資料閲覧 / 返信</td><td>アプリ内ベル通知 ＋ <b>Google Chat DM</b>（Chat連携済みの人）</td><td><b>今すぐ架電</b>。相手が見ているその瞬間が最も繋がる</td></tr>
+<tr><td>メール開封のみ</td><td>アプリ内ベル通知のみ（通知疲れ防止のためDMは送らない）</td><td>🔥リストで様子見。他の反応が重なったら架電</td></tr>
+<tr><td>スコアが閾値(15pt)を超え <b>P1昇格</b></td><td>「🔥 〇〇社がP1(今すぐ対応)に昇格」がベル＋Chat DMに</td><td><b>本日中に架電</b>。P1は今日のTOP優先</td></tr>
+</table>
+<ul>
+<li>通知は<b>リードの担当者</b>に届きます。担当者が未設定のリードは、owner / admin / インサイドセールスのロールを持つ全員に届きます</li>
+<li>通知を開くとリード詳細へ直行 → 電話番号の「発信」からワンタップで架電できます</li>
+<li>反応のあった直近48時間のリードは、<b>今日のアポ・AC</b> 画面上部の「<b>🔥 反応のあったリード</b>」に理由つきで常時表示されます（通知を見逃してもここで拾える）</li>
+</ul>
+
+<h2 class="grp" id="segment">9. セグメント履歴・流入別分析の見方</h2>
+<p><b>メール → セグメント分析</b>（またはテンプレート画面の「セグメント分析」ボタン）で開きます。</p>
+<h3>① 送信セグメント履歴</h3>
+<p>一括送信1回 = 1セグメントとして自動記録されます。</p>
+<div class="mono">例:  7/29 18:02   AIDX展1日目・S/Aランクお礼   送信20件   開封率 55%   クリック率 20%   返信率 5%</div>
+<ul>
+<li>送信時に付けた<b>セグメント名</b>・テンプレ・実行者・送信/失敗数・<b>開封率/クリック率/返信率</b>が1行で見えます</li>
+<li>「1日目と2日目でお礼文面を変えたらどちらが反応が良いか」のような<b>文面・タイミングの比較</b>に使ってください</li>
+</ul>
+<h3>② 流入別の反応・アクション状況</h3>
+<p>展示会・セミナーなど<b>流入（取込イベント）ごと</b>に、リード数 → メール送信 → 開封/クリック/返信 → 架電着手率 → アポ → 商談化 のファネルを横断で見ます。</p>
+<ul>
+<li><b>反応率が高い流入</b> = 見込みの濃いリスト。架電の時間をここに寄せる</li>
+<li><b>架電着手率が低い流入</b> = フォロー漏れ。リストの消化を優先する</li>
+<li>展示会の出展判断（来年も出るか）の材料としても使えます</li>
+</ul>
+
+<h2 class="grp" id="optout">10. 配信停止と法令対応（必読）</h2>
+<ul>
+<li>一括送信・シーケンスの全メールに<b>配信停止リンク付きのフッターが自動で付きます</b>（特定電子メール法対応）。テンプレに書く必要はありません</li>
+<li>相手が停止リンクを押すと即座に停止リストへ登録され、以後の一括送信・シーケンス・個別送信すべてから<b>自動で除外</b>されます</li>
+<li>停止された相手に手動で送ることもできません（送信時にブロックされます）</li>
+<li>誤って自分でテスト中に停止してしまった場合は管理者に解除を依頼してください</li>
+</ul>
+<div class="warn">⚠ 一括メールは「接点をいただいた方へのご案内」が前提です。接点のない購入リスト等への送信は行わないでください（法令リスクに加え、送信元ドメインの評価が下がり全メールが届きにくくなります）。</div>
+
+</main>
+<div class="foot">CATORCE Sales OS — リード→アポ獲得 実践マニュアル ／ 設計: docs/LEAD_TO_APPOINTMENT_DESIGN_2026-07.md ／ 2026-07-29 初版</div>
+</div></body></html>

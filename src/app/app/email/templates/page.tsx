@@ -67,6 +67,9 @@ export default async function EmailTemplatesPage({ searchParams }: { searchParam
         <Link href="/app/email/history" className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/70">
           <History size={14} /> 送信履歴
         </Link>
+        <Link href="/app/email/segments" className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/70">
+          <BarChart3 size={14} /> セグメント分析
+        </Link>
         <Link href="/app/email/account" className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/70">
           <Plug size={14} /> メール送信アカウント接続
         </Link>

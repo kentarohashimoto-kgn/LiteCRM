@@ -1,4 +1,4 @@
-import { BookOpen, Presentation, GraduationCap, ExternalLink, ArrowRight } from "lucide-react";
+import { BookOpen, Presentation, GraduationCap, ExternalLink, ArrowRight, Flame } from "lucide-react";
 import { requireCtx } from "@/lib/session";
 import { PageHeader, Section } from "@/components/ui/primitives";
 
@@ -25,6 +25,16 @@ const DOCS = [
     lead: "実際の画面キャプチャ付きで、全メニューの操作を網羅した詳細マニュアルです。",
     points: ["ホーム／案件／顧客／分析／レビュー", "バックオフィス／人事／設定", "用語集・ロール別の表示メニュー"],
     meta: "リファレンス ／ 画面目次から検索",
+  },
+  {
+    href: "/help/lead-mail.html",
+    icon: Flame,
+    tag: "リード→アポ獲得",
+    tagCls: "bg-rose-500 text-white",
+    title: "リード→アポ獲得 実践マニュアル",
+    lead: "展示会リードの取込〜一括お礼メール〜反応スコア〜ホット通知〜架電までを、フロー図・マトリクス付きで説明します。",
+    points: ["取込2経路とFit×Engagementの優先グレード", "一括メールの送り方・テンプレの可変部分", "反応の点数・通知の条件・セグメント分析"],
+    meta: "図解リファレンス ／ IS・営業向け",
   },
   {
     href: "/help/onboarding.html",

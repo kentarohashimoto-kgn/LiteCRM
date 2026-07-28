@@ -29,6 +29,7 @@ export interface DeliverParams {
   accountId?: string | null;
   opportunityId?: string | null;
   leadId?: string | null;
+  mailBatchId?: string | null;   // 一括送信セグメント(lead_mail_batches)への紐付け
   templateId?: string | null;
   sequenceEnrollmentId?: string | null;
   sequenceStep?: number | null;
@@ -70,7 +71,7 @@ export async function deliverTrackedEmail(sb: SupabaseClient, p: DeliverParams):
     subject: p.subject.trim() || null, snippet: emailSnippet(p.body),
     to_addrs: [p.to], from_addr: p.from.email,
     contact_id: p.contactId ?? null, account_id: p.accountId ?? null, opportunity_id: p.opportunityId ?? null,
-    lead_id: p.leadId ?? null,
+    lead_id: p.leadId ?? null, mail_batch_id: p.mailBatchId ?? null,
     template_id: p.templateId ?? null, activity_id: activityId,
     source: "compose", sent_via: p.authMethod === "google_oauth" ? "gmail_api" : "smtp", status: "queued",
     track_token: openToken,
