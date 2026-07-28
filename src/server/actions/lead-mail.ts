@@ -119,6 +119,11 @@ export interface BulkMailPreview {
   capped?: boolean;
   sampleSubject?: string;
   sampleBody?: string;
+  subjectTmpl?: string;      // テンプレ原文(送信前の直接編集の初期値)
+  bodyTmpl?: string;
+  sampleContact?: string;    // 差し込みプレビュー用の先頭リード
+  sampleCompany?: string;
+  senderName?: string;
   senderReady?: boolean;
 }
 
@@ -155,6 +160,11 @@ export async function previewLeadBulkMailAction(filters: LeadMailFilters, templa
     capped: r.capped,
     sampleSubject: renderEmailTemplate(tpl.subject_tmpl as string, vars),
     sampleBody: renderEmailTemplate(tpl.body_tmpl as string, vars),
+    subjectTmpl: tpl.subject_tmpl as string,
+    bodyTmpl: tpl.body_tmpl as string,
+    sampleContact: sample?.name || "",
+    sampleCompany: sample?.company || "",
+    senderName: (acc?.from_name as string) || "",
     senderReady: acc?.status === "active",
   };
 }
@@ -179,7 +189,13 @@ export async function sendLeadBulkMailAction(
   filters: LeadMailFilters,
   templateId: string,
   batchSize = 20,
-  opts?: { batchId?: string; segmentTitle?: string },
+  opts?: {
+    batchId?: string;
+    segmentTitle?: string;
+    /** 送信直前の直接編集(全宛先に適用。{contact}等の差し込み変数は使用可)。未指定はテンプレの内容 */
+    subjectTmpl?: string;
+    bodyTmpl?: string;
+  },
 ): Promise<BulkMailResult> {
   const ctx = await requireCtx();
   if (ctx.isPresentation) return { ok: false, error: "プレゼンモード中はメール送信できません" };
@@ -190,6 +206,9 @@ export async function sendLeadBulkMailAction(
   const sb = getSupabaseServer();
   const { data: tpl } = await sb.from("email_templates").select("id, subject_tmpl, body_tmpl").eq("id", templateId).maybeSingle();
   if (!tpl) return { ok: false, error: "テンプレートが見つかりません" };
+  // 送信直前の直接編集(件名・本文)。空文字は「編集で消した」と区別できないため、値がある時だけ上書き
+  const subjectTmpl = (opts?.subjectTmpl ?? "").trim() || (tpl.subject_tmpl as string);
+  const bodyTmpl = (opts?.bodyTmpl ?? "").trim() ? (opts?.bodyTmpl as string) : (tpl.body_tmpl as string);
 
   const { data: acc } = await sb
     .from("user_mail_accounts")
@@ -250,8 +269,8 @@ export async function sendLeadBulkMailAction(
       ...authArgs,
       bccSelf: false, // 一括送信でBCC自分は受信箱が溢れるため常時OFF
       to: t.email,
-      subject: renderEmailTemplate(tpl.subject_tmpl as string, vars),
-      body: renderEmailTemplate(tpl.body_tmpl as string, vars),
+      subject: renderEmailTemplate(subjectTmpl, vars),
+      body: renderEmailTemplate(bodyTmpl, vars),
       leadId: t.id, templateId, mailBatchId: batchId,
       createActivity: false,
       unsubscribeFooter: true,
