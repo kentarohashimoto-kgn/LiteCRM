@@ -21,8 +21,15 @@ import { RecentList } from "@/components/layout/recent-items";
 
 // ボトムナビ: 外出先で最も使う導線に絞る(残りはメニューから)
 const salesTabs: NavItem[] = [
-  { href: "/app/dashboard", label: "ホーム", icon: LayoutDashboard },
+  { href: "/app/mypage", label: "ホーム", icon: LayoutDashboard },
   { href: "/app/today", label: "今日", icon: Sun },
+  { href: "/app/opportunities", label: "案件", icon: Target },
+  { href: "/app/tasks", label: "タスク", icon: CheckSquare },
+];
+// インサイドセールス: アポ登録と案件確認に絞る
+const insideSalesTabs: NavItem[] = [
+  { href: "/app/mypage", label: "ホーム", icon: LayoutDashboard },
+  { href: "/app/appointments/new", label: "アポ登録", icon: CalendarCheck },
   { href: "/app/opportunities", label: "案件", icon: Target },
   { href: "/app/tasks", label: "タスク", icon: CheckSquare },
 ];
@@ -41,7 +48,7 @@ export function MobileNav({ role }: { role: Role }) {
   const [open, setOpen] = useState(false);
   const navGroups = navGroupsFor(role);
   const boOnly = isBackOfficeOnly(role);
-  const tabs = boOnly ? boTabs : salesTabs;
+  const tabs = boOnly ? boTabs : role === "inside_sales" ? insideSalesTabs : salesTabs;
 
   // 画面遷移したらドロワーを閉じる
   useEffect(() => {

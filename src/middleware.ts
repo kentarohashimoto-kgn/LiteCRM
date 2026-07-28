@@ -47,7 +47,7 @@ export async function middleware(request: NextRequest) {
   }
   if (user && isLogin) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/app/dashboard";
+    redirectUrl.pathname = "/app/mypage";
     return NextResponse.redirect(redirectUrl);
   }
 
