@@ -104,6 +104,18 @@ export async function GET(req: Request) {
     const alreadySent = !!existing?.length;
 
     if (!alreadySent) {
+      // 配信停止(サプレッション)突合: 停止済み宛先はシーケンスごと停止(特電法対応・0172)
+      const { data: sup } = await admin
+        .from("mail_suppressions")
+        .select("id")
+        .eq("tenant_id", e.tenant_id as string)
+        .eq("email", String(e.to_addr ?? "").trim().toLowerCase())
+        .maybeSingle();
+      if (sup) {
+        await admin.from("sequence_enrollments").update({ status: "stopped", stopped_reason: "配信停止(unsubscribe)" }).eq("id", e.id);
+        stopped++;
+        continue;
+      }
       const acc = mailMap.get(e.enrolled_by as string);
       if (!acc || acc.status !== "active") { skipped++; continue; } // 未接続は今回スキップ(次回リトライ)
       const tpl = tplMap.get(step.template_id);
@@ -133,6 +145,7 @@ export async function GET(req: Request) {
         sequenceEnrollmentId: e.id as string,
         sequenceStep: stepIdx,
         createActivity: true,
+        unsubscribeFooter: true, // 自動送信には配信停止導線を必須で付ける(特電法対応・0172)
         baseUrl,
       };
 

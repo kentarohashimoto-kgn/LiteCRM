@@ -4,6 +4,7 @@ import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { QuickLogForm } from "@/components/today/quick-log-form";
+import { HotLeadsSection } from "@/components/today/hot-leads";
 import { formatYen } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -108,6 +109,10 @@ export default async function TodayPage({ searchParams }: { searchParams: { all?
         <Card><div className="text-xs text-ink/50">今日のアポ</div><div className="stat-value mt-1">{appts.length}</div></Card>
         <Card><div className="text-xs text-ink/50">今日のAC</div><div className="stat-value mt-1">{acsToday.length}</div></Card>
         <Card><div className="text-xs text-ink/50">期限超過</div><div className={`stat-value mt-1 ${overdue.length > 0 ? "text-rose-600" : ""}`}>{overdue.length}</div></Card>
+      </div>
+
+      <div className="mb-5">
+        <HotLeadsSection />
       </div>
 
       <Section title={`今日のアポ（${appts.length}）`} className="mb-5">

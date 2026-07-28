@@ -9,7 +9,7 @@ import { deliverTrackedEmail } from "@/lib/mail-deliver";
 import { refreshAccessToken } from "@/lib/google-oauth";
 import { logAudit, clientIp } from "@/lib/audit-events";
 
-const SEND_ROLES = ["owner", "admin", "sales_manager", "sales_rep", "external_sales", "partner"];
+const SEND_ROLES = ["owner", "admin", "sales_manager", "sales_rep", "external_sales", "partner", "inside_sales"];
 
 export interface SendEmailInput {
   contactId: string | null;
@@ -35,6 +35,10 @@ export async function sendEmailViaSmtpAction(input: SendEmailInput): Promise<Sen
   if (!input.subject.trim() && !input.body.trim()) return { ok: false, error: "件名または本文を入力してください" };
 
   const sb = getSupabaseServer();
+  // 配信停止(サプレッション)突合: 停止済み宛先には個別送信もしない(特電法対応)
+  const { data: sup } = await sb.from("mail_suppressions").select("id").eq("email", input.toAddr.trim().toLowerCase()).maybeSingle();
+  if (sup) return { ok: false, error: "この宛先は配信停止済みです（本人の希望により送信できません）" };
+
   const { data: acc } = await sb
     .from("user_mail_accounts")
     .select("auth_method, smtp_host, smtp_port, smtp_secure, smtp_username, smtp_password_enc, oauth_refresh_token_enc, oauth_email, from_email, from_name, bcc_self, status")
