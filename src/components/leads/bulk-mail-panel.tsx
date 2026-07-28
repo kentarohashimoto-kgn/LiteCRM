@@ -9,7 +9,7 @@ import {
   type BulkMailPreview,
   type LeadMailFilters,
 } from "@/server/actions/lead-mail";
-import { EMAIL_CATEGORY_LABEL } from "@/lib/email";
+import { EMAIL_CATEGORY_LABEL, renderEmailTemplate } from "@/lib/email";
 
 /**
  * リード一括メール送信パネル(D2: 手動トリガー)。
@@ -25,6 +25,8 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
   const [templates, setTemplates] = useState<TemplateOpt[] | null>(null);
   const [templateId, setTemplateId] = useState("");
   const [segTitle, setSegTitle] = useState("");
+  const [subj, setSubj] = useState("");   // 送信直前の直接編集(件名)
+  const [body, setBody] = useState("");   // 送信直前の直接編集(本文)
   const [preview, setPreview] = useState<BulkMailPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -51,10 +53,22 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
     try {
       const p = await previewLeadBulkMailAction(effectiveFilters, id);
       if (!p.ok) setError(p.error ?? "プレビューに失敗しました");
-      else setPreview(p);
+      else {
+        setPreview(p);
+        setSubj(p.subjectTmpl ?? "");
+        setBody(p.bodyTmpl ?? "");
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  // 直接編集後の差し込みプレビュー(先頭リードのサンプル値でクライアント側レンダリング)
+  const sampleVars = {
+    contact: preview?.sampleContact || "(担当者名)",
+    company: preview?.sampleCompany || "(会社名)",
+    opportunity: "",
+    sender: preview?.senderName || "",
   };
 
   const send = async () => {
@@ -71,7 +85,7 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
       // 20件ずつ完了までループ。送信済みはサーバー側で自動除外されるため冪等。
       // 初回チャンクがセグメント履歴を作り、以降は同じbatchIdへ積む。
       for (let guard = 0; guard < 30; guard++) {
-        const r = await sendLeadBulkMailAction(effectiveFilters, templateId, 20, { batchId, segmentTitle: segTitle });
+        const r = await sendLeadBulkMailAction(effectiveFilters, templateId, 20, { batchId, segmentTitle: segTitle, subjectTmpl: subj, bodyTmpl: body });
         batchId = r.batchId ?? batchId;
         if (!r.ok) {
           if (sent === 0) { setError(r.error ?? "送信に失敗しました"); return; }
@@ -97,7 +111,7 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => !sending && setOpen(false)}>
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-xl space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-ink flex items-center gap-2">
                 <Mail size={16} /> 一括メール送信（{selectedIds.length > 0 ? `チェック選択 ${selectedIds.length}件` : "現在の絞り込み対象"}）
@@ -144,10 +158,20 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
                     </p>
                   )}
                 </div>
-                <div className="rounded-xl border border-black/10 p-3 text-xs space-y-1 max-h-48 overflow-y-auto">
-                  <p className="font-semibold text-ink/70">差し込みプレビュー（先頭のリード）</p>
-                  <p className="text-ink/80">件名: {preview.sampleSubject || "(件名なし)"}</p>
-                  <p className="whitespace-pre-wrap text-ink/60">{preview.sampleBody}</p>
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <label className="text-xs text-ink/50">件名（今回の送信だけ直接編集できます。{"{contact}"} {"{company}"} {"{sender}"} は差し込み可）</label>
+                    <input value={subj} onChange={(e) => setSubj(e.target.value)} disabled={sending} className="input" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-ink/50">本文（テンプレは変更されません。編集内容は今回の全宛先に適用）</label>
+                    <textarea value={body} onChange={(e) => setBody(e.target.value)} disabled={sending} rows={8} className="input font-normal leading-relaxed" />
+                  </div>
+                </div>
+                <div className="rounded-xl border border-black/10 p-3 text-xs space-y-1 max-h-40 overflow-y-auto bg-mist-soft/30">
+                  <p className="font-semibold text-ink/70">差し込みプレビュー（先頭のリード: {preview.sampleContact || "—"}）</p>
+                  <p className="text-ink/80">件名: {renderEmailTemplate(subj, sampleVars) || "(件名なし)"}</p>
+                  <p className="whitespace-pre-wrap text-ink/60">{renderEmailTemplate(body, sampleVars)}</p>
                   <p className="text-ink/40 pt-1">※末尾に配信停止フッターが自動で付きます</p>
                 </div>
               </div>
