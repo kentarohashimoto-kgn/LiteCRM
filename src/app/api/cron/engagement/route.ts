@@ -55,17 +55,18 @@ export async function GET(req: Request) {
   const evs = (events ?? []).filter((e) => enabledTenants.has(e.tenant_id as string));
 
   const msgIds = [...new Set(evs.map((e) => e.email_message_id as string))];
-  const msgMap = new Map<string, { lead_id: string | null; to: string | null; tenant_id: string }>();
+  const msgMap = new Map<string, { lead_id: string | null; to: string | null; tenant_id: string; sent_at: string | null }>();
   for (let i = 0; i < msgIds.length; i += 200) {
     const { data: msgs } = await admin
       .from("email_messages")
-      .select("id, tenant_id, lead_id, to_addrs")
+      .select("id, tenant_id, lead_id, to_addrs, sent_at")
       .in("id", msgIds.slice(i, i + 200));
     for (const m of msgs ?? []) {
       msgMap.set(m.id as string, {
         lead_id: (m.lead_id as string) ?? null,
         to: ((m.to_addrs as string[] | null)?.[0] ?? "").trim().toLowerCase() || null,
         tenant_id: m.tenant_id as string,
+        sent_at: (m.sent_at as string) ?? null,
       });
     }
   }
@@ -75,6 +76,9 @@ export async function GET(req: Request) {
     const m = msgMap.get(e.email_message_id as string);
     if (!m || !m.to) continue;
     const occurredAt = e.occurred_at as string;
+    // 送信後60秒以内の開封/クリックは、受信側セキュリティスキャナやプロキシ先読みの
+    // 可能性が高い(人間の反応ではない)ためスコア・通知の対象にしない
+    if (m.sent_at && new Date(occurredAt).getTime() - new Date(m.sent_at).getTime() < 60_000) continue;
     if (e.kind === "open") {
       // 開封は 同一メール×同一JST日 で1回だけ計上(Gmailプロキシの多重取得を吸収)
       candidates.push({
