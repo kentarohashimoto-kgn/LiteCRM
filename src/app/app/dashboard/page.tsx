@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { CalendarCheck, AlertTriangle, Clock, Target as TargetIcon } from "lucide-react";
-import { redirect } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import { requireCtx } from "@/lib/session";
+import { requireSalesNumbersCtx } from "@/lib/session";
 import { getDashboardMetrics, getDashboardMonthSeries, miniToOppView, type DealLite } from "@/lib/data/dashboard";
 import { getLeadMetrics } from "@/lib/data/leads";
 import { getSalesAlerts, summarizeAlerts } from "@/lib/data/alerts";
@@ -18,9 +17,8 @@ import { formatYen, formatPercent, formatDate, sum, monthKey, startOfMonth, addM
 interface TargetRow { target_month: string; target_amount: number; target_deals?: number; target_appointments?: number; target_leads?: number; }
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ fy?: string }> }) {
-  // BO専任ロールの着地点はBOダッシュボード(営業データはRLSで不可視のため)
-  const ctx = await requireCtx();
-  if (ctx.role === "back_office" || ctx.role === "hr") redirect("/app/bo");
+  // 営業数字ページ: BO専任はBOトップへ、インサイドセールスはマイページへ
+  const ctx = await requireSalesNumbersCtx();
   const sp = await searchParams;
   const now = new Date();
   const sb = getSupabaseServer();

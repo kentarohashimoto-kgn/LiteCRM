@@ -70,6 +70,7 @@ export const ROLES: { key: Role; label: string; description: string }[] = [
   { key: "admin", label: "管理者", description: "設定、メンバー管理、全データ管理" },
   { key: "sales_manager", label: "Sales Ops", description: "全案件閲覧、レビュー、分析" },
   { key: "sales_rep", label: "営業担当", description: "自分の担当案件を閲覧・編集" },
+  { key: "inside_sales", label: "インサイドセールス", description: "アポ・商談登録と自分が登録した案件の確認のみ。全社の営業数字は不可視" },
   { key: "external_sales", label: "外部営業", description: "割り当て案件のみ閲覧・編集" },
   { key: "partner", label: "パートナー営業", description: "自分の紹介案件のみ閲覧" },
   { key: "delivery", label: "講師/PM", description: "受注後案件・顧客情報のみ閲覧" },
@@ -105,7 +106,19 @@ export function canManageProjects(role: Role): boolean {
 /** tenant全体を閲覧できるロール(MVPの簡易RLS方針 14.2) */
 export const FULL_VIEW_ROLES: Role[] = ["owner", "admin", "sales_manager", "viewer"];
 /** 自分担当のみ参照のロール */
-export const OWN_ONLY_ROLES: Role[] = ["sales_rep", "external_sales", "partner"];
+export const OWN_ONLY_ROLES: Role[] = ["sales_rep", "inside_sales", "external_sales", "partner"];
+
+/**
+ * 全社の営業数字(ダッシュボード・分析・予測・週報・AI-PMO等)を閲覧できるロール。
+ * inside_sales / back_office / hr は不可視(DB側も 0170 の can_view_sales_numbers で二重に遮断)。
+ */
+export const SALES_NUMBER_ROLES: Role[] = [
+  "owner", "admin", "sales_manager", "viewer", "sales_rep", "external_sales", "partner", "delivery", "finance",
+];
+/** 現在のロールが全社の営業数字を閲覧できるか。 */
+export function canViewSalesNumbers(role: Role): boolean {
+  return SALES_NUMBER_ROLES.includes(role);
+}
 
 export const ACTIVITY_TYPES: { key: ActivityType; label: string }[] = [
   { key: "meeting", label: "商談" },

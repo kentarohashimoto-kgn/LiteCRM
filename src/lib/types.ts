@@ -11,6 +11,7 @@ export type Role =
   | "admin"
   | "sales_manager"
   | "sales_rep"
+  | "inside_sales"
   | "external_sales"
   | "partner"
   | "delivery"

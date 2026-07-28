@@ -70,7 +70,8 @@ export async function signIn(formData: FormData) {
   }
   await logAudit({ tenantId, userId: uid, email: data.user?.email ?? email, action: "login", ip });
 
-  redirect("/app/dashboard");
+  // ログイン直後は個人ごとにカスタマイズ可能なマイページへ(ロール別の見せ方はマイページ側で解決)
+  redirect("/app/mypage");
 }
 
 export async function signOut() {

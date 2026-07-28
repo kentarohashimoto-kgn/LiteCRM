@@ -93,19 +93,31 @@ export async function requireCtx(): Promise<Ctx> {
 }
 
 /**
- * 管理者(代表/管理者)専用ページで使用。権限がなければ営業トップへ。
+ * 管理者(代表/管理者)専用ページで使用。権限がなければマイページへ。
  * マインドマップなど「橋本個人の段取り」機能はこのゲートで囲う(DB側もRLSで二重に遮断)。
  */
 export async function requireAdminCtx(): Promise<Ctx> {
   const ctx = await requireCtx();
-  if (!["owner", "admin"].includes(ctx.role)) redirect("/app/dashboard");
+  if (!["owner", "admin"].includes(ctx.role)) redirect("/app/mypage");
   return ctx;
 }
 
-/** BO領域(事務/人事/管理者)専用ページで使用。権限がなければ営業トップへ。 */
+/**
+ * 全社の営業数字を扱うページ(ダッシュボード・分析・予測・週報・AI-PMO等)で使用。
+ * inside_sales はマイページへ、BO専任(事務/人事)はBOトップへ。
+ * DB側も 0170 の can_view_sales_numbers で二重に遮断している(RPC直叩き対策)。
+ */
+export async function requireSalesNumbersCtx(): Promise<Ctx> {
+  const ctx = await requireCtx();
+  if (ctx.role === "back_office" || ctx.role === "hr") redirect("/app/bo");
+  if (ctx.role === "inside_sales") redirect("/app/mypage");
+  return ctx;
+}
+
+/** BO領域(事務/人事/管理者)専用ページで使用。権限がなければマイページへ。 */
 export async function requireBoCtx(): Promise<Ctx> {
   const ctx = await requireCtx();
-  if (!["back_office", "hr", "owner", "admin"].includes(ctx.role)) redirect("/app/dashboard");
+  if (!["back_office", "hr", "owner", "admin"].includes(ctx.role)) redirect("/app/mypage");
   return ctx;
 }
 
@@ -116,9 +128,9 @@ export async function requireHrCtx(): Promise<Ctx> {
   return ctx;
 }
 
-/** 案件管理(デリバリー原価・粗利管理)専用ページで使用。管理職以外は営業トップへ。 */
+/** 案件管理(デリバリー原価・粗利管理)専用ページで使用。管理職以外はマイページへ。 */
 export async function requireProjectCtx(): Promise<Ctx> {
   const ctx = await requireCtx();
-  if (!["owner", "admin", "sales_manager", "finance", "delivery"].includes(ctx.role)) redirect("/app/dashboard");
+  if (!["owner", "admin", "sales_manager", "finance", "delivery"].includes(ctx.role)) redirect("/app/mypage");
   return ctx;
 }

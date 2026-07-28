@@ -1,4 +1,4 @@
-import { requireCtx } from "@/lib/session";
+import { requireSalesNumbersCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, StatCard } from "@/components/ui/primitives";
 import { formatManYen } from "@/lib/utils";
@@ -26,7 +26,7 @@ type ReportRow = {
  * 2ペインで、選択はクライアント側で即時切替(ページ遷移せず縦スクロールも抑制)。
  */
 export default async function PmoPage() {
-  const ctx = await requireCtx();
+  const ctx = await requireSalesNumbersCtx();
   const sb = getSupabaseServer();
 
   const [input, reportsRes] = await Promise.all([

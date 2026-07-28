@@ -1,4 +1,5 @@
 import {
+  Home,
   LayoutDashboard,
   Target,
   CalendarCheck,
@@ -54,6 +55,7 @@ const groups: NavGroup[] = [
   {
     heading: "ホーム",
     items: [
+      { href: "/app/mypage", label: "マイページ", icon: Home },
       { href: "/app/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
       { href: "/app/today", label: "今日のアポ・AC", icon: Sun },
       { href: "/app/review", label: "AI確認キュー", icon: Inbox },
@@ -170,9 +172,24 @@ const helpGroup: NavGroup = {
   items: [{ href: "/app/help", label: "ヘルプ・マニュアル", icon: HelpCircle }],
 };
 
+// インサイドセールス: アポ・商談登録と登録後の確認(案件一覧)のみ。
+// 営業数字(ダッシュボード・分析・予測等)は不可視(ページゲート＋DB側 can_view_sales_numbers で遮断)。
+const insideSalesGroups: NavGroup[] = [
+  {
+    heading: "ホーム",
+    items: [
+      { href: "/app/mypage", label: "マイページ", icon: Home },
+      { href: "/app/appointments/new", label: "アポ・商談登録", icon: CalendarCheck },
+      { href: "/app/opportunities", label: "案件（表・ボード）", icon: Target },
+      { href: "/app/tasks", label: "タスク", icon: CheckSquare },
+    ],
+  },
+];
+
 /** ロールに応じたナビ(営業⇔BOの相互不可視、管理者は全部)。ヘルプは全ロール共通。 */
 export function navGroupsFor(role: Role): NavGroup[] {
   const sales = injectAdminOnly(injectProjects(groups, role), role); // 「設定」グループにヘルプを内包
+  if (role === "inside_sales") return [...insideSalesGroups, helpGroup];
   if (role === "back_office") return [...boGroups, helpGroup];
   if (role === "hr") return [...boGroups, hrGroup, helpGroup];
   if (role === "owner" || role === "admin") return [...sales, ...boGroups, hrGroup];
