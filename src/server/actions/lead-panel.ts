@@ -36,6 +36,8 @@ export interface LeadPanelData {
     timing: string | null;
     budgetBand: string | null;
     notes: string | null;
+    handledBy: string | null;
+    handledBySource: string | null;
     converted: boolean;
     opportunityId: string | null;
   };
@@ -93,6 +95,8 @@ export async function getLeadPanelAction(leadId: string): Promise<LeadPanelData>
       timing: row.timing ?? null,
       budgetBand: row.budget_band ?? null,
       notes: row.notes ?? null,
+      handledBy: row.handled_by ?? null,
+      handledBySource: row.handled_by_source ?? null,
       converted: !!row.account_id || row.status === "converted",
       opportunityId: (oppR.data?.id as string) ?? null,
     },

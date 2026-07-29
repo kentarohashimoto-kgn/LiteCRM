@@ -58,6 +58,7 @@ export function LeadsWorkspace({
   aliases = [],
   events = [],
   acquirers = [],
+  handlers = [],
   mediaOptions = [],
   presets = [],
   filters,
@@ -72,6 +73,7 @@ export function LeadsWorkspace({
   aliases?: AliasRow[];
   events?: string[];
   acquirers?: { name: string; leads: number }[];
+  handlers?: { name: string; leads: number }[];
   mediaOptions?: string[];
   presets?: PresetRow[];
   filters: LeadsFilters;
@@ -88,7 +90,7 @@ export function LeadsWorkspace({
         <TabLink active={tab === "download"} tab="download" icon={<Download size={15} />} label="ダウンロード" />
         <TabLink active={tab === "batches"} tab="batches" icon={<History size={15} />} label="取込履歴" />
       </div>
-      {tab === "list" && list && <LeadList list={list} filters={filters} events={events} acquirers={acquirers} />}
+      {tab === "list" && list && <LeadList list={list} filters={filters} events={events} acquirers={acquirers} handlers={handlers} />}
       {tab === "inquiries" && list && <LeadList list={list} filters={filters} events={events} tabKey="inquiries" mediaOptions={mediaOptions} />}
       {tab === "funnel" && funnel && <FunnelView funnel={funnel} />}
       {tab === "queue" && queue && <CallQueue queue={queue} />}
@@ -103,7 +105,7 @@ export function LeadsWorkspace({
 // ============ リード一覧(サーバー側フィルタ＋ページング) ============
 // tabKey="inquiries" のときは「HP問合せ」タブとして、Webフォーム由来(HP問合せ・資料請求)に
 // 絞った一覧を表示する(絞り込み自体はサーバー側で sourceIn により適用済み)。
-function LeadList({ list, filters, events, acquirers = [], tabKey = "list", mediaOptions = [] }: { list: ListData; filters: LeadsFilters; events: string[]; acquirers?: { name: string; leads: number }[]; tabKey?: LeadsTab; mediaOptions?: string[] }) {
+function LeadList({ list, filters, events, acquirers = [], handlers = [], tabKey = "list", mediaOptions = [] }: { list: ListData; filters: LeadsFilters; events: string[]; acquirers?: { name: string; leads: number }[]; handlers?: { name: string; leads: number }[]; tabKey?: LeadsTab; mediaOptions?: string[] }) {
   const router = useRouter();
   const [q, setQ] = useState(filters.q ?? "");
   const isInquiries = tabKey === "inquiries";
@@ -135,6 +137,7 @@ function LeadList({ list, filters, events, acquirers = [], tabKey = "list", medi
     if (f.disposition) p.set("disp", f.disposition);
     if (f.rank) p.set("rank", f.rank);
     if (f.owner) p.set("owner", f.owner);
+    if (f.handler) p.set("handler", f.handler);
     if (f.from) p.set("from", f.from);
     if (f.to) p.set("to", f.to);
     if (isInquiries && f.sort && f.sort !== "date") p.set("sort", f.sort);
@@ -185,10 +188,18 @@ function LeadList({ list, filters, events, acquirers = [], tabKey = "list", medi
             opts={acquirers.map((a) => ({ id: a.name, name: `${a.name}（${a.leads}）` }))}
           />
         )}
+        {!isInquiries && handlers.length > 0 && (
+          <Sel
+            value={filters.handler ?? ""}
+            onChange={(v) => go({ handler: v, page: 1 })}
+            ph="対応者(接客)"
+            opts={handlers.map((h) => ({ id: h.name, name: `${h.name}（${h.leads}）` }))}
+          />
+        )}
         {!isInquiries && <DateRange from={filters.from ?? ""} to={filters.to ?? ""} onChange={(from, to) => go({ from, to, page: 1 })} />}
         {!isInquiries && (
           <BulkMailPanel
-            filters={{ q: filters.q, event: filters.event, disposition: filters.disposition, rank: filters.rank, owner: filters.owner, from: filters.from, to: filters.to }}
+            filters={{ q: filters.q, event: filters.event, disposition: filters.disposition, rank: filters.rank, owner: filters.owner, handler: filters.handler, from: filters.from, to: filters.to }}
             selectedIds={[...selected]}
           />
         )}
@@ -314,7 +325,7 @@ function LeadList({ list, filters, events, acquirers = [], tabKey = "list", medi
           <button onClick={() => go({ page: (filters.page ?? 1) + 1 })} disabled={(filters.page ?? 1) >= pageCount} className="btn-ghost text-xs disabled:opacity-30">次 <ChevronRight size={14} /></button>
         </div>
       )}
-      <LeadSidePanel leadId={panelId} onClose={() => setPanelId(null)} />
+      <LeadSidePanel leadId={panelId} onClose={() => setPanelId(null)} handlers={handlers.map((h) => h.name)} />
     </div>
   );
 }
