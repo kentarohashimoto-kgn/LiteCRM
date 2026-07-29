@@ -6,6 +6,10 @@
       "schedule": "0 23 * * *"
     },
     {
+      "path": "/api/cron/seo-ingest",
+      "schedule": "0 19 * * *"
+    },
+    {
       "path": "/api/cron/xray-snapshot",
       "schedule": "30 15 * * *"
     },

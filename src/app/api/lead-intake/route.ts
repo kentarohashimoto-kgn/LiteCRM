@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { normalizeAttribution } from "@/lib/seo/attribution";
 import { sendSystemMail } from "@/lib/mail-system";
 import { isRecaptchaEnabled, verifyRecaptcha } from "@/lib/recaptcha";
 import { buildClientAutoReply, buildInternalNotify, type InquiryFields } from "@/lib/inquiry-emails";
@@ -91,6 +92,11 @@ export async function POST(req: Request) {
   const tags = tagsRaw
     ? Array.from(new Set(tagsRaw.split(",").map((t) => t.trim()).filter(Boolean).map((t) => t.slice(0, 40)))).slice(0, 20)
     : [];
+  // 流入コンテキスト（着地ページ・UTM・参照元）。未送信でも従来どおり動く（後方互換）。
+  // これが無いと「どの記事が問合せを生んだか」が永久に分からないため、HP側に送信を依頼する。
+  const attribution = normalizeAttribution(body as unknown as Record<string, unknown>);
+  const firstVisitAt = (body.first_visit_at ?? "").trim();
+
   if (!company && !email) {
     return NextResponse.json({ ok: false, error: "company or email is required" }, { status: 400, headers: CORS_HEADERS });
   }
@@ -140,6 +146,16 @@ export async function POST(req: Request) {
       raw_event: source,
       inquiry_media: media || null,
       inquiry_tags: tags.length ? tags : null,
+      landing_page: attribution.landingPage,
+      entry_referrer: attribution.entryReferrer,
+      utm_source: attribution.utmSource,
+      utm_medium: attribution.utmMedium,
+      utm_campaign: attribution.utmCampaign,
+      utm_term: attribution.utmTerm,
+      utm_content: attribution.utmContent,
+      gclid: attribution.gclid,
+      acquisition_type: attribution.acquisitionType,
+      first_visit_at: firstVisitAt && !Number.isNaN(Date.parse(firstVisitAt)) ? firstVisitAt : null,
       acquired_at: new Date().toISOString().slice(0, 10),
       status: "new",
     })

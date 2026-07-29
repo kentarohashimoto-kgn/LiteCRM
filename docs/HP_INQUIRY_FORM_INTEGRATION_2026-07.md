@@ -188,6 +188,84 @@ curl -i -X POST "https://<CRM_BASE_URL>/api/lead-intake" \
 
 ---
 
+## 4.4 【重要・追加】流入元の記録（SEO成果を売上まで追跡するため）
+
+> **2026-07 追加。既存フォームは改修しなくても動きますが、これを送らないと
+> 「どの記事・どの検索が問い合わせを生んだか」が永久に分かりません。**
+> CRM側は SEO集客画面で「どのページが何件の問合せ・いくらの受注を生んだか」を集計します。
+> その集計の入力がこの項目です。
+
+### 送ってほしい項目（すべて任意・追加のみ）
+
+| フィールド | 例 | 説明 |
+|---|---|---|
+| `landing_page` | `/blog/ai-training-cost` | **最初に着地したページ**。SEO成果の帰属先。最重要 |
+| `page_url` | `/contact` | 送信したページ（`landing_page` が取れない場合の代替） |
+| `referrer` | `https://www.google.com/` | 最初の参照元 |
+| `utm_source` / `utm_medium` / `utm_campaign` / `utm_term` / `utm_content` | `google` / `organic` | 広告・メール等との切り分け |
+| `gclid` | — | 広告クリックID。**これがあるとCRM側は「広告流入」と判定**し、SEOの成果に混ぜません |
+| `first_visit_at` | `2026-07-01T09:00:00Z` | 初回訪問時刻（ISO8601）。検討期間の把握 |
+
+- 値はCRM側で正規化されます（`landing_page` のクエリ文字列は自動で除去）。
+- 何も送らなくても従来どおりリードは作成されます（後方互換）。
+
+### HP側スニペット（初回訪問時に保存 → 送信時に載せる）
+
+`<head>` などで**全ページ**に読み込んでください。初回訪問の情報を `sessionStorage`
+に保存し、フォーム送信時に hidden 項目へ流し込みます。
+
+```html
+<script>
+(function () {
+  var KEY = "catorce_first_touch";
+  // 初回訪問時だけ記録する（2ページ目以降の値で上書きしない）
+  if (!sessionStorage.getItem(KEY)) {
+    var q = new URLSearchParams(location.search);
+    sessionStorage.setItem(KEY, JSON.stringify({
+      landing_page: location.pathname,
+      referrer: document.referrer || "",
+      utm_source: q.get("utm_source") || "",
+      utm_medium: q.get("utm_medium") || "",
+      utm_campaign: q.get("utm_campaign") || "",
+      utm_term: q.get("utm_term") || "",
+      utm_content: q.get("utm_content") || "",
+      gclid: q.get("gclid") || "",
+      first_visit_at: new Date().toISOString()
+    }));
+  }
+  // 送信時に hidden 項目として付与する
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form || form.tagName !== "FORM") return;
+    var data = {};
+    try { data = JSON.parse(sessionStorage.getItem(KEY) || "{}"); } catch (err) { return; }
+    Object.keys(data).forEach(function (k) {
+      if (!data[k] || form.querySelector('[name="' + k + '"]')) return;
+      var input = document.createElement("input");
+      input.type = "hidden"; input.name = k; input.value = data[k];
+      form.appendChild(input);
+    });
+    // 送信ページ自体も記録
+    if (!form.querySelector('[name="page_url"]')) {
+      var pu = document.createElement("input");
+      pu.type = "hidden"; pu.name = "page_url"; pu.value = location.pathname;
+      form.appendChild(pu);
+    }
+  }, true);
+})();
+</script>
+```
+
+> **サーバー中継方式（§4.1 推奨）の場合**は、中継サーバーで受け取った上記フィールドを
+> そのままCRMへ転送してください（値の加工は不要です）。
+
+### 記録できているかの確認
+
+CRMの **SEO集客 → 「アトリビューション健全性」** に「問合せリードに着地ページが
+記録されている割合」が表示されます。設置後の問い合わせで**100%**になっていれば成功です。
+
+---
+
 ## 5. 通知・メール仕様（CRM側で自動実行）
 
 1件登録されると、CRM側が以下を自動で行います（HP側の追加実装は不要）。
