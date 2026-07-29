@@ -84,7 +84,10 @@ export default async function SeoSettingsPage({
       .select("id, property_id, name, base_url, path_prefix, exclude_prefixes, audience, sitemap_url, inquiry_media, status")
       .order("created_at"),
   ]);
-  const properties = (propsR.data ?? []) as PropertyRow[];
+  // 稼働中のプロパティを先に出す（主対象の catorce.jp を先頭に）
+  const properties = ((propsR.data ?? []) as PropertyRow[]).sort(
+    (a, b) => Number(b.status === "active") - Number(a.status === "active"),
+  );
   const sites = (sitesR.data ?? []) as SiteRow[];
   const cred = getSeoCredentialInfo();
   const canEdit = ["owner", "admin"].includes(ctx.role);
@@ -162,14 +165,24 @@ export default async function SeoSettingsPage({
               <form action={saveSeoPropertyAction} className="grid gap-3 md:grid-cols-[1fr_200px_auto] md:items-end">
                 <input type="hidden" name="id" value={p.id} />
                 <label className="block text-sm">
-                  <span className="text-ink/60 text-xs">Search Console プロパティ</span>
+                  <span className="text-ink/60 text-xs">
+                    Search Console プロパティ
+                    {gscSites.length > 0 && "（欄をクリックすると候補から選べます）"}
+                  </span>
                   <input
                     name="gsc_property"
                     defaultValue={p.gsc_property ?? ""}
-                    placeholder="sc-domain:catorce.jp"
+                    placeholder={`sc-domain:${p.domain}`}
+                    list={`gsc-options-${p.id}`}
                     disabled={!canEdit}
                     className="mt-1 w-full rounded border border-black/10 px-2.5 py-1.5 text-sm"
                   />
+                  {/* 診断で見つかったプロパティを候補として出す（手入力の取り違えを防ぐ） */}
+                  <datalist id={`gsc-options-${p.id}`}>
+                    {gscSites.map((s) => (
+                      <option key={s.siteUrl} value={s.siteUrl} />
+                    ))}
+                  </datalist>
                 </label>
                 <label className="block text-sm">
                   <span className="text-ink/60 text-xs">GA4 プロパティID</span>
@@ -201,7 +214,8 @@ export default async function SeoSettingsPage({
                   {gscSites.length > 0 && (
                     <div>
                       <p className="text-xs font-medium text-ink/70">
-                        このサービスアカウントがアクセスできる Search Console プロパティ
+                        アクセスできる Search Console プロパティ（この値を上の「Search Console
+                        プロパティ」欄に入れて保存してください）
                       </p>
                       <ul className="mt-1 space-y-0.5">
                         {gscSites.map((s) => (

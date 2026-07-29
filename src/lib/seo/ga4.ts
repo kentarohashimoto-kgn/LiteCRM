@@ -1,5 +1,6 @@
 import "server-only";
 import { GA4_SCOPE, getSeoAccessToken, classifyStatus, type ApiStatus } from "./google-sa";
+import { isApiDisabled, extractProjectId } from "./google-errors";
 
 /**
  * GA4 Data API クライアント（REST直叩き・SDK不使用）。
@@ -101,7 +102,15 @@ export async function fetchGa4DailyPages(
 }
 
 async function describeError(res: Response): Promise<string> {
-  const body = (await res.text()).slice(0, 300);
+  const body = (await res.text()).slice(0, 500);
+  // GSCと同じく、「APIが無効」と「権限がない」は同じ403で来るため区別する。
+  if (isApiDisabled(body)) {
+    const project = extractProjectId(body);
+    const link = project
+      ? `https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com?project=${project}`
+      : "https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com";
+    return `Google Cloud で「Google Analytics Data API」が有効になっていません。次のURLを開いて「有効にする」を押してください（数分後に反映）: ${link}`;
+  }
   if (res.status === 401 || res.status === 403) {
     return `権限がありません(${res.status})。GA4の「プロパティのアクセス管理」にサービスアカウントのメールアドレスを閲覧者として追加してください。 ${body}`;
   }

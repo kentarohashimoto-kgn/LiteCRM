@@ -1,5 +1,6 @@
 import "server-only";
 import { GSC_SCOPE, getSeoAccessToken, classifyStatus, type ApiStatus } from "./google-sa";
+import { isApiDisabled, extractProjectId } from "./google-errors";
 
 /**
  * Google Search Console API クライアント（REST直叩き・SDK不使用）。
@@ -92,7 +93,17 @@ export async function querySearchAnalytics(
 
 /** エラー本文を、画面にそのまま出せる日本語の説明に変換する。 */
 async function describeError(res: Response): Promise<string> {
-  const body = (await res.text()).slice(0, 300);
+  const body = (await res.text()).slice(0, 500);
+  // 同じ403でも原因は2種類ある。取り違えると「権限は付けたのに直らない」になるため区別する。
+  //  (a) GCPプロジェクトでAPI自体が無効 → APIを有効化する（権限付与では直らない）
+  //  (b) SAがプロパティのユーザーに入っていない → ユーザーと権限に追加する
+  if (isApiDisabled(body)) {
+    const project = extractProjectId(body);
+    const link = project
+      ? `https://console.cloud.google.com/apis/library/searchconsole.googleapis.com?project=${project}`
+      : "https://console.cloud.google.com/apis/library/searchconsole.googleapis.com";
+    return `Google Cloud で「Search Console API」が有効になっていません。次のURLを開いて「有効にする」を押してください（数分後に反映）: ${link}`;
+  }
   if (res.status === 401 || res.status === 403) {
     return `権限がありません(${res.status})。Search Consoleの「ユーザーと権限」にサービスアカウントのメールアドレスを追加してください。 ${body}`;
   }
