@@ -37,14 +37,28 @@ async function countTodaySent(userId: string): Promise<number> {
 
 export interface LeadMailFilters {
   q?: string;
-  event?: string;       // raw_event(取込イベント)
+  event?: string;       // raw_event(取込イベント)。複数はCSV("AIDX,ODEX")
   disposition?: string;
   rank?: string;        // 単一 or CSV("S,A")。ranks指定時は無視
   ranks?: string[];     // ランク複数選択
+  owner?: string;       // 社内担当者(取得担当の表示名。表記ゆれは名寄せ済み)
+  from?: string;        // 獲得日 開始(YYYY-MM-DD)
+  to?: string;          // 獲得日 終了(YYYY-MM-DD)
   leadIds?: string[];   // チェックボックスで個別選択した場合。指定時は他の絞り込みより優先
 }
 
 interface TargetLead { id: string; email: string; company: string; name: string }
+
+/** 担当者の表示名 → 元の値(表記ゆれ含む)の配列。名寄せはSQL(lead_acquirers / 0176)側。 */
+async function resolveOwnerRaws(displayName: string): Promise<string[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.rpc("lead_acquirers");
+  const key = displayName.replace(/[\s\u3000]/g, "");
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const hit = ((data ?? []) as any[]).find((a) => String(a.name ?? "").replace(/[\s\u3000]/g, "") === key);
+  return (hit?.raws as string[]) ?? [];
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
 
 interface TargetResolution {
   targets: TargetLead[];
@@ -66,11 +80,20 @@ async function resolveTargets(filters: LeadMailFilters, templateId: string): Pro
   } else {
     const q = (filters.q ?? "").replace(/[,%_()]/g, " ").trim();
     if (q) qy = qy.or(`company_name.ilike.%${q}%,contact_name.ilike.%${q}%`);
-    if (filters.event) qy = qy.eq("raw_event", filters.event);
+    const evs = (filters.event ?? "").split(",").map((e) => e.trim()).filter(Boolean);
+    if (evs.length === 1) qy = qy.eq("raw_event", evs[0]);
+    else if (evs.length > 1) qy = qy.in("raw_event", evs);
     if (filters.disposition) qy = qy.eq("disposition", filters.disposition);
     const ranks = (filters.ranks ?? (filters.rank ? filters.rank.split(",") : [])).map((r) => r.trim()).filter(Boolean);
     if (ranks.length === 1) qy = qy.eq("rank", ranks[0]);
     else if (ranks.length > 1) qy = qy.in("rank", ranks);
+    // 社内担当者(取得担当)。表示名 → 表記ゆれを含む全rawへ展開(一覧の絞り込みと同一ロジック)
+    if (filters.owner) {
+      const raws = await resolveOwnerRaws(filters.owner);
+      qy = raws.length ? qy.in("acquirer", raws) : qy.eq("acquirer", "\u0000");
+    }
+    if (filters.from) qy = qy.gte("acquired_at", filters.from);
+    if (filters.to) qy = qy.lte("acquired_at", filters.to);
   }
   qy = qy.order("priority_score", { ascending: false, nullsFirst: false }).order("id").limit(2000);
   const { data, count } = await qy;

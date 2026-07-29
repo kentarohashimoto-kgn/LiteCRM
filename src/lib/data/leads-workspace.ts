@@ -41,7 +41,20 @@ export interface WsAnalysisScope {
 export interface CompaniesData { rows: WsCompanyRow[]; total: number; multi: number }
 export interface AnalysisData { events: string[]; scopes: Record<string, WsAnalysisScope>; rawAcquirers: string[] }
 
-export interface LeadsFilters { q?: string; event?: string; disposition?: string; rank?: string; page?: number; sourceIdIn?: string[]; media?: string; sort?: string; dir?: "asc" | "desc" }
+export interface LeadsFilters {
+  q?: string;
+  event?: string;        // 流入(raw_event)。複数選択はCSV("AIDX,ODEX")
+  disposition?: string;
+  rank?: string;         // ランク。複数選択はCSV("S,A")
+  owner?: string;        // 社内担当者(取得担当 acquirer の表示名。表記ゆれは名寄せ済み)
+  from?: string;         // 獲得日 開始(YYYY-MM-DD)
+  to?: string;           // 獲得日 終了(YYYY-MM-DD)
+  page?: number;
+  sourceIdIn?: string[];
+  media?: string;
+  sort?: string;
+  dir?: "asc" | "desc";
+}
 
 export function roleBucket(t: string): string {
   if (/社長|代表|CEO|会長/.test(t)) return "経営者";
