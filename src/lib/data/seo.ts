@@ -192,3 +192,52 @@ export async function getCrmRates(): Promise<CrmRates> {
     medianDealAmount: median,
   };
 }
+
+/** 今日の要対応（機会・劣化）。機会スコア降順。 */
+export interface SeoInsight {
+  id: string;
+  kind: string;
+  severity: string;
+  title: string;
+  query: string | null;
+  pagePath: string | null;
+  metric: Record<string, unknown>;
+  opportunityScore: number;
+  actionType: string | null;
+  runDate: string;
+}
+
+export async function getOpenInsights(siteId: string, limit = 12): Promise<SeoInsight[]> {
+  const sb = getSupabaseServer();
+  // 最新の実行日のものだけを見る（過去日の所見が混ざると「今日やること」がぼやける）
+  const { data: latest } = await sb
+    .from("seo_insights")
+    .select("run_date")
+    .eq("site_id", siteId)
+    .order("run_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!latest) return [];
+
+  const { data } = await sb
+    .from("seo_insights")
+    .select("id, kind, severity, title, query, page_path, metric_json, opportunity_score, action_type, run_date")
+    .eq("site_id", siteId)
+    .eq("run_date", latest.run_date as string)
+    .eq("status", "open")
+    .order("opportunity_score", { ascending: false })
+    .limit(limit);
+
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    kind: r.kind as string,
+    severity: (r.severity as string) ?? "medium",
+    title: r.title as string,
+    query: (r.query as string) || null,
+    pagePath: (r.page_path as string) || null,
+    metric: (r.metric_json as Record<string, unknown>) ?? {},
+    opportunityScore: Number(r.opportunity_score ?? 0),
+    actionType: (r.action_type as string) ?? null,
+    runDate: r.run_date as string,
+  }));
+}

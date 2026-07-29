@@ -5,6 +5,7 @@ import { fetchGa4DailyPages } from "@/lib/seo/ga4";
 import { seoGoogleConfigured } from "@/lib/seo/google-sa";
 import { buildPageRows, buildQueryRows, buildGa4Aggregates, rollupWeekly, type IngestSite } from "@/lib/seo/ingest";
 import { todayJst, addDays, weekStartJst } from "@/lib/seo/site-match";
+import { runSeoAnalysis } from "@/lib/seo/run-analyze";
 
 /**
  * SEO計測データの取込 本体（決定的処理・AIは使わない）。
@@ -43,6 +44,8 @@ interface SiteRow {
 export interface IngestResult {
   ok: boolean;
   sites: number;
+  /** 取込後に検出された所見の件数。 */
+  insights?: number;
   summary: Array<Record<string, unknown>>;
   errors: string[];
   window?: { startDate: string; endDate: string };
@@ -230,10 +233,21 @@ export async function runSeoIngest(trigger: "cron" | "manual"): Promise<IngestRe
     });
   }
 
+  // 取込直後に検出まで走らせる。数字が入った瞬間に「今日の要対応」が出る状態にするため。
+  let insights = 0;
+  try {
+    const analyzed = await runSeoAnalysis();
+    insights = analyzed.insights;
+    errors.push(...analyzed.errors);
+  } catch (e) {
+    errors.push(`分析: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   return {
     ok: errors.length === 0,
     window: { startDate, endDate },
     sites: touchedSites,
+    insights,
     summary,
     errors: errors.slice(0, 20),
   };
