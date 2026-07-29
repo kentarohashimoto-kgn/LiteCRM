@@ -13,8 +13,9 @@
 | **F-303** | 施策実行機能 | 提案を「実行チケット」に落とし、成果物（記事・タイトル案・内部リンク指示書）まで作って実行・反映を管理する（Do） |
 | **F-304** | 効果検証・学習 | 施策の前後を差分比較して勝ち負けを判定し、提案ロジックの重みに反映する（Check → Act） |
 | **F-305** | 集客アトリビューション | 検索キーワード → 着地ページ → 問合せ → リード → 商談 → 受注金額 をつなぐ（目的の実証） |
+| **F-306** | **SEO戦略ボード** | 集客戦略（目標逆算・3層・クラスタ・90日計画）の**進捗とズレを毎日1画面で確認**する。日次の提案はすべてこの戦略に紐づく |
 
-**関連文書**: `docs/HP_INQUIRY_FORM_INTEGRATION_2026-07.md`（問合せ→リード連携・本設計はこれを拡張）/ `docs/SALES_AUTOMATION_DESIGN_2026-07.md` §7（方針A・夜間バッチ）/ `docs/exec-plan/runbooks/NIGHTLY_BATCH.md`（夜間セッション runbook）/ `docs/LEAD_TO_APPOINTMENT_DESIGN_2026-07.md`（リード→アポ。SEOの下流）
+**関連文書**: **`docs/SEO_STRATEGY_2026-07.md`（集客戦略の本体。F-306はこれを画面化したもの）** / `docs/HP_INQUIRY_FORM_INTEGRATION_2026-07.md`（問合せ→リード連携・本設計はこれを拡張）/ `docs/SALES_AUTOMATION_DESIGN_2026-07.md` §7（方針A・夜間バッチ）/ `docs/exec-plan/runbooks/NIGHTLY_BATCH.md`（夜間セッション runbook）/ `docs/LEAD_TO_APPOINTMENT_DESIGN_2026-07.md`（リード→アポ。SEOの下流）
 
 ---
 
@@ -25,7 +26,8 @@
 3. **提案は必ず「期待リード数」「期待売上」に換算する。** SEO施策の優先度を CTR や順位ではなく **CRMの実績CVR・成約率・平均受注単価** で金額化する。これがこの設計の中核であり、既存のSEOツールにはない CRM 一体型の強み。
 4. **AIは提案・成果物までを作り、公開は必ず人が承認する（v1）。** HP本体への自動デプロイはしない。実行モードは「アプリ内で完結」「記事パイプライン（`content_ideas`）へ連携」「HP保守担当への指示書を発行」の3系統。
 5. **効果検証は前後比較ではなく差分比較（DiD）**。対象ページの前後変化から**サイト全体の同期間変化を引く**ことで、季節変動・アルゴリズム変動を除去して勝敗を判定する。
-6. 追加テーブルは **migration 0180〜0183**、新規画面は **`/app/seo` 配下6画面**、新規cron **3本**、新規バッチAPI **3本**。既存機能の破壊的変更は `leads` への列追加と `/api/lead-intake` の**後方互換な**フィールド追加のみ。
+6. **日次の改善を、戦略に紐づけて管理する。** 期待売上だけで並べると短期に効くCTR改善ばかりが上位を占め、3ヶ月後に効くクラスタ構築が永久に後回しになる。**戦略ボード（F-306）**で目標逆算・トピッククラスタ・検索意図3層・90日計画の進捗を毎日可視化し、提案のスコアに戦略係数を掛けて近視眼を補正する。戦略の中身は `docs/SEO_STRATEGY_2026-07.md`。
+7. 追加テーブルは **migration 0180〜0184**、新規画面は **`/app/seo` 配下8画面**、新規cron **3本**、新規バッチAPI **3本**。既存機能の破壊的変更は `leads` への列追加と `/api/lead-intake` の**後方互換な**フィールド追加のみ。
 
 ---
 
@@ -722,12 +724,217 @@ SEO ROAS = SEO由来の受注金額 ÷ 月間コスト
 
 ---
 
-## 10. 権限・RLS・セキュリティ
+# F-306 SEO戦略ボード — 戦略を画面で確認する
+
+**解く課題**: 戦略は書いた瞬間から風化する。「今どこまで進み、どこがズレたか」が毎日見えないと、日次PDCAは**目先の細かい改善だけを回す装置**になり、半年後に「順位は少し上がったが売上は変わらない」に着地する。
+**方針**: `docs/SEO_STRATEGY_2026-07.md` の各章を**そのまま画面のブロックに1対1で対応させる**。戦略ドキュメントの数値部分を、DBの実測値で毎日置き換え続けるのが本画面の役割。
+
+## 10.1 画面構成 `/app/seo/strategy`
+
+```
+┌ SEO戦略ボード ─────────────────── 目標: SEO由来 月¥3,000,000（2027-07まで）┐
+│                                                                              │
+│ ■ A. 売上逆算ファネル（戦略 §1.2）             [今月]  [目標]  [達成率]      │
+│   表示回数   ████████░░░░░░░░░░  12,400 / 31,500   39%   あと 19,100        │
+│   クリック   ██████░░░░░░░░░░░░     430 /  1,260   34%   ← CTR 3.5%(目標4.0%)│
+│   セッション ██████░░░░░░░░░░░░     410 /  1,200   34%                       │
+│   問合せ     ████░░░░░░░░░░░░░░       5 /     24   21%   ← CVR 1.2%(目標2.0%)│
+│   有効リード ████░░░░░░░░░░░░░░       4 /     17   24%                       │
+│   商談       ██████░░░░░░░░░░░░       2 /      7   29%                       │
+│   受注/売上  ██░░░░░░░░░░░░░░░░  ¥0 / ¥3,000,000    0%                       │
+│   ▶ 最大のボトルネック: **CVR**（1.2% → 2.0% で問合せ +3.3件/月・追加流入ゼロ）│
+│      → 関連提案 3件を見る                                                    │
+│                                                                              │
+│ ■ B. トピッククラスタ・マップ（戦略 §4）                                      │
+│  ┌────────────┬──────┬────┬──────┬──────┬──────┬─────────┐               │
+│  │ クラスタ    │ピラー│記事│平均順位│クリック│問合せ│ 受注額  │               │
+│  ├────────────┼──────┼────┼──────┼──────┼──────┼─────────┤               │
+│  │①生成AI研修 │  ✅  │5/10│ 18.2 │  310 │  4   │¥1,500,000│ ●進行中       │
+│  │②AI顧問     │  ⚠️未 │1/8 │ 34.0 │   28 │  0   │        —│ ○未着手       │
+│  │③AI開発     │  ⚠️未 │0/8 │   —  │    0 │  0   │        —│ ○未着手       │
+│  │④営業AX     │  ✅  │2/6 │ 22.5 │   64 │  1   │  ¥800,000│ ●進行中       │
+│  │⑤SNS支援    │  —   │0/4 │   —  │    0 │  0   │        —│ −対象外       │
+│  └────────────┴──────┴────┴──────┴──────┴──────┴─────────┘               │
+│   ▶ ①のピラーは有るが記事が半分。**残り5本で1クラスタ完成** → 記事ネタを見る  │
+│   ▶ ②はピラーページ未作成。LTV最大のクラスタが空 → 提案を作る                 │
+│                                                                              │
+│ ■ C. 検索意図3層カバレッジ（戦略 §3）                                         │
+│   第1層 今すぐ客   KW 42語 / 10位内 6語(14%) / 流入 120 / 問合せ 3  ⚠️最重要  │
+│   第2層 課題認識   KW 88語 / 10位内 9語(10%) / 流入 240 / 問合せ 2            │
+│   第3層 情報収集   KW 30語 / 10位内 4語(13%) / 流入  70 / 問合せ 0            │
+│   ▶ 第1層は問合せの60%を生んでいるが、流入は26%しかない。**ここが伸びしろ**    │
+│                                                                              │
+│ ■ D. 90日ロードマップ進捗（戦略 §9）  現在: Phase 1（Week 4 / 12）           │
+│   Phase 0 現状把握      ✅ 完了（2026-08-10）                                 │
+│   Phase 1 刈り取り      ●進行中 6/9 完了  期限まで残り18日  ⚠️料金ページ未着手│
+│   Phase 2 クラスタ構築  ○未着手                                               │
+│                                                                              │
+│ ■ E. 勝ち筋 & 営業起点のネタ（戦略 §5.3）                                     │
+│   勝ち筋: /blog/ai-training-cost … CVR 4.8%（サイト平均の4倍）→ 横展開候補3件 │
+│   営業起点: 商談で3回以上聞かれた質問 5件が記事ネタとして未着手              │
+│                                                                              │
+│ ■ F. 戦略ズレ検知                                                            │
+│   🔴 Phase 1 の「料金ページ新設」が期限まで18日で未着手（第1層の主要施策）     │
+│   🟡 直近30日の施策12件のうち、クラスタ②に紐づくものが0件（戦略配分とのズレ）  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+## 10.2 各ブロックの計算ロジック（すべて決定的処理）
+
+| ブロック | 出典 | 計算 |
+|---|---|---|
+| **A. 逆算ファネル** | `seo_strategies` + `seo_daily_metrics` + `leads` + `opportunities` | 目標受注金額から §1.2 の逆算を実行。レートは**CRM実績の直近90日**（データ不足時は `seo_strategies` の想定値にフォールバックし「想定値」バッジを出す）。ボトルネック = 達成率が最小の段 |
+| **B. クラスタマップ** | `seo_clusters` + `seo_keywords` + `seo_pages` + `seo_page_revenue()` | 記事数 = クラスタに紐づく公開ページ数 ÷ 目標本数。受注額は F-305 のページ別売上RPCをクラスタで集約 |
+| **C. 3層カバレッジ** | `seo_keywords.intent_layer` + `seo_query_weekly` | 層ごとに KW数・10位内数・流入・問合せ（着地ページ経由の推定帰属） |
+| **D. ロードマップ** | `seo_strategy_milestones` | 期限・完了状態。完了は手動 or KPI条件の自動判定（`kpi_json`） |
+| **E. 勝ち筋** | `seo_page_revenue()` + `seo_insights(kind='high_cvr_page')` + `content_ideas(source='sales_need')` | CVRがサイト平均の2倍以上のページ / 営業起点の未着手ネタ |
+| **F. ズレ検知** | 下記 §10.3 | 決定的ルール。該当時は通知も飛ばす |
+
+## 10.3 戦略ズレ検知ルール（毎日 `/api/cron/seo-verify` で判定）
+
+**「毎日の改善が戦略から離れていないか」を機械が見張る**。日次PDCAの最大のリスクは、目先の小改善に最適化されて戦略が進まないこと。
+
+| # | ルール | 意味 |
+|---|---|---|
+| Z1 | 現フェーズのマイルストーンが**期限14日前で未着手** | 90日計画が遅延 |
+| Z2 | 直近30日の実行施策のうち、**優先度1・2のクラスタに紐づくものが30%未満** | 戦力配分が戦略とズレている |
+| Z3 | **第1層KWのカバレッジ**（10位内比率）が90日間で改善していない | 最も売上に近い層が動いていない |
+| Z4 | ファネルのボトルネック段が**60日間同じまま** | 効かない打ち手を続けている |
+| Z5 | クラスタ完成率が全て70%未満のまま**新クラスタに着手** | 分散。専門性が集中しない |
+| Z6 | 目標達成ペース（現在の伸び率の線形外挿）が**期限に間に合わない** | 目標 or 投下量の見直し時期 |
+
+> Z2・Z5 は「戦略を持たないSEOツール」には原理的に出せない警告であり、本機能の存在意義。
+
+## 10.4 戦略と日次提案の接続（重要）
+
+`seo_proposals` に `cluster_id` / `intent_layer` / `strategy_phase` を持たせ、**提案は必ず戦略のどこに効くかを明示する**。
+
+- 提案カードに「**①生成AI研修クラスタ / 第1層 / Phase 1**」バッジを表示
+- **ICEスコアに戦略係数を掛ける**: 優先クラスタ ×1.5 / 第1層 ×1.3 / 現フェーズの施策 ×1.2（既定値。`seo_strategies` で調整可）
+  → 同じ期待売上なら、**戦略に沿った施策が上に来る**
+- どのクラスタにも紐づかない提案は「その他」に分類し、**1日の提案枠10件のうち最大2件まで**に制限
+
+> **設計判断**: 期待売上（§6.2）だけで並べると、短期に効くCTR改善ばかりが上位を占め、クラスタ構築（3ヶ月後に効く）が永久に後回しになる。**戦略係数はこの近視眼を補正するための仕組み**。
+
+## 10.5 データモデル（migration 0184_seo_strategy.sql）
+
+```sql
+-- 戦略（期間・目標・想定レート）。同時に有効なのは1サイト1本。
+create table if not exists public.seo_strategies (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  site_id uuid not null references seo_sites(id) on delete cascade,
+  name text not null,                            -- '2026下期 集客戦略'
+  period_from date not null, period_to date not null,
+  target_monthly_revenue numeric not null,       -- SEO由来の月間目標売上
+  -- CRM実績が不足する初期のフォールバック値（実績が揃えば実績を優先）
+  assumed_avg_deal_amount numeric, assumed_win_rate numeric,
+  assumed_opp_rate numeric, assumed_valid_rate numeric,
+  assumed_inquiry_cvr numeric, assumed_ctr numeric,
+  -- ICEに掛ける戦略係数
+  weight_priority_cluster numeric default 1.5,
+  weight_layer1 numeric default 1.3,
+  weight_current_phase numeric default 1.2,
+  status text not null default 'active',         -- 'draft'|'active'|'archived'
+  note_md text,                                  -- 戦略メモ（戦略ドキュメントへのリンク等）
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+
+-- トピッククラスタ（＝商材。戦略 §4）
+create table if not exists public.seo_clusters (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null, site_id uuid not null references seo_sites(id) on delete cascade,
+  name text not null,                            -- '生成AI企業研修'
+  product_id uuid references products(id) on delete set null,   -- ★商材マスタと接続
+  pillar_page_id uuid references seo_pages(id) on delete set null,
+  target_article_count int not null default 8,
+  priority int not null default 3,               -- 1(最優先)〜5
+  status text not null default 'planned',        -- 'planned'|'active'|'completed'|'out_of_scope'
+  note text,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  unique (site_id, name)
+);
+
+-- 90日ロードマップのマイルストーン（戦略 §9）
+create table if not exists public.seo_strategy_milestones (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null,
+  strategy_id uuid not null references seo_strategies(id) on delete cascade,
+  phase text not null,                           -- 'phase0'|'phase1'|'phase2'|'phase3'|'phase4'
+  seq int not null default 0,
+  title text not null,                           -- '料金ページの新設'
+  due_date date,
+  status text not null default 'todo',           -- 'todo'|'in_progress'|'done'|'skipped'
+  kpi_json jsonb,                                -- 自動完了判定の条件（例 {"inquiries_delta_min":3}）
+  action_id uuid references seo_actions(id) on delete set null,  -- 施策と紐付け
+  completed_at timestamptz, note text
+);
+
+-- 既存テーブルへの追加
+alter table seo_keywords  add column if not exists cluster_id uuid references seo_clusters(id) on delete set null;
+alter table seo_keywords  add column if not exists intent_layer smallint;   -- 1|2|3（戦略 §3）
+alter table seo_pages     add column if not exists cluster_id uuid references seo_clusters(id) on delete set null;
+alter table seo_pages     add column if not exists page_role text;          -- 'pillar'|'cluster'|'service'|'case'|'pricing'|'other'
+alter table seo_proposals add column if not exists cluster_id uuid references seo_clusters(id) on delete set null;
+alter table seo_proposals add column if not exists intent_layer smallint;
+alter table seo_proposals add column if not exists strategy_weight numeric default 1.0;  -- 適用された戦略係数
+
+-- 戦略ズレ検知の結果（§10.3）。日次で洗い替え。
+create table if not exists public.seo_strategy_alerts (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null, strategy_id uuid not null references seo_strategies(id) on delete cascade,
+  rule_code text not null,                       -- 'Z1'..'Z6'
+  severity text not null default 'medium',
+  title text not null, detail_json jsonb not null default '{}'::jsonb,
+  status text not null default 'open',           -- 'open'|'acknowledged'|'resolved'
+  first_detected_at timestamptz not null default now(), resolved_at timestamptz,
+  unique (strategy_id, rule_code, status)
+);
+
+-- 逆算ファネル（Aブロック）。目標・現在・ギャップを1本で返す
+create or replace function public.seo_strategy_funnel(p_strategy uuid, p_month date)
+returns table (
+  stage text, target_value numeric, actual_value numeric, achievement_rate numeric,
+  gap numeric, rate_used numeric, rate_source text   -- 'crm_actual'|'assumed'
+) language plpgsql stable security invoker set search_path = public as $$ ... $$;
+
+-- クラスタ進捗（Bブロック）
+create or replace function public.seo_cluster_progress(p_site uuid, p_from date, p_to date)
+returns table (
+  cluster_id uuid, name text, priority int, has_pillar boolean,
+  article_count int, target_article_count int, avg_position numeric,
+  clicks bigint, inquiries int, opportunities int, revenue numeric, completion_rate numeric
+) language sql stable security invoker set search_path = public as $$ ... $$;
+
+-- 3層カバレッジ（Cブロック）
+create or replace function public.seo_intent_coverage(p_site uuid, p_from date, p_to date)
+returns table (
+  intent_layer smallint, keyword_count int, ranked_top10 int, coverage_rate numeric,
+  impressions bigint, clicks bigint, inquiries int
+) language sql stable security invoker set search_path = public as $$ ... $$;
+```
+
+## 10.6 初期セットアップ（戦略ドキュメント → DB）
+
+`docs/SEO_STRATEGY_2026-07.md` の内容を、導入時に画面から入力する（seed ではなく**人が決める**もの）。
+
+1. `/app/seo/strategy/setup` で目標売上・期間を入力 → `seo_strategies` 1行
+2. **クラスタは商材マスタ（`products`）から自動で候補生成** → 優先度と目標本数を人が調整 → `seo_clusters`
+3. マイルストーンは **Phase 0〜4 のテンプレート**（戦略 §9 の表）を初期投入 → 期限のみ調整
+4. KW台帳は棚卸し結果をCSV取込 → `intent_layer` と `cluster_id` を付与（未分類KWは画面から一括分類。GSCで新たに現れたKWは毎晩「未分類」として溜まり、分類を促す）
+
+> **運用の肝**: 戦略の見直しは**四半期に1回**。日々変えるものではない。ただし §10.3 のズレ検知が3件以上openになったら、その時点でレビューを促す通知を出す。
+
+---
+
+## 11. 権限・RLS・セキュリティ
 
 | 操作 | 権限 |
 |---|---|
 | SEO画面の閲覧 | テナントメンバー全員（外部営業も閲覧可。数値は集客の全体像で個人情報を含まない） |
 | ターゲットKW・サイト設定の編集 | `can_edit_role`（owner/admin/sales_manager） |
+| **戦略（目標・クラスタ・マイルストーン）の編集** | **owner/admin のみ**（事業目標そのものであり、日常操作で変わってはいけない） |
+| マイルストーンの完了記録 | `can_edit_role` |
 | 提案の承認・却下 | owner/admin/sales_manager。**主要ページ（G5）は owner/admin のみ** |
 | 施策の「反映済み」記録 | 担当者本人 + 上記ロール |
 | ジョブ on/off | owner/admin（既存 `batch_job_settings` のポリシーを踏襲） |
@@ -740,9 +947,9 @@ SEO ROAS = SEO由来の受注金額 ÷ 月間コスト
 
 ---
 
-## 11. ジョブ設計
+## 12. ジョブ設計
 
-### 11.1 Vercel Cron（決定的処理・`vercel.json` に追加）
+### 12.1 Vercel Cron（決定的処理・`vercel.json` に追加）
 
 | path | schedule (UTC) | JST | 処理 | 上限 |
 |---|---|---|---|---|
@@ -754,7 +961,7 @@ SEO ROAS = SEO由来の受注金額 ÷ 月間コスト
 - **冪等性**: 全て upsert（`unique` 制約が実質のキー）。同日再実行しても壊れない。
 - **60秒制限対策**: GSCは日付×ディメンションでページングし、`ingest_cursor` を `seo_sites.notes` ではなく専用列 `last_ingested_date` に持って**続きから再開**。1回で終わらない場合は翌日の実行で自動追いつく。
 
-### 11.2 夜間 Claude Code セッション（方針A・従量課金ゼロ）
+### 12.2 夜間 Claude Code セッション（方針A・従量課金ゼロ）
 
 `docs/exec-plan/runbooks/SEO_DAILY.md`（新規）に手順化。既存 NIGHTLY_BATCH.md と同じ様式:
 
@@ -768,7 +975,7 @@ SEO ROAS = SEO由来の受注金額 ÷ 月間コスト
 
 ---
 
-## 12. データ量試算と保持ポリシー
+## 13. データ量試算と保持ポリシー
 
 Supabase（現状Free、Pro移行推奨）の容量・CPUを守るため、**最初から保持ポリシーを設計に入れる**。
 
@@ -788,7 +995,7 @@ Supabase（現状Free、Pro移行推奨）の容量・CPUを守るため、**最
 
 ---
 
-## 13. 画面IA・ナビ配置
+## 14. 画面IA・ナビ配置
 
 `nav-config.ts` の **「分析」グループ**に1項目追加（既存IA方針＝メニューを増やしすぎない、に従いハブ配下へ集約）。
 
@@ -799,7 +1006,9 @@ Supabase（現状Free、Pro移行推奨）の容量・CPUを守るため、**最
 | ルート | 内容 |
 |---|---|
 | `/app/seo` | サマリー（§5.4）。KPIファネル・今日の要対応・今日の提案・効果検証サマリー |
-| `/app/seo/keywords` | KW台帳。順位推移・機会・商材紐付け。CSV入出力（既存 `lead-export` 様式） |
+| **`/app/seo/strategy`** | **戦略ボード（§10）。逆算ファネル・クラスタマップ・3層カバレッジ・90日進捗・ズレ検知** |
+| `/app/seo/strategy/setup` | 戦略の初期設定（目標・クラスタ・マイルストーン）。四半期に1回見直す |
+| `/app/seo/keywords` | KW台帳。順位推移・機会・**クラスタ/意図層の分類**・商材紐付け。CSV入出力（既存 `lead-export` 様式） |
 | `/app/seo/pages` | ページ一覧。クリック/CVR/欠陥/内部リンク数・**売上貢献額**でソート |
 | `/app/seo/proposals` | 提案の承認キュー（一覧で一括承認可能） |
 | `/app/seo/actions` | 実行チケット（カンバン: todo/進行中/反映待ち/検証中/完了） |
@@ -815,7 +1024,7 @@ Supabase（現状Free、Pro移行推奨）の容量・CPUを守るため、**最
 
 ---
 
-## 14. 段階導入ロードマップ
+## 15. 段階導入ロードマップ
 
 各WOは独立して価値が出る単位で切る（既存 exec-plan の様式に合わせ `docs/exec-plan/WO-3x_*.md` を作成）。
 
@@ -823,12 +1032,15 @@ Supabase（現状Free、Pro移行推奨）の容量・CPUを守るため、**最
 |---|---|---|---|---|
 | **WO-30** | 計測基盤 | 0180 / `google-sa.ts` / `seo-ingest` / `/app/seo` サマリー | GSC/GA4の数値が毎日入り、KPIファネルが表示される。**ベースライン数値が確定** | 3〜4日 |
 | **WO-31** | アトリビューション | 0183 / lead-intake 拡張 / HP用スニペット / ファネルRPC | 新規問合せに着地ページが記録され、SEO由来の売上が算出できる | 2日 |
-| **WO-32** | 分析（F-301完成） | クロール / 欠陥検出 / 12種の検出ロジック + テスト | 毎朝 `seo_insights` が生成され、機会が優先度順に並ぶ | 3日 |
-| **WO-33** | 提案（F-302） | 0181 / 期待値エンジン / batch API 2本 / 承認UI | 毎朝10件以内の提案が**期待リード数付き**で出て、承認/却下できる | 3日 |
-| **WO-34** | 実行（F-303） | 0182 / 指示書生成 / content_ideas連携 / カンバン / 通知 | 承認→成果物→反映記録が1画面で回る。指示書がそのまま渡せる | 3〜4日 |
-| **WO-35** | 検証・学習（F-304） | `seo-verify` / DiD判定 / playbook_stats / 結果画面 | 14日後に自動で勝敗が付き、勝率がConfidenceに反映される | 2日 |
+| **WO-32** | **戦略ボード（F-306）** | 0184 / 逆算・クラスタ・3層のRPC / `/app/seo/strategy` / 初期設定UI | 目標に対する各段のギャップ・クラスタ進捗・3層カバレッジが1画面で見える | 3日 |
+| **WO-33** | 分析（F-301完成） | クロール / 欠陥検出 / 12種の検出ロジック + テスト | 毎朝 `seo_insights` が生成され、機会が優先度順に並ぶ | 3日 |
+| **WO-34** | 提案（F-302） | 0181 / 期待値エンジン + **戦略係数** / batch API 2本 / 承認UI | 毎朝10件以内の提案が**期待リード数 + 戦略バッジ付き**で出て、承認/却下できる | 3日 |
+| **WO-35** | 実行（F-303） | 0182 / 指示書生成 / content_ideas連携 / カンバン / 通知 | 承認→成果物→反映記録が1画面で回る。指示書がそのまま渡せる | 3〜4日 |
+| **WO-36** | 検証・学習（F-304） | `seo-verify` / DiD判定 / playbook_stats / **ズレ検知 Z1〜Z6** / 結果画面 | 14日後に自動で勝敗が付き、勝率がConfidenceに反映される。戦略ズレが警告される | 2〜3日 |
 
-**最短の価値提供順**: WO-30 → WO-31 で「**今どれだけ集客できていて、それがいくらの売上になっているか**」が可視化される（ここまで1週間）。以降が改善エンジン。
+**最短の価値提供順**: WO-30 → WO-31 で「**今どれだけ集客できていて、それがいくらの売上になっているか**」が可視化される（ここまで1週間）。続く WO-32 で「**目標まであと何が足りないか**」が出る。以降が改善エンジン。
+
+> **WO-32 を分析・提案より先に置く理由**: 戦略の型（クラスタ・意図層・目標）が先に無いと、F-302 の提案が「戦略に紐づかない小改善の羅列」になる。**器を先に作ってから、そこに日次の改善を流し込む**順序にする。
 
 **リリース後30日の成功指標（目標値は導入時にベースラインから設定）**
 1. 提案の承認率 ≥ 50%（低ければ検出の的外れ＝閾値調整）
@@ -839,7 +1051,7 @@ Supabase（現状Free、Pro移行推奨）の容量・CPUを守るため、**最
 
 ---
 
-## 15. 意思決定が必要な論点
+## 16. 意思決定が必要な論点
 
 | # | 論点 | 選択肢 | 本設計の推奨 |
 |---|---|---|---|
@@ -850,12 +1062,15 @@ Supabase（現状Free、Pro移行推奨）の容量・CPUを守るため、**最
 | 5 | 提案の承認者 | ①代表のみ ②マーケ担当まで | **②**（主要ページのみ代表承認＝G5）。日次で回すには承認者が2人以上必要 |
 | 6 | 記事の執筆 | ①既存 `content_draft` ジョブを再開（現在停止中）②人が執筆 | SEO提案からの起票に限り**品質基準（構成・一次情報・監修）を満たしたもののみ再開**を推奨 |
 | 7 | 効果検証の判定窓 | ①14日 ②28日 | **①を既定・②を確定値**（CTR施策は3日速報）。順位系は28日推奨 |
+| 8 | **SEOに割り当てる売上目標** | ①月¥150万 ②月¥300万 ③それ以上 | **②（12ヶ月）**。戦略ボードの全数値がここから逆算される。詳細は `SEO_STRATEGY_2026-07.md` §11 |
 
-> 1・3・6 は**実装着手前に確定が必要**（1 = WO-30 の前提、3 = WO-34 の設計分岐、6 = 記事施策の可否）。2・4・5・7 は既定値で開始し、運用しながら変更できる。
+> 1・3・6 は**実装着手前に確定が必要**（1 = WO-30 の前提、3 = WO-35 の設計分岐、6 = 記事施策の可否）。**8 は WO-32（戦略ボード）の前提**。2・4・5・7 は既定値で開始し、運用しながら変更できる。
+>
+> 戦略側の論点（記事の生産体制・料金の公開範囲・導入事例の掲載可否・独自調査の実施）は `docs/SEO_STRATEGY_2026-07.md` §11 に分離した。
 
 ---
 
-## 16. 非スコープ（v1でやらないこと）
+## 17. 非スコープ（v1でやらないこと）
 
 | 項目 | 理由 |
 |---|---|
@@ -876,6 +1091,8 @@ supabase/migrations/
   0181_seo_analysis.sql          seo_keywords / seo_insights
   0182_seo_actions.sql           seo_proposals / seo_actions / seo_action_results / seo_playbook_stats
   0183_seo_attribution.sql       leads列追加 / RPC / seo_settings / batch_job_settings 3行
+  0184_seo_strategy.sql          seo_strategies / seo_clusters / seo_strategy_milestones
+                                 / seo_strategy_alerts / 既存表への cluster_id・intent_layer 追加 / 逆算RPC
 src/lib/seo/
   google-sa.ts        サービスアカウントJWT → アクセストークン（SDK不使用）
   gsc.ts / ga4.ts     Search Console / GA4 Data API クライアント
@@ -883,16 +1100,18 @@ src/lib/seo/
   analyze.ts          §5.3 の12検出（純関数・テスト対象）
   benchmark.ts        順位別ベンチマークCTR・商用意図判定
   expected-value.ts   §6.2 期待リード数・期待売上（純関数・テスト対象）
+  strategy.ts         §10 逆算ファネル・クラスタ進捗・3層カバレッジ・戦略係数（純関数・テスト対象）
+  strategy-alerts.ts  §10.3 ズレ検知 Z1〜Z6（純関数・テスト対象）
   verify.ts           §8.1 DiD判定（純関数・テスト対象）
   attribution.ts      acquisition_type 判定・着地ページ→推定KW
 src/lib/data/seo.ts   画面用の参照ヘルパー（RLS前提）
 src/app/api/cron/seo-ingest|seo-crawl|seo-verify/route.ts
 src/app/api/batch/seo-analysis|seo-proposal|seo-action-draft/route.ts
-src/app/app/seo/(page|keywords|pages|proposals|actions|results|settings)/page.tsx
+src/app/app/seo/(page|strategy|strategy/setup|keywords|pages|proposals|actions|results|settings)/page.tsx
 src/components/seo/*
-src/server/actions/seo.ts        承認・却下・反映記録・KW編集
-tests/seo-analyze.test.ts / seo-expected-value.test.ts / seo-verify.test.ts
-docs/exec-plan/WO-30〜35_*.md / docs/exec-plan/runbooks/SEO_DAILY.md
+src/server/actions/seo.ts        承認・却下・反映記録・KW編集・戦略/クラスタ/マイルストーン編集
+tests/seo-analyze.test.ts / seo-expected-value.test.ts / seo-verify.test.ts / seo-strategy.test.ts
+docs/exec-plan/WO-30〜36_*.md / docs/exec-plan/runbooks/SEO_DAILY.md
 ```
 
 ## 付録B. 用語
