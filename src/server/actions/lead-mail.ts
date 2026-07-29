@@ -137,6 +137,17 @@ async function resolveTargets(filters: LeadMailFilters, templateId: string): Pro
     for (const m of sent ?? []) if (m.lead_id) sentSet.add(String(m.lead_id));
   }
 
+  // 同一テンプレで予約済みのリードも除外(予約は email_messages を作らないため別途突合)
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data: sch } = await sb
+      .from("scheduled_emails")
+      .select("lead_id")
+      .eq("template_id", templateId)
+      .eq("status", "scheduled")
+      .in("lead_id", ids.slice(i, i + 200));
+    for (const m of sch ?? []) if (m.lead_id) sentSet.add(String(m.lead_id));
+  }
+
   const eligible = withEmail.filter((t) => !suppressedSet.has(t.email) && !sentSet.has(t.id));
   const suppressed = withEmail.filter((t) => suppressedSet.has(t.email)).length;
   const alreadySent = withEmail.filter((t) => !suppressedSet.has(t.email) && sentSet.has(t.id)).length;
@@ -221,6 +232,7 @@ export interface BulkMailResult {
   failures?: { email: string; error: string }[];
   skipped?: { suppressed: number; alreadySent: number; noEmail: number };
   batchId?: string;   // セグメント履歴(lead_mail_batches)のID。継続チャンクの呼出に渡す
+  scheduled?: number; // 予約送信で積んだ件数(即時送信の場合は未設定)
 }
 
 /**
@@ -239,6 +251,8 @@ export async function sendLeadBulkMailAction(
     /** 送信直前の直接編集(全宛先に適用。{contact}等の差し込み変数は使用可)。未指定はテンプレの内容 */
     subjectTmpl?: string;
     bodyTmpl?: string;
+    /** 予約送信(UTC ISO)。指定時は即時送信せず scheduled_emails に積む(cronが指定時刻に送信) */
+    scheduledAtIso?: string;
   },
 ): Promise<BulkMailResult> {
   const ctx = await requireCtx();
@@ -313,6 +327,38 @@ export async function sendLeadBulkMailAction(
   const senderName = (acc.from_name as string) || "";
   let sent = 0;
   const failures: { email: string; error: string }[] = [];
+
+  // 予約送信: 即時に送らず scheduled_emails に積む(cronが指定時刻に本人アカウントで送信)。
+  // 挿入のみで高速なため、チャンク分割せず対象全件(最大300)を1回で積む。
+  if (opts?.scheduledAtIso) {
+    const rows = r.targets.map((t) => {
+      const vars = { contact: t.name, company: t.company, opportunity: "", sender: senderName };
+      return {
+        tenant_id: ctx.tenantId,
+        scheduled_at: opts.scheduledAtIso,
+        sender_user_id: ctx.userId,
+        to_addr: t.email,
+        subject: renderEmailTemplate(subjectTmpl, vars),
+        body: renderEmailTemplate(bodyTmpl, vars),
+        lead_id: t.id,
+        template_id: templateId,
+        mail_batch_id: batchId,
+        unsubscribe_footer: true,
+        create_activity: false,
+        created_by: ctx.userId,
+      };
+    });
+    const { error: schErr } = await sb.from("scheduled_emails").insert(rows);
+    if (schErr) return { ok: false, error: `予約に失敗しました: ${schErr.message}`, batchId: batchId ?? undefined };
+    await logAudit({
+      tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.bulk_schedule",
+      target: `template:${templateId}`, meta: { count: rows.length, at: opts.scheduledAtIso }, ip: clientIp(),
+    });
+    revalidatePath("/app/email/scheduled");
+    return { ok: true, sent: 0, scheduled: rows.length, failed: 0, batchId: batchId ?? undefined,
+      skipped: { suppressed: r.suppressed, alreadySent: r.alreadySent, noEmail: r.noEmail } };
+  }
+
   for (const t of batch) {
     const vars = { contact: t.name, company: t.company, opportunity: "", sender: senderName };
     const res = await deliverTrackedEmail(sb, {

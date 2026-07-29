@@ -26,6 +26,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/scheduled-mail",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/pmo-nightly",
       "schedule": "0 16 * * *"
     },

@@ -94,7 +94,7 @@ export default async function BusinessCardsPage({
         }
       />
 
-      <div className="grid grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <Card>
           <div className="text-xs text-ink/50">名刺総数</div>
           <div className="stat-value mt-1">{stats.total.toLocaleString()}<span className="stat-unit">枚</span></div>
@@ -107,6 +107,15 @@ export default async function BusinessCardsPage({
         <Card>
           <div className="text-xs text-ink/50">未連携</div>
           <div className="stat-value mt-1">{(stats.total - stats.linked).toLocaleString()}<span className="stat-unit">枚</span></div>
+        </Card>
+        <Card>
+          <div className="text-xs text-ink/50">未リード化</div>
+          <div className={`stat-value mt-1 ${stats.notLead > 0 ? "text-amber-600" : ""}`}>{stats.notLead.toLocaleString()}<span className="stat-unit">枚</span></div>
+          <div className="text-xs text-ink/40 mt-1">
+            {stats.notLead > 0
+              ? "リード一覧・一括メールの対象外です。右上の「リード化」で取り込めます"
+              : "すべてリードとして取り込み済みです"}
+          </div>
         </Card>
       </div>
 

@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { FileSpreadsheet, Link2, Upload, UserCheck } from "lucide-react";
+import { FileSpreadsheet, Link2, Upload, UserCheck, UserPlus } from "lucide-react";
 import { decodeFileText, detectDelim, parseDelimited, uniquifyHeaders } from "@/lib/lead-import";
 import { dedupCards, findHeaderRowIndex, rowsToCardInputs, type BusinessCardInput } from "@/lib/card-import";
-import { importBusinessCardsAction, runCardMatchingAction, logCardImportAudit, type MatchCardsResult } from "@/server/actions/business-cards";
+import { importBusinessCardsAction, runCardMatchingAction, convertCardsToLeadsAction, logCardImportAudit, type MatchCardsResult, type ConvertCardsResult } from "@/server/actions/business-cards";
 
 const CHUNK = 300;
 
@@ -25,6 +25,10 @@ export function CardImportForm({ members, currentUserId }: { members: { id: stri
   const [inserted, setInserted] = useState(0);
   const [skipped, setSkipped] = useState(0);
   const [match, setMatch] = useState<MatchCardsResult | null>(null);
+  // 取込した名刺をそのままリードとして扱う(既定ON)。OFFにすると名刺のみ登録され、
+  // リード一覧・一括メール・スコアリングの対象にならない
+  const [toLeads, setToLeads] = useState(true);
+  const [converted, setConverted] = useState<ConvertCardsResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const onFile = async (f: File | null) => {
@@ -57,12 +61,14 @@ export function CardImportForm({ members, currentUserId }: { members: { id: stri
     setProgress(0);
     let ins = 0;
     let skp = 0;
+    const newIds: string[] = [];
     try {
       for (let i = 0; i < cards.length; i += CHUNK) {
         const r = await importBusinessCardsAction(cards.slice(i, i + CHUNK), exchangerId);
         if (!r.ok) throw new Error(r.error ?? "取込に失敗しました");
         ins += r.inserted;
         skp += r.skipped;
+        newIds.push(...(r.insertedIds ?? []));
         setProgress(Math.min(cards.length, i + CHUNK));
         setInserted(ins);
         setSkipped(skp);
@@ -71,6 +77,8 @@ export function CardImportForm({ members, currentUserId }: { members: { id: stri
       await logCardImportAudit({ inserted: ins, skipped: skp, total: cards.length });
       // 取込後にCRMマッチングを自動実行
       setMatch(await runCardMatchingAction());
+      // 取込した名刺をリード化(既定ON)。今回登録分のみを対象にする
+      if (toLeads && newIds.length > 0) setConverted(await convertCardsToLeadsAction({ cardIds: newIds }));
       setPhase("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -101,6 +109,16 @@ export function CardImportForm({ members, currentUserId }: { members: { id: stri
             ))}
           </select>
           <span className="text-xs text-ink/45">この取込で登録する名刺の交換者として記録されます。</span>
+          <label className="w-full flex items-start gap-2 pt-2 mt-1 border-t border-black/[0.06] cursor-pointer">
+            <input type="checkbox" checked={toLeads} onChange={(e) => setToLeads(e.target.checked)} className="accent-teal-primary mt-0.5" />
+            <span className="text-sm text-ink/70">
+              <b>取込後にリード化する</b>（推奨）
+              <span className="block text-xs text-ink/45">
+                リードにすると<b>リード一覧に表示され</b>、スコアリング・一括メール・架電キューの対象になります。
+                同じメールのリードが既にある場合は新規作成せず紐付けます。OFFにすると名刺としてのみ登録されます。
+              </span>
+            </span>
+          </label>
         </div>
       )}
 
@@ -197,8 +215,20 @@ export function CardImportForm({ members, currentUserId }: { members: { id: stri
               </li>
             )}
             {match && !match.ok && <li className="text-rose-600">{match.error}</li>}
+            {converted?.ok && (
+              <li className="flex items-center gap-1.5">
+                <UserPlus size={14} className="text-ink/40" />
+                リード化: 新規 <b>{converted.created}</b> 件 / 既存リードへ紐付け {converted.linkedExisting} 件
+                <span className="text-xs text-ink/40">（リード一覧・一括メールの対象になりました）</span>
+              </li>
+            )}
+            {converted && !converted.ok && <li className="text-amber-600">リード化: {converted.error}</li>}
+            {!toLeads && <li className="text-xs text-amber-600">リード化していないため、リード一覧には表示されません（名刺一覧の「リード化」から後で実行できます）。</li>}
           </ul>
-          <Link href="/app/business-cards" className="btn-primary inline-block">名刺一覧を見る</Link>
+          <div className="flex gap-2">
+            <Link href="/app/business-cards" className="btn-primary inline-block">名刺一覧を見る</Link>
+            {(converted?.created ?? 0) > 0 && <Link href="/app/leads" className="btn-ghost inline-block">リード一覧を見る</Link>}
+          </div>
         </div>
       )}
     </div>
