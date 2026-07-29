@@ -11,7 +11,10 @@ export const EMAIL_TEMPLATE_VARS: { key: string; label: string }[] = [
   { key: "contact", label: "担当者名" },
   { key: "company", label: "会社名" },
   { key: "opportunity", label: "案件名" },
-  { key: "sender", label: "自分(署名)" },
+  { key: "sender", label: "差出人名(フルネーム)" },
+  { key: "sender_last", label: "差出人の姓" },
+  { key: "sender_email", label: "差出人のメールアドレス" },
+  { key: "signature", label: "差出人の署名ブロック" },
 ];
 
 export type EmailVars = Record<string, string | null | undefined>;

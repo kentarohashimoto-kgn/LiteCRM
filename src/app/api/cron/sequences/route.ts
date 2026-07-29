@@ -4,6 +4,7 @@ import { checkBearer } from "@/lib/secure-compare";
 import { decryptSecret, mailCredSecretConfigured } from "@/lib/crypto-mail";
 import { deliverTrackedEmail } from "@/lib/mail-deliver";
 import { refreshAccessToken } from "@/lib/google-oauth";
+import { resolveSender } from "@/lib/sender";
 import { renderEmailTemplate } from "@/lib/email";
 import { addDays, jstToday, evalStop, type SequenceStep, type StopOn } from "@/lib/sequences";
 
@@ -53,7 +54,7 @@ export async function GET(req: Request) {
     accIds.length ? admin.from("accounts").select("id, name").in("id", accIds) : Promise.resolve({ data: [] as never[] }),
     contactIds.length ? admin.from("contacts").select("id, name").in("id", contactIds) : Promise.resolve({ data: [] as never[] }),
     admin.from("profiles").select("id, display_name, email").in("id", userIds),
-    admin.from("user_mail_accounts").select("user_id, auth_method, smtp_host, smtp_port, smtp_secure, smtp_username, smtp_password_enc, oauth_refresh_token_enc, oauth_email, from_email, from_name, bcc_self, status").in("user_id", userIds),
+    admin.from("user_mail_accounts").select("user_id, auth_method, smtp_host, smtp_port, smtp_secure, smtp_username, smtp_password_enc, oauth_refresh_token_enc, oauth_email, from_email, from_name, bcc_self, status, signature").in("user_id", userIds),
   ]);
 
   const seqMap = new Map((seqR.data ?? []).map((s) => [s.id as string, s]));
@@ -129,7 +130,15 @@ export async function GET(req: Request) {
         contact: e.contact_id ? contactMap.get(e.contact_id as string) ?? null : null,
         company: e.account_id ? accMap.get(e.account_id as string) ?? null : null,
         opportunity: (opp?.name as string) ?? null,
-        sender: profMap.get(e.enrolled_by as string) ?? "",
+        // 差出人依存({sender}/{sender_last}/{sender_email}/{signature})は送信者アカウントから解決
+        ...resolveSender({
+          fromName: acc.from_name as string | null,
+          displayName: profMap.get(e.enrolled_by as string) ?? null,
+          fromEmail: acc.from_email as string | null,
+          oauthEmail: acc.oauth_email as string | null,
+          authMethod: acc.auth_method as string | null,
+          signature: acc.signature as string | null,
+        }),
       };
       const common = {
         tenantId: e.tenant_id as string,

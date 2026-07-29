@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { PenSquare, Eye, MousePointerClick } from "lucide-react";
 import { renderEmailTemplate, EMAIL_CATEGORY_LABEL } from "@/lib/email";
+import type { SenderVars } from "@/lib/sender";
 
 /**
  * テンプレ設定 ↔ 実際に届くメール の対比プレビュー。
@@ -13,7 +14,10 @@ import { renderEmailTemplate, EMAIL_CATEGORY_LABEL } from "@/lib/email";
 
 export interface TplRow { id: string; name: string; category: string; subject_tmpl: string; body_tmpl: string }
 
-const VAR_LABEL: Record<string, string> = { contact: "相手の氏名", company: "会社名", opportunity: "案件名", sender: "差出人名" };
+const VAR_LABEL: Record<string, string> = {
+  contact: "相手の氏名", company: "会社名", opportunity: "案件名",
+  sender: "差出人名", sender_last: "差出人の姓", sender_email: "差出人のメールアドレス", signature: "差出人の署名ブロック",
+};
 
 /** 送信方法 × 内容の組み合わせ。配信停止フッターの有無がこれで決まる。 */
 type PreviewMode = "bulk_ad" | "bulk_plain" | "single";
@@ -72,7 +76,9 @@ function RenderedBody({ text }: { text: string }) {
   );
 }
 
-export function TemplatePreview({ templates, senderName, senderEmail }: { templates: TplRow[]; senderName: string; senderEmail: string }) {
+export function TemplatePreview({ templates, senderVars }: { templates: TplRow[]; senderVars: SenderVars }) {
+  const senderName = senderVars.sender;
+  const senderEmail = senderVars.sender_email;
   const [tplId, setTplId] = useState(templates[0]?.id ?? "");
   const [contact, setContact] = useState("山田 太郎");
   const [company, setCompany] = useState("株式会社サンプル");
@@ -80,7 +86,12 @@ export function TemplatePreview({ templates, senderName, senderEmail }: { templa
   const [mode, setMode] = useState<PreviewMode>("bulk_ad");
   const withFooter = mode === "bulk_ad";
   const tpl = useMemo(() => templates.find((t) => t.id === tplId) ?? null, [templates, tplId]);
-  const vars = { contact, company, opportunity: "", sender: senderName || "(差出人名未設定)" };
+  const vars = {
+    contact, company, opportunity: "",
+    ...senderVars,
+    sender: senderName || "(差出人名未設定)",
+    signature: senderVars.signature || "(署名未設定 — メール設定で登録してください)",
+  };
   const subject = tpl ? renderEmailTemplate(tpl.subject_tmpl, vars) : "";
   const body = tpl ? renderEmailTemplate(tpl.body_tmpl, vars) : "";
 

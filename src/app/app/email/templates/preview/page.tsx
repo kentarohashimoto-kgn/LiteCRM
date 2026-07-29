@@ -4,6 +4,7 @@ import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui/primitives";
 import { TemplatePreview, type TplRow } from "@/components/email/template-preview";
+import { resolveSender } from "@/lib/sender";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,19 @@ export const dynamic = "force-dynamic";
 export default async function TemplatePreviewPage() {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
-  const [{ data: tpls }, { data: acc }] = await Promise.all([
+  const [{ data: tpls }, { data: acc }, { data: prof }] = await Promise.all([
     sb.from("email_templates").select("id, name, category, subject_tmpl, body_tmpl").order("category").order("name"),
-    sb.from("user_mail_accounts").select("from_name, from_email, oauth_email").eq("user_id", ctx.userId).maybeSingle(),
+    sb.from("user_mail_accounts").select("from_name, from_email, oauth_email, auth_method, signature").eq("user_id", ctx.userId).maybeSingle(),
+    sb.from("profiles").select("display_name").eq("id", ctx.userId).maybeSingle(),
   ]);
+  const senderVars = resolveSender({
+    fromName: acc?.from_name as string | null,
+    displayName: prof?.display_name as string | null,
+    fromEmail: acc?.from_email as string | null,
+    oauthEmail: acc?.oauth_email as string | null,
+    authMethod: acc?.auth_method as string | null,
+    signature: acc?.signature as string | null,
+  });
 
   return (
     <div>
@@ -32,8 +42,7 @@ export default async function TemplatePreviewPage() {
       />
       <TemplatePreview
         templates={(tpls ?? []) as TplRow[]}
-        senderName={(acc?.from_name as string) ?? ""}
-        senderEmail={((acc?.oauth_email as string) || (acc?.from_email as string)) ?? ""}
+        senderVars={senderVars}
       />
     </div>
   );

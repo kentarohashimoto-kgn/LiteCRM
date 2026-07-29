@@ -73,7 +73,8 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
     contact: preview?.sampleContact || "(担当者名)",
     company: preview?.sampleCompany || "(会社名)",
     opportunity: "",
-    sender: preview?.senderName || "",
+    // 差出人依存({sender}/{sender_last}/{sender_email}/{signature})はサーバーで解決済みの値を使う
+    ...(preview?.senderVars ?? { sender: preview?.senderName || "", sender_last: "", sender_email: "", signature: "" }),
   };
 
   // 「純粋なお礼のみ」を選んでいるのに広告宣伝にあたりうる要素が本文にある場合の注意喚起。
