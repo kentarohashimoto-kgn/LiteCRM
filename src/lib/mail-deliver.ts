@@ -34,9 +34,12 @@ export interface DeliverParams {
   sequenceEnrollmentId?: string | null;
   sequenceStep?: number | null;
   createActivity?: boolean;
-  /** 配信停止フッターを付ける(リード宛の一括送信では必須。特定電子メール法対応)。
+  /** 本文末尾に配信停止フッターを付ける(広告宣伝を含むメールでは必須。特定電子メール法の表示義務)。
    *  フッターURLはクリック計測でラップしない(停止操作をエンゲージメント誤計上しないため)。 */
   unsubscribeFooter?: boolean;
+  /** List-Unsubscribe ヘッダ(不可視。Gmail等の配信停止ボタン用)を付ける。
+   *  未指定は unsubscribeFooter に追従。一括送信では本文フッターなしでも true にして苦情率を下げる。 */
+  unsubscribeHeader?: boolean;
   baseUrl: string;
 }
 
@@ -86,7 +89,9 @@ export async function deliverTrackedEmail(sb: SupabaseClient, p: DeliverParams):
   }
 
   // フッターはリンクトークン割当(p.body基準)の後に足す=停止URLは計測ラップされない
-  const unsubUrl = p.unsubscribeFooter ? `${p.baseUrl.replace(/\/$/, "")}/api/track/u/${openToken}` : undefined;
+  // ヘッダは本文フッターと独立(既定はフッターに追従)。本文は自然なまま配信停止導線だけ残す運用に対応。
+  const wantHeader = p.unsubscribeHeader ?? !!p.unsubscribeFooter;
+  const unsubUrl = wantHeader ? `${p.baseUrl.replace(/\/$/, "")}/api/track/u/${openToken}` : undefined;
   const bodyOut = p.unsubscribeFooter ? p.body + unsubscribeFooterText(p.baseUrl, openToken) : p.body;
   const html = buildTrackedHtml({ bodyText: bodyOut, baseUrl: p.baseUrl, openToken, linkTokens });
   const fromHeader = p.from.name ? `${p.from.name} <${p.from.email}>` : p.from.email;

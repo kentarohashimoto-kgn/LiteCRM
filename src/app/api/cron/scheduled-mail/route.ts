@@ -39,7 +39,7 @@ export async function GET(req: Request) {
   // 期日到来の予約(古い順)
   const { data: dueRows } = await admin
     .from("scheduled_emails")
-    .select("id, tenant_id, sender_user_id, to_addr, subject, body, contact_id, account_id, opportunity_id, lead_id, template_id, mail_batch_id, unsubscribe_footer, create_activity, attempts")
+    .select("id, tenant_id, sender_user_id, to_addr, subject, body, contact_id, account_id, opportunity_id, lead_id, template_id, mail_batch_id, unsubscribe_footer, unsubscribe_header, create_activity, attempts")
     .eq("status", "scheduled")
     .lte("scheduled_at", new Date(nowMs).toISOString())
     .order("scheduled_at")
@@ -139,6 +139,8 @@ export async function GET(req: Request) {
       templateId: r.template_id as string | null,
       createActivity: !!r.create_activity,
       unsubscribeFooter: !!r.unsubscribe_footer,
+      // null は「フッターに追従」(既存行の従来挙動)。一括の header_only 予約はここで true
+      unsubscribeHeader: r.unsubscribe_header === null || r.unsubscribe_header === undefined ? undefined : !!r.unsubscribe_header,
       baseUrl,
     });
 
