@@ -19,6 +19,9 @@ export interface SendEmailInput {
   toAddr: string;
   subject: string;
   body: string;
+  /** 配信停止リンクを本文末尾に付ける。個別送信は既定OFF(業務連絡として自然な文面にするため)。
+   *  サービス紹介・セミナー勧誘など広告宣伝が主目的の内容ではONを推奨(特定電子メール法の表示義務)。 */
+  unsubscribeFooter?: boolean;
 }
 export type SendEmailResult = { ok: true; id: string } | { ok: false; error: string };
 
@@ -51,7 +54,8 @@ export async function sendEmailViaSmtpAction(input: SendEmailInput): Promise<Sen
     bccSelf: acc.bcc_self as boolean,
     to: input.toAddr, subject: input.subject, body: input.body,
     contactId: input.contactId, accountId: input.accountId, opportunityId: input.opportunityId, templateId: input.templateId,
-    createActivity: true, baseUrl: process.env.NEXT_PUBLIC_APP_URL || "",
+    createActivity: true, unsubscribeFooter: !!input.unsubscribeFooter,
+    baseUrl: process.env.NEXT_PUBLIC_APP_URL || "",
   };
 
   let res;
