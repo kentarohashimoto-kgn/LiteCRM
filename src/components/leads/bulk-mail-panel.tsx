@@ -12,6 +12,7 @@ import {
 import { EMAIL_CATEGORY_LABEL, renderEmailTemplate } from "@/lib/email";
 import { SchedulePicker } from "@/components/email/schedule-picker";
 import { formatJstSchedule } from "@/lib/schedule";
+import { detectAdSignals, UNSUB_MODE_HINT, UNSUB_MODE_LABEL, type UnsubMode } from "@/lib/unsubscribe";
 
 /**
  * リード一括メール送信パネル(D2: 手動トリガー)。
@@ -30,6 +31,7 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
   const [scheduleAt, setScheduleAt] = useState<string | null>(null);  // 予約送信(null=即時)
   const [subj, setSubj] = useState("");   // 送信直前の直接編集(件名)
   const [body, setBody] = useState("");   // 送信直前の直接編集(本文)
+  const [unsubMode, setUnsubMode] = useState<UnsubMode>("full");  // 配信停止の付け方(既定=本文フッターあり)
   const [preview, setPreview] = useState<BulkMailPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -74,10 +76,25 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
     sender: preview?.senderName || "",
   };
 
+  // 「純粋なお礼のみ」を選んでいるのに広告宣伝にあたりうる要素が本文にある場合の注意喚起。
+  // ガイドライン上は一部でも広告宣伝が含まれれば特定電子メールに該当するため、フッターを勧める。
+  const adSignals = unsubMode === "header_only" ? detectAdSignals(subj, body) : [];
+
   const send = async () => {
     if (!preview?.sendable) return;
     const when = scheduleAt ? `${formatJstSchedule(scheduleAt)} に送信予約します` : "メールを送信します";
-    if (!confirm(`${preview.sendable}件のリードに${when}。よろしいですか？\n(配信停止フッター・開封/クリック計測が自動で付きます)`)) return;
+    const footerNote = unsubMode === "full"
+      ? "配信停止フッター・開封/クリック計測が自動で付きます"
+      : "本文フッターは付けません（配信停止ヘッダ・開封/クリック計測は付きます）";
+    if (adSignals.length > 0) {
+      const reasons = adSignals.map((s) => `・${s.label}（「${s.hit}」）`).join("\n");
+      if (!confirm(
+        `本文に広告宣伝にあたりうる要素が見つかりました:\n${reasons}\n\n` +
+        `一部でも広告宣伝が含まれる場合、特定電子メール法により本文への配信停止表示が必要です。\n` +
+        `「広告宣伝を含む」に切り替えることを強く推奨します。\n\nこのまま本文フッターなしで送信しますか？`,
+      )) return;
+    }
+    if (!confirm(`${preview.sendable}件のリードに${when}。よろしいですか？\n(${footerNote})`)) return;
     setSending(true);
     setError(null);
     let sent = 0;
@@ -92,7 +109,7 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
       for (let guard = 0; guard < 30; guard++) {
         const r = await sendLeadBulkMailAction(effectiveFilters, templateId, 20, {
           batchId, segmentTitle: segTitle, subjectTmpl: subj, bodyTmpl: body,
-          scheduledAtIso: scheduleAt ?? undefined,
+          scheduledAtIso: scheduleAt ?? undefined, unsubMode,
         });
         batchId = r.batchId ?? batchId;
         if (!r.ok) {
@@ -186,11 +203,43 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
                     <textarea value={body} onChange={(e) => setBody(e.target.value)} disabled={sending} rows={8} className="input font-normal leading-relaxed" />
                   </div>
                 </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-ink/50">このメールの内容</label>
+                  {(["full", "header_only"] as UnsubMode[]).map((m) => (
+                    <label key={m} className="flex items-start gap-2 text-xs cursor-pointer rounded-lg border border-black/10 p-2 hover:bg-mist-soft/40">
+                      <input
+                        type="radio"
+                        name="unsub-mode"
+                        checked={unsubMode === m}
+                        onChange={() => setUnsubMode(m)}
+                        disabled={sending}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium text-ink/80">{UNSUB_MODE_LABEL[m]}</span>
+                        <span className="block text-ink/45">{UNSUB_MODE_HINT[m]}</span>
+                      </span>
+                    </label>
+                  ))}
+                  {adSignals.length > 0 && (
+                    <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2 flex items-start gap-1.5">
+                      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                      <span>
+                        本文に広告宣伝にあたりうる要素があります（{adSignals.map((s) => s.label).join(" / ")}）。
+                        一部でも広告宣伝が含まれると特定電子メール法の表示義務の対象になるため、「広告宣伝を含む」を選んでください。
+                      </span>
+                    </p>
+                  )}
+                </div>
                 <div className="rounded-xl border border-black/10 p-3 text-xs space-y-1 max-h-40 overflow-y-auto bg-mist-soft/30">
                   <p className="font-semibold text-ink/70">差し込みプレビュー（先頭のリード: {preview.sampleContact || "—"}）</p>
                   <p className="text-ink/80">件名: {renderEmailTemplate(subj, sampleVars) || "(件名なし)"}</p>
                   <p className="whitespace-pre-wrap text-ink/60">{renderEmailTemplate(body, sampleVars)}</p>
-                  <p className="text-ink/40 pt-1">※末尾に配信停止フッターが自動で付きます</p>
+                  <p className="text-ink/40 pt-1">
+                    {unsubMode === "full"
+                      ? "※末尾に配信停止フッターが自動で付きます"
+                      : "※本文フッターは付きません（Gmail等が出す配信停止ボタン用のヘッダのみ付きます）"}
+                  </p>
                 </div>
               </div>
             )}

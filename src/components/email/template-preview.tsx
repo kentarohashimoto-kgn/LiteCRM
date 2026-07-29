@@ -15,6 +15,19 @@ export interface TplRow { id: string; name: string; category: string; subject_tm
 
 const VAR_LABEL: Record<string, string> = { contact: "相手の氏名", company: "会社名", opportunity: "案件名", sender: "差出人名" };
 
+/** 送信方法 × 内容の組み合わせ。配信停止フッターの有無がこれで決まる。 */
+type PreviewMode = "bulk_ad" | "bulk_plain" | "single";
+const MODE_LABEL: Record<PreviewMode, string> = {
+  bulk_ad: "一括 / シーケンス（広告宣伝を含む）",
+  bulk_plain: "一括（純粋なお礼・業務連絡のみ）",
+  single: "個別メール（1通ずつ）",
+};
+const MODE_NOTE: Record<PreviewMode, string> = {
+  bulk_ad: "",
+  bulk_plain: "本文フッターは付きません。ただしGmail等が差出人名の横に出す配信停止ボタン用のヘッダは付くため、迷惑メール報告に流れにくい状態は保たれます。",
+  single: "配信停止フッターは付きません（個別送信は業務連絡として自然な文面で届きます）。広告宣伝が主目的の内容を送るときは、作成画面の「配信停止リンクを本文末尾に付ける」をONにしてください。",
+};
+
 /** {var} をハイライトして表示。未知の変数は赤(送信時もそのまま残るため要修正)。 */
 function Highlighted({ text }: { text: string }) {
   const parts = text.split(/(\{\w+\})/g);
@@ -63,9 +76,9 @@ export function TemplatePreview({ templates, senderName, senderEmail }: { templa
   const [tplId, setTplId] = useState(templates[0]?.id ?? "");
   const [contact, setContact] = useState("山田 太郎");
   const [company, setCompany] = useState("株式会社サンプル");
-  // 送信方法で配信停止フッターの有無が変わるため、プレビューも切り替える
-  const [mode, setMode] = useState<"bulk" | "single">("bulk");
-  const withFooter = mode === "bulk";
+  // 配信停止フッターの有無は「送信方法 × 内容が広告宣伝か」で変わるため、プレビューも切り替える
+  const [mode, setMode] = useState<PreviewMode>("bulk_ad");
+  const withFooter = mode === "bulk_ad";
   const tpl = useMemo(() => templates.find((t) => t.id === tplId) ?? null, [templates, tplId]);
   const vars = { contact, company, opportunity: "", sender: senderName || "(差出人名未設定)" };
   const subject = tpl ? renderEmailTemplate(tpl.subject_tmpl, vars) : "";
@@ -91,10 +104,11 @@ export function TemplatePreview({ templates, senderName, senderEmail }: { templa
           <input value={company} onChange={(e) => setCompany(e.target.value)} className="input w-52" />
         </div>
         <div className="space-y-1">
-          <label className="text-xs text-ink/50 block">送信方法</label>
-          <select value={mode} onChange={(e) => setMode(e.target.value as "bulk" | "single")} className="input w-52">
-            <option value="bulk">一括メール / シーケンス</option>
-            <option value="single">個別メール（1通ずつ）</option>
+          <label className="text-xs text-ink/50 block">送信方法・内容</label>
+          <select value={mode} onChange={(e) => setMode(e.target.value as PreviewMode)} className="input w-64">
+            {(Object.keys(MODE_LABEL) as PreviewMode[]).map((m) => (
+              <option key={m} value={m}>{MODE_LABEL[m]}</option>
+            ))}
           </select>
         </div>
         {tpl && (
@@ -133,7 +147,7 @@ export function TemplatePreview({ templates, senderName, senderEmail }: { templa
             <div className="px-4 py-2.5 border-b border-black/[0.06] bg-teal-light/30 flex items-center gap-2">
               <Eye size={14} className="text-teal-deep" />
               <span className="text-sm font-semibold text-teal-deep">
-                実際に届くメール（{contact || "相手"} さんの受信画面 ／ {mode === "bulk" ? "一括送信時" : "個別送信時"}）
+                実際に届くメール（{contact || "相手"} さんの受信画面 ／ {MODE_LABEL[mode]}）
               </span>
             </div>
             <div className="p-4">
@@ -154,8 +168,7 @@ export function TemplatePreview({ templates, senderName, senderEmail }: { templa
                     </div>
                   ) : (
                     <div className="mt-4 pt-3 border-t border-dashed border-black/15 text-xs text-ink/40">
-                      配信停止フッターは<b>付きません</b>（個別送信は業務連絡として自然な文面で届きます）。
-                      <span className="block">広告宣伝が主目的の内容を送るときは、作成画面の「配信停止リンクを本文末尾に付ける」をONにしてください。</span>
+                      配信停止フッターは<b>付きません</b>。<span className="block">{MODE_NOTE[mode]}</span>
                     </div>
                   )}
                 </div>

@@ -8,12 +8,16 @@ import { isValidEmail, renderEmailTemplate } from "@/lib/email";
 import { deliverTrackedEmail, type DeliverParams } from "@/lib/mail-deliver";
 import { refreshAccessToken } from "@/lib/google-oauth";
 import { logAudit, clientIp } from "@/lib/audit-events";
+import { wantsFooter, type UnsubMode } from "@/lib/unsubscribe";
 
 /**
  * リード一括メール(F-203 MVP・D2=手動トリガー)。
  * リード一覧の絞り込み結果に対し、テンプレを差し込んで送信者本人のアカウントから順次送信する。
  * ガードレール: サプレッション突合 / 同一テンプレの再送防止 / メール重複除外 / 1回300件上限。
- * 送信メールには開封/クリック計測と配信停止フッターが自動で付く(deliverTrackedEmail)。
+ * 送信メールには開封/クリック計測が自動で付く(deliverTrackedEmail)。
+ * 配信停止は unsubMode で切替: full=本文フッター+ヘッダ(既定・広告宣伝を含む場合) /
+ * header_only=本文フッターなし・List-Unsubscribeヘッダのみ(純粋なお礼・業務連絡)。
+ * 一括では内容にかかわらずヘッダは必ず付ける(苦情率＝ドメイン評価の保護)。
  */
 
 const SEND_ROLES = ["owner", "admin", "sales_manager", "sales_rep", "external_sales", "partner", "inside_sales"];
@@ -253,6 +257,8 @@ export async function sendLeadBulkMailAction(
     bodyTmpl?: string;
     /** 予約送信(UTC ISO)。指定時は即時送信せず scheduled_emails に積む(cronが指定時刻に送信) */
     scheduledAtIso?: string;
+    /** 配信停止の付け方(既定 full=本文フッター+ヘッダ)。header_only は本文フッターなし・ヘッダのみ */
+    unsubMode?: UnsubMode;
   },
 ): Promise<BulkMailResult> {
   const ctx = await requireCtx();
@@ -325,6 +331,8 @@ export async function sendLeadBulkMailAction(
   }
 
   const senderName = (acc.from_name as string) || "";
+  // 本文フッターは内容次第(既定は付ける)。ヘッダは一括では常に付ける
+  const footer = wantsFooter(opts?.unsubMode ?? "full");
   let sent = 0;
   const failures: { email: string; error: string }[] = [];
 
@@ -343,7 +351,8 @@ export async function sendLeadBulkMailAction(
         lead_id: t.id,
         template_id: templateId,
         mail_batch_id: batchId,
-        unsubscribe_footer: true,
+        unsubscribe_footer: footer,
+        unsubscribe_header: true,
         create_activity: false,
         created_by: ctx.userId,
       };
@@ -352,7 +361,7 @@ export async function sendLeadBulkMailAction(
     if (schErr) return { ok: false, error: `予約に失敗しました: ${schErr.message}`, batchId: batchId ?? undefined };
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.bulk_schedule",
-      target: `template:${templateId}`, meta: { count: rows.length, at: opts.scheduledAtIso }, ip: clientIp(),
+      target: `template:${templateId}`, meta: { count: rows.length, at: opts.scheduledAtIso, unsub_mode: opts?.unsubMode ?? "full" }, ip: clientIp(),
     });
     revalidatePath("/app/email/scheduled");
     return { ok: true, sent: 0, scheduled: rows.length, failed: 0, batchId: batchId ?? undefined,
@@ -370,7 +379,8 @@ export async function sendLeadBulkMailAction(
       body: renderEmailTemplate(bodyTmpl, vars),
       leadId: t.id, templateId, mailBatchId: batchId,
       createActivity: false,
-      unsubscribeFooter: true,
+      unsubscribeFooter: footer,
+      unsubscribeHeader: true,
       baseUrl: process.env.NEXT_PUBLIC_APP_URL || "",
     });
     if (res.ok) sent++;
@@ -392,7 +402,7 @@ export async function sendLeadBulkMailAction(
   await logAudit({
     tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.bulk_send",
     target: `template:${templateId}`,
-    meta: { sent, failed: failures.length, filters: { ...filters }, suppressed: r.suppressed, already_sent: r.alreadySent },
+    meta: { sent, failed: failures.length, filters: { ...filters }, suppressed: r.suppressed, already_sent: r.alreadySent, unsub_mode: opts?.unsubMode ?? "full" },
     ip: clientIp(),
   });
   revalidatePath("/app/leads");

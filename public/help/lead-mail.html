@@ -27,6 +27,7 @@ table.t th,table.t td{border:1px solid var(--line);padding:8px 11px;text-align:l
 table.t th{background:#f0fbf9;color:var(--accent2);font-weight:700}
 .tip{margin:12px 0;font-size:12.5px;background:#f0fbf9;border:1px solid #cdeae6;border-radius:8px;padding:9px 12px;color:#0b5c55}
 .warn{margin:12px 0;font-size:12.5px;background:#fff7ed;border:1px solid #fde3c4;border-radius:8px;padding:9px 12px;color:#b45309}
+.mut{color:var(--mut);font-size:11.5px}
 .mono{font-family:ui-monospace,monospace;background:#f4f7f9;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:12.5px;white-space:pre-wrap;color:#233}
 /* ---- フロー図 ---- */
 .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;margin:16px 0}
@@ -208,7 +209,7 @@ table.mx td span{font-size:11px;color:var(--mut)}
 <div class="mail">
 <div class="row"><span class="tag var">自動で変わる</span><span>件名・本文中の <b>{contact}</b>（相手の氏名）・<b>{company}</b>（会社名）・<b>{sender}</b>（差出人名）が、リードごとに差し込まれる</span></div>
 <div class="row"><span class="tag fix">固定（自分で書く）</span><span>挨拶文・展示会名・案内文・<b>資料リンクのURL</b>など、テンプレに書いた本文はそのまま送られる</span></div>
-<div class="row"><span class="tag auto">システムが自動付与</span><span>開封計測（見えない1pxの画像）／クリック計測（URLの自動ラップ）／<b>配信停止フッター（一括メール・シーケンスのみ）</b>。テンプレに書く必要はない</span></div>
+<div class="row"><span class="tag auto">システムが自動付与</span><span>開封計測（見えない1pxの画像）／クリック計測（URLの自動ラップ）／<b>配信停止フッター</b>（付くかは送信方法と内容で決まる → <a href="#optout">§10</a>）。テンプレに書く必要はない</span></div>
 </div>
 <table class="t">
 <tr><th>差し込み変数</th><th>展開される内容</th><th>データ元</th></tr>
@@ -217,7 +218,7 @@ table.mx td span{font-size:11px;color:var(--mut)}
 <tr><td class="mono" style="border:0;background:none;padding:4px 11px">{sender}</td><td>差出人名（例: 橋本 健太郎）</td><td>メール送信アカウントの差出人名</td></tr>
 </table>
 <div class="warn">⚠ 変数のスペルを間違えると（例: {contct}）そのまま文字として送られます。送信前のプレビューで、先頭リードでの実際の差し込み結果を必ず確認してください。</div>
-<div class="tip">🔍 <b>今どんなメールが送られるの？</b> → アプリの <a href="/app/email/templates/preview" target="_blank"><b>送信プレビュー（対比）</b></a> を開くと、<b>現在登録されているテンプレート</b>を選んで「左＝設定画面の原文（変数ハイライト付き）／右＝相手の受信画面イメージ（差し込み後・計測リンク・配信停止フッター込み）」を左右対比で確認できます。サンプルの氏名・会社名も自由に変えて試せます。</div>
+<div class="tip">🔍 <b>今どんなメールが送られるの？</b> → アプリの <a href="/app/email/templates/preview" target="_blank"><b>送信プレビュー（対比）</b></a> を開くと、<b>現在登録されているテンプレート</b>を選んで「左＝設定画面の原文（変数ハイライト付き）／右＝相手の受信画面イメージ（差し込み後・計測リンク・配信停止フッター込み）」を左右対比で確認できます。サンプルの氏名・会社名も自由に変えて試せます。<b>送信方法・内容</b>を切り替えると、配信停止フッターが付く場合／付かない場合の見え方も比較できます。</div>
 
 <h2 class="grp" id="react">7. 反応の計測とスコア加点</h2>
 <p>送信後、相手の行動は次の流れで自動的にスコアへ変わります（<b>15分間隔</b>で処理）。</p>
@@ -264,17 +265,40 @@ table.mx td span{font-size:11px;color:var(--mut)}
 </ul>
 
 <h2 class="grp" id="optout">10. 配信停止と法令対応（必読）</h2>
-<h3>どの送信方法にフッターが付くか</h3>
+
+<div class="tip">📌 <b>大原則</b>：配信停止フッターが必要かどうかは「<b>何通送るか</b>」ではなく「<b>中身が広告宣伝かどうか</b>」で決まります。1通でも広告なら必要、1万通でも純粋なお礼なら（法的には）不要です。</div>
+
+<h3>配信停止には2種類ある</h3>
 <table class="t">
-<tr><th>送信方法</th><th>配信停止フッター</th><th>理由</th></tr>
-<tr><td><b>一括メール</b>（リード一覧から）</td><td><b>自動で付く</b></td><td>多数への案内は広告宣伝メールに当たるため（特定電子メール法の表示義務）</td></tr>
-<tr><td><b>シーケンス</b>（多段フォロー）</td><td><b>自動で付く</b></td><td>同上（自動送信のため）</td></tr>
-<tr><td><b>個別メール</b>（1通ずつ作成）</td><td><b>既定で付かない</b>（ONにもできる）</td><td>アポ調整・お礼・資料送付などの<b>業務連絡</b>は広告宣伝メールに当たらないため。自然な文面で届きます</td></tr>
+<tr><th>種類</th><th>見え方</th><th>役割</th></tr>
+<tr><td><b>本文フッター</b></td><td>メール末尾に文章として表示</td><td><b>法令対応</b>。特定電子メール法の表示義務を満たすのはこちら</td></tr>
+<tr><td><b>配信停止ヘッダ</b><br>（List-Unsubscribe）</td><td>本文には出ない。Gmail等が<b>差出人名の横に「配信停止」ボタン</b>を出す</td><td><b>到達性の保護</b>。「迷惑メール報告」の代わりに押してもらうための逃し弁。苦情率が上がるとドメイン評価が落ち、全メールが届きにくくなる</td></tr>
 </table>
-<div class="tip">💡 個別送信でも、<b>サービス紹介・セミナー勧誘など「広告宣伝が主目的」の内容</b>を送る場合は、メール作成画面の「<b>配信停止リンクを本文末尾に付ける</b>」にチェックを入れてください。1通であっても内容によっては表示義務の対象になります（義務は通数ではなく内容で決まります）。</div>
+
+<h3>送信方法ごとの設定</h3>
+<table class="t">
+<tr><th>送信方法</th><th>本文フッター</th><th>配信停止ヘッダ</th></tr>
+<tr><td><b>一括メール</b>／内容に<b>広告宣伝を含む</b><br><span class="mut">資料・サービス紹介・セミナー案内など</span></td><td><b>付く</b>（既定）</td><td>付く</td></tr>
+<tr><td><b>一括メール</b>／<b>純粋なお礼・業務連絡のみ</b></td><td>付かない<br><span class="mut">（送信画面で選択）</span></td><td><b>付く</b></td></tr>
+<tr><td><b>シーケンス</b>（多段フォロー）</td><td><b>付く</b>（変更不可）</td><td>付く</td></tr>
+<tr><td><b>個別メール</b>（1通ずつ作成）</td><td>既定で付かない<br><span class="mut">（ONにもできる）</span></td><td>フッターに追従</td></tr>
+</table>
+
+<h3>「広告宣伝を含む」かどうかの判断基準</h3>
+<table class="t">
+<tr><th>本文に含まれるもの</th><th>該当</th><th>本文フッター</th></tr>
+<tr><td>ブース来訪・面談のお礼のみ（純粋な挨拶）</td><td>✗ 非該当</td><td>不要</td></tr>
+<tr><td>日程調整・議事録送付などの業務連絡</td><td>✗ 非該当</td><td>不要</td></tr>
+<tr><td><b>サービス資料・製品資料へのリンク</b></td><td>○ 該当</td><td><b>必要</b></td></tr>
+<tr><td><b>セミナー・キャンペーンの案内</b></td><td>○ 該当</td><td><b>必要</b></td></tr>
+<tr><td><b>「ぜひ一度ご説明の機会を」等の商談誘導</b></td><td>○ 該当</td><td><b>必要</b></td></tr>
+</table>
+<div class="warn">⚠ ガイドライン上、<b>広告宣伝の内容が一部でも含まれれば</b>「特定電子メール」に該当します。「お礼メール」という体裁でも、資料リンクや商談の打診が入っていれば該当します。<b>現在の「展示会お礼」テンプレは資料リンクとオンライン説明の打診を含むため、フッターが必要です</b>（＝「広告宣伝を含む」を選んでください）。</div>
+<div class="tip">💡 一括送信画面で「純粋なお礼・業務連絡のみ」を選ぶと、本文にURLや「資料」「セミナー」などの<b>広告要素が見つかった場合に警告</b>が出ます。迷ったら「広告宣伝を含む」（既定）のままにしてください。付けて困ることはありません。</div>
+
 <h3>停止された場合の扱い</h3>
 <ul>
-<li>一括送信・シーケンスの全メールに<b>配信停止リンク付きのフッターが自動で付きます</b>（特定電子メール法対応）。テンプレに書く必要はありません</li>
+<li>配信停止フッター／ヘッダは<b>システムが自動で付けます</b>。テンプレに書く必要はありません</li>
 <li>相手が停止リンクを押すと即座に停止リストへ登録され、以後の一括送信・シーケンス・個別送信すべてから<b>自動で除外</b>されます</li>
 <li>停止された相手に手動で送ることもできません（送信時にブロックされます）</li>
 <li>誤って自分でテスト中に停止してしまった場合は管理者に解除を依頼してください</li>

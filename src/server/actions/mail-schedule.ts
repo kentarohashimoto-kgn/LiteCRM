@@ -27,6 +27,8 @@ export interface ScheduleEmailInput {
   templateId?: string | null;
   mailBatchId?: string | null;
   unsubscribeFooter?: boolean;
+  /** List-Unsubscribeヘッダ(不可視)。未指定はフッターに追従 */
+  unsubscribeHeader?: boolean;
   createActivity?: boolean;
 }
 
@@ -66,6 +68,7 @@ export async function scheduleEmailAction(input: ScheduleEmailInput): Promise<Sc
     template_id: input.templateId ?? null,
     mail_batch_id: input.mailBatchId ?? null,
     unsubscribe_footer: !!input.unsubscribeFooter,
+    unsubscribe_header: input.unsubscribeHeader ?? null,
     create_activity: input.createActivity !== false,
     created_by: ctx.userId,
   }).select("id").single();
