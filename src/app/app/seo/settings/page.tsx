@@ -5,7 +5,12 @@ import { PageHeader, Section, EmptyState } from "@/components/ui/primitives";
 import { ActionNotice } from "@/components/ui/action-notice";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { getSeoCredentialInfo } from "@/lib/seo/google-sa";
-import { runSeoDiagnosticsAction, saveSeoPropertyAction, saveSeoSiteAction } from "@/server/actions/seo";
+import {
+  runSeoDiagnosticsAction,
+  runSeoIngestNowAction,
+  saveSeoPropertyAction,
+  saveSeoSiteAction,
+} from "@/server/actions/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +75,7 @@ function StatusBadge({ status, label }: { status: string; label?: string }) {
 export default async function SeoSettingsPage({
   searchParams,
 }: {
-  searchParams: { saved?: string; error?: string };
+  searchParams: { saved?: string; error?: string; msg?: string; sites?: string };
 }) {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
@@ -104,6 +109,7 @@ export default async function SeoSettingsPage({
         error={searchParams.error}
         savedMessages={{
           diagnosed: "接続診断を実行しました。結果を下に表示しています。",
+          ingested: `取込を実行しました（対象 ${searchParams.sites ?? "0"} サイト）。SEO集客画面で数字を確認できます。`,
           property: "接続プロパティを保存しました。",
           site: "サイト設定を保存しました。",
         }}
@@ -112,6 +118,10 @@ export default async function SeoSettingsPage({
           not_configured: "サービスアカウントが未設定です。GOOGLE_SEO_SA_CREDENTIALS を設定してください。",
           ga4_format: "GA4のプロパティIDは数字のみで入力してください（例: 123456789）。",
           save_failed: "保存に失敗しました。",
+          ingest_disabled:
+            "取込ジョブが停止中です。設定 → AIバッチ運用 で「SEO計測データ取込」を開始してください。",
+          ingest_failed: `取込に失敗しました。${searchParams.msg ?? ""}`,
+          ingest_partial: `一部のデータを取り込めませんでした。${searchParams.msg ?? ""}`,
         }}
       />
 
@@ -227,12 +237,26 @@ export default async function SeoSettingsPage({
               </form>
 
               {canEdit && (
-                <form action={runSeoDiagnosticsAction}>
-                  <input type="hidden" name="property_id" value={p.id} />
-                  <SubmitButton className="btn-secondary" pendingLabel="診断中…">
-                    接続診断を実行
-                  </SubmitButton>
-                </form>
+                <div className="flex flex-wrap items-center gap-2">
+                  <form action={runSeoDiagnosticsAction}>
+                    <input type="hidden" name="property_id" value={p.id} />
+                    <SubmitButton className="btn-secondary" pendingLabel="診断中…">
+                      接続診断を実行
+                    </SubmitButton>
+                  </form>
+                  {p.gsc_status === "ok" && (
+                    <>
+                      <form action={runSeoIngestNowAction}>
+                        <SubmitButton className="btn-secondary" pendingLabel="取込中…（最大1分）">
+                          今すぐ取込を実行
+                        </SubmitButton>
+                      </form>
+                      <span className="text-xs text-ink/50">
+                        夜間(04:00)を待たずに、直近16日分を取り込みます
+                      </span>
+                    </>
+                  )}
+                </div>
               )}
 
               {p.gsc_checked_at && (

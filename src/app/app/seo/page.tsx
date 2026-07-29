@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search, Settings2, AlertTriangle } from "lucide-react";
+import { Search, Settings2, AlertTriangle, Target } from "lucide-react";
 import { requireCtx } from "@/lib/session";
 import { PageHeader, Section, EmptyState } from "@/components/ui/primitives";
 import { listSeoSites, getSeoFunnel, getCrmRates, getAttributionHealth, getSeoPageRevenue } from "@/lib/data/seo";
@@ -74,10 +74,16 @@ export default async function SeoPage({ searchParams }: { searchParams: { site?:
         title="SEO集客"
         subtitle={`${current.name}（直近30日）— 検索からの集客を、問合せ・商談・売上まで一本で追跡します。`}
         action={
-          <Link href="/app/seo/settings" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
-            <Settings2 size={14} />
-            接続設定
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/app/seo/strategy" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
+              <Target size={14} />
+              戦略ボード
+            </Link>
+            <Link href="/app/seo/settings" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
+              <Settings2 size={14} />
+              接続設定
+            </Link>
+          </div>
         }
       />
 

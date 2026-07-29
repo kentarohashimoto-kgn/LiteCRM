@@ -7,6 +7,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { listGscSites } from "@/lib/seo/gsc";
 import { checkGa4Access } from "@/lib/seo/ga4";
 import { getSeoCredentialInfo } from "@/lib/seo/google-sa";
+import { runSeoIngest } from "@/lib/seo/run-ingest";
 
 const ADMIN_ROLES = ["owner", "admin"];
 const SETTINGS_PATH = "/app/seo/settings";
@@ -180,4 +181,53 @@ export async function saveSeoSiteAction(formData: FormData): Promise<void> {
 
   revalidatePath(SETTINGS_PATH);
   back("saved=site");
+}
+
+/**
+ * 「今すぐ取込を実行」— 夜間cronと同じ処理を手動で走らせる。
+ *
+ * 接続を設定した直後に「本当に数字が取れるか」をその場で確認できるようにするため。
+ * 翌朝まで待たないと成否が分からない状態は、導入時の最大の詰まりどころになる。
+ * 冪等（upsert）なので何度押しても壊れない。
+ */
+export async function runSeoIngestNowAction(): Promise<void> {
+  const ctx = await requireCtx();
+  const back: (q: string) => never = (q) => redirect(`${SETTINGS_PATH}?${q}`);
+  if (!ADMIN_ROLES.includes(ctx.role)) back("error=forbidden");
+
+  let result: Awaited<ReturnType<typeof runSeoIngest>>;
+  try {
+    result = await runSeoIngest("manual");
+  } catch (e) {
+    back(`error=ingest_failed&msg=${encodeURIComponent(e instanceof Error ? e.message : String(e))}`);
+  }
+
+  revalidatePath(SETTINGS_PATH);
+  revalidatePath("/app/seo");
+  if (result.skipped) back("error=ingest_disabled");
+  if (result.error) back(`error=ingest_failed&msg=${encodeURIComponent(result.error)}`);
+  if (result.errors.length) back(`error=ingest_partial&msg=${encodeURIComponent(result.errors[0].slice(0, 300))}`);
+  back(`saved=ingested&sites=${result.sites}`);
+}
+
+/** ロードマップのマイルストーン完了/未完了を切り替える。 */
+export async function setMilestoneStatusAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const site = String(formData.get("site") ?? "");
+  const back: (q: string) => never = (q) =>
+    redirect(`/app/seo/strategy?${site ? `site=${site}&` : ""}${q}`);
+  if (!["owner", "admin", "sales_manager"].includes(ctx.role)) back("error=forbidden");
+
+  const id = String(formData.get("id") ?? "").trim();
+  const to = String(formData.get("to") ?? "todo");
+  if (!id || !["todo", "in_progress", "done", "skipped"].includes(to)) back("error=invalid");
+
+  const sb = getSupabaseServer();
+  await sb
+    .from("seo_strategy_milestones")
+    .update({ status: to, completed_at: to === "done" ? new Date().toISOString() : null })
+    .eq("id", id);
+
+  revalidatePath("/app/seo/strategy");
+  back("saved=milestone");
 }
