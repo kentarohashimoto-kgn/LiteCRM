@@ -51,7 +51,12 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
   if (q) qy = qy.or(`company_name.ilike.%${q}%,contact_name.ilike.%${q}%`);
   if (f.sourceIdIn) qy = qy.in("lead_source_id", f.sourceIdIn);
   if (f.media) qy = qy.eq("inquiry_media", f.media);
-  if (f.event) qy = qy.eq("raw_event", f.event);
+  // 流入(raw_event)は複数選択可(CSV)
+  if (f.event) {
+    const evs = f.event.split(",").map((e) => e.trim()).filter(Boolean);
+    if (evs.length === 1) qy = qy.eq("raw_event", evs[0]);
+    else if (evs.length > 1) qy = qy.in("raw_event", evs);
+  }
   if (f.disposition) qy = qy.eq("disposition", f.disposition);
   if (f.rank) {
     // ランクは複数選択可(CSV: "S,A")。1つなら等価、複数なら IN で絞る
@@ -59,6 +64,14 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
     if (ranks.length === 1) qy = qy.eq("rank", ranks[0]);
     else if (ranks.length > 1) qy = qy.in("rank", ranks);
   }
+  // 社内担当者(取得担当)。表示名 → 表記ゆれを含む全rawへ展開して絞る
+  if (f.owner) {
+    const raws = await resolveAcquirerRaws(f.owner);
+    qy = raws.length ? qy.in("acquirer", raws) : qy.eq("acquirer", "\u0000"); // 該当なし
+  }
+  // 獲得日の範囲
+  if (f.from) qy = qy.gte("acquired_at", f.from);
+  if (f.to) qy = qy.lte("acquired_at", f.to);
   // 並べ替え。f.sort 指定時はそのカラムで(HP問合せタブ用)、無ければ優先度降順(既定)。
   const SORT_COLS: Record<string, string> = {
     date: "created_at", media: "inquiry_media", detail: "raw_event", tags: "inquiry_tags", disposition: "disposition",
@@ -92,6 +105,26 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
   });
   /* eslint-enable @typescript-eslint/no-explicit-any */
   return { rows, total: count ?? 0, page, pageSize: LIST_PAGE };
+}
+
+/**
+ * 社内担当者(取得担当)の選択肢。表記ゆれ・別名をSQL側(0176)で名寄せ済み。
+ * raws は「その担当者に対応する元の値の配列」で、フィルタ時に IN 展開して使う。
+ */
+export async function getLeadAcquirers(): Promise<{ name: string; raws: string[]; leads: number }[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.rpc("lead_acquirers");
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  return ((data ?? []) as any[]).map((a) => ({ name: a.name as string, raws: (a.raws as string[]) ?? [], leads: a.leads ?? 0 }));
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
+
+/** 担当者の表示名 → 元の値(表記ゆれ含む)の配列。該当なしは空配列。 */
+async function resolveAcquirerRaws(displayName: string): Promise<string[]> {
+  const key = displayName.replace(/[\s\u3000]/g, "");
+  const all = await getLeadAcquirers();
+  const hit = all.find((a) => a.name.replace(/[\s\u3000]/g, "") === key);
+  return hit?.raws ?? [];
 }
 
 /** 架電キュー: 未着手・不通を優先度降順で上位300件(SQL)。 */

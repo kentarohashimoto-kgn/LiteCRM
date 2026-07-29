@@ -11,6 +11,7 @@ import { parseDelimited, detectDelim, rowToRawInput, dedupLeads, LEAD_KINDS } fr
 import { FUNNEL_STAGES, FUNNEL_STAGE_MAP, FUNNEL_MAIN, nextFunnelStage, SQL_CRITERIA, NURTURE_CRITERIA } from "@/lib/lead-funnel";
 import { PromoteLeadButton } from "@/components/leads/promote-button";
 import { BulkMailPanel } from "@/components/leads/bulk-mail-panel";
+import { LeadSidePanel } from "@/components/leads/lead-side-panel";
 import { StickyGrid } from "@/components/ui/sticky-grid";
 import { cn, formatDateFull, formatDateTimeJst } from "@/lib/utils";
 import type { WsListRow, WsQueueRow, WsCompanyRow, WsAnalysisScope, WsAttr, LeadsFilters, CompaniesData, AnalysisData, FunnelData } from "@/lib/data/leads-workspace";
@@ -56,6 +57,7 @@ export function LeadsWorkspace({
   batches = [],
   aliases = [],
   events = [],
+  acquirers = [],
   mediaOptions = [],
   presets = [],
   filters,
@@ -69,6 +71,7 @@ export function LeadsWorkspace({
   batches?: BatchRow[];
   aliases?: AliasRow[];
   events?: string[];
+  acquirers?: { name: string; leads: number }[];
   mediaOptions?: string[];
   presets?: PresetRow[];
   filters: LeadsFilters;
@@ -85,7 +88,7 @@ export function LeadsWorkspace({
         <TabLink active={tab === "download"} tab="download" icon={<Download size={15} />} label="ダウンロード" />
         <TabLink active={tab === "batches"} tab="batches" icon={<History size={15} />} label="取込履歴" />
       </div>
-      {tab === "list" && list && <LeadList list={list} filters={filters} events={events} />}
+      {tab === "list" && list && <LeadList list={list} filters={filters} events={events} acquirers={acquirers} />}
       {tab === "inquiries" && list && <LeadList list={list} filters={filters} events={events} tabKey="inquiries" mediaOptions={mediaOptions} />}
       {tab === "funnel" && funnel && <FunnelView funnel={funnel} />}
       {tab === "queue" && queue && <CallQueue queue={queue} />}
@@ -100,10 +103,12 @@ export function LeadsWorkspace({
 // ============ リード一覧(サーバー側フィルタ＋ページング) ============
 // tabKey="inquiries" のときは「HP問合せ」タブとして、Webフォーム由来(HP問合せ・資料請求)に
 // 絞った一覧を表示する(絞り込み自体はサーバー側で sourceIn により適用済み)。
-function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }: { list: ListData; filters: LeadsFilters; events: string[]; tabKey?: LeadsTab; mediaOptions?: string[] }) {
+function LeadList({ list, filters, events, acquirers = [], tabKey = "list", mediaOptions = [] }: { list: ListData; filters: LeadsFilters; events: string[]; acquirers?: { name: string; leads: number }[]; tabKey?: LeadsTab; mediaOptions?: string[] }) {
   const router = useRouter();
   const [q, setQ] = useState(filters.q ?? "");
   const isInquiries = tabKey === "inquiries";
+  // 詳細サイドパネル(画面遷移せずに確認・更新する)
+  const [panelId, setPanelId] = useState<string | null>(null);
   // チェックボックスによる対象の個別絞り込み(一括メールの対象指定に使う)
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const toggleSelect = (id: string) => setSelected((prev) => {
@@ -129,6 +134,9 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
     if (f.media) p.set("md", f.media);
     if (f.disposition) p.set("disp", f.disposition);
     if (f.rank) p.set("rank", f.rank);
+    if (f.owner) p.set("owner", f.owner);
+    if (f.from) p.set("from", f.from);
+    if (f.to) p.set("to", f.to);
     if (isInquiries && f.sort && f.sort !== "date") p.set("sort", f.sort);
     if (isInquiries && f.dir === "asc") p.set("dir", "asc");
     if (f.page && f.page > 1) p.set("page", String(f.page));
@@ -162,12 +170,25 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="会社・担当者で検索（Enter）" className="input pl-9" />
         </form>
         {isInquiries && <Sel value={filters.media ?? ""} onChange={(v) => go({ media: v, page: 1 })} ph="流入元" opts={mediaOptions.map((m) => ({ id: m, name: m }))} />}
-        <Sel value={filters.event ?? ""} onChange={(v) => go({ event: v, page: 1 })} ph={isInquiries ? "流入詳細" : "流入"} opts={events.map((e) => ({ id: e, name: evLabel(e) }))} />
+        {isInquiries ? (
+          <Sel value={filters.event ?? ""} onChange={(v) => go({ event: v, page: 1 })} ph="流入詳細" opts={events.map((e) => ({ id: e, name: evLabel(e) }))} />
+        ) : (
+          <MultiSel label="流入" value={filters.event ?? ""} onChange={(v) => go({ event: v, page: 1 })} opts={events.map((e) => ({ id: e, name: evLabel(e) }))} width="w-64" />
+        )}
         <Sel value={filters.disposition ?? ""} onChange={(v) => go({ disposition: v, page: 1 })} ph="決着" opts={LEAD_DISPOSITIONS.map((d) => ({ id: d.key, name: d.label }))} />
-        {!isInquiries && <MultiRankSel value={filters.rank ?? ""} onChange={(v) => go({ rank: v, page: 1 })} />}
+        {!isInquiries && <MultiSel label="ランク" value={filters.rank ?? ""} onChange={(v) => go({ rank: v, page: 1 })} opts={["S", "A", "B", "C", "D"].map((x) => ({ id: x, name: x }))} width="w-40" />}
+        {!isInquiries && acquirers.length > 0 && (
+          <Sel
+            value={filters.owner ?? ""}
+            onChange={(v) => go({ owner: v, page: 1 })}
+            ph="獲得担当"
+            opts={acquirers.map((a) => ({ id: a.name, name: `${a.name}（${a.leads}）` }))}
+          />
+        )}
+        {!isInquiries && <DateRange from={filters.from ?? ""} to={filters.to ?? ""} onChange={(from, to) => go({ from, to, page: 1 })} />}
         {!isInquiries && (
           <BulkMailPanel
-            filters={{ q: filters.q, event: filters.event, disposition: filters.disposition, rank: filters.rank }}
+            filters={{ q: filters.q, event: filters.event, disposition: filters.disposition, rank: filters.rank, owner: filters.owner, from: filters.from, to: filters.to }}
             selectedIds={[...selected]}
           />
         )}
@@ -199,7 +220,7 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
               <tr key={r.id} className="row-hover">
                 <td className="td text-xs text-ink/60 whitespace-nowrap tabular-nums">{r.createdAt ? formatDateTimeJst(r.createdAt) : "—"}</td>
                 <td className="td max-w-[220px]">
-                  <Link href={`/app/leads/${r.id}`} className="font-medium text-ink hover:text-teal-deep block truncate">{r.company}</Link>
+                  <button onClick={() => setPanelId(r.id)} className="font-medium text-ink hover:text-teal-deep block truncate text-left w-full" title="クリックで詳細パネルを開く">{r.company}</button>
                   <span className="text-xs text-ink/45 truncate block">{r.name || "—"}</span>
                 </td>
                 <td className="td text-xs">{r.media ? <span className="pill bg-teal-light text-teal-deep text-[10px]">{r.media}</span> : <span className="text-ink/35">—</span>}</td>
@@ -252,7 +273,7 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
                   <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="accent-teal-primary" />
                 </td>
                 <td className="td max-w-[240px]">
-                  <Link href={`/app/leads/${r.id}`} className="font-medium text-ink hover:text-teal-deep block truncate">{r.company}</Link>
+                  <button onClick={() => setPanelId(r.id)} className="font-medium text-ink hover:text-teal-deep block truncate text-left w-full" title="クリックで詳細パネルを開く（画面は遷移しません）">{r.company}</button>
                   <span className="text-xs text-ink/45 truncate block">{r.name}{r.rank && <span className="ml-1 pill bg-mist-soft text-ink/50 text-[9px]">{r.rank}</span>}</span>
                 </td>
                 <td className="td text-xs text-ink/60">{r.jobTitle || "—"}<span className="block text-ink/40">{r.empSizeBucket}</span></td>
@@ -293,6 +314,7 @@ function LeadList({ list, filters, events, tabKey = "list", mediaOptions = [] }:
           <button onClick={() => go({ page: (filters.page ?? 1) + 1 })} disabled={(filters.page ?? 1) >= pageCount} className="btn-ghost text-xs disabled:opacity-30">次 <ChevronRight size={14} /></button>
         </div>
       )}
+      <LeadSidePanel leadId={panelId} onClose={() => setPanelId(null)} />
     </div>
   );
 }
@@ -319,6 +341,7 @@ function HearingSel({ id, field, value, opts, ph }: { id: string; field: string;
 }
 
 function CallQueue({ queue }: { queue: QueueData }) {
+  const [panelId, setPanelId] = useState<string | null>(null);
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-4 text-sm text-ink/60 px-1">
@@ -343,7 +366,7 @@ function CallQueue({ queue }: { queue: QueueData }) {
             {queue.rows.map((r: WsQueueRow) => (
               <tr key={r.id} className="row-hover">
                 <td className="td text-right tabular-nums font-bold stat-accent">{r.score}</td>
-                <td className="td max-w-[240px]"><Link href={`/app/leads/${r.id}`} className="font-medium block truncate hover:text-teal-deep">{r.company}</Link><span className="text-xs text-ink/45">{r.name} {r.rank && `(${r.rank})`}</span></td>
+                <td className="td max-w-[240px]"><button onClick={() => setPanelId(r.id)} className="font-medium block truncate hover:text-teal-deep text-left w-full" title="クリックで詳細パネルを開く">{r.company}</button><span className="text-xs text-ink/45">{r.name} {r.rank && `(${r.rank})`}</span></td>
                 <td className="td text-xs text-ink/60">{r.jobTitle || "—"}</td>
                 <td className="td text-xs">{evLabel(r.event)}</td>
                 <td className="td">
@@ -361,6 +384,7 @@ function CallQueue({ queue }: { queue: QueueData }) {
           </tbody>
         </table>
       </div>
+      <LeadSidePanel leadId={panelId} onClose={() => setPanelId(null)} />
     </div>
   );
 }
@@ -778,34 +802,83 @@ function SortTh({ label, col, sortKey, sortDir, onSort }: { label: string; col: 
   );
 }
 
-/** ランクの複数選択(チェックボックス式ドロップダウン)。値はCSV("S,A")でURL/サーバーへ渡す。 */
-function MultiRankSel({ value, onChange }: { value: string; onChange: (csv: string) => void }) {
+/**
+ * 複数選択(チェックボックス式ドロップダウン)。値はCSV("S,A" / "AIDX,ODEX")でURL・サーバーへ渡す。
+ * ランク・流入など「候補が固定でOR条件にしたい」絞り込みに使う。
+ */
+function MultiSel({ label, value, onChange, opts, width = "w-52" }: {
+  label: string;
+  value: string;
+  onChange: (csv: string) => void;
+  opts: { id: string; name: string }[];
+  width?: string;
+}) {
   const [open, setOpen] = useState(false);
   const picked = new Set(value.split(",").map((r) => r.trim()).filter(Boolean));
-  const toggle = (r: string) => {
+  const order = opts.map((o) => o.id);
+  const toggle = (id: string) => {
     const next = new Set(picked);
-    if (next.has(r)) next.delete(r); else next.add(r);
-    onChange(["S", "A", "B", "C", "D"].filter((x) => next.has(x)).join(","));
+    if (next.has(id)) next.delete(id); else next.add(id);
+    onChange(order.filter((x) => next.has(x)).join(","));
   };
-  const label = picked.size === 0 ? "ランク：すべて" : `ランク：${["S", "A", "B", "C", "D"].filter((x) => picked.has(x)).join(",")}`;
+  const names = opts.filter((o) => picked.has(o.id)).map((o) => o.name);
+  const btnLabel = picked.size === 0
+    ? `${label}：すべて`
+    : `${label}：${names.length <= 2 ? names.join(",") : `${names[0]} 他${names.length - 1}`}`;
   return (
     <div className="relative">
-      <button onClick={() => setOpen(!open)} className={cn("rounded-xl border bg-white px-3 py-1.5 text-sm outline-none", picked.size > 0 ? "border-teal-primary text-teal-deep" : "border-black/10")}>
+      <button onClick={() => setOpen(!open)} className={cn("rounded-xl border bg-white px-3 py-1.5 text-sm outline-none max-w-[240px] truncate", picked.size > 0 ? "border-teal-primary text-teal-deep" : "border-black/10")}>
+        {btnLabel} ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className={cn("absolute z-20 mt-1 rounded-xl border border-black/10 bg-white p-2 shadow-lg space-y-1 max-h-72 overflow-y-auto", width)}>
+            {opts.map((o) => (
+              <label key={o.id} className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-mist-soft/60 cursor-pointer text-sm">
+                <input type="checkbox" checked={picked.has(o.id)} onChange={() => toggle(o.id)} className="accent-teal-primary" />
+                <span className="truncate">{o.name}</span>
+              </label>
+            ))}
+            {opts.length === 0 && <p className="text-xs text-ink/40 px-2 py-1">候補がありません</p>}
+            {picked.size > 0 && (
+              <button onClick={() => { onChange(""); setOpen(false); }} className="w-full text-left px-2 py-1 text-xs text-ink/50 hover:text-ink border-t border-black/[0.06] mt-1 pt-1.5">クリア</button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** 獲得日の範囲絞り込み(YYYY-MM-DD)。今月・今週などのショートカット付き。 */
+function DateRange({ from, to, onChange }: { from: string; to: string; onChange: (from: string, to: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const active = !!(from || to);
+  const jstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const daysAgo = (n: number) => new Date(Date.now() + 9 * 3600 * 1000 - n * 86400000).toISOString().slice(0, 10);
+  const label = active ? `獲得日：${from || "〜"}${from && to ? " 〜 " : ""}${to || (from ? " 〜" : "")}` : "獲得日：すべて";
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)} className={cn("rounded-xl border bg-white px-3 py-1.5 text-sm outline-none max-w-[260px] truncate", active ? "border-teal-primary text-teal-deep" : "border-black/10")}>
         {label} ▾
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute z-20 mt-1 w-40 rounded-xl border border-black/10 bg-white p-2 shadow-lg space-y-1">
-            {["S", "A", "B", "C", "D"].map((r) => (
-              <label key={r} className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-mist-soft/60 cursor-pointer text-sm">
-                <input type="checkbox" checked={picked.has(r)} onChange={() => toggle(r)} className="accent-teal-primary" />
-                {r}
-              </label>
-            ))}
-            {picked.size > 0 && (
-              <button onClick={() => { onChange(""); setOpen(false); }} className="w-full text-left px-2 py-1 text-xs text-ink/50 hover:text-ink">クリア</button>
-            )}
+          <div className="absolute z-20 mt-1 w-64 rounded-xl border border-black/10 bg-white p-3 shadow-lg space-y-2">
+            <label className="block text-xs text-ink/50">開始
+              <input type="date" value={from} onChange={(e) => onChange(e.target.value, to)} className="input mt-0.5 text-sm" />
+            </label>
+            <label className="block text-xs text-ink/50">終了
+              <input type="date" value={to} onChange={(e) => onChange(from, e.target.value)} className="input mt-0.5 text-sm" />
+            </label>
+            <div className="flex flex-wrap gap-1 pt-1">
+              <button onClick={() => { onChange(jstToday(), jstToday()); setOpen(false); }} className="pill bg-mist-soft text-ink/60 text-[11px] hover:bg-teal-light">今日</button>
+              <button onClick={() => { onChange(daysAgo(6), jstToday()); setOpen(false); }} className="pill bg-mist-soft text-ink/60 text-[11px] hover:bg-teal-light">直近7日</button>
+              <button onClick={() => { onChange(daysAgo(29), jstToday()); setOpen(false); }} className="pill bg-mist-soft text-ink/60 text-[11px] hover:bg-teal-light">直近30日</button>
+              {active && <button onClick={() => { onChange("", ""); setOpen(false); }} className="pill bg-mist-soft text-ink/50 text-[11px] hover:bg-rose-50">クリア</button>}
+            </div>
           </div>
         </>
       )}
