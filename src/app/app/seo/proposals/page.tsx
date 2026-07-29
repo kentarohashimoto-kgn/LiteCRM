@@ -85,10 +85,15 @@ export default async function SeoProposalsPage({
         title="改善提案"
         subtitle={`${current.name} — 期待売上の大きい順。上から3件承認すれば、その日の打ち手が決まります。`}
         action={
-          <Link href="/app/seo" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
-            <Search size={14} />
-            集客サマリー
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/app/seo/actions" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
+              施策の実行
+            </Link>
+            <Link href="/app/seo" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
+              <Search size={14} />
+              集客サマリー
+            </Link>
+          </div>
         }
       />
 
@@ -96,7 +101,9 @@ export default async function SeoProposalsPage({
         saved={searchParams.saved}
         error={searchParams.error}
         savedMessages={{
-          approved: "承認しました。実行チケット化はWO-35で追加します。",
+          approved: "承認しました。「施策の実行」に実行チケットと指示書を作成しました。",
+          approved_dup:
+            "承認しました。ただし同じページに未完了の施策があります。効果の帰属が難しくなるため、先の施策の完了後に着手してください。",
           rejected: "却下しました。同じ提案はしばらく出ません。",
         }}
         errorMessages={{ forbidden: "承認・却下は owner / admin / sales_manager のみ可能です。" }}

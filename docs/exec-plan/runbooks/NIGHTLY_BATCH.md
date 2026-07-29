@@ -80,6 +80,33 @@ curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: applic
 
 ---
 
+## 0.6 SEO成果物のAI生成（seo_action_draft / 2026-07 追加）
+
+> 設計: `docs/SEO_GROWTH_ENGINE_DESIGN_2026-07.md` F-303
+
+**前提**: 指示書は決定的テンプレートで既に生成済みで、そのままHP担当へ渡せる状態。
+夜間セッションが作るのは **案の中身** — タイトル案3つ・メタ案・記事の構成案。
+**HP本体には書き込まない**（公開は必ず人が行う。設計 §7.2 G1）。
+
+```bash
+curl -s -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/batch/seo-action-draft?limit=5"
+#   → {ok:true, targets:[{action_id, action_type, target_query, target_page, evidence, hypothesis}]}
+
+curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+  "$APP_URL/api/batch/seo-action-draft" \
+  -d '{"items":[{"action_id":"...","options":{"titles":["案1","案2","案3"],"metas":["..."]},
+       "deliverable_md":"..."}],"trigger":"nightly"}'
+#   → {ok:true, generated:N}  ※書き戻すと status が review になり、人の確認待ちになる
+```
+
+**書き方の指針**
+- `title_meta` … `options.titles` に3案。対象KWをタイトル前半、全角30文字前後
+- `internal_link` … `options.links` に「どのページから・どのアンカーテキストで」
+- `rewrite` / `new_article` … `deliverable_md` に H2/H3 の構成案と各節の要点
+- 実績のない数字・誇大表現は書かない
+
+---
+
 ---
 
 ## 1. ジョブ一覧（この順で実行）
