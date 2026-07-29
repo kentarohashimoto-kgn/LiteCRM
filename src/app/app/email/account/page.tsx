@@ -69,6 +69,8 @@ export default async function MailAccountPage({ searchParams }: { searchParams: 
           google_state: "接続の検証に失敗しました（時間をおいて再度お試しください）。",
           google_denied: "Google側で接続が許可されませんでした。",
           google_exchange: `Google認証に失敗しました${searchParams.detail ? `: ${decodeURIComponent(searchParams.detail)}` : ""}。`,
+          google_profile: "Googleアカウントのメールアドレスを取得できなかったため、接続を保存しませんでした。時間をおいて再接続してください。",
+          gmail_api_disabled: "接続は保存しましたが、Gmail API が有効でないためこのままでは送信できません。管理者にGoogle CloudプロジェクトでのGmail API（およびCalendar API）の有効化を依頼し、数分後に再接続してください。",
           unverified: `保存しましたが接続テストに失敗しました${searchParams.detail ? `: ${decodeURIComponent(searchParams.detail)}` : ""}。ホスト/ポート/アプリパスワードをご確認ください。`,
         }}
       />
