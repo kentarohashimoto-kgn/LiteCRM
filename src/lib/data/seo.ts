@@ -26,6 +26,12 @@ export interface SeoFunnel {
   sessions: number;
   inquiries: number;
   leadsValid: number;
+  opportunities: number;
+  won: number;
+  revenue: number;
+  cvr: number | null;
+  leadToOpp: number | null;
+  winRate: number | null;
   days: number;
 }
 
@@ -56,42 +62,93 @@ export async function listSeoSites(): Promise<SeoSiteSummary[]> {
   });
 }
 
-/** 直近N日のファネル実測（データが無ければ全て0で返す）。 */
+/**
+ * 直近N日のファネル実測。集計はDBのRPC(seo_funnel_summary)で確定させ、
+ * 画面側では再計算しない（同じ数字が画面ごとに違う、を防ぐ）。
+ */
 export async function getSeoFunnel(siteId: string, days = 30): Promise<SeoFunnel> {
   const sb = getSupabaseServer();
   const to = todayJst();
   const from = addDays(to, -(days - 1));
-  const { data } = await sb
-    .from("seo_daily_metrics")
-    .select("impressions, clicks, position, sessions, inquiries, leads_valid")
-    .eq("site_id", siteId)
-    .gte("date", from)
-    .lte("date", to);
-
-  const rows = data ?? [];
-  const impressions = rows.reduce((n, r) => n + Number(r.impressions ?? 0), 0);
-  const clicks = rows.reduce((n, r) => n + Number(r.clicks ?? 0), 0);
-  // 平均順位は表示回数を重みにした加重平均（単純平均にしない）
-  let posNum = 0;
-  let posDen = 0;
-  for (const r of rows) {
-    const p = r.position == null ? null : Number(r.position);
-    const imp = Number(r.impressions ?? 0);
-    if (p != null && imp > 0) {
-      posNum += p * imp;
-      posDen += imp;
-    }
-  }
+  const { data } = await sb.rpc("seo_funnel_summary", { p_site: siteId, p_from: from, p_to: to });
+  const r = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+  const n = (v: unknown) => Number(v ?? 0);
+  const nOrNull = (v: unknown) => (v == null ? null : Number(v));
   return {
-    impressions,
-    clicks,
-    ctr: impressions ? clicks / impressions : null,
-    position: posDen ? Math.round((posNum / posDen) * 100) / 100 : null,
-    sessions: rows.reduce((n, r) => n + Number(r.sessions ?? 0), 0),
-    inquiries: rows.reduce((n, r) => n + Number(r.inquiries ?? 0), 0),
-    leadsValid: rows.reduce((n, r) => n + Number(r.leads_valid ?? 0), 0),
+    impressions: n(r?.impressions),
+    clicks: n(r?.clicks),
+    ctr: nOrNull(r?.ctr),
+    position: nOrNull(r?.avg_position),
+    sessions: n(r?.sessions),
+    inquiries: n(r?.inquiries),
+    leadsValid: n(r?.leads_valid),
+    opportunities: n(r?.opportunities),
+    won: n(r?.won),
+    revenue: n(r?.revenue),
+    cvr: nOrNull(r?.cvr),
+    leadToOpp: nOrNull(r?.lead_to_opp),
+    winRate: nOrNull(r?.win_rate),
     days,
   };
+}
+
+/**
+ * アトリビューション健全性。
+ * 「集客の成果を売上として証明できる状態か」を示す。紐付け率が低いままだと、
+ * SEOがどれだけ成功しても受注金額が¥0に見えてしまう。
+ */
+export interface AttributionHealth {
+  opportunitiesTotal: number;
+  opportunitiesLinked: number;
+  linkRate: number | null;
+  inquiryLeadsTotal: number;
+  inquiryLeadsWithLanding: number;
+  landingRate: number | null;
+  unlinkedRecent: number;
+}
+
+export async function getAttributionHealth(tenantId: string, days = 90): Promise<AttributionHealth | null> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.rpc("seo_attribution_health", { p_tenant: tenantId, p_days: days });
+  const r = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+  if (!r) return null;
+  const n = (v: unknown) => Number(v ?? 0);
+  return {
+    opportunitiesTotal: n(r.opportunities_total),
+    opportunitiesLinked: n(r.opportunities_linked),
+    linkRate: r.link_rate == null ? null : Number(r.link_rate),
+    inquiryLeadsTotal: n(r.inquiry_leads_total),
+    inquiryLeadsWithLanding: n(r.inquiry_leads_with_landing),
+    landingRate: r.landing_rate == null ? null : Number(r.landing_rate),
+    unlinkedRecent: n(r.unlinked_recent),
+  };
+}
+
+/** ページ別の売上貢献（「どの記事が稼いだか」）。 */
+export interface SeoPageRevenue {
+  pagePath: string;
+  clicks: number;
+  inquiries: number;
+  leadsValid: number;
+  opportunities: number;
+  won: number;
+  revenue: number;
+}
+
+export async function getSeoPageRevenue(siteId: string, days = 30, limit = 10): Promise<SeoPageRevenue[]> {
+  const sb = getSupabaseServer();
+  const to = todayJst();
+  const from = addDays(to, -(days - 1));
+  const { data } = await sb.rpc("seo_page_revenue", { p_site: siteId, p_from: from, p_to: to });
+  return ((data ?? []) as Record<string, unknown>[]).slice(0, limit).map((r) => ({
+    pagePath: String(r.page_path ?? "/"),
+    clicks: Number(r.clicks ?? 0),
+    inquiries: Number(r.inquiries ?? 0),
+    leadsValid: Number(r.leads_valid ?? 0),
+    opportunities: Number(r.opportunities ?? 0),
+    won: Number(r.won ?? 0),
+    revenue: Number(r.revenue ?? 0),
+  }));
 }
 
 /**
