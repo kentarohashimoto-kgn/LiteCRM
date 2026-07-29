@@ -43,7 +43,7 @@ const STATUS_LABEL: Record<string, { label: string; tone: "ok" | "ng" | "unknown
   unknown: { label: "未診断", tone: "unknown" },
 };
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, label }: { status: string; label?: string }) {
   const s = STATUS_LABEL[status] ?? STATUS_LABEL.unknown;
   const Icon = s.tone === "ok" ? CheckCircle2 : s.tone === "ng" ? XCircle : HelpCircle;
   const cls =
@@ -55,7 +55,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${cls}`}>
       <Icon size={12} />
-      {s.label}
+      {label ? `${label}: ${s.label}` : s.label}
     </span>
   );
 }
@@ -149,6 +149,11 @@ export default async function SeoSettingsPage({
         const diag = (p.diagnostics ?? {}) as Record<string, unknown>;
         const gscSites = (diag.gscSites as Array<{ siteUrl: string; permission: string }> | undefined) ?? [];
         const mySites = sites.filter((s) => s.property_id === p.id);
+        // このドメインに対応する候補だけをワンクリック保存の対象にする。
+        // （aicafe.jp のカードに catorce.jp を保存してしまう事故を防ぐ）
+        const ownCandidates = gscSites.filter((s) => s.siteUrl.includes(p.domain));
+        const otherCandidates = gscSites.filter((s) => !s.siteUrl.includes(p.domain));
+        const needsSetup = !p.gsc_property && ownCandidates.length > 0;
         return (
           <Section
             key={p.id}
@@ -156,23 +161,47 @@ export default async function SeoSettingsPage({
             icon={<Globe size={15} />}
             action={
               <div className="flex items-center gap-2">
-                <StatusBadge status={p.gsc_status} />
-                <StatusBadge status={p.ga4_status} />
+                <StatusBadge status={p.gsc_status} label="Search Console" />
+                <StatusBadge status={p.ga4_status} label="GA4" />
               </div>
             }
           >
             <div className="space-y-4">
+              {/* 診断で候補が見つかったのに未設定 = あと1クリックで完了する状態。最も目立たせる。 */}
+              {needsSetup && canEdit && (
+                <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+                  <p className="text-sm font-medium text-teal-900">
+                    あと1クリックで接続できます
+                  </p>
+                  <p className="mt-0.5 text-xs text-teal-800">
+                    診断で見つかったプロパティです。ボタンを押すとこの値が保存されます。
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {ownCandidates.map((s) => (
+                      <form key={s.siteUrl} action={saveSeoPropertyAction}>
+                        <input type="hidden" name="id" value={p.id} />
+                        <input type="hidden" name="gsc_property" value={s.siteUrl} />
+                        <input type="hidden" name="ga4_property_id" value={p.ga4_property_id ?? ""} />
+                        <SubmitButton className="btn-primary text-sm" pendingLabel="保存中…">
+                          {`「${s.siteUrl}」を使う`}
+                        </SubmitButton>
+                      </form>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <form action={saveSeoPropertyAction} className="grid gap-3 md:grid-cols-[1fr_200px_auto] md:items-end">
                 <input type="hidden" name="id" value={p.id} />
                 <label className="block text-sm">
                   <span className="text-ink/60 text-xs">
                     Search Console プロパティ
-                    {gscSites.length > 0 && "（欄をクリックすると候補から選べます）"}
+                    {!p.gsc_property && "（未設定。下のグレー文字は入力例です）"}
                   </span>
                   <input
                     name="gsc_property"
                     defaultValue={p.gsc_property ?? ""}
-                    placeholder={`sc-domain:${p.domain}`}
+                    placeholder="例) sc-domain:example.com"
                     list={`gsc-options-${p.id}`}
                     disabled={!canEdit}
                     className="mt-1 w-full rounded border border-black/10 px-2.5 py-1.5 text-sm"
@@ -211,11 +240,16 @@ export default async function SeoSettingsPage({
                   <p className="text-xs text-ink/50">
                     最終診断: {new Date(p.gsc_checked_at).toLocaleString("ja-JP")}
                   </p>
+                  {otherCandidates.length > 0 && ownCandidates.length === 0 && (
+                    <p className="text-xs text-amber-700">
+                      このドメイン（{p.domain}）のプロパティは見つかりませんでした。Search
+                      Consoleに未登録か、サービスアカウントに権限が付いていません。
+                    </p>
+                  )}
                   {gscSites.length > 0 && (
                     <div>
                       <p className="text-xs font-medium text-ink/70">
-                        アクセスできる Search Console プロパティ（この値を上の「Search Console
-                        プロパティ」欄に入れて保存してください）
+                        アクセスできる Search Console プロパティ
                       </p>
                       <ul className="mt-1 space-y-0.5">
                         {gscSites.map((s) => (
