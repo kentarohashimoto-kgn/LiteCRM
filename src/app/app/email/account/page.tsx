@@ -5,6 +5,7 @@ import { ActionNotice } from "@/components/ui/action-notice";
 import { mailCredSecretConfigured } from "@/lib/crypto-mail";
 import { googleOAuthConfigured } from "@/lib/google-oauth";
 import { MailAccountForm } from "@/components/email/mail-account-form";
+import { SignatureForm } from "@/components/email/signature-form";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export interface MailAccountView {
   inbound_last_error: string | null;
   auth_method: string;
   oauth_email: string | null;
+  signature: string | null;
 }
 
 /**
@@ -36,7 +38,7 @@ export default async function MailAccountPage({ searchParams }: { searchParams: 
   const sb = getSupabaseServer();
   const { data } = await sb
     .from("user_mail_accounts")
-    .select("provider, from_email, from_name, smtp_host, smtp_port, smtp_secure, smtp_username, bcc_self, verified_at, imap_host, imap_port, inbound_enabled, inbound_last_run_at, inbound_last_error, auth_method, oauth_email")
+    .select("provider, from_email, from_name, smtp_host, smtp_port, smtp_secure, smtp_username, bcc_self, verified_at, imap_host, imap_port, inbound_enabled, inbound_last_run_at, inbound_last_error, auth_method, oauth_email, signature")
     .maybeSingle();
   const account = (data as MailAccountView | null) ?? null;
   const secretReady = mailCredSecretConfigured();
@@ -57,6 +59,7 @@ export default async function MailAccountPage({ searchParams }: { searchParams: 
           verified: "接続テストに成功しました。",
           disconnected: "接続を解除しました。",
           google_connected: "Googleアカウントに接続しました。送受信（開封/クリック計測・返信自動停止）が有効です。",
+          signature: "署名を保存しました。テンプレの {signature} に差し込まれます。",
         }}
         errorMessages={{
           forbidden: "メール送信の権限がありません。",
@@ -97,6 +100,12 @@ export default async function MailAccountPage({ searchParams }: { searchParams: 
           Google接続中: <b>{account.oauth_email}</b>（送受信・計測・返信自動停止が有効）。切り替える場合は下のフォームで別方式を保存するか、
           <a href="/api/oauth/google/start" className="underline ml-1">再接続</a>してください。
         </div>
+      )}
+
+      {account && (
+        <Section title="署名（メール末尾のブロック）">
+          <SignatureForm signature={account.signature} />
+        </Section>
       )}
 
       <Section title={account?.auth_method === "google_oauth" ? "SMTP接続に切り替える場合（任意）" : "SMTP接続（Zoho / その他）"}>

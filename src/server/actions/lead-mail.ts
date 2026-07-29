@@ -9,6 +9,7 @@ import { deliverTrackedEmail, type DeliverParams } from "@/lib/mail-deliver";
 import { refreshAccessToken } from "@/lib/google-oauth";
 import { logAudit, clientIp } from "@/lib/audit-events";
 import { wantsFooter, type UnsubMode } from "@/lib/unsubscribe";
+import { resolveSender, type SenderVars } from "@/lib/sender";
 
 /**
  * リード一括メール(F-203 MVP・D2=手動トリガー)。
@@ -180,6 +181,8 @@ export interface BulkMailPreview {
   sampleContact?: string;    // 差し込みプレビュー用の先頭リード
   sampleCompany?: string;
   senderName?: string;
+  /** 差出人依存の差し込み値(クライアント側プレビューで同じ結果を出すため) */
+  senderVars?: SenderVars;
   senderReady?: boolean;
   dailyRemaining?: number;   // 本日の残り送信可能数(送信者単位・上限300/日)
 }
@@ -198,15 +201,21 @@ export async function previewLeadBulkMailAction(filters: LeadMailFilters, templa
   if (!SEND_ROLES.includes(ctx.role)) return { ok: false, error: "送信権限がありません" };
   if (!templateId) return { ok: false, error: "テンプレートを選択してください" };
   const sb = getSupabaseServer();
-  const [{ data: tpl }, { data: acc }, r, todaySent] = await Promise.all([
+  const [{ data: tpl }, { data: acc }, { data: prof }, r, todaySent] = await Promise.all([
     sb.from("email_templates").select("subject_tmpl, body_tmpl").eq("id", templateId).maybeSingle(),
-    sb.from("user_mail_accounts").select("status, from_name").eq("user_id", ctx.userId).maybeSingle(),
+    sb.from("user_mail_accounts").select("status, from_name, from_email, oauth_email, auth_method, signature").eq("user_id", ctx.userId).maybeSingle(),
+    sb.from("profiles").select("display_name").eq("id", ctx.userId).maybeSingle(),
     resolveTargets(filters, templateId),
     countTodaySent(ctx.userId),
   ]);
   if (!tpl) return { ok: false, error: "テンプレートが見つかりません" };
   const sample = r.targets[0];
-  const vars = { contact: sample?.name || "(担当者名)", company: sample?.company || "(会社名)", opportunity: "", sender: (acc?.from_name as string) || "" };
+  const senderVars = resolveSender({
+    fromName: acc?.from_name as string | null, displayName: prof?.display_name as string | null,
+    fromEmail: acc?.from_email as string | null, oauthEmail: acc?.oauth_email as string | null,
+    authMethod: acc?.auth_method as string | null, signature: acc?.signature as string | null,
+  });
+  const vars = { contact: sample?.name || "(担当者名)", company: sample?.company || "(会社名)", opportunity: "", ...senderVars };
   return {
     ok: true,
     sendable: r.targets.length,
@@ -222,7 +231,8 @@ export async function previewLeadBulkMailAction(filters: LeadMailFilters, templa
     bodyTmpl: tpl.body_tmpl as string,
     sampleContact: sample?.name || "",
     sampleCompany: sample?.company || "",
-    senderName: (acc?.from_name as string) || "",
+    senderName: senderVars.sender,
+    senderVars,
     senderReady: acc?.status === "active",
     dailyRemaining: Math.max(0, DAILY_CAP_PER_SENDER - todaySent),
   };
@@ -276,10 +286,17 @@ export async function sendLeadBulkMailAction(
 
   const { data: acc } = await sb
     .from("user_mail_accounts")
-    .select("auth_method, smtp_host, smtp_port, smtp_secure, smtp_username, smtp_password_enc, oauth_refresh_token_enc, oauth_email, from_email, from_name, bcc_self, status")
+    .select("auth_method, smtp_host, smtp_port, smtp_secure, smtp_username, smtp_password_enc, oauth_refresh_token_enc, oauth_email, from_email, from_name, bcc_self, status, signature")
     .eq("user_id", ctx.userId)
     .maybeSingle();
   if (!acc || acc.status !== "active") return { ok: false, error: "送信メールアカウントが未接続です。[メール設定]から接続してください。" };
+  const { data: prof } = await sb.from("profiles").select("display_name").eq("id", ctx.userId).maybeSingle();
+  // 差出人依存の差し込み値。OAuth接続は from_name が空のことがあるため表示名で補う
+  const senderVars = resolveSender({
+    fromName: acc.from_name as string | null, displayName: prof?.display_name as string | null,
+    fromEmail: acc.from_email as string | null, oauthEmail: acc.oauth_email as string | null,
+    authMethod: acc.auth_method as string | null, signature: acc.signature as string | null,
+  });
 
   // 認証情報は一括分をまとめて1回だけ解決する
   let authArgs: Pick<DeliverParams, "authMethod" | "smtp" | "oauthAccessToken" | "from">;
@@ -291,7 +308,7 @@ export async function sendLeadBulkMailAction(
     if (!tok.ok) return { ok: false, error: "Googleトークンの更新に失敗しました（再接続してください）: " + tok.error };
     authArgs = {
       authMethod: "google_oauth", oauthAccessToken: tok.accessToken,
-      from: { email: (acc.oauth_email as string) || (acc.from_email as string), name: acc.from_name as string | null },
+      from: { email: (acc.oauth_email as string) || (acc.from_email as string), name: senderVars.sender || null },
     };
   } else {
     let password = "";
@@ -299,7 +316,7 @@ export async function sendLeadBulkMailAction(
     catch { return { ok: false, error: "送信資格情報の復号に失敗しました。" }; }
     authArgs = {
       authMethod: "smtp",
-      from: { email: acc.from_email as string, name: acc.from_name as string | null },
+      from: { email: acc.from_email as string, name: senderVars.sender || null },
       smtp: { host: acc.smtp_host as string, port: acc.smtp_port as number, secure: acc.smtp_secure as boolean, username: acc.smtp_username as string, password, fromEmail: acc.from_email as string, fromName: acc.from_name as string | null },
     };
   }
@@ -330,7 +347,6 @@ export async function sendLeadBulkMailAction(
     batchId = (b?.id as string) ?? null;
   }
 
-  const senderName = (acc.from_name as string) || "";
   // 本文フッターは内容次第(既定は付ける)。ヘッダは一括では常に付ける
   const footer = wantsFooter(opts?.unsubMode ?? "full");
   let sent = 0;
@@ -340,7 +356,7 @@ export async function sendLeadBulkMailAction(
   // 挿入のみで高速なため、チャンク分割せず対象全件(最大300)を1回で積む。
   if (opts?.scheduledAtIso) {
     const rows = r.targets.map((t) => {
-      const vars = { contact: t.name, company: t.company, opportunity: "", sender: senderName };
+      const vars = { contact: t.name, company: t.company, opportunity: "", ...senderVars };
       return {
         tenant_id: ctx.tenantId,
         scheduled_at: opts.scheduledAtIso,
@@ -369,7 +385,7 @@ export async function sendLeadBulkMailAction(
   }
 
   for (const t of batch) {
-    const vars = { contact: t.name, company: t.company, opportunity: "", sender: senderName };
+    const vars = { contact: t.name, company: t.company, opportunity: "", ...senderVars };
     const res = await deliverTrackedEmail(sb, {
       tenantId: ctx.tenantId, loggedBy: ctx.userId,
       ...authArgs,
