@@ -63,6 +63,9 @@ export function TemplatePreview({ templates, senderName, senderEmail }: { templa
   const [tplId, setTplId] = useState(templates[0]?.id ?? "");
   const [contact, setContact] = useState("山田 太郎");
   const [company, setCompany] = useState("株式会社サンプル");
+  // 送信方法で配信停止フッターの有無が変わるため、プレビューも切り替える
+  const [mode, setMode] = useState<"bulk" | "single">("bulk");
+  const withFooter = mode === "bulk";
   const tpl = useMemo(() => templates.find((t) => t.id === tplId) ?? null, [templates, tplId]);
   const vars = { contact, company, opportunity: "", sender: senderName || "(差出人名未設定)" };
   const subject = tpl ? renderEmailTemplate(tpl.subject_tmpl, vars) : "";
@@ -86,6 +89,13 @@ export function TemplatePreview({ templates, senderName, senderEmail }: { templa
         <div className="space-y-1">
           <label className="text-xs text-ink/50 block">サンプル: 会社名 {"{company}"}</label>
           <input value={company} onChange={(e) => setCompany(e.target.value)} className="input w-52" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-ink/50 block">送信方法</label>
+          <select value={mode} onChange={(e) => setMode(e.target.value as "bulk" | "single")} className="input w-52">
+            <option value="bulk">一括メール / シーケンス</option>
+            <option value="single">個別メール（1通ずつ）</option>
+          </select>
         </div>
         {tpl && (
           <Link href="/app/email/templates" className="btn-ghost inline-flex items-center gap-1.5 text-sm ml-auto">
@@ -122,7 +132,9 @@ export function TemplatePreview({ templates, senderName, senderEmail }: { templa
           <div className="card overflow-hidden">
             <div className="px-4 py-2.5 border-b border-black/[0.06] bg-teal-light/30 flex items-center gap-2">
               <Eye size={14} className="text-teal-deep" />
-              <span className="text-sm font-semibold text-teal-deep">実際に届くメール（{contact || "相手"} さんの受信画面）</span>
+              <span className="text-sm font-semibold text-teal-deep">
+                実際に届くメール（{contact || "相手"} さんの受信画面 ／ {mode === "bulk" ? "一括送信時" : "個別送信時"}）
+              </span>
             </div>
             <div className="p-4">
               <div className="rounded-xl border border-black/10 overflow-hidden text-sm">
@@ -133,12 +145,19 @@ export function TemplatePreview({ templates, senderName, senderEmail }: { templa
                 </div>
                 <div className="px-4 py-3 whitespace-pre-wrap leading-relaxed bg-white">
                   <RenderedBody text={body} />
-                  <div className="mt-4 pt-3 border-t border-dashed border-black/15 text-xs text-ink/45">
-                    ――――――――――――――――{"\n"}
-                    本メールは、名刺交換・展示会・お問い合わせ等で接点をいただいた方にお送りしています。{"\n"}
-                    配信停止をご希望の方はこちら: <span className="underline">https://…/api/track/u/（メールごとに固有のURL）</span>
-                    <span className="ml-1 rounded-full bg-mist-soft text-ink/50 text-[9px] px-1.5 py-px">自動付与</span>
-                  </div>
+                  {withFooter ? (
+                    <div className="mt-4 pt-3 border-t border-dashed border-black/15 text-xs text-ink/45">
+                      ――――――――――――――――{"\n"}
+                      本メールは、名刺交換・展示会・お問い合わせ等で接点をいただいた方にお送りしています。{"\n"}
+                      配信停止をご希望の方はこちら: <span className="underline">https://…/api/track/u/（メールごとに固有のURL）</span>
+                      <span className="ml-1 rounded-full bg-mist-soft text-ink/50 text-[9px] px-1.5 py-px">自動付与</span>
+                    </div>
+                  ) : (
+                    <div className="mt-4 pt-3 border-t border-dashed border-black/15 text-xs text-ink/40">
+                      配信停止フッターは<b>付きません</b>（個別送信は業務連絡として自然な文面で届きます）。
+                      <span className="block">広告宣伝が主目的の内容を送るときは、作成画面の「配信停止リンクを本文末尾に付ける」をONにしてください。</span>
+                    </div>
+                  )}
                 </div>
                 <div className="px-4 py-2 bg-mist-soft/30 border-t border-black/[0.06] text-[11px] text-ink/45">
                   📎 このほか、目に見えない開封計測（1pxの画像）が自動で入ります。開封・クリックはエンゲージメントスコアに加点され、ホット通知の判定に使われます。

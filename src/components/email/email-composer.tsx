@@ -44,6 +44,8 @@ export function EmailComposer({ templates, initial, hasMailAccount }: { template
   const [sent, setSent] = useState(false);
   // 予約送信(Gmailの「送信日時を設定」相当)。null=即時送信
   const [scheduleAt, setScheduleAt] = useState<string | null>(null);
+  // 配信停止リンク(既定OFF)。広告宣伝が主目的の内容のときだけONにする
+  const [unsubFooter, setUnsubFooter] = useState(false);
   const [scheduled, setScheduled] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,10 +87,11 @@ export function EmailComposer({ templates, initial, hasMailAccount }: { template
       toAddr,
       subject,
       body,
+      unsubscribeFooter: unsubFooter,
     };
     // 送信日時の指定があれば予約(cronが指定時刻に本人アカウントで送信する)
     if (scheduleAt) {
-      const res = await scheduleEmailAction({ ...common, scheduledAtIso: scheduleAt });
+      const res = await scheduleEmailAction({ ...common, scheduledAtIso: scheduleAt, unsubscribeFooter: unsubFooter });
       setSending(false);
       if (res.ok) { setScheduled(scheduleAt); setSent(true); router.refresh(); }
       else setError(res.error);
@@ -174,6 +177,17 @@ export function EmailComposer({ templates, initial, hasMailAccount }: { template
               <ExternalLink size={14} /> かわりにGmailで開く
             </a>
           </div>
+          {!sent && (
+            <label className="flex items-start gap-2 text-xs text-ink/60 cursor-pointer">
+              <input type="checkbox" checked={unsubFooter} onChange={(e) => setUnsubFooter(e.target.checked)} className="accent-teal-primary mt-0.5" />
+              <span>
+                配信停止リンクを本文末尾に付ける
+                <span className="block text-ink/40">
+                  個別の業務連絡（アポ調整・お礼・資料送付など）では<b>不要</b>です。サービス紹介・セミナー勧誘など<b>広告宣伝が主目的</b>の内容を送る場合はONにしてください（特定電子メール法の表示義務）。
+                </span>
+              </span>
+            </label>
+          )}
           <p className="text-xs text-ink/40">
             「送信する」はご自身のメールアカウント経由で送信し、開封（近似）とリンククリック（どの資料か）を計測します。送信控えはご自身の[送信済み]にも残ります。
             {" "}「送信日時を指定」で予約すると、指定時刻に同じ方法で自動送信されます（送信前ならキャンセル・日時変更が可能）。
