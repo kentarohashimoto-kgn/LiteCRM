@@ -83,11 +83,31 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ ok: tr
 }
 
 /** 接続したGoogleアカウントのメールアドレスを取得。 */
-export async function fetchGoogleEmail(accessToken: string): Promise<string | null> {
+export interface GoogleAccountInfo {
+  /** 接続したGoogleアカウントのメールアドレス。取得できなければ null(接続を保存してはいけない)。 */
+  email: string | null;
+  /** Gmail API が呼べる状態か。false ならGCPプロジェクトでAPIが未有効の可能性が高い(送信できない)。 */
+  gmailApiReady: boolean;
+}
+
+/**
+ * 接続したGoogleアカウントのアドレスを取得する。
+ * まず Gmail プロフィール(送信と同じAPI)を叩き、成否で Gmail API の有効/無効も判定する。
+ * Gmail API が未有効でもアドレス自体は userinfo(scope: userinfo.email)から取れるため、
+ * UUID等の代替値を送信元として保存してしまわないようフォールバックする。
+ */
+export async function fetchGoogleEmail(accessToken: string): Promise<GoogleAccountInfo> {
   const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) return null;
-  const j = (await res.json()) as { emailAddress?: string };
-  return j.emailAddress ?? null;
+  if (res.ok) {
+    const j = (await res.json()) as { emailAddress?: string };
+    if (j.emailAddress) return { email: j.emailAddress, gmailApiReady: true };
+  }
+  const ui = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!ui.ok) return { email: null, gmailApiReady: false };
+  const j2 = (await ui.json()) as { email?: string };
+  return { email: j2.email ?? null, gmailApiReady: false };
 }

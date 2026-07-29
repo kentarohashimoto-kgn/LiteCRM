@@ -23,7 +23,12 @@ export async function GET(req: Request) {
   const tok = await exchangeCode(code, redirectUri);
   if (!tok.ok) return back(`error=google_exchange&detail=${encodeURIComponent(tok.error.slice(0, 120))}`);
 
-  const email = (await fetchGoogleEmail(tok.accessToken)) ?? ctx.userId;
+  // アドレスが取れないまま保存すると、送信元が不正な値(ユーザーID等)のまま
+  // 「接続成功」に見えてしまう。取得できなければ保存せずエラーにする。
+  const info = await fetchGoogleEmail(tok.accessToken);
+  const email = info.email;
+  if (!email) return back("error=google_profile");
+
   const sb = getSupabaseServer();
   const { data: existing } = await sb.from("user_mail_accounts").select("id").eq("user_id", ctx.userId).maybeSingle();
 
@@ -45,6 +50,7 @@ export async function GET(req: Request) {
     : await sb.from("user_mail_accounts").insert(row);
   if (res.error) return back(`error=save_failed&detail=${encodeURIComponent(res.error.message.slice(0, 120))}`);
 
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.account.google_connect", target: email, meta: { provider: "gws" }, ip: clientIp() });
-  return back("saved=google_connected");
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.account.google_connect", target: email, meta: { provider: "gws", gmail_api_ready: info.gmailApiReady }, ip: clientIp() });
+  // 保存はできたがGmail APIが未有効の場合、そのまま送信すると失敗する。接続時点で気づけるようにする。
+  return back(info.gmailApiReady ? "saved=google_connected" : "error=gmail_api_disabled");
 }
