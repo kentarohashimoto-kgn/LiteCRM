@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search, Settings2, AlertTriangle, Target, Zap, Lightbulb } from "lucide-react";
+import { Search, Settings2, AlertTriangle, Target, Zap, Lightbulb, ClipboardList } from "lucide-react";
 import { requireCtx } from "@/lib/session";
 import { PageHeader, Section, EmptyState } from "@/components/ui/primitives";
 import {
@@ -97,6 +97,10 @@ export default async function SeoPage({ searchParams }: { searchParams: { site?:
             <Link href="/app/seo/proposals" className="btn-accent inline-flex items-center gap-1.5 text-sm">
               <Lightbulb size={14} />
               改善提案
+            </Link>
+            <Link href="/app/seo/actions" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
+              <ClipboardList size={14} />
+              施策の実行
             </Link>
             <Link href="/app/seo/strategy" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
               <Target size={14} />

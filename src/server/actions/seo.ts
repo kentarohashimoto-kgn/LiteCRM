@@ -8,6 +8,7 @@ import { listGscSites } from "@/lib/seo/gsc";
 import { checkGa4Access } from "@/lib/seo/ga4";
 import { getSeoCredentialInfo } from "@/lib/seo/google-sa";
 import { runSeoIngest } from "@/lib/seo/run-ingest";
+import { buildInstruction, EXECUTION_MODE } from "@/lib/seo/instructions";
 
 const ADMIN_ROLES = ["owner", "admin"];
 const SETTINGS_PATH = "/app/seo/settings";
@@ -267,7 +268,147 @@ export async function reviewProposalAction(formData: FormData): Promise<void> {
       .eq("id", insightId);
   }
 
+  // 承認 = 実行チケット化。ここで指示書まで作るので、承認直後にHP担当へ渡せる。
+  if (to === "approved") {
+    const created = await createActionFromProposal(sb, ctx.userId, id);
+    revalidatePath("/app/seo/actions");
+    if (created === "duplicate_page") {
+      revalidatePath("/app/seo/proposals");
+      back("saved=approved_dup");
+    }
+  }
+
   revalidatePath("/app/seo/proposals");
   revalidatePath("/app/seo");
   back(to === "approved" ? "saved=approved" : "saved=rejected");
+}
+
+/**
+ * 承認された提案から実行チケットを作る。
+ * 指示書は決定的テンプレートで生成するので、AIが未稼働でもそのまま渡せる。
+ *
+ * G3（同一ページに未完了施策を並走させない）はここで判定する。
+ * 並走すると効果がどちらの施策によるものか帰属できなくなる。
+ */
+async function createActionFromProposal(
+  sb: ReturnType<typeof getSupabaseServer>,
+  userId: string,
+  proposalId: string,
+): Promise<"ok" | "duplicate_page" | "skipped"> {
+  const { data: p } = await sb
+    .from("seo_proposals")
+    .select(
+      "id, tenant_id, site_id, title, action_type, target_query, target_page, expected_json, evidence_json, plan_md, seo_sites(name, base_url)",
+    )
+    .eq("id", proposalId)
+    .maybeSingle();
+  if (!p) return "skipped";
+
+  // 既に同じ提案からチケットを作っていれば二重に作らない
+  const { data: existing } = await sb.from("seo_actions").select("id").eq("proposal_id", proposalId).limit(1);
+  if (existing?.length) return "skipped";
+
+  const site = (p as { seo_sites?: { name?: string; base_url?: string } }).seo_sites;
+  const targetPage = (p.target_page as string) ?? "";
+
+  let duplicate = false;
+  if (targetPage) {
+    const { data: openOnPage } = await sb
+      .from("seo_actions")
+      .select("id")
+      .eq("site_id", p.site_id as string)
+      .eq("target_page", targetPage)
+      .not("status", "in", "(done,canceled)")
+      .limit(1);
+    duplicate = !!openOnPage?.length;
+  }
+
+  const actionType = p.action_type as string;
+  const instruction = buildInstruction({
+    actionType,
+    siteName: site?.name ?? "対象サイト",
+    baseUrl: site?.base_url ?? "",
+    targetQuery: (p.target_query as string) ?? "",
+    targetPage,
+    evidence: (p.evidence_json as Record<string, unknown>) ?? {},
+    expected: (p.expected_json as Record<string, number>) ?? {},
+  });
+  // AIが仮説・打ち手を書いていれば指示書に追記する（未生成でも成立する）
+  const plan = (p.plan_md as string) ?? "";
+  const deliverable = plan ? `${instruction}\n\n## AIが提案した打ち手\n${plan}` : instruction;
+
+  const mode = EXECUTION_MODE[actionType] ?? "external";
+  const { data: action } = await sb
+    .from("seo_actions")
+    .insert({
+      tenant_id: p.tenant_id as string,
+      site_id: p.site_id as string,
+      proposal_id: proposalId,
+      action_type: actionType,
+      execution_mode: mode,
+      title: p.title as string,
+      target_query: (p.target_query as string) ?? "",
+      target_page: targetPage,
+      expected_json: p.expected_json ?? {},
+      deliverable_md: deliverable,
+      status: "todo",
+      note: duplicate
+        ? "同じページに未完了の施策があります。効果の帰属が難しくなるため、先の施策の完了後に着手してください。"
+        : null,
+      created_by: userId,
+    })
+    .select("id")
+    .maybeSingle();
+
+  // 記事系はCRMの記事パイプラインに起票して、執筆フローに乗せる
+  if (mode === "content" && action) {
+    const { data: idea } = await sb
+      .from("content_ideas")
+      .insert({
+        tenant_id: p.tenant_id as string,
+        theme: "SEO施策",
+        title: (p.target_query as string) || (p.title as string),
+        angle: p.title as string,
+        target_keyword: (p.target_query as string) ?? null,
+        source: "web_trend",
+        status: "selected",
+        note: `SEO施策から起票（${actionType}）。対象: ${targetPage || "新規"}`,
+        created_by: userId,
+      })
+      .select("id")
+      .maybeSingle();
+    if (idea) await sb.from("seo_actions").update({ content_idea_id: idea.id }).eq("id", action.id);
+  }
+
+  return duplicate ? "duplicate_page" : "ok";
+}
+
+/** 施策の状態を進める。「反映しました」の記録が効果検証の起点になる。 */
+export async function updateActionStatusAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const site = String(formData.get("site") ?? "");
+  const back: (q: string) => never = (q) =>
+    redirect(`/app/seo/actions?${site ? `site=${site}&` : ""}${q}`);
+  if (!["owner", "admin", "sales_manager", "sales_rep"].includes(ctx.role)) back("error=forbidden");
+
+  const id = String(formData.get("id") ?? "").trim();
+  const to = String(formData.get("to") ?? "");
+  const allowed = ["todo", "in_progress", "review", "waiting_deploy", "deployed", "done", "canceled"];
+  if (!id || !allowed.includes(to)) back("error=invalid");
+
+  const patch: Record<string, unknown> = { status: to };
+  // 反映済みにした瞬間を効果検証の起点として記録する（DBトリガが検証期限を計算する）
+  if (to === "deployed") {
+    patch.applied_at = new Date().toISOString();
+    patch.applied_by = ctx.userId;
+  }
+  if (to === "canceled") patch.applied_at = null;
+
+  const sb = getSupabaseServer();
+  const up = await sb.from("seo_actions").update(patch).eq("id", id).select("id");
+  if (up.error || !up.data?.length) back("error=save_failed");
+
+  revalidatePath("/app/seo/actions");
+  revalidatePath("/app/seo");
+  back(to === "deployed" ? "saved=applied" : "saved=status");
 }
