@@ -231,3 +231,43 @@ export async function setMilestoneStatusAction(formData: FormData): Promise<void
   revalidatePath("/app/seo/strategy");
   back("saved=milestone");
 }
+
+/** 提案の承認 / 却下。却下理由は再提案のクールダウンと学習に使う。 */
+export async function reviewProposalAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const site = String(formData.get("site") ?? "");
+  const back: (q: string) => never = (q) =>
+    redirect(`/app/seo/proposals?${site ? `site=${site}&` : ""}${q}`);
+  if (!["owner", "admin", "sales_manager"].includes(ctx.role)) back("error=forbidden");
+
+  const id = String(formData.get("id") ?? "").trim();
+  const to = String(formData.get("to") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim() || null;
+  if (!id || !["approved", "rejected", "snoozed"].includes(to)) back("error=invalid");
+
+  const sb = getSupabaseServer();
+  const up = await sb
+    .from("seo_proposals")
+    .update({
+      status: to,
+      reject_reason: to === "rejected" ? reason : null,
+      reviewed_by: ctx.userId,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select("insight_id");
+  if (up.error) back("error=save_failed");
+
+  // 承認された提案の元になった所見は、以後の検出対象から外す（同じ提案が翌日も出ないように）
+  const insightId = up.data?.[0]?.insight_id as string | null;
+  if (insightId) {
+    await sb
+      .from("seo_insights")
+      .update({ status: to === "approved" ? "proposed" : "ignored" })
+      .eq("id", insightId);
+  }
+
+  revalidatePath("/app/seo/proposals");
+  revalidatePath("/app/seo");
+  back(to === "approved" ? "saved=approved" : "saved=rejected");
+}

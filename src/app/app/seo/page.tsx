@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search, Settings2, AlertTriangle, Target, Zap } from "lucide-react";
+import { Search, Settings2, AlertTriangle, Target, Zap, Lightbulb } from "lucide-react";
 import { requireCtx } from "@/lib/session";
 import { PageHeader, Section, EmptyState } from "@/components/ui/primitives";
 import {
@@ -94,6 +94,10 @@ export default async function SeoPage({ searchParams }: { searchParams: { site?:
         subtitle={`${current.name}（直近30日）— 検索からの集客を、問合せ・商談・売上まで一本で追跡します。`}
         action={
           <div className="flex items-center gap-2">
+            <Link href="/app/seo/proposals" className="btn-accent inline-flex items-center gap-1.5 text-sm">
+              <Lightbulb size={14} />
+              改善提案
+            </Link>
             <Link href="/app/seo/strategy" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
               <Target size={14} />
               戦略ボード
@@ -189,7 +193,11 @@ export default async function SeoPage({ searchParams }: { searchParams: { site?:
             ))}
           </ul>
           <p className="mt-3 text-xs text-ink/50">
-            検出は毎日同じ基準で機械的に行われます。ここから施策を起票する機能（改善提案）はWO-34で追加します。
+            検出は毎日同じ基準で機械的に行われます。承認できる形の提案は{" "}
+            <Link href="/app/seo/proposals" className="underline">
+              改善提案
+            </Link>
+            で確認できます。
           </p>
         </Section>
       )}
