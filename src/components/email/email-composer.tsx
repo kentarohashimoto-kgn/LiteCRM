@@ -11,6 +11,9 @@ import {
   type ContactPick,
 } from "@/server/actions/email";
 import { sendEmailViaSmtpAction } from "@/server/actions/mail-send";
+import { scheduleEmailAction } from "@/server/actions/mail-schedule";
+import { SchedulePicker } from "@/components/email/schedule-picker";
+import { formatJstSchedule } from "@/lib/schedule";
 import { searchOpportunitiesAction, type PickOption } from "@/server/actions/activities";
 import type { EmailTemplate } from "@/app/app/email/templates/page";
 
@@ -39,6 +42,9 @@ export function EmailComposer({ templates, initial, hasMailAccount }: { template
   const [opened, setOpened] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  // 予約送信(Gmailの「送信日時を設定」相当)。null=即時送信
+  const [scheduleAt, setScheduleAt] = useState<string | null>(null);
+  const [scheduled, setScheduled] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const company = contact?.account_name ?? initial.company ?? null;
@@ -71,7 +77,7 @@ export function EmailComposer({ templates, initial, hasMailAccount }: { template
     if (!isValidEmail(toAddr)) { setError("宛先メールアドレスを正しく入力してください"); return; }
     if (!subject.trim() && !body.trim()) { setError("件名または本文を入力してください"); return; }
     setSending(true);
-    const res = await sendEmailViaSmtpAction({
+    const common = {
       contactId: contact?.id ?? null,
       accountId: contact?.account_id ?? initial.accountId ?? null,
       opportunityId: opportunity?.id ?? null,
@@ -79,7 +85,16 @@ export function EmailComposer({ templates, initial, hasMailAccount }: { template
       toAddr,
       subject,
       body,
-    });
+    };
+    // 送信日時の指定があれば予約(cronが指定時刻に本人アカウントで送信する)
+    if (scheduleAt) {
+      const res = await scheduleEmailAction({ ...common, scheduledAtIso: scheduleAt });
+      setSending(false);
+      if (res.ok) { setScheduled(scheduleAt); setSent(true); router.refresh(); }
+      else setError(res.error);
+      return;
+    }
+    const res = await sendEmailViaSmtpAction(common);
     setSending(false);
     if (res.ok) { setSent(true); setLogged(true); router.refresh(); }
     else setError(res.error);
@@ -140,20 +155,28 @@ export function EmailComposer({ templates, initial, hasMailAccount }: { template
       </div>
 
       {error && <p className="text-sm text-rose-600 whitespace-pre-wrap">{error}</p>}
-      {sent && <p className="text-sm text-emerald-700 inline-flex items-center gap-1"><Check size={14} /> 送信しました。開封・クリックは送信履歴で確認できます。</p>}
+      {sent && !scheduled && <p className="text-sm text-emerald-700 inline-flex items-center gap-1"><Check size={14} /> 送信しました。開封・クリックは送信履歴で確認できます。</p>}
+      {scheduled && (
+        <p className="text-sm text-teal-deep inline-flex items-center gap-1">
+          <Check size={14} /> {formatJstSchedule(scheduled)} に送信予約しました。
+          <Link href="/app/email/scheduled" className="underline">予約一覧で確認・変更</Link>
+        </p>
+      )}
 
       {hasMailAccount ? (
         <>
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <button onClick={onSend} disabled={sending || sent} className="btn-accent inline-flex items-center gap-1 text-sm disabled:opacity-60">
-              <Send size={14} /> {sent ? "送信済み" : sending ? "送信中…" : "送信する（計測あり）"}
+              <Send size={14} /> {sent ? (scheduled ? "予約済み" : "送信済み") : sending ? (scheduleAt ? "予約中…" : "送信中…") : scheduleAt ? "この日時に送信予約する" : "送信する（計測あり）"}
             </button>
+            {!sent && <SchedulePicker value={scheduleAt} onChange={setScheduleAt} disabled={sending} />}
             <a href={gmailUrl} target="_blank" rel="noopener noreferrer" onClick={() => setOpened(true)} className="btn-ghost inline-flex items-center gap-1 text-sm text-ink/60">
               <ExternalLink size={14} /> かわりにGmailで開く
             </a>
           </div>
           <p className="text-xs text-ink/40">
             「送信する」はご自身のメールアカウント経由で送信し、開封（近似）とリンククリック（どの資料か）を計測します。送信控えはご自身の[送信済み]にも残ります。
+            {" "}「送信日時を指定」で予約すると、指定時刻に同じ方法で自動送信されます（送信前ならキャンセル・日時変更が可能）。
           </p>
         </>
       ) : (

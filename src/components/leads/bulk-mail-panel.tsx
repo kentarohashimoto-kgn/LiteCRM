@@ -10,6 +10,8 @@ import {
   type LeadMailFilters,
 } from "@/server/actions/lead-mail";
 import { EMAIL_CATEGORY_LABEL, renderEmailTemplate } from "@/lib/email";
+import { SchedulePicker } from "@/components/email/schedule-picker";
+import { formatJstSchedule } from "@/lib/schedule";
 
 /**
  * リード一括メール送信パネル(D2: 手動トリガー)。
@@ -25,6 +27,7 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
   const [templates, setTemplates] = useState<TemplateOpt[] | null>(null);
   const [templateId, setTemplateId] = useState("");
   const [segTitle, setSegTitle] = useState("");
+  const [scheduleAt, setScheduleAt] = useState<string | null>(null);  // 予約送信(null=即時)
   const [subj, setSubj] = useState("");   // 送信直前の直接編集(件名)
   const [body, setBody] = useState("");   // 送信直前の直接編集(本文)
   const [preview, setPreview] = useState<BulkMailPreview | null>(null);
@@ -73,11 +76,13 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
 
   const send = async () => {
     if (!preview?.sendable) return;
-    if (!confirm(`${preview.sendable}件のリードにメールを送信します。よろしいですか？\n(配信停止フッター・開封/クリック計測が自動で付きます)`)) return;
+    const when = scheduleAt ? `${formatJstSchedule(scheduleAt)} に送信予約します` : "メールを送信します";
+    if (!confirm(`${preview.sendable}件のリードに${when}。よろしいですか？\n(配信停止フッター・開封/クリック計測が自動で付きます)`)) return;
     setSending(true);
     setError(null);
     let sent = 0;
     let failed = 0;
+    let scheduled = 0;
     let batchId: string | undefined;
     const target = preview.sendable;
     setProgress({ sent, failed, target });
@@ -85,19 +90,27 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
       // 20件ずつ完了までループ。送信済みはサーバー側で自動除外されるため冪等。
       // 初回チャンクがセグメント履歴を作り、以降は同じbatchIdへ積む。
       for (let guard = 0; guard < 30; guard++) {
-        const r = await sendLeadBulkMailAction(effectiveFilters, templateId, 20, { batchId, segmentTitle: segTitle, subjectTmpl: subj, bodyTmpl: body });
+        const r = await sendLeadBulkMailAction(effectiveFilters, templateId, 20, {
+          batchId, segmentTitle: segTitle, subjectTmpl: subj, bodyTmpl: body,
+          scheduledAtIso: scheduleAt ?? undefined,
+        });
         batchId = r.batchId ?? batchId;
         if (!r.ok) {
-          if (sent === 0) { setError(r.error ?? "送信に失敗しました"); return; }
+          if (sent === 0 && scheduled === 0) { setError(r.error ?? "送信に失敗しました"); return; }
           break; // 途中から対象0になった等 → 完了扱い
         }
         sent += r.sent ?? 0;
         failed += r.failed ?? 0;
-        setProgress({ sent, failed, target });
+        scheduled += r.scheduled ?? 0;
+        setProgress({ sent: sent + scheduled, failed, target });
+        // 予約はサーバー側で対象全件を1回で積むため、チャンクを繰り返さない
+        if (scheduleAt) break;
         if ((r.sent ?? 0) === 0) break;
         if (sent + failed >= target) break;
       }
-      setDone(`送信 ${sent}件 / 失敗 ${failed}件${failed > 0 ? "（失敗分は送信履歴で確認できます）" : ""}`);
+      setDone(scheduleAt
+        ? `${scheduled}件を ${formatJstSchedule(scheduleAt)} に送信予約しました`
+        : `送信 ${sent}件 / 失敗 ${failed}件${failed > 0 ? "（失敗分は送信履歴で確認できます）" : ""}`);
       setPreview(null);
     } finally {
       setSending(false);
@@ -191,18 +204,21 @@ export function BulkMailPanel({ filters, selectedIds = [] }: { filters: LeadMail
             {done && (
               <p className="text-sm text-teal-deep flex items-center gap-1.5">
                 <CheckCircle2 size={15} /> {done}
-                <a href="/app/email/segments" className="underline text-xs" target="_blank">送信履歴・反応分析を見る</a>
+                <a href={scheduleAt ? "/app/email/scheduled" : "/app/email/segments"} className="underline text-xs" target="_blank">
+                  {scheduleAt ? "予約一覧で確認・変更" : "送信履歴・反応分析を見る"}
+                </a>
               </p>
             )}
 
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="flex flex-wrap justify-end items-center gap-2 pt-1">
+              {preview?.sendable && !sending && <SchedulePicker value={scheduleAt} onChange={setScheduleAt} disabled={sending} />}
               <button onClick={() => setOpen(false)} disabled={sending} className="btn-ghost text-sm">閉じる</button>
               <button
                 onClick={send}
                 disabled={sending || !preview?.sendable || !preview.senderReady}
                 className="btn-accent inline-flex items-center gap-1.5 text-sm disabled:opacity-40"
               >
-                <Send size={14} /> {preview?.sendable ? `${preview.sendable}件に送信` : "送信"}
+                <Send size={14} /> {preview?.sendable ? `${preview.sendable}件を${scheduleAt ? "予約" : "送信"}` : "送信"}
               </button>
             </div>
           </div>
