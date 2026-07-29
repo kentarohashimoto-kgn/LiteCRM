@@ -50,6 +50,36 @@ curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: applic
 - 利用枠に注意。レート制限/枠到達を感じたら打ち切り、POSTの `deferred_count`/`limit_hit`/`limit_hit_at` に記録（§4はAPIが担当）。
 - **F2（常設セッション/MCP保持時）に限り**、以下 §2.1/§2.3/§4 の SQL を直接実行してよい（参考）。
 
+## 0.5 SEO提案のAI肉付け（seo_proposal / 2026-07 追加）
+
+> 設計: `docs/SEO_GROWTH_ENGINE_DESIGN_2026-07.md` F-302 / 戦略: `docs/SEO_STRATEGY_2026-07.md`
+
+**前提**: 提案そのもの（対象・期待値・優先度）は日中のアプリ側で決定的に生成済み。
+夜間セッションが書くのは **なぜ効くか(hypothesis)** と **具体的に何をするか(plan_md)** の2つだけ。
+**数値の再計算はしないこと**（AIが数値を出すと日によって順序が揺れ、PDCAが続かない）。
+
+```bash
+# 1) 対象取得（最大10件）
+curl -s -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/batch/seo-proposal?limit=10"
+#   → {ok:true, enabled:true, count:N, targets:[{proposal_id, title, action_type,
+#       target_query, target_page, evidence:{...}, expected:{clicks,inquiries,leads,revenue}}],
+#      instruction:"..."}
+
+# 2) 各 target について自分(サブスク枠)で執筆してから書き戻し
+curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+  "$APP_URL/api/batch/seo-proposal" \
+  -d '{"items":[{"proposal_id":"...","hypothesis":"...","plan_md":"- ..."}],
+       "trigger":"nightly","usage_note":"10件中10件生成"}'
+#   → {ok:true, generated:N, failed:M, batch_run_id:"..."}
+```
+
+**書き方の指針**
+- `hypothesis` … evidence の数値を必ず引用して2〜4文。「なぜ今この状態なのか」「直すと何が起きるか」
+- `plan_md` … 箇条書き3〜6行。タイトル改善なら**案を3つ**出す。抽象論を書かない
+- `enabled:false` が返ったら**何も生成せず終了**（POSTも409で拒否される）
+
+---
+
 ---
 
 ## 1. ジョブ一覧（この順で実行）
