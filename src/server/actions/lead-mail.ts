@@ -42,6 +42,7 @@ export interface LeadMailFilters {
   rank?: string;        // 単一 or CSV("S,A")。ranks指定時は無視
   ranks?: string[];     // ランク複数選択
   owner?: string;       // 社内担当者(取得担当の表示名。表記ゆれは名寄せ済み)
+  handler?: string;     // 対応者(FS接客者。社長/責任者が接客したリード)
   from?: string;        // 獲得日 開始(YYYY-MM-DD)
   to?: string;          // 獲得日 終了(YYYY-MM-DD)
   leadIds?: string[];   // チェックボックスで個別選択した場合。指定時は他の絞り込みより優先
@@ -92,6 +93,7 @@ async function resolveTargets(filters: LeadMailFilters, templateId: string): Pro
       const raws = await resolveOwnerRaws(filters.owner);
       qy = raws.length ? qy.in("acquirer", raws) : qy.eq("acquirer", "\u0000");
     }
+    if (filters.handler) qy = qy.eq("handled_by", filters.handler);
     if (filters.from) qy = qy.gte("acquired_at", filters.from);
     if (filters.to) qy = qy.lte("acquired_at", filters.to);
   }

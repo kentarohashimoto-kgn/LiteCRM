@@ -69,6 +69,8 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
     const raws = await resolveAcquirerRaws(f.owner);
     qy = raws.length ? qy.in("acquirer", raws) : qy.eq("acquirer", "\u0000"); // 該当なし
   }
+  // 対応者(FS接客者)
+  if (f.handler) qy = qy.eq("handled_by", f.handler);
   // 獲得日の範囲
   if (f.from) qy = qy.gte("acquired_at", f.from);
   if (f.to) qy = qy.lte("acquired_at", f.to);
@@ -116,6 +118,15 @@ export async function getLeadAcquirers(): Promise<{ name: string; raws: string[]
   const { data } = await sb.rpc("lead_acquirers");
   /* eslint-disable @typescript-eslint/no-explicit-any */
   return ((data ?? []) as any[]).map((a) => ({ name: a.name as string, raws: (a.raws as string[]) ?? [], leads: a.leads ?? 0 }));
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
+
+/** 対応者(FS接客者)の選択肢。判定は assign_lead_handlers(0177)。 */
+export async function getLeadHandlers(): Promise<{ name: string; leads: number }[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.rpc("lead_handlers");
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  return ((data ?? []) as any[]).map((h) => ({ name: h.name as string, leads: h.leads ?? 0 }));
   /* eslint-enable @typescript-eslint/no-explicit-any */
 }
 

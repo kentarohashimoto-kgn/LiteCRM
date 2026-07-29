@@ -13,6 +13,7 @@ import {
   getWebIntakeSources,
   getWebIntakeMedia,
   getLeadAcquirers,
+  getLeadHandlers,
 } from "@/lib/data/leads";
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { LeadsWorkspace, type LeadsTab } from "@/components/leads/leads-workspace";
@@ -20,7 +21,7 @@ import { LeadsWorkspace, type LeadsTab } from "@/components/leads/leads-workspac
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; owner?: string; from?: string; to?: string; page?: string; scored?: string; md?: string; sort?: string; dir?: string };
+  searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; owner?: string; handler?: string; from?: string; to?: string; page?: string; scored?: string; md?: string; sort?: string; dir?: string };
 }) {
   const tab = (["list", "inquiries", "funnel", "queue", "company", "analysis", "download", "batches"].includes(searchParams.tab ?? "")
     ? searchParams.tab
@@ -45,6 +46,7 @@ export default async function LeadsPage({
     disposition: searchParams.disp ?? "",
     rank: searchParams.rank ?? "",
     owner: searchParams.owner ?? "",
+    handler: searchParams.handler ?? "",
     from: searchParams.from ?? "",
     to: searchParams.to ?? "",
     page: searchParams.page ? Math.max(1, parseInt(searchParams.page, 10) || 1) : 1,
@@ -66,6 +68,8 @@ export default async function LeadsPage({
   const events = tab === "list" || tab === "download" ? await getLeadEvents() : tab === "inquiries" ? inquirySourceNames : [];
   // 社内担当者(取得担当)の選択肢。表記ゆれはSQL側(0176)で名寄せ済み
   const acquirers = tab === "list" ? (await getLeadAcquirers()).map((a) => ({ name: a.name, leads: a.leads })) : [];
+  // 対応者(FS接客者)の選択肢。展示会で社長/責任者が接客した相手を抽出する
+  const handlers = tab === "list" ? await getLeadHandlers() : [];
   const presets = tab === "download" ? (await getExportPresets()).map((p) => ({ id: p.id, name: p.name, columns: p.columns })) : [];
   const batchRows = tab === "batches" ? await getLeadImportBatches() : [];
   const batches = batchRows.map((b) => ({
@@ -113,6 +117,7 @@ export default async function LeadsPage({
         aliases={aliases}
         events={events}
         acquirers={acquirers}
+        handlers={handlers}
         mediaOptions={inquiryMedia}
         presets={presets}
         filters={filters}

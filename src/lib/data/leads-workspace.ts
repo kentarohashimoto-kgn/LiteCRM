@@ -47,6 +47,7 @@ export interface LeadsFilters {
   disposition?: string;
   rank?: string;         // ランク。複数選択はCSV("S,A")
   owner?: string;        // 社内担当者(取得担当 acquirer の表示名。表記ゆれは名寄せ済み)
+  handler?: string;      // 対応者(FS接客者 handled_by。展示会で社長/責任者が接客した相手)
   from?: string;         // 獲得日 開始(YYYY-MM-DD)
   to?: string;           // 獲得日 終了(YYYY-MM-DD)
   page?: number;

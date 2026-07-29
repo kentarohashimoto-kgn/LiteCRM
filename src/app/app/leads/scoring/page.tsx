@@ -4,6 +4,8 @@ import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui/primitives";
 import { ScoringDesigner, type AxisRow, type RuleRow } from "@/components/leads/scoring-designer";
+import { HandlerRules } from "@/components/leads/handler-rules";
+import { listHandlerRulesAction } from "@/server/actions/lead-handlers";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +16,10 @@ export const dynamic = "force-dynamic";
 export default async function LeadScoringPage() {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
-  const [{ data: axes }, { data: rules }] = await Promise.all([
+  const [{ data: axes }, { data: rules }, handlerData] = await Promise.all([
     sb.from("lead_scoring_axes").select("axis, label, cap, agg, sort_order").order("sort_order"),
     sb.from("lead_scoring_rules").select("id, axis, label, match_kind, match_value, points, sort_order, is_active").order("sort_order"),
+    listHandlerRulesAction(),
   ]);
   const canEdit = ["owner", "admin", "sales_manager"].includes(ctx.role);
 
@@ -41,6 +44,16 @@ export default async function LeadScoringPage() {
         rules={(rules ?? []) as RuleRow[]}
         canEdit={canEdit}
       />
+
+      <div className="mt-8 pt-6 border-t border-black/[0.08]">
+        <h2 className="text-base font-semibold text-ink mb-3">対応者（接客した人）の判定ルール</h2>
+        <HandlerRules
+          rules={handlerData.rules}
+          members={handlerData.members}
+          handlers={handlerData.handlers}
+          canEdit={canEdit}
+        />
+      </div>
     </div>
   );
 }

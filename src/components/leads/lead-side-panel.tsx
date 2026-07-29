@@ -5,6 +5,7 @@ import Link from "next/link";
 import { X, Phone, Mail, ExternalLink, Loader2, Gauge, Flame } from "lucide-react";
 import { getLeadPanelAction, type LeadPanelData } from "@/server/actions/lead-panel";
 import { setLeadDispositionAction, setLeadHearingAction } from "@/server/actions";
+import { setLeadHandlerAction } from "@/server/actions/lead-handlers";
 import { LEAD_DISPOSITIONS } from "@/lib/constants";
 import { GRADE_DEFS, type PriorityGrade } from "@/lib/engagement";
 import { cn, formatDateFull } from "@/lib/utils";
@@ -44,7 +45,11 @@ function HearingSel({ id, field, value, opts, ph, onSaved }: {
   );
 }
 
-export function LeadSidePanel({ leadId, onClose }: { leadId: string | null; onClose: () => void }) {
+const HANDLER_SRC_LABEL: Record<string, string> = {
+  memo: "メモから判定", card: "名刺から判定", both: "メモ+名刺", manual: "手動設定",
+};
+
+export function LeadSidePanel({ leadId, onClose, handlers = [] }: { leadId: string | null; onClose: () => void; handlers?: string[] }) {
   const [data, setData] = useState<LeadPanelData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -154,6 +159,27 @@ export function LeadSidePanel({ leadId, onClose }: { leadId: string | null; onCl
                   {LEAD_DISPOSITIONS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
                 </select>
               </form>
+            </div>
+
+            {/* 対応者(FS接客者) */}
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-ink/70">
+                対応者（接客）
+                {l.handledBySource && (
+                  <span className="ml-1.5 pill bg-mist-soft text-ink/50 text-[9px] font-normal">{HANDLER_SRC_LABEL[l.handledBySource] ?? l.handledBySource}</span>
+                )}
+              </p>
+              <select
+                defaultValue={l.handledBy ?? ""}
+                onChange={async (e) => { await setLeadHandlerAction({ leadId: l.id, handlerName: e.target.value || null }); void load(l.id); }}
+                className={cn("input text-sm", l.handledBy ? "border-rose-300 bg-rose-50/40 text-rose-700" : "")}
+              >
+                <option value="">（なし）</option>
+                {[...new Set([...(handlers ?? []), ...(l.handledBy ? [l.handledBy] : [])])].map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-ink/40">社長・責任者が接客したリードはスコアで優遇されます。手で変更すると以後の自動判定では上書きされません。</p>
             </div>
 
             {/* 基本情報 */}
