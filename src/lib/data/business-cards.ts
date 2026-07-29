@@ -92,14 +92,17 @@ export async function getAccountIndustries(): Promise<string[]> {
 }
 
 /** 件数サマリ（全体/連携済み/未連携）。 */
-export async function getCardStats(): Promise<{ total: number; linked: number; contactLinked: number }> {
+export async function getCardStats(): Promise<{ total: number; linked: number; contactLinked: number; notLead: number }> {
   const sb = getSupabaseServer();
   const [totalR, linkedR, contactR] = await Promise.all([
     sb.from("business_cards").select("id", { count: "exact", head: true }),
     sb.from("business_cards").select("id", { count: "exact", head: true }).not("account_id", "is", null),
     sb.from("business_cards").select("id", { count: "exact", head: true }).not("contact_id", "is", null),
   ]);
-  return { total: totalR.count ?? 0, linked: linkedR.count ?? 0, contactLinked: contactR.count ?? 0 };
+  // 未リード化(=リード一覧に出ない名刺)。取込後のリード化漏れに気づけるようにする
+  const sb2 = getSupabaseServer();
+  const { count: notLead } = await sb2.from("business_cards").select("id", { count: "exact", head: true }).is("lead_id", null);
+  return { total: totalR.count ?? 0, linked: linkedR.count ?? 0, contactLinked: contactR.count ?? 0, notLead: notLead ?? 0 };
 }
 
 /** 名刺詳細（連携先の顧客・担当者つき）。 */

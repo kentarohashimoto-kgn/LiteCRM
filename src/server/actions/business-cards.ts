@@ -15,6 +15,8 @@ export interface ImportCardsResult {
   ok: boolean;
   inserted: number;
   skipped: number;
+  /** 今回挿入された名刺のID(取込直後の自動リード化で対象を限定するため)。 */
+  insertedIds?: string[];
   error?: string;
 }
 
@@ -76,7 +78,7 @@ export async function importBusinessCardsAction(rows: BusinessCardInput[], excha
   if (error) return { ok: false, inserted: 0, skipped: 0, error: `取込に失敗しました: ${error.message}` };
   const inserted = data?.length ?? 0;
   revalidatePath(LIST_PATH);
-  return { ok: true, inserted, skipped: records.length - inserted };
+  return { ok: true, inserted, skipped: records.length - inserted, insertedIds: (data ?? []).map((d) => d.id as string) };
 }
 
 export interface MatchCardsResult {
@@ -290,7 +292,7 @@ export interface ConvertCardsResult {
  * 名刺に lead_id を紐付ける。同一メールの既存リードがあれば新規作成せずそのリードへ紐付け(重複防止)。
  * 変換後は rescore_leads で Fit スコアを自動付与。
  */
-export async function convertCardsToLeadsAction(input: { tag?: string; from?: string }): Promise<ConvertCardsResult> {
+export async function convertCardsToLeadsAction(input: { tag?: string; from?: string; cardIds?: string[] }): Promise<ConvertCardsResult> {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const { normCompany, deriveRoleLevel } = await import("@/lib/lead-import");
@@ -301,8 +303,14 @@ export async function convertCardsToLeadsAction(input: { tag?: string; from?: st
     .is("lead_id", null)
     .limit(500);
   const tag = (input.tag ?? "").trim();
-  if (tag) qy = qy.contains("tags", [tag]);
-  if (input.from) qy = qy.gte("exchanged_on", input.from);
+  const ids = (input.cardIds ?? []).filter(Boolean).slice(0, 500);
+  if (ids.length > 0) {
+    // 取込直後の自動リード化: 今回登録した名刺だけを対象にする(過去分を巻き込まない)
+    qy = qy.in("id", ids);
+  } else {
+    if (tag) qy = qy.contains("tags", [tag]);
+    if (input.from) qy = qy.gte("exchanged_on", input.from);
+  }
   const { data: cards, error } = await qy;
   if (error) return { ok: false, created: 0, linkedExisting: 0, skippedConverted: 0, error: error.message };
   if (!cards || cards.length === 0) return { ok: false, created: 0, linkedExisting: 0, skippedConverted: 0, error: "対象の名刺がありません（未リード化・タグ/期間一致）" };
