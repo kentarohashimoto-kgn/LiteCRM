@@ -354,6 +354,101 @@ export async function clearNextActionAction(input: {
   return { ok: true };
 }
 
+/** 一括消込の1回あたりの上限。取りこぼしは件数で返して繰り返し実行してもらう。 */
+const BULK_CLEAR_LIMIT = 200;
+
+/**
+ * 「◯日以上超過している次回AC」の棚卸し候補を数える(消込のプレビュー)。
+ * 画面の「期限超過」は先頭30件しか出していないので、一括消込はDB側の全件を対象にする。
+ * ここでは何も更新せず、対象idと総件数だけ返す(実行前に件数を確認させるため)。
+ */
+export async function listStaleNextActionsAction(input: {
+  olderThanDays: number;
+  teamWide: boolean;
+}): Promise<{ ok: boolean; ids: string[]; total: number; error?: string }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const days = Math.max(1, Math.floor(input.olderThanDays));
+  // 他メンバーのACを消すのは管理操作。担当変更と同じロールに揃える。
+  if (input.teamWide && !canReassignOwner(ctx.role)) {
+    return { ok: false, ids: [], total: 0, error: "チーム全体の一括消込は代表・管理者・Sales Opsのみ実行できます" };
+  }
+  const cutoff = jstDate(new Date(Date.now() - days * 24 * 3600 * 1000).toISOString());
+
+  let q = sb
+    .from("opportunities")
+    .select("id", { count: "exact" })
+    .eq("status", "open")
+    .not("next_action_date", "is", null)
+    .lt("next_action_date", cutoff)
+    .order("next_action_date", { ascending: true })
+    .limit(BULK_CLEAR_LIMIT);
+  if (!input.teamWide) q = q.eq("owner_user_id", ctx.userId);
+
+  const { data, count, error } = await q;
+  if (error) return { ok: false, ids: [], total: 0, error: `対象の取得に失敗しました: ${error.message}` };
+  return { ok: true, ids: (data ?? []).map((r) => (r as { id: string }).id), total: count ?? (data ?? []).length };
+}
+
+/**
+ * 次回ACの一括消込。listStaleNextActionsAction が返したidに対してだけ実行する
+ * (条件で消すのではなく、ユーザーが件数を確認したidを消す)。
+ * 単体の消込と同じく last_activity_at は触らず、activities に1件ずつ記録を残す。
+ */
+export async function bulkClearNextActionsAction(input: {
+  ids: string[];
+}): Promise<{ ok: boolean; cleared: number; error?: string }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+  const ids = input.ids.slice(0, BULK_CLEAR_LIMIT);
+  if (ids.length === 0) return { ok: false, cleared: 0, error: "対象がありません" };
+
+  // 消す直前の内容を取得。プレビュー後に他メンバーが更新した行もあるので、
+  // 「今まだACが残っている行」だけを対象にする。
+  const { data, error: readErr } = await sb
+    .from("opportunities")
+    .select("id, account_id, owner_user_id, next_action_date, next_action_text")
+    .in("id", ids)
+    .eq("status", "open")
+    .not("next_action_date", "is", null);
+  if (readErr) return { ok: false, cleared: 0, error: `対象の取得に失敗しました: ${readErr.message}` };
+  const rows = (data ?? []) as {
+    id: string;
+    account_id: string | null;
+    owner_user_id: string | null;
+    next_action_date: string | null;
+    next_action_text: string | null;
+  }[];
+  if (rows.length === 0) return { ok: true, cleared: 0 };
+  if (rows.some((r) => r.owner_user_id !== ctx.userId) && !canReassignOwner(ctx.role)) {
+    return { ok: false, cleared: 0, error: "他メンバーの案件が含まれています。自分の担当のみ消込できます" };
+  }
+
+  const { error: updErr } = await sb
+    .from("opportunities")
+    .update({ next_action_date: null, next_action_text: null })
+    .in("id", rows.map((r) => r.id));
+  if (updErr) return { ok: false, cleared: 0, error: `消込に失敗しました: ${updErr.message}` };
+
+  await sb.from("activities").insert(
+    rows.map((r) => ({
+      tenant_id: ctx.tenantId,
+      opportunity_id: r.id,
+      account_id: r.account_id,
+      owner_user_id: ctx.userId,
+      activity_type: "internal_memo",
+      title: "次回アクションを消込（一括）",
+      body: `消込した次回アクション: ${r.next_action_date ?? "日付なし"}${r.next_action_text ? ` / ${r.next_action_text}` : ""}`,
+      activity_at: new Date().toISOString(),
+    })),
+  );
+
+  revalidatePath("/app/today");
+  revalidatePath("/app/activities");
+  revalidatePath("/app/opportunities");
+  return { ok: true, cleared: rows.length };
+}
+
 /* ============================================================
  * A-6 一括操作
  * ============================================================ */

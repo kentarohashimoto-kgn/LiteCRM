@@ -5,6 +5,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { QuickLogForm } from "@/components/today/quick-log-form";
 import { ClearNextActionButton } from "@/components/today/clear-next-action-button";
+import { BulkClearStale } from "@/components/today/bulk-clear-stale";
 import { HotLeadsSection } from "@/components/today/hot-leads";
 import { formatYen } from "@/lib/utils";
 
@@ -140,7 +141,7 @@ export default async function TodayPage({ searchParams }: { searchParams: { all?
         )}
       </Section>
 
-      <Section title={`期限超過（${overdue.length}）`}>
+      <Section title={`期限超過（${overdue.length}）`} action={<BulkClearStale teamWide={showAll} />}>
         {overdue.length === 0 ? (
           <p className="text-sm text-ink/40 py-4 text-center">超過している次回ACはありません 🎉</p>
         ) : (
