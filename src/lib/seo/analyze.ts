@@ -89,7 +89,15 @@ export function detectInsights(
         pagePath: r.pagePath || null,
         title: `「${r.query}」は${round(pos, 1)}位に表示されているのにクリック0`,
         severity: "high",
-        metric: { impressions: r.impressions, clicks: 0, position: round(pos, 1), benchmarkCtr: bench },
+        // extraClicks は期待売上の換算元。ここが欠けると最重要の検出が金額0で
+        // 最下位に沈むため、必ず入れる。
+        metric: {
+          impressions: r.impressions,
+          clicks: 0,
+          position: round(pos, 1),
+          benchmarkCtr: bench,
+          extraClicks: Math.round(extra),
+        },
         opportunityScore: score(extra, r.query, "title_meta"),
         actionType: "title_meta",
       });
@@ -277,4 +285,97 @@ export function intentMixInsight(mix: IntentMix): Insight | null {
     opportunityScore: 100000,
     actionType: "new_article",
   };
+}
+
+
+/** ページ単位に束ねた施策候補。1ページの改善は、そのページに来る全クエリに効く。 */
+export interface PageGroupedInsight {
+  actionType: string;
+  pagePath: string;
+  /** 代表クエリ（表示回数が最大のもの）。タイトルに使う。 */
+  primaryQuery: string;
+  queries: Array<{ query: string; impressions: number; clicks: number; position: number | null; extraClicks: number }>;
+  totalExtraClicks: number;
+  totalImpressions: number;
+  severity: "high" | "medium" | "low";
+  /** 束ねたどれか1つでも第1層なら第1層扱い（ページを直せばその語にも効くため）。 */
+  hasLayer1: boolean;
+  kinds: string[];
+  sourceInsightIds: string[];
+}
+
+/** ページ全体に効く施策タイプ。これらは同一ページの検出を1件に束ねる。 */
+const PAGE_SCOPED_ACTIONS = new Set(["title_meta", "rewrite", "internal_link", "technical", "cta_form"]);
+
+export function isPageScopedAction(actionType: string): boolean {
+  return PAGE_SCOPED_ACTIONS.has(actionType);
+}
+
+/**
+ * 同一ページ・同一施策タイプの検出を1件に束ねる。
+ *
+ * タイトルを1回書き換えれば、そのページに来る全クエリのCTRが動く。
+ * 束ねないと「同じ記事のタイトル改善」が4件並び、期待売上も分割されて
+ * 実際より小さく見え、承認の判断を誤らせる。
+ *
+ * ページが特定できない検出（サイトレベル等）や、カニバリのように
+ * 複数ページをまたぐ施策は束ねない。
+ */
+export function groupInsightsByPage(
+  insights: Array<Insight & { id?: string }>,
+): { grouped: PageGroupedInsight[]; ungrouped: Array<Insight & { id?: string }> } {
+  const buckets = new Map<string, PageGroupedInsight>();
+  const ungrouped: Array<Insight & { id?: string }> = [];
+
+  for (const ins of insights) {
+    if (!ins.pagePath || !isPageScopedAction(ins.actionType)) {
+      ungrouped.push(ins);
+      continue;
+    }
+    const key = `${ins.actionType}|${ins.pagePath}`;
+    const extra = Number(ins.metric.extraClicks ?? 0);
+    const impressions = Number(ins.metric.impressions ?? 0);
+    const position = ins.metric.position == null ? null : Number(ins.metric.position);
+
+    let b = buckets.get(key);
+    if (!b) {
+      b = {
+        actionType: ins.actionType,
+        pagePath: ins.pagePath,
+        primaryQuery: ins.query ?? "",
+        queries: [],
+        totalExtraClicks: 0,
+        totalImpressions: 0,
+        severity: "low",
+        hasLayer1: false,
+        kinds: [],
+        sourceInsightIds: [],
+      };
+      buckets.set(key, b);
+    }
+    b.queries.push({
+      query: ins.query ?? "",
+      impressions,
+      clicks: Number(ins.metric.clicks ?? 0),
+      position,
+      extraClicks: extra,
+    });
+    b.totalExtraClicks += extra;
+    b.totalImpressions += impressions;
+    if (!b.kinds.includes(ins.kind)) b.kinds.push(ins.kind);
+    if (ins.id) b.sourceInsightIds.push(ins.id);
+    if (ins.query && estimateIntentLayer(ins.query) === 1) b.hasLayer1 = true;
+    // 束ねた中の最も重い深刻度を採用する
+    if (ins.severity === "high") b.severity = "high";
+    else if (ins.severity === "medium" && b.severity !== "high") b.severity = "medium";
+  }
+
+  const grouped = [...buckets.values()].map((b) => {
+    // 代表クエリは表示回数が最大のもの（そのページの主戦場）
+    const top = [...b.queries].sort((x, y) => y.impressions - x.impressions)[0];
+    b.queries.sort((x, y) => y.extraClicks - x.extraClicks || y.impressions - x.impressions);
+    return { ...b, primaryQuery: top?.query ?? b.primaryQuery };
+  });
+  grouped.sort((a, b) => b.totalExtraClicks - a.totalExtraClicks);
+  return { grouped, ungrouped };
 }
