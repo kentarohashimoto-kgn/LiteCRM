@@ -29,7 +29,7 @@ WORK = BASE / "work"
 OUT = BASE / "output"
 
 #: freee の口座種別の表記(API実物より)
-FREEE_ACCOUNT_TYPE = {"普通": "ordinary", "当座": "current", "貯蓄": "saving"}
+FREEE_ACCOUNT_TYPE = {"普通": "ordinary", "当座": "checking", "貯蓄": "savings"}
 
 
 def from_bank_record(payee: str) -> str:
