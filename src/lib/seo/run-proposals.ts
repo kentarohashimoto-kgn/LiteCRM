@@ -5,6 +5,7 @@ import { estimateIntentLayer } from "@/lib/seo/benchmark";
 import { groupInsightsByPage, isPageScopedAction, type Insight } from "@/lib/seo/analyze";
 import { DEFAULT_RATES, type StrategyRates } from "@/lib/seo/strategy";
 import { todayJst } from "@/lib/seo/site-match";
+import { benchmarkCtr } from "@/lib/seo/benchmark";
 
 /**
  * 検出した機会(seo_insights)を「承認できる提案」に変換する（決定的処理）。
@@ -180,6 +181,67 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
       };
       const candidates: Candidate[] = [];
 
+      // ── ① 台帳ギャップ由来（仮説駆動）──────────────────────────
+      // 「狙ったのに取れていない語」から提案を作る。ここを最優先にするのは、
+      // GSCに出てきた語を磨くだけでは、そもそも狙っていない語の順位が
+      // 上がるだけで問合せが増えないため（対処療法になる）。
+      const { data: gapRows } = await admin.rpc("seo_keyword_rankings", { p_site: siteId, p_weeks: 2 });
+      for (const g of (gapRows ?? []) as Record<string, unknown>[]) {
+        const status = String(g.gap_status ?? "");
+        const query = String(g.query ?? "");
+        const layer = g.intent_layer == null ? null : Number(g.intent_layer);
+        const volume = Number(g.search_volume ?? 0);
+        const targetPos = Number(g.target_position ?? 5);
+        const page = (g.ranking_page as string) ?? (g.target_page as string) ?? "";
+
+        // 状態ごとに打ち手が一意に決まる
+        const actionType =
+          status === "no_page" || status === "out"
+            ? "new_article"
+            : status === "far" || status === "striking"
+              ? "rewrite"
+              : "title_meta";
+
+        // 目標順位まで取れたときのクリック増。取れていない語は現在0クリックなので
+        // 「目標順位のCTR × 検索数」がそのまま伸びしろになる。
+        const targetCtr = benchmarkCtr(targetPos) ?? 0.03;
+        const currentClicks = Number(g.clicks ?? 0);
+        const extraClicks = Math.max(0, Math.round(volume * targetCtr - currentClicks));
+        if (extraClicks <= 0) continue;
+
+        const statusLabel =
+          status === "no_page"
+            ? "対策ページが無い"
+            : status === "out"
+              ? "ページはあるが圏外"
+              : status === "far"
+                ? `${g.current_position}位（21位以下）`
+                : status === "striking"
+                  ? `${g.current_position}位（あと一歩）`
+                  : `${g.current_position}位（CTR改善の段階）`;
+
+        candidates.push({
+          actionType,
+          query,
+          page,
+          extraClicks,
+          title: `狙う語「${query}」を取る（${ACTION_PRIORS[actionType]?.label ?? actionType}）`,
+          evidence: {
+            kind: "keyword_gap",
+            detected: `台帳の狙う語。現状: ${statusLabel} / 想定検索数 月${volume} / 目標 ${targetPos}位`,
+            searchVolume: volume,
+            targetPosition: targetPos,
+            currentPosition: g.current_position ?? "圏外",
+            impressions: Number(g.impressions ?? 0),
+            clicks: currentClicks,
+            extraClicks,
+            gapStatus: status,
+          },
+          layer1: layer === 1,
+          insightIds: [],
+        });
+      }
+
       for (const g of grouped) {
         const others = g.queries.length - 1;
         candidates.push({
@@ -221,7 +283,14 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
           insightIds: ins.id ? [ins.id] : [],
         });
       }
-      candidates.sort((a, b) => b.extraClicks - a.extraClicks);
+      // 台帳由来を優先する。同じ機会量なら「狙った語」を先に出す。
+      const isFromLedger = (c: Candidate) => c.evidence.kind === "keyword_gap";
+      candidates.sort((a, b) => {
+        const la = isFromLedger(a) ? 1 : 0;
+        const lb = isFromLedger(b) ? 1 : 0;
+        if (la !== lb) return lb - la;
+        return b.extraClicks - a.extraClicks;
+      });
 
       const rows: Record<string, unknown>[] = [];
       for (const c of candidates) {
@@ -245,7 +314,12 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
           insight_id: c.insightIds[0] ?? null,
           title: c.title,
           action_type: c.actionType,
-          lever: LEVER_BY_KIND[String(c.evidence.kind ?? "").split(",")[0]] ?? null,
+          lever:
+            c.evidence.kind === "keyword_gap"
+              ? c.actionType === "title_meta"
+                ? "ctr"
+                : "position"
+              : LEVER_BY_KIND[String(c.evidence.kind ?? "").split(",")[0]] ?? null,
           intent_layer: c.layer1 ? 1 : intentLayer,
           target_query: c.query,
           target_page: c.page,
