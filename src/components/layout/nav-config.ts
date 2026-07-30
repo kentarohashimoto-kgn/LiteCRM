@@ -91,6 +91,7 @@ const groups: NavGroup[] = [
     heading: "分析",
     items: [
       { href: "/app/seo", label: "SEO集客", icon: Search },
+      { href: "/app/seo/keywords", label: "KW順位表", icon: Target },
       { href: "/app/pmo", label: "AI-PMO", icon: Telescope },
       { href: "/app/analytics/xray", label: "営業レントゲン", icon: ScanLine },
       { href: "/app/analytics", label: "分析ハブ", icon: Gauge },

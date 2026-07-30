@@ -1,5 +1,14 @@
 import Link from "next/link";
-import { Search, Settings2, AlertTriangle, Target, Zap, Lightbulb, ClipboardList } from "lucide-react";
+import {
+  Search,
+  Settings2,
+  AlertTriangle,
+  Target,
+  Zap,
+  Lightbulb,
+  ClipboardList,
+  Compass,
+} from "lucide-react";
 import { requireCtx } from "@/lib/session";
 import { PageHeader, Section, EmptyState } from "@/components/ui/primitives";
 import {
@@ -102,8 +111,12 @@ export default async function SeoPage({ searchParams }: { searchParams: { site?:
               <ClipboardList size={14} />
               施策の実行
             </Link>
-            <Link href="/app/seo/strategy" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
+            <Link href="/app/seo/keywords" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
               <Target size={14} />
+              KW順位表
+            </Link>
+            <Link href="/app/seo/strategy" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
+              <Compass size={14} />
               戦略ボード
             </Link>
             <Link href="/app/seo/settings" className="btn-secondary inline-flex items-center gap-1.5 text-sm">

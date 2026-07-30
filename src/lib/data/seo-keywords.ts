@@ -1,0 +1,143 @@
+import { getSupabaseServer } from "@/lib/supabase/server";
+
+/**
+ * ターゲットKW台帳と順位トラッキングの参照（F-307）。
+ *
+ * 「狙った語が何位取れているか」を見るための入口。
+ * これが無いと、Search Consoleに出てきた語を磨くだけの対処療法になる。
+ * 背景: docs/SEO_STRATEGY_V2_KEYWORD_DRIVEN_2026-07.md
+ */
+
+export type GapStatus = "no_page" | "out" | "far" | "striking" | "top10";
+
+export interface KeywordRanking {
+  keywordId: string;
+  query: string;
+  intentLayer: number | null;
+  clusterName: string | null;
+  searchVolume: number | null;
+  targetPosition: number | null;
+  priority: number;
+  targetPage: string | null;
+  currentPosition: number | null;
+  prevPosition: number | null;
+  delta: number | null;
+  impressions: number;
+  clicks: number;
+  rankingPage: string | null;
+  pageMismatch: boolean;
+  gapStatus: GapStatus;
+}
+
+/** ギャップ状態の意味と、そこから決まる打ち手。 */
+export const GAP_META: Record<GapStatus, { label: string; action: string; tone: "bad" | "warn" | "ok" }> = {
+  no_page: { label: "未対応", action: "新規記事を作る", tone: "bad" },
+  out: { label: "圏外", action: "作り直す（内容が的を外している）", tone: "bad" },
+  far: { label: "21位以下", action: "リライトで押し上げる", tone: "warn" },
+  striking: { label: "11〜20位", action: "リライトで1ページ目へ", tone: "warn" },
+  top10: { label: "10位以内", action: "CTR改善で刈り取る／守る", tone: "ok" },
+};
+
+export const LAYER_LABEL: Record<number, string> = {
+  1: "第1層 発注検討（今すぐ客）",
+  2: "第2層 課題認識（そのうち客）",
+  3: "第3層 情報収集",
+};
+
+export async function getKeywordRankings(siteId: string): Promise<KeywordRanking[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.rpc("seo_keyword_rankings", { p_site: siteId, p_weeks: 2 });
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    keywordId: String(r.keyword_id),
+    query: String(r.query),
+    intentLayer: r.intent_layer == null ? null : Number(r.intent_layer),
+    clusterName: (r.cluster_name as string) ?? null,
+    searchVolume: r.search_volume == null ? null : Number(r.search_volume),
+    targetPosition: r.target_position == null ? null : Number(r.target_position),
+    priority: Number(r.priority ?? 3),
+    targetPage: (r.target_page as string) ?? null,
+    currentPosition: r.current_position == null ? null : Number(r.current_position),
+    prevPosition: r.prev_position == null ? null : Number(r.prev_position),
+    delta: r.delta == null ? null : Number(r.delta),
+    impressions: Number(r.impressions ?? 0),
+    clicks: Number(r.clicks ?? 0),
+    rankingPage: (r.ranking_page as string) ?? null,
+    pageMismatch: !!r.page_mismatch,
+    gapStatus: (r.gap_status as GapStatus) ?? "no_page",
+  }));
+}
+
+export interface KeywordGapRow {
+  intentLayer: number | null;
+  gapStatus: GapStatus;
+  keywords: number;
+  totalVolume: number;
+  totalImpressions: number;
+  totalClicks: number;
+}
+
+export async function getKeywordGap(siteId: string): Promise<KeywordGapRow[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.rpc("seo_keyword_gap", { p_site: siteId });
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    intentLayer: r.intent_layer == null ? null : Number(r.intent_layer),
+    gapStatus: (r.gap_status as GapStatus) ?? "no_page",
+    keywords: Number(r.keywords ?? 0),
+    totalVolume: Number(r.total_volume ?? 0),
+    totalImpressions: Number(r.total_impressions ?? 0),
+    totalClicks: Number(r.total_clicks ?? 0),
+  }));
+}
+
+/**
+ * 「狙っていなかったが取れている語」= 拾い物。
+ * 捨てるのではなく仮説の種として扱う。ここから台帳に昇格させる。
+ */
+export interface DiscoveredQuery {
+  query: string;
+  impressions: number;
+  clicks: number;
+  position: number | null;
+  pagePath: string | null;
+}
+
+export async function getDiscoveredQueries(siteId: string, limit = 15): Promise<DiscoveredQuery[]> {
+  const sb = getSupabaseServer();
+  const [weeklyR, kwR] = await Promise.all([
+    sb
+      .from("seo_query_weekly")
+      .select("query, page_path, impressions, clicks, position")
+      .eq("site_id", siteId)
+      .order("impressions", { ascending: false })
+      .limit(400),
+    sb.from("seo_keywords").select("query").eq("site_id", siteId),
+  ]);
+  const known = new Set((kwR.data ?? []).map((k) => String(k.query)));
+
+  const agg = new Map<string, { impressions: number; clicks: number; posNum: number; posDen: number; page: string | null }>();
+  for (const r of weeklyR.data ?? []) {
+    const q = String(r.query);
+    if (known.has(q)) continue;
+    const imp = Number(r.impressions ?? 0);
+    const cur = agg.get(q) ?? { impressions: 0, clicks: 0, posNum: 0, posDen: 0, page: null };
+    cur.impressions += imp;
+    cur.clicks += Number(r.clicks ?? 0);
+    if (r.position != null && imp > 0) {
+      cur.posNum += Number(r.position) * imp;
+      cur.posDen += imp;
+    }
+    if (!cur.page) cur.page = (r.page_path as string) || null;
+    agg.set(q, cur);
+  }
+
+  return [...agg.entries()]
+    .map(([query, v]) => ({
+      query,
+      impressions: v.impressions,
+      clicks: v.clicks,
+      position: v.posDen > 0 ? Math.round((v.posNum / v.posDen) * 10) / 10 : null,
+      pagePath: v.page,
+    }))
+    .sort((a, b) => b.impressions - a.impressions)
+    .slice(0, limit);
+}
