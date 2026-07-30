@@ -11,7 +11,7 @@ import {
   PLAN_STATUS_LABEL,
   LAYER_LABEL,
 } from "@/lib/data/seo-keywords";
-import { startArticlePlanAction } from "@/server/actions/seo";
+import { startArticlePlanAction, savePlanUrlAction } from "@/server/actions/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +88,10 @@ export default async function SeoPlansPage({
       <ActionNotice
         saved={searchParams.saved}
         error={searchParams.error}
-        savedMessages={{ started: "記事ネタとして起票しました。「記事ネタ・ブログ」で執筆を進められます。" }}
+        savedMessages={{
+          started: "記事ネタとして起票しました。「記事ネタ・ブログ」で執筆を進められます。",
+          url: "対策URLを保存しました。KW順位表で実表示ページとのズレを検出できます。",
+        }}
         errorMessages={{ forbidden: "この操作を行う権限がありません。", already: "この記事は既に起票済みです。" }}
       />
 
@@ -160,6 +163,13 @@ export default async function SeoPlansPage({
                       <span className="rounded bg-black/[0.03] px-1.5 py-0.5 text-ink/50">
                         {PLAN_STATUS_LABEL[p.status] ?? p.status}
                       </span>
+                      <span
+                        className={`rounded px-1.5 py-0.5 ${
+                          p.isExistingPage ? "bg-teal-50 text-teal-700" : "bg-orange-50 text-orange-700"
+                        }`}
+                      >
+                        {p.isExistingPage ? "既存ページ強化" : "新規作成"}
+                      </span>
                     </div>
                   </div>
                   {p.status === "planned" && (
@@ -184,6 +194,28 @@ export default async function SeoPlansPage({
                   <Cell label="実績" value={`表示 ${num(p.impressions)} / クリック ${num(p.clicks)}`} />
                 </div>
 
+                {/* 対策URL。1検索意図=1ページの割当先。既存強化なのにURL未登録だと
+                    実表示ページとのズレ（カニバリ兆候）を検出できない */}
+                <form
+                  action={savePlanUrlAction}
+                  className="mt-2 flex flex-wrap items-center gap-2 text-xs"
+                >
+                  <input type="hidden" name="id" value={p.planId} />
+                  <input type="hidden" name="site" value={current.id} />
+                  <span className="text-ink/45">対策URL</span>
+                  <input
+                    name="planned_url"
+                    defaultValue={p.plannedUrl ?? ""}
+                    placeholder={p.isExistingPage ? "既存ページのパスを入力（例 /st/dify-training.html）" : "公開後にパスを入力"}
+                    className="w-72 max-w-full rounded border border-black/10 px-2 py-1"
+                  />
+                  <SubmitButton className="btn-ghost text-xs" pendingLabel="…">
+                    保存
+                  </SubmitButton>
+                  {p.isExistingPage && !p.plannedUrl && (
+                    <span className="text-amber-700">既存ページで狙う設定ですがURLが未登録です</span>
+                  )}
+                </form>
                 {p.publishedUrl && (
                   <div className="mt-1.5 break-all text-xs text-ink/45">{p.publishedUrl}</div>
                 )}

@@ -162,13 +162,14 @@ export default async function SeoKeywordsPage({
 
           <Section title={`KW順位表（${rows.length}語）`} icon={<Target size={15} />}>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[880px] text-sm">
+              <table className="w-full min-w-[1080px] text-sm">
                 <thead>
                   <tr className="border-b border-black/[0.06] text-xs text-ink/50">
                     <th className="py-2 text-left font-medium">キーワード</th>
                     <th className="py-2 text-left font-medium">クラスタ</th>
                     <th className="py-2 text-right font-medium">想定検索数</th>
-                    <th className="py-2 text-right font-medium">目標</th>
+                    <th className="py-2 text-left font-medium">対策ページ</th>
+                    <th className="py-2 text-right font-medium">目標 6M→12M</th>
                     <th className="py-2 text-right font-medium">現在</th>
                     <th className="py-2 text-right font-medium">前週比</th>
                     <th className="py-2 text-right font-medium">表示</th>
@@ -179,8 +180,9 @@ export default async function SeoKeywordsPage({
                 <tbody>
                   {rows.map((r) => {
                     const meta = GAP_META[r.gapStatus];
+                    // 到達判定は12ヶ月目標に対して行う（6ヶ月は中間チェックポイント）
                     const reached =
-                      r.currentPosition != null && r.targetPosition != null && r.currentPosition <= r.targetPosition;
+                      r.currentPosition != null && r.target12m != null && r.currentPosition <= r.target12m;
                     return (
                       <tr key={r.keywordId} className="border-b border-black/[0.03]">
                         <td className="py-2 pr-2">
@@ -188,7 +190,29 @@ export default async function SeoKeywordsPage({
                         </td>
                         <td className="py-2 pr-2 text-xs text-ink/50">{r.clusterName ?? "—"}</td>
                         <td className="py-2 text-right text-ink/60">{r.searchVolume ? num(r.searchVolume) : "—"}</td>
-                        <td className="py-2 text-right text-ink/50">{r.targetPosition ?? "—"}位</td>
+                        <td className="py-2 pr-2 text-xs">
+                          {/* 1検索意図=1ページ。どのページで取るかを常に見せてカニバリを防ぐ */}
+                          {r.planTitle ? (
+                            <>
+                              <span className="text-ink/70">{r.planTitle.split("｜")[0]}</span>
+                              <span
+                                className={`ml-1 rounded px-1 text-[10px] ${
+                                  r.isExistingPage ? "bg-teal-50 text-teal-700" : "bg-orange-50 text-orange-700"
+                                }`}
+                              >
+                                {r.isExistingPage ? "既存" : "新規"}
+                              </span>
+                              {r.plannedUrl && (
+                                <div className="break-all text-[10px] text-ink/40">{r.plannedUrl}</div>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-rose-600">未割当</span>
+                          )}
+                        </td>
+                        <td className="py-2 text-right text-ink/50">
+                          {r.target6m ?? "—"}→{r.target12m ?? "—"}位
+                        </td>
                         <td className={`py-2 text-right font-medium ${reached ? "text-emerald-700" : ""}`}>
                           {r.currentPosition != null ? `${r.currentPosition}位` : "—"}
                         </td>

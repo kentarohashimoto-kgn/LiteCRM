@@ -16,9 +16,14 @@ export interface KeywordRanking {
   intentLayer: number | null;
   clusterName: string | null;
   searchVolume: number | null;
-  targetPosition: number | null;
+  /** 二段階目標。表示0のドメインに単発目標は運用できない。 */
+  target6m: number | null;
+  target12m: number | null;
   priority: number;
-  targetPage: string | null;
+  /** 対策ページ（記事プラン）。1検索意図=1ページ。カニバリ防止の要。 */
+  planTitle: string | null;
+  plannedUrl: string | null;
+  isExistingPage: boolean;
   currentPosition: number | null;
   prevPosition: number | null;
   delta: number | null;
@@ -32,7 +37,7 @@ export interface KeywordRanking {
 /** ギャップ状態の意味と、そこから決まる打ち手。 */
 export const GAP_META: Record<GapStatus, { label: string; action: string; tone: "bad" | "warn" | "ok" }> = {
   no_page: { label: "未対応", action: "新規記事を作る", tone: "bad" },
-  out: { label: "圏外", action: "作り直す（内容が的を外している）", tone: "bad" },
+  out: { label: "圏外", action: "既存ページが的を外している。作り直す", tone: "bad" },
   far: { label: "21位以下", action: "リライトで押し上げる", tone: "warn" },
   striking: { label: "11〜20位", action: "リライトで1ページ目へ", tone: "warn" },
   top10: { label: "10位以内", action: "CTR改善で刈り取る／守る", tone: "ok" },
@@ -53,9 +58,12 @@ export async function getKeywordRankings(siteId: string): Promise<KeywordRanking
     intentLayer: r.intent_layer == null ? null : Number(r.intent_layer),
     clusterName: (r.cluster_name as string) ?? null,
     searchVolume: r.search_volume == null ? null : Number(r.search_volume),
-    targetPosition: r.target_position == null ? null : Number(r.target_position),
+    target6m: r.target_position_6m == null ? null : Number(r.target_position_6m),
+    target12m: r.target_position_12m == null ? null : Number(r.target_position_12m),
     priority: Number(r.priority ?? 3),
-    targetPage: (r.target_page as string) ?? null,
+    planTitle: (r.plan_title as string) ?? null,
+    plannedUrl: (r.planned_url as string) ?? null,
+    isExistingPage: !!r.is_existing_page,
     currentPosition: r.current_position == null ? null : Number(r.current_position),
     prevPosition: r.prev_position == null ? null : Number(r.prev_position),
     delta: r.delta == null ? null : Number(r.delta),
@@ -155,6 +163,9 @@ export interface ArticlePlanProgress {
   difficulty: number | null;
   priority: number;
   pageRole: string | null;
+  pageType: string | null;
+  plannedUrl: string | null;
+  isExistingPage: boolean;
   status: string;
   publishedUrl: string | null;
   keywordCount: number;
@@ -177,6 +188,9 @@ export async function getArticlePlans(siteId: string): Promise<ArticlePlanProgre
     difficulty: r.difficulty == null ? null : Number(r.difficulty),
     priority: Number(r.priority ?? 3),
     pageRole: (r.page_role as string) ?? null,
+    pageType: (r.page_type as string) ?? null,
+    plannedUrl: (r.planned_url as string) ?? null,
+    isExistingPage: !!r.is_existing_page,
     status: String(r.status ?? "planned"),
     publishedUrl: (r.published_url as string) ?? null,
     keywordCount: Number(r.keyword_count ?? 0),

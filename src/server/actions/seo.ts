@@ -473,3 +473,41 @@ export async function startArticlePlanAction(formData: FormData): Promise<void> 
   revalidatePath("/app/content");
   back("saved=started");
 }
+
+/**
+ * 記事プランの対策URLを保存する。
+ * 既存ページで狙うプランはURLが入って初めて「対策ページと実表示ページのズレ」
+ * （カニバリの兆候）を検出できるようになる。
+ */
+export async function savePlanUrlAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const site = String(formData.get("site") ?? "");
+  const back: (q: string) => never = (q) =>
+    redirect(`/app/seo/plans?${site ? `site=${site}&` : ""}${q}`);
+  if (!["owner", "admin", "sales_manager"].includes(ctx.role)) back("error=forbidden");
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) back("error=invalid");
+  const raw = String(formData.get("planned_url") ?? "").trim();
+  // 絶対URLで貼られてもパスに正規化する（GSCのページパスと突合するため）
+  let url: string | null = raw || null;
+  if (url && /^https?:\/\//i.test(url)) {
+    try {
+      url = new URL(url).pathname;
+    } catch {
+      back("error=invalid");
+    }
+  }
+
+  const sb = getSupabaseServer();
+  const up = await sb
+    .from("seo_article_plans")
+    .update({ planned_url: url, is_existing_page: url != null })
+    .eq("id", id)
+    .select("id");
+  if (up.error || !up.data?.length) back("error=save_failed");
+
+  revalidatePath("/app/seo/plans");
+  revalidatePath("/app/seo/keywords");
+  back("saved=url");
+}
