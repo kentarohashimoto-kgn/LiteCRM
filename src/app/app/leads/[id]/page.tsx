@@ -9,7 +9,7 @@ import { RecordRecent } from "@/components/layout/recent-items";
 import { getLead, getPersonEngagement, getPersonTouchpoints } from "@/lib/data/leads";
 import { LEAD_DISPOSITIONS } from "@/lib/constants";
 import { ROLE_LEVELS, NEEDS_OPTS, TIMING_OPTS, AUTHORITY_OPTS, BUDGET_OPTS, REVENUE_OPTS } from "@/lib/lead-import";
-import { formatDateFull } from "@/lib/utils";
+import { formatAcquiredAt, formatDateFull, formatDateTimeJst } from "@/lib/utils";
 import { DocumentSection } from "@/components/documents/document-section";
 import { DataPath, EditTarget, entityBorder } from "@/components/layout/data-path";
 import { MAIL_TOUCH_LABEL, GRADE_DEFS, type PriorityGrade } from "@/lib/engagement";
@@ -24,6 +24,10 @@ const ENG_COLOR: Record<string, string> = {
   S: "bg-rose-100 text-rose-600", A: "bg-amber-100 text-amber-700", B: "bg-teal-light text-teal-deep",
   C: "bg-mist-soft text-ink/60", D: "bg-mist-soft text-ink/40",
 };
+/** 接客者(handled_by)の判定根拠。0177 assign_lead_handlers が設定する。 */
+const HANDLER_SRC_LABEL: Record<string, string> = {
+  memo: "メモから判定", card: "名刺から判定", both: "メモ+名刺", manual: "手動設定",
+};
 
 export default async function LeadEditPage({ params }: { params: { id: string } }) {
   const l = await getLead(params.id);
@@ -36,6 +40,14 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
     first_contact_due_date?: string | null;
     priority_grade?: PriorityGrade | null;
     last_engaged_at?: string | null;
+  };
+  // 獲得情報(Lead型に未宣言の列はcastで参照。getLeadはselect("*"))
+  const acq = l as unknown as {
+    acquirer?: string | null;
+    scanned_at?: string | null;
+    created_at?: string | null;
+    handled_by?: string | null;
+    handled_by_source?: string | null;
   };
   const converted = !!l.account_id || l.status === "converted";
   // E-1軽量化: workspace_full(2.1MB)ではなく、このリードに紐づく案件のみ直接取得
@@ -76,6 +88,35 @@ export default async function LeadEditPage({ params }: { params: { id: string } 
           )
         }
       />
+
+      {/* 獲得情報(誰が・いつ獲得したか)。取込時のデータをそのまま表示する参照専用ブロック */}
+      <Card className="mb-5">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-semibold text-ink">獲得情報</span>
+          {acq.handled_by && (
+            <span className="pill bg-rose-100 text-rose-700 text-[11px] font-bold" title="展示会で実際に接客した担当者。社長・責任者の接客はスコアで優遇されます">
+              接客: {acq.handled_by}
+              {acq.handled_by_source && <span className="font-normal opacity-70 ml-1">（{HANDLER_SRC_LABEL[acq.handled_by_source] ?? acq.handled_by_source}）</span>}
+            </span>
+          )}
+        </div>
+        <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+          {[
+            ["流入元", ev],
+            ["獲得担当", acq.acquirer || "—"],
+            ["獲得日時", formatAcquiredAt(acq.scanned_at, l.acquired_at)],
+            ["取込日時", formatDateTimeJst(acq.created_at)],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-ink/40">{label}</dt>
+              <dd className="text-ink/80 mt-0.5 break-all">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        {!acq.scanned_at && (
+          <p className="text-[11px] text-ink/40 mt-2">※ 獲得日時は、QRスキャン時刻が記録されているリードのみ分単位で表示されます（名刺取込などは日付のみ）。</p>
+        )}
+      </Card>
 
       {/* リードスコア(要件書4.10の5軸) */}
       {sc.lead_score != null && (
