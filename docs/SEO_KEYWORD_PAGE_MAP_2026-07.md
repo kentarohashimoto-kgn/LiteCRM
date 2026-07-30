@@ -106,9 +106,32 @@ catorce.jp への直接クロールはネットワークポリシーで不可の
 
 **未紐づけの既存ページ候補（要確認）**: `/st/training-10h.html`(7) と `/st/training-dept.html`(2) は
 研修系ページに見えるが、どのプランに対応するか判断できず未割当。
+→ **解決済（下の§2.6）**: HP担当から全ページ一覧の提供を受け、コース詳細ページ群と判明。
 
 **衛生面の発見**: `/company/sample-company*/`・`/service/sample-service*/` のCMSデモページが
 インデックスされ表示回数が付いている。**noindex推奨**（HP担当への依頼事項）。
+
+### §2.6 HP担当（ClaudeDesign）からの全ページ提供で判明したこと（2026-07-30・0191）
+
+/st/ 配下**全101ページ**のZIP提供を受け突合した（sitemap.xmlも35→101URLに拡充済み）。
+
+**確認事項の回答（依頼4）**:
+- `training-10h/2h/aidx/dept/dify.html` = 研修**コース詳細ページ群**（総合LP `training-lp.html` の子）。
+  `training.html` は noindex + canonical→training-lp.html 設定済みで**カニバリ懸念なし**
+- **バイブコーディング専用LPは存在しない**。`knowledge-vibe-coding.html` が唯一の対策ページ（暫定→確定）
+- `prompt-campaign.html` = プロンプト100選の**リードマグネット**。研修LPとは別物で併存し、新LPから誘導
+
+**新たに見つかった強力な内部リンク・CTA資産**（各プランのノートに登録済み）:
+- 助成金: `/st/training-subsidy-simulator.html`（**助成金シミュレーター**。記事→シミュレーター→問合せの動線）
+- 導入ピラー: `knowledge-ai-roadmap` ＋ `knowledge-ai-training-90days`（90日定着）＋ WP `wp-ai-roadmap`
+- AI顧問: `knowledge-caio` / `knowledge-caio-2026`（「CAIO 外部」語の受け皿）
+- ガバナンス: WP `wp-ai-guideline`（策定キット） / RAG: `knowledge-rag-accuracy`
+- 総合LP: `knowledge-ai-training-selection`（選び方）/ `knowledge-group-training`（集合型）
+- 営業AX: `marketing.html` / `knowledge-seminar-title-ai` / `knowledge-ai-proposal-case`
+
+**計測まわり（依頼3）は先行実装済み**: first-touch.js（仕様§4.4準拠）を全108ページに設置する
+アップロードパッケージと、自社問い合わせフォーム（contact.html → CRM /api/lead-intake 直POST）まで
+実装済み。有効化にはCRM側から `LEAD_INTAKE_SECRET` の値の受け渡しが必要（§5参照）。
 
 ### ⏸ 降格・保留
 
@@ -155,6 +178,18 @@ catorce.jp への直接クロールはネットワークポリシーで不可の
 ---
 
 ## 5. 運用
+
+### 自社フォーム有効化の手順（着地ページ記録0%の解消・最重要）
+
+HP側は実装済み。残りは値の受け渡しのみ:
+
+1. **CRM管理者**: Vercelの環境変数 `LEAD_INTAKE_SECRET` の値を確認し、HP担当へ共有
+   （Vercel → プロジェクト → Settings → Environment Variables。本番で設定済みなことはAPI応答401で確認済み）
+2. **推奨**: 同時に `LEAD_INTAKE_ALLOW_ORIGIN=https://catorce.jp` を追加（現在は全オリジン許可）
+3. **HP担当**: `contact-form.js` の `TOKEN` に設定 → contact.html の noindex を解除 →
+   各ページのCTAをGoogleフォームから `/st/contact.html` へ差し替え
+4. 以後、リードに landing_page / 検索流入元が自動記録され、SEO→問合せ→売上が接続される
+
 
 - **対策URLの登録**: `/app/seo/plans` の各プランに対策URL欄を追加済み。既存ページで狙うプランはURLを入れると、KW順位表で「対策ページと実表示ページのズレ」（カニバリ兆候）を自動検出できる
 - **週次**: KW順位表で前週比を確認。`no_page`→新規作成 / `out`→作り直し / `striking`→リライト / `top10`→CTR
