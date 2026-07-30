@@ -244,9 +244,10 @@ def main() -> int:
     lines += render(insufficient)
     if excluded:
         lines += [
-            "---", "", "## C. 振込対象外（確認済み）", "",
+            "---", "", "## C. 今回は振込しない（確認済み）", "",
             f"{len(excluded)}件 / {sum(r['amount'] for r in excluded):,}円", "",
-            "自動引落などで別途決済されるもの。**振り込むと二重支払いになる。**", "",
+            "自動引落で別途決済されるもの、および支払方法の確認待ちで保留したもの。"
+            "**自動引落分は振り込むと二重支払いになる。**", "",
         ]
         for r in excluded:
             lines.append(f"- **{r['partner_name']}** {r['amount']:,}円 — {r['exclusion_reason']}")
@@ -262,7 +263,7 @@ def main() -> int:
         "# サマリ（2026-07-31 支払分）", "",
         "| 区分 | 件数 | 金額 |", "|---|---:|---:|",
         f"| freee 支払管理の対象 | {len(all_rows)} | {total_all:,}円 |",
-        f"| うち振込対象外(自動引落) | {len(excluded)} | -{total_excluded:,}円 |",
+        f"| うち今回振込しない(自動引落・保留) | {len(excluded)} | -{total_excluded:,}円 |",
         f"| **振込で払う範囲** | **{len(all_rows) - len(excluded)}** | **{transfer_scope:,}円** |",
         f"| 　確定(全銀ファイルに収録) | {len(confirmed)} | {total_ok:,}円 |",
         f"| 　要判断(口座情報は完備) | {len(judgement)} | {sum(r['amount'] for r in judgement):,}円 |",
