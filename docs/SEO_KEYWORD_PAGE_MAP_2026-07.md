@@ -10,6 +10,9 @@
 **現況**: 対策ページ **43本** / 狙う語 **211語** / 想定検索数 **月39,910**。
 CRM上の実体は `/app/seo/plans`（ページ）と `/app/seo/keywords`（語×順位×対策ページ）。
 
+**対策URLの紐づけ（2026-07-30）**: /st/ 配下の実在ページをSearch Console実データから特定し、
+13プランにURLを設定済み（§2.5）。新規LP6本には内部リンク元資産をノート化。
+
 ---
 
 ## 1. 目標順位は二段階（6ヶ月 → 12ヶ月）
@@ -69,6 +72,43 @@ GSC実データの手応えを測ってから、ヘッド語に挑む。
 | 22 | 業界別（製造→建設→金融→**保険→化学**） | 各業界 生成AI 活用/事例/研修 |
 | 23 | ガバナンス記事群 | ChatGPT 社内ルール(800) / ガイドライン 企業 / 情報漏洩 対策 |
 | 24 | 集客記事（第2層大型） | 生成AI 業務効率化 事例(600+800+500) / AI導入 失敗 |
+
+### §2.5 対策URLの紐づけ結果（2026-07-30・マイグレーション0190）
+
+catorce.jp への直接クロールはネットワークポリシーで不可のため、**Search Console実データ
+（Googleが実際に検索結果に表示しているURL）**から /st/ 配下の実在ページを特定して紐づけた。
+括弧内は直近16日の表示回数。
+
+| プラン | 対策URL | 備考 |
+|---|---|---|
+| 生成AI研修 総合LP | `/st/training-lp.html` (39) | 現「AI研修のご案内」。タイトル差し替え対象 |
+| AI研修 助成金 | `/st/knowledge-training-subsidy.html` (105) | 既存の助成金解説を研修サービスと接続 |
+| Dify 研修 | `/st/training-dify.html` (26) | 研修ページが既にある |
+| AI顧問 | `/st/ai-advisor.html` (192) | 新規予定→既存強化に切替。解説記事(240)からリンク |
+| 生成AI 導入支援ピラー | `/st/knowledge-ai-introduction-guide.html` (51) | 既存導入ガイドを土台に拡張 |
+| 生成AI ガイドライン 企業 | `/st/knowledge-genai-guideline.html` (99) | |
+| 情シス 生成AI研修 | `/st/knowledge-itdept-training.html` (55) | |
+| 営業 生成AI 活用 | `/st/knowledge-sales-genai.html` (30) | |
+| 提案書 AI 作成 | `/st/knowledge-ai-sales-proposal.html` (14) | |
+| 社内チャットボット 開発 | `/st/knowledge-faq-ai.html` (11) | |
+| 生成AI 業務効率化 事例 | `/st/knowledge-genai-cases.html` (26) | |
+| 議事録AI 法人 | `/st/knowledge-ai-meeting-tools.html` (41) | 比較記事として。local-meeting-ai.html(67)も関連 |
+| バイブコーディング 研修 | `/st/knowledge-vibe-coding.html` (1) | **暫定**。専用LPが別URLなら差し替え |
+
+**新規LP6本の内部リンク元資産**（公開当日にリンクを張る既存ページをプランのノートに記録済み）:
+
+- **Claude研修LP** ← claude-code-pricing(6,286) / claude-code(2,274) / claude-design(656) / claude-security(244) / claude-guide(112)。**合計約9,600表示の資産**
+- **NotebookLM研修** ← knowledge-notebooklm(1,052)
+- **Copilot研修LP** ← knowledge-copilot(814) / github-copilot(39) / news/m365-copilot-training(12)
+- **AIエージェント研修LP** ← knowledge-agent(104) / sales-ai-agent(63)
+- **生成AI開発ピラーLP** ← development-cases.html(80) を実績・事例に接続
+- **プロンプト研修LP** ← prompt-campaign.html との統合可否を確認
+
+**未紐づけの既存ページ候補（要確認）**: `/st/training-10h.html`(7) と `/st/training-dept.html`(2) は
+研修系ページに見えるが、どのプランに対応するか判断できず未割当。
+
+**衛生面の発見**: `/company/sample-company*/`・`/service/sample-service*/` のCMSデモページが
+インデックスされ表示回数が付いている。**noindex推奨**（HP担当への依頼事項）。
 
 ### ⏸ 降格・保留
 
