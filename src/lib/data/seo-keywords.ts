@@ -141,3 +141,65 @@ export async function getDiscoveredQueries(siteId: string, limit = 15): Promise<
     .sort((a, b) => b.impressions - a.impressions)
     .slice(0, limit);
 }
+
+/**
+ * 記事プラン別の進捗。
+ * 1記事 = メインKW1つ + サブKW数語。KW1語だけ見て諦めないための単位。
+ */
+export interface ArticlePlanProgress {
+  planId: string;
+  title: string;
+  mainKeyword: string;
+  intentLayer: number | null;
+  clusterName: string | null;
+  difficulty: number | null;
+  priority: number;
+  pageRole: string | null;
+  status: string;
+  publishedUrl: string | null;
+  keywordCount: number;
+  totalVolume: number;
+  rankedTop10: number;
+  rankedAny: number;
+  impressions: number;
+  clicks: number;
+}
+
+export async function getArticlePlans(siteId: string): Promise<ArticlePlanProgress[]> {
+  const sb = getSupabaseServer();
+  const { data } = await sb.rpc("seo_article_plan_progress", { p_site: siteId });
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    planId: String(r.plan_id),
+    title: String(r.title),
+    mainKeyword: String(r.main_keyword),
+    intentLayer: r.intent_layer == null ? null : Number(r.intent_layer),
+    clusterName: (r.cluster_name as string) ?? null,
+    difficulty: r.difficulty == null ? null : Number(r.difficulty),
+    priority: Number(r.priority ?? 3),
+    pageRole: (r.page_role as string) ?? null,
+    status: String(r.status ?? "planned"),
+    publishedUrl: (r.published_url as string) ?? null,
+    keywordCount: Number(r.keyword_count ?? 0),
+    totalVolume: Number(r.total_volume ?? 0),
+    rankedTop10: Number(r.ranked_top10 ?? 0),
+    rankedAny: Number(r.ranked_any ?? 0),
+    impressions: Number(r.impressions ?? 0),
+    clicks: Number(r.clicks ?? 0),
+  }));
+}
+
+/** 難易度の意味。検索数だけで選ぶと競合が強い語ばかり狙って半年成果ゼロになる。 */
+export const DIFFICULTY_LABEL: Record<number, { label: string; note: string }> = {
+  1: { label: "易", note: "ニッチ・自社商材名。競合ほぼ無し" },
+  2: { label: "やや易", note: "ツール名×法人、業種別、階層別" },
+  3: { label: "中", note: "中間。ある程度のドメイン実力が必要" },
+  4: { label: "難", note: "一般語＋修飾。大手と競合する" },
+  5: { label: "最難", note: "一般語ビッグ。後半で挑む" },
+};
+
+export const PLAN_STATUS_LABEL: Record<string, string> = {
+  planned: "未着手",
+  writing: "執筆中",
+  review: "確認中",
+  published: "公開済み",
+};

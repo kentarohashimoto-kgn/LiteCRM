@@ -72,6 +72,9 @@ export default async function SeoKeywordsPage({
         subtitle={`${current.name} — 仮説で決めた狙う語 ${rankings.length}語（想定検索数 合計 月${num(totalVolume)}）。うち10位以内 ${takenCount}語`}
         action={
           <div className="flex items-center gap-2">
+            <Link href="/app/seo/plans" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
+              記事プラン
+            </Link>
             <Link href="/app/seo/strategy" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
               <Target size={14} />
               戦略ボード
