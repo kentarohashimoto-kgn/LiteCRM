@@ -65,6 +65,16 @@ export default async function SeoKeywordsPage({
   const totalVolume = rankings.reduce((n, r) => n + (r.searchVolume ?? 0), 0);
   const takenCount = rankings.filter((r) => r.gapStatus === "top10").length;
 
+  // HP内のパスを実サイトの絶対URLに解決する。リライト時に対象ページと
+  // 実表示ページを画面から直接開いて見比べられるようにするため
+  const pageUrl = (path: string): string | null => {
+    try {
+      return new URL(path, current.baseUrl).toString();
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -202,9 +212,21 @@ export default async function SeoKeywordsPage({
                               >
                                 {r.isExistingPage ? "既存" : "新規"}
                               </span>
-                              {r.plannedUrl && (
-                                <div className="break-all text-[10px] text-ink/40">{r.plannedUrl}</div>
-                              )}
+                              {r.plannedUrl &&
+                                (pageUrl(r.plannedUrl) ? (
+                                  <div className="break-all text-[10px]">
+                                    <a
+                                      href={pageUrl(r.plannedUrl)!}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-teal-700 underline decoration-teal-300 hover:text-teal-900"
+                                    >
+                                      {r.plannedUrl}
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <div className="break-all text-[10px] text-ink/40">{r.plannedUrl}</div>
+                                ))}
                             </>
                           ) : (
                             <span className="text-rose-600">未割当</span>
@@ -239,9 +261,19 @@ export default async function SeoKeywordsPage({
                           <span className={`rounded border px-1.5 py-0.5 text-xs ${TONE[meta.tone]}`}>
                             {meta.label}
                           </span>
-                          {r.rankingPage && (
-                            <span className="ml-2 break-all text-xs text-ink/45">{r.rankingPage}</span>
-                          )}
+                          {r.rankingPage &&
+                            (pageUrl(r.rankingPage) ? (
+                              <a
+                                href={pageUrl(r.rankingPage)!}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-2 break-all text-xs text-ink/60 underline decoration-black/20 hover:text-ink"
+                              >
+                                {r.rankingPage}
+                              </a>
+                            ) : (
+                              <span className="ml-2 break-all text-xs text-ink/45">{r.rankingPage}</span>
+                            ))}
                           {/* 対策ページを決めているのにGoogleが別ページを選んでいる = カニバリか対策ページが弱い */}
                           {r.pageMismatch && (
                             <span className="ml-1 rounded bg-amber-50 px-1 text-xs text-amber-800">
@@ -282,7 +314,20 @@ export default async function SeoKeywordsPage({
                         <td className="py-2 text-right text-ink/60">{num(d.impressions)}</td>
                         <td className="py-2 text-right text-ink/60">{num(d.clicks)}</td>
                         <td className="py-2 text-right text-ink/60">{d.position ?? "—"}</td>
-                        <td className="py-2 break-all text-xs text-ink/45">{d.pagePath ?? "—"}</td>
+                        <td className="py-2 break-all text-xs">
+                          {d.pagePath && pageUrl(d.pagePath) ? (
+                            <a
+                              href={pageUrl(d.pagePath)!}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-ink/60 underline decoration-black/20 hover:text-ink"
+                            >
+                              {d.pagePath}
+                            </a>
+                          ) : (
+                            <span className="text-ink/45">{d.pagePath ?? "—"}</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
