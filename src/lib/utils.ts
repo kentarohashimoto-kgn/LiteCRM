@@ -55,6 +55,16 @@ export function formatDateTimeJst(value?: string | null): string {
   });
 }
 
+/**
+ * リードの獲得日時。QRスキャン時刻(scanned_at)があれば分単位まで、
+ * 無ければ獲得日(acquired_at=日付のみ。名刺取込・手入力)を表示する。
+ */
+export function formatAcquiredAt(scannedAt?: string | null, acquiredAt?: string | null): string {
+  if (scannedAt) return formatDateTimeJst(scannedAt);
+  if (acquiredAt) return formatDateFull(acquiredAt);
+  return "—";
+}
+
 /** ISO日時をJSTの HH:MM で表示。時刻が無ければ空文字。 */
 export function formatTimeJst(value?: string | null): string {
   if (!value) return "";

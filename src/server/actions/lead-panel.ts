@@ -26,6 +26,10 @@ export interface LeadPanelData {
     event: string | null;
     acquirer: string | null;
     acquiredAt: string | null;
+    /** QRスキャン時刻(展示会リード)。獲得の「日時」はこれが最も正確 */
+    scannedAt: string | null;
+    /** システムへの取込日時 */
+    createdAt: string | null;
     rank: string | null;
     leadScore: number | null;
     scoreDetail: Record<string, number | string> | null;
@@ -85,6 +89,8 @@ export async function getLeadPanelAction(leadId: string): Promise<LeadPanelData>
       event: row.raw_event ?? null,
       acquirer: row.acquirer ?? null,
       acquiredAt: row.acquired_at ?? null,
+      scannedAt: row.scanned_at ?? null,
+      createdAt: row.created_at ?? null,
       rank: row.rank ?? null,
       leadScore: row.lead_score ?? null,
       scoreDetail: (row.lead_score_detail as Record<string, number | string>) ?? null,

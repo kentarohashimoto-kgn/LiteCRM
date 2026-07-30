@@ -2,7 +2,7 @@
  * E-5 回帰テスト: 金額表示・日付ユーティリティ。
  */
 import { describe, expect, it } from "vitest";
-import { formatYen, formatManYen, formatPercent, monthKey, daysSince, sameMonth, sum } from "@/lib/utils";
+import { formatYen, formatManYen, formatPercent, monthKey, daysSince, sameMonth, sum, formatAcquiredAt } from "@/lib/utils";
 
 describe("formatYen / formatManYen / formatPercent", () => {
   it("円表記", () => {
@@ -42,5 +42,18 @@ describe("日付ユーティリティ", () => {
 describe("sum", () => {
   it("NaN/undefinedは0扱い", () => {
     expect(sum([{ v: 1 }, { v: NaN }, { v: 2 }], (x) => x.v)).toBe(3);
+  });
+});
+
+describe("リードの獲得日時", () => {
+  it("QRスキャン時刻があれば分単位まで(JST)", () => {
+    // 2026-07-29 08:00 UTC = 17:00 JST
+    expect(formatAcquiredAt("2026-07-29T08:00:00+00:00", "2026-07-29")).toBe("2026/7/29 17:00");
+  });
+  it("スキャン時刻が無ければ獲得日(日付のみ)", () => {
+    expect(formatAcquiredAt(null, "2026-07-29")).toBe("2026/7/29");
+  });
+  it("どちらも無ければダッシュ", () => {
+    expect(formatAcquiredAt(null, null)).toBe("—");
   });
 });
