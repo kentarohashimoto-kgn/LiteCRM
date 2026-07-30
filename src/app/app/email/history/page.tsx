@@ -3,6 +3,9 @@ import { MailOpen, MousePointerClick, AlertTriangle, PenSquare } from "lucide-re
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, EmptyState } from "@/components/ui/primitives";
+import { HistoryToolbar } from "@/components/email/history-toolbar";
+import { jstRangeToUtc } from "@/lib/mail-export";
+import type { MailHistoryFilters } from "@/server/actions/mail-export";
 
 export const dynamic = "force-dynamic";
 
@@ -28,18 +31,49 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   logged: { label: "記録のみ", cls: "bg-ink/[0.06] text-ink/55" },
 };
 
+/** 一覧の表示件数(全件はCSVダウンロードで取得する)。 */
+const LIST_LIMIT = 100;
+
 /**
  * WO-22 メール送信履歴(F-101c)。送信状態・開封回数・クリック(どの資料か)を可視化。
+ * 件数が増えるため期間などで絞り込み、同じ条件のままCSVで一括ダウンロードできる。
  */
-export default async function EmailHistoryPage() {
-  await requireCtx();
+export default async function EmailHistoryPage({ searchParams }: {
+  searchParams: { from?: string; to?: string; status?: string; sender?: string; reaction?: string };
+}) {
+  const ctx = await requireCtx();
   const sb = getSupabaseServer();
-  const { data: msgs } = await sb
+
+  const filters: MailHistoryFilters = {
+    from: searchParams.from ?? "", to: searchParams.to ?? "",
+    status: searchParams.status ?? "", sender: searchParams.sender ?? "", reaction: searchParams.reaction ?? "",
+  };
+  const range = jstRangeToUtc(filters.from, filters.to);
+
+  // 一覧とダウンロードで同じ条件を使う(表示=出力)
+  let qy = sb
     .from("email_messages")
-    .select("id, subject, to_addrs, status, sent_via, sent_at, open_count, last_opened_at, click_count, error_text, opportunity_id")
-    .order("sent_at", { ascending: false, nullsFirst: false })
-    .limit(50);
+    .select("id, subject, to_addrs, status, sent_via, sent_at, open_count, last_opened_at, click_count, error_text, opportunity_id", { count: "exact" })
+    .eq("tenant_id", ctx.tenantId)
+    .eq("direction", "out");
+  if (range.gte) qy = qy.gte("sent_at", range.gte);
+  if (range.lt) qy = qy.lt("sent_at", range.lt);
+  if (filters.status) qy = qy.eq("status", filters.status);
+  if (filters.sender) qy = qy.eq("logged_by", filters.sender);
+  if (filters.reaction === "opened") qy = qy.gt("open_count", 0);
+  if (filters.reaction === "clicked") qy = qy.gt("click_count", 0);
+
+  const [{ data: msgs, count }, profR] = await Promise.all([
+    qy.order("sent_at", { ascending: false, nullsFirst: false }).limit(LIST_LIMIT),
+    sb.from("profiles").select("id, display_name, email"),
+  ]);
   const messages = (msgs ?? []) as Msg[];
+  const total = count ?? messages.length;
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const senders = ((profR.data ?? []) as any[]).map((p) => ({
+    id: p.id as string, name: ((p.display_name as string) || (p.email as string)) ?? "",
+  })).filter((p) => p.name);
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   const ids = messages.map((m) => m.id);
   const linksByMsg = new Map<string, LinkRow[]>();
@@ -64,9 +98,11 @@ export default async function EmailHistoryPage() {
         </Link>
       </div>
 
-      <Section title="最近の送信（直近50件）">
+      <HistoryToolbar filters={filters} senders={senders} total={total} />
+
+      <Section title={total > LIST_LIMIT ? `送信履歴（新しい順 ${LIST_LIMIT}件を表示 / 全 ${total.toLocaleString()}件。全件はCSVでダウンロードできます）` : `送信履歴（${total.toLocaleString()}件）`}>
         {messages.length === 0 ? (
-          <EmptyState message="まだ送信・記録がありません。" />
+          <EmptyState message="該当する送信履歴がありません。期間・条件を変えてお試しください。" />
         ) : (
           <div className="space-y-2">
             {messages.map((m) => {
