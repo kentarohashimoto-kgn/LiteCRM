@@ -249,7 +249,7 @@ export default async function SeoStrategyPage({
       {/* C. 検索意図3層 — 戦略 §3 */}
       <Section title="検索意図3層のカバレッジ" icon={<Search size={15} />}>
         {coverage.every((c) => c.keywordCount === 0) ? (
-          <EmptyState message="ターゲットKW台帳が未登録です。Phase 0 で100〜200語を登録します（KW台帳画面はWO-33で追加）。" />
+          <EmptyState message="ターゲットKW台帳が未登録です。KW順位表から登録できます。" />
         ) : (
           <div className="space-y-2 text-sm">
             {coverage.map((c) => (
@@ -272,7 +272,11 @@ export default async function SeoStrategyPage({
         )}
         <p className="mt-3 text-xs text-ink/50">
           第1層（今すぐ客）が最も売上に近い層です。ここのカバレッジが低いまま第3層の記事を増やしても、
-          PVは増えて問合せは増えません。
+          PVは増えて問合せは増えません。語ごとの順位とギャップは{" "}
+          <Link href="/app/seo/keywords" className="underline">
+            KW順位表
+          </Link>
+          で確認できます。
         </p>
       </Section>
 

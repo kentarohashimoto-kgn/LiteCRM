@@ -412,3 +412,64 @@ export async function updateActionStatusAction(formData: FormData): Promise<void
   revalidatePath("/app/seo");
   back(to === "deployed" ? "saved=applied" : "saved=status");
 }
+
+/**
+ * 記事プランを記事ネタ（content_ideas）に起票して執筆フローに乗せる。
+ * サブKWを含めて起票するので、執筆者が「この記事で何語狙うのか」を見て書ける。
+ */
+export async function startArticlePlanAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const site = String(formData.get("site") ?? "");
+  const back: (q: string) => never = (q) =>
+    redirect(`/app/seo/plans?${site ? `site=${site}&` : ""}${q}`);
+  if (!["owner", "admin", "sales_manager"].includes(ctx.role)) back("error=forbidden");
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) back("error=invalid");
+
+  const sb = getSupabaseServer();
+  const { data: plan } = await sb
+    .from("seo_article_plans")
+    .select("id, tenant_id, title, main_keyword, angle, content_idea_id, seo_clusters(name)")
+    .eq("id", id)
+    .maybeSingle();
+  if (!plan) back("error=not_found");
+  if (plan.content_idea_id) back("error=already");
+
+  // この記事で狙う語を全部渡す。執筆者が構成を決める材料になる。
+  const { data: kws } = await sb
+    .from("seo_keywords")
+    .select("query, search_volume")
+    .eq("article_plan_id", id)
+    .order("search_volume", { ascending: false });
+  const kwList = (kws ?? [])
+    .map((k) => `${k.query}（月${k.search_volume ?? "—"}）`)
+    .join(" / ");
+
+  const cluster = (plan as { seo_clusters?: { name?: string } }).seo_clusters?.name ?? "SEO";
+  const { data: idea } = await sb
+    .from("content_ideas")
+    .insert({
+      tenant_id: plan.tenant_id as string,
+      theme: cluster,
+      title: plan.title as string,
+      angle: (plan.angle as string) ?? null,
+      target_keyword: plan.main_keyword as string,
+      source: "web_trend",
+      status: "selected",
+      note: `SEO記事プランから起票。この記事で狙う語: ${kwList || plan.main_keyword}`,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .maybeSingle();
+  if (!idea) back("error=save_failed");
+
+  await sb
+    .from("seo_article_plans")
+    .update({ content_idea_id: idea.id, status: "writing" })
+    .eq("id", id);
+
+  revalidatePath("/app/seo/plans");
+  revalidatePath("/app/content");
+  back("saved=started");
+}

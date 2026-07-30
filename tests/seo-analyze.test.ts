@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { detectInsights, intentMix, intentMixInsight, type QueryAgg } from "@/lib/seo/analyze";
+import {
+  detectInsights,
+  intentMix,
+  intentMixInsight,
+  groupInsightsByPage,
+  type QueryAgg,
+} from "@/lib/seo/analyze";
 import { benchmarkCtr, estimateIntentLayer, isBrandQuery, commercialWeight } from "@/lib/seo/benchmark";
 
 const BRAND = ["カトルセ", "catorce"];
@@ -158,5 +164,97 @@ describe("intentMix / intentMixInsight", () => {
   it("母数が小さいときは判定しない（誤検知の防止）", () => {
     const mix = intentMix([q("gpt image 2", 100, 1, 7)], BRAND);
     expect(intentMixInsight(mix)).toBeNull();
+  });
+});
+
+describe("groupInsightsByPage", () => {
+  const ins = (over: Partial<import("@/lib/seo/analyze").Insight> & { id?: string }) => ({
+    kind: "ctr_opportunity" as const,
+    scope: "query" as const,
+    query: "q",
+    pagePath: "/p",
+    title: "t",
+    severity: "medium" as const,
+    metric: { impressions: 100, clicks: 1, position: 7, extraClicks: 3 },
+    opportunityScore: 3,
+    actionType: "title_meta",
+    ...over,
+  });
+
+  it("同一ページ・同一施策の検出を1件に束ね、期待クリックを合算する", () => {
+    // 本番で起きていた実例: /st/knowledge-gpt-image-2.html に4語の機会が分散していた
+    const { grouped } = groupInsightsByPage([
+      ins({ id: "1", query: "gpt-image-2", metric: { impressions: 304, clicks: 6, position: 6.5, extraClicks: 5 } }),
+      ins({ id: "2", query: "gpt image2", metric: { impressions: 261, clicks: 5, position: 6.7, extraClicks: 4 } }),
+      ins({ id: "3", query: "image2", metric: { impressions: 107, clicks: 1, position: 7.8, extraClicks: 2 } }),
+      ins({ id: "4", query: "gpt image 2", metric: { impressions: 1424, clicks: 21, position: 6.8, extraClicks: 36 } }),
+    ]);
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].totalExtraClicks).toBe(47);
+    expect(grouped[0].queries).toHaveLength(4);
+    // 代表クエリは表示回数が最大のもの（そのページの主戦場）
+    expect(grouped[0].primaryQuery).toBe("gpt image 2");
+    expect(grouped[0].sourceInsightIds).toHaveLength(4);
+  });
+
+  it("施策タイプが違えば別の提案として残す（タイトル改善とリライトは別作業）", () => {
+    const { grouped } = groupInsightsByPage([
+      ins({ actionType: "title_meta" }),
+      ins({ actionType: "rewrite" }),
+    ]);
+    expect(grouped).toHaveLength(2);
+  });
+
+  it("ページが違えば束ねない", () => {
+    const { grouped } = groupInsightsByPage([ins({ pagePath: "/a" }), ins({ pagePath: "/b" })]);
+    expect(grouped).toHaveLength(2);
+  });
+
+  it("束ねた中に第1層のKWが1つでもあれば第1層扱いにする（ページを直せばその語にも効く）", () => {
+    const { grouped } = groupInsightsByPage([
+      ins({ query: "gpt image 2" }),
+      ins({ query: "生成AI研修 費用" }),
+    ]);
+    expect(grouped[0].hasLayer1).toBe(true);
+  });
+
+  it("深刻度は束ねた中で最も重いものを採用する", () => {
+    const { grouped } = groupInsightsByPage([
+      ins({ severity: "low" }),
+      ins({ severity: "high", kind: "zero_click" }),
+    ]);
+    expect(grouped[0].severity).toBe("high");
+  });
+
+  it("ページ横断の施策(カニバリ)とサイトレベルは束ねずそのまま残す", () => {
+    const { grouped, ungrouped } = groupInsightsByPage([
+      ins({ actionType: "merge_pages", kind: "cannibalization" }),
+      ins({ actionType: "new_article", kind: "intent_mix", scope: "site", pagePath: null, query: null }),
+    ]);
+    expect(grouped).toHaveLength(0);
+    expect(ungrouped).toHaveLength(2);
+  });
+
+  it("ページが不明な検出は束ねない", () => {
+    const { grouped, ungrouped } = groupInsightsByPage([ins({ pagePath: null })]);
+    expect(grouped).toHaveLength(0);
+    expect(ungrouped).toHaveLength(1);
+  });
+
+  it("束ねた結果は期待クリックの大きい順に並ぶ", () => {
+    const { grouped } = groupInsightsByPage([
+      ins({ pagePath: "/small", metric: { impressions: 100, clicks: 0, position: 7, extraClicks: 2 } }),
+      ins({ pagePath: "/big", metric: { impressions: 1000, clicks: 0, position: 7, extraClicks: 30 } }),
+    ]);
+    expect(grouped[0].pagePath).toBe("/big");
+  });
+});
+
+describe("zero_click の期待値（回帰テスト）", () => {
+  it("extraClicks を必ず含む（欠けると最重要の検出が金額0で最下位に沈む）", () => {
+    const found = detectInsights([q("claude code", 822, 0, 3.1)], null, opts);
+    const zero = found.find((i) => i.kind === "zero_click")!;
+    expect(typeof zero.metric.extraClicks).toBe("number");
+    expect(Number(zero.metric.extraClicks)).toBeGreaterThan(50);
   });
 });

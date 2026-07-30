@@ -147,6 +147,9 @@ export default async function SeoProposalsPage({
           {proposals.map((p) => {
             const e = p.expected_json ?? {};
             const prior = ACTION_PRIORS[p.action_type];
+            // 束ねた対象クエリ（ページ単位の提案のみ持つ）
+            const groupedQueries =
+              typeof p.evidence_json?.queries === "string" ? p.evidence_json.queries : null;
             return (
               <Section key={p.id} title={p.title} icon={<Lightbulb size={15} />}>
                 <div className="space-y-3">
@@ -167,13 +170,30 @@ export default async function SeoProposalsPage({
                     <Metric label="月あたり売上" value={yen(Number(e.revenue ?? 0))} accent />
                   </div>
 
+                  {/* 束ねた対象クエリを常に見せる。1ページの改善が何語に効くのかが
+                      分かると、承認の判断が早くなる。 */}
+                  {groupedQueries && (
+                    <div className="rounded-lg border border-black/[0.06] bg-black/[0.01] p-3 text-xs">
+                      <div className="text-ink/50">この1件で改善される検索キーワード</div>
+                      <ul className="mt-1 space-y-0.5">
+                        {groupedQueries
+                          .split(" ／ ")
+                          .map((line) => (
+                            <li key={line} className="break-words text-ink/80">
+                              ・{line}
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  )}
+
                   <details className="text-sm">
                     <summary className="cursor-pointer text-xs text-ink/60">根拠となる数値を見る</summary>
                     <div className="mt-2 rounded bg-black/[0.02] p-2 text-xs text-ink/70">
                       {String(p.evidence_json?.detected ?? "")}
                       <div className="mt-1 break-all">
                         {Object.entries(p.evidence_json ?? {})
-                          .filter(([k]) => !["detected", "kind"].includes(k))
+                          .filter(([k]) => !["detected", "kind", "queries"].includes(k))
                           .map(([k, v]) => `${k}: ${String(v)}`)
                           .join(" / ")}
                       </div>
