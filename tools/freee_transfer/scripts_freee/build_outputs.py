@@ -152,15 +152,22 @@ def main() -> int:
     data = json.loads((WORK / "extracted_accounts.json").read_text(encoding="utf-8"))
     OUT.mkdir(parents=True, exist_ok=True)
 
-    confirmed, judgement, insufficient = [], [], []
+    confirmed, judgement, insufficient, excluded = [], [], [], []
     all_rows = []
     for rec in data["records"]:
+        if rec.get("excluded"):
+            # 自動引落など、そもそも振込で払わないもの。二重支払いを防ぐため
+            # 要確認ではなく「対象外」として明確に分ける。
+            row = {**rec, "status": "対象外", "problems": [], "kana": ""}
+            all_rows.append(row)
+            excluded.append(row)
+            continue
         status, problems, kana = classify(rec)
         row = {**rec, "status": status, "problems": problems, "kana": kana}
         all_rows.append(row)
         {"確定": confirmed, "要判断": judgement}.get(status, insufficient).append(row)
 
-    for group in (confirmed, judgement, insufficient):
+    for group in (confirmed, judgement, insufficient, excluded):
         group.sort(key=lambda r: -r["amount"])
     review = judgement + insufficient
 
@@ -179,11 +186,14 @@ def main() -> int:
                     "受取人名(原本表記)", "受取人名カナ(全銀用)", "証憑ID",
                     "要確認事項", "備考(確認済みの論点)"])
         for r in all_rows:
+            remarks = list(r.get("notes") or [])
+            if r.get("exclusion_reason"):
+                remarks.insert(0, r["exclusion_reason"])
             w.writerow([r["status"], r["partner_name"], r["amount"], r["bank_name"],
                         r["bank_code"], r["branch_name"], r["branch_code"],
                         r["account_type"], r["account_number"], r["holder_raw"],
                         r["kana"], r["source"], " / ".join(r["problems"]),
-                        " / ".join(r.get("notes") or [])])
+                        " / ".join(remarks)])
 
     # --- 全銀ファイル(確定分のみ) ----------------------------------------
     zengin_path = OUT / "zengin_soufuri_20260731.txt"
@@ -227,18 +237,31 @@ def main() -> int:
         "コードを補えばそのまま振込可能になる。", "",
     ]
     lines += render(insufficient)
+    if excluded:
+        lines += [
+            "---", "", "## C. 振込対象外（確認済み）", "",
+            f"{len(excluded)}件 / {sum(r['amount'] for r in excluded):,}円", "",
+            "自動引落などで別途決済されるもの。**振り込むと二重支払いになる。**", "",
+        ]
+        for r in excluded:
+            lines.append(f"- **{r['partner_name']}** {r['amount']:,}円 — {r['exclusion_reason']}")
+        lines.append("")
     (OUT / "review.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     # --- サマリ -----------------------------------------------------------
     total_all = sum(r["amount"] for r in all_rows)
     total_ok = sum(r["amount"] for r in confirmed)
+    total_excluded = sum(r["amount"] for r in excluded)
+    transfer_scope = total_all - total_excluded
     summary = [
         "# サマリ（2026-07-31 支払分）", "",
         "| 区分 | 件数 | 金額 |", "|---|---:|---:|",
-        f"| 支払対象(freee 支払管理) | {len(all_rows)} | {total_all:,}円 |",
-        f"| 確定(全銀ファイルに収録) | {len(confirmed)} | {total_ok:,}円 |",
-        f"| 要判断(口座情報は完備) | {len(judgement)} | {sum(r['amount'] for r in judgement):,}円 |",
-        f"| 情報不足 | {len(insufficient)} | {sum(r['amount'] for r in insufficient):,}円 |",
+        f"| freee 支払管理の対象 | {len(all_rows)} | {total_all:,}円 |",
+        f"| うち振込対象外(自動引落) | {len(excluded)} | -{total_excluded:,}円 |",
+        f"| **振込で払う範囲** | **{len(all_rows) - len(excluded)}** | **{transfer_scope:,}円** |",
+        f"| 　確定(全銀ファイルに収録) | {len(confirmed)} | {total_ok:,}円 |",
+        f"| 　要判断(口座情報は完備) | {len(judgement)} | {sum(r['amount'] for r in judgement):,}円 |",
+        f"| 　情報不足 | {len(insufficient)} | {sum(r['amount'] for r in insufficient):,}円 |",
         "",
         f"情報不足のうち **コード欠落だけ** が原因: {len(code_only)}件 / "
         f"{sum(r['amount'] for r in code_only):,}円",
