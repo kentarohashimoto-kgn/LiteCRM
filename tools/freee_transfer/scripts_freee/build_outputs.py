@@ -62,8 +62,13 @@ def classify(record: dict) -> tuple[str, list[str], str]:
     """確定/要確認を判定し、正規化した受取人名カナを返す。"""
     problems = list(record["issues"])
 
-    kana = normalize_kana(record["holder_raw"])
-    if not record["holder_raw"]:
+    # 過去に着金している名義があればそれを正とする。
+    # 漢字からの読み生成と違い、実際に振込が成立した実績に基づく確かな根拠。
+    if record.get("holder_from_history"):
+        kana = normalize_kana(record["holder_from_history"])
+    else:
+        kana = normalize_kana(record["holder_raw"])
+    if not record["holder_raw"] and not record.get("holder_from_history"):
         problems.append("受取人名カナが取得できていない")
     elif kana.invalid_chars:
         problems.append(
