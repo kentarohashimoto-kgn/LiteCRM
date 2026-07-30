@@ -1,0 +1,8 @@
+# STEP 2(請求書の読み取り)でのみ必要。
+# kana / validate / freee_export / build は標準ライブラリだけで動く。
+pdfplumber>=0.11    # PDFのテキストレイヤー抽出
+PyMuPDF>=1.24       # スキャンPDFのページをPNG化して視覚的に読み取る
+
+# pandas はあえて使わない。
+# read_csv の dtype 推論で口座番号の先頭ゼロが消える事故を防ぐため、
+# CSVの読み書きは標準ライブラリの csv モジュールで文字列のまま扱う。
