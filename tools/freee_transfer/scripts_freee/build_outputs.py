@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -23,14 +24,18 @@ DUE = "2026-07-31"
 # --- 振込元(仕向)口座 -------------------------------------------------------
 # 出典: 株式会社顧問名鑑「口座振替のご案内」(receipt 483365597) に記載された
 # カトルセの登録預金口座。WEB総振の契約口座と一致するか要確認。
+#: 金融機関名・支店名はハードコードせず全銀協マスタから引く(打ち間違いを避けるため)
 SENDER = {
-    "code": "0033", "name": "ﾊﾟｲﾍﾟｲｷﾞﾝｺｳ",
-    "branch_code": "005", "branch_name": "ﾋﾞｼﾞﾈｽｴｲｷﾞﾖｳﾌﾞ",
+    "code": "0033",
+    "branch_code": "005",
     "account_type": "1", "account_number": "3103228",
     "client_name": "ｶ)ｶﾄﾙｾ",
 }
-# 委託者コード: PayPay銀行 WEB総振では不要。全10桁スペースで出力する。
-CLIENT_CODE = " " * 10
+# 委託者コード: PayPay銀行 WEB総振では不要とされるため既定はスペース10桁。
+# 銀行側が10桁の数字を要求する場合に備え、環境変数で差し替えられるようにしておく。
+CLIENT_CODE = os.environ.get("ZENGIN_CLIENT_CODE", " " * 10)
+if len(CLIENT_CODE) != 10:
+    raise SystemExit(f"ZENGIN_CLIENT_CODE は10桁で指定してください(現在 {len(CLIENT_CODE)}桁)")
 
 ACCOUNT_TYPE_CODE = {"普通": "1", "当座": "2", "貯蓄": "4"}
 
@@ -38,6 +43,38 @@ ACCOUNT_TYPE_CODE = {"普通": "1", "当座": "2", "貯蓄": "4"}
 def jis_len(text: str) -> int:
     """Shift_JIS でのバイト長(半角カナは1バイト)。"""
     return len(text.encode("cp932"))
+
+
+def from_master_kana(name: str) -> str:
+    """マスタの全角カナを全銀の半角カナへ。長音が全角ハイフンで入っている点に注意。
+
+    (例: ミツビシユ－エフジエイ = ミツビシユーエフジエイ)
+    """
+    return normalize_kana((name or "").replace("－", "ー").replace("−", "ー")).normalized
+
+
+def load_kana_masters() -> tuple[dict[str, str], dict[tuple[str, str], str]]:
+    """金融機関カナ・支店カナを引けるようにする。マスタが無ければ空で返す。"""
+    banks: dict[str, str] = {}
+    branches: dict[tuple[str, str], str] = {}
+    bank_csv = BASE / "input" / "zengin_banks_20260630.csv"
+    branch_csv = BASE / "input" / "zengin_branches_20260630.csv"
+    if bank_csv.exists():
+        with bank_csv.open(encoding="utf-8-sig", newline="") as fh:
+            for row in csv.DictReader(fh):
+                banks[row["金融機関コード"].strip()] = from_master_kana(row["金融機関カナ"])
+    if branch_csv.exists():
+        with branch_csv.open(encoding="utf-8-sig", newline="") as fh:
+            for row in csv.DictReader(fh):
+                branches[(row["金融機関コード"].strip(), row["支店コード"].strip())] = \
+                    from_master_kana(row["支店カナ"])
+    return banks, branches
+
+
+def pad_name(text: str, width: int) -> str:
+    """名称欄用。コードが正なので超過分は切り詰めてよい(口座番号とは扱いが違う)。"""
+    truncated = (text or "").encode("cp932")[:width].decode("cp932", errors="ignore")
+    return truncated + " " * (width - jis_len(truncated))
 
 
 def pad(text: str, width: int) -> str:
@@ -108,6 +145,15 @@ def classify(record: dict) -> tuple[str, list[str], str]:
 def build_zengin(rows: list[dict]) -> str:
     """全銀フォーマット(総合振込・120桁固定長)を組み立てる。"""
     lines = []
+    bank_kana, branch_kana = load_kana_masters()
+
+    sender_bank = bank_kana.get(SENDER["code"], "")
+    sender_branch = branch_kana.get((SENDER["code"], SENDER["branch_code"]), "")
+    if not sender_bank or not sender_branch:
+        raise ValueError(
+            f"仕向金融機関名/支店名をマスタから引けない "
+            f"({SENDER['code']}/{SENDER['branch_code']})"
+        )
 
     # ヘッダーレコード
     header = (
@@ -115,30 +161,36 @@ def build_zengin(rows: list[dict]) -> str:
         + CLIENT_CODE
         + pad(SENDER["client_name"], 40)
         + DUE[5:7] + DUE[8:10]
-        + SENDER["code"] + pad(SENDER["name"], 15)
-        + SENDER["branch_code"] + pad(SENDER["branch_name"], 15)
+        + SENDER["code"] + pad_name(sender_bank, 15)
+        + SENDER["branch_code"] + pad_name(sender_branch, 15)
         + SENDER["account_type"] + zfill(SENDER["account_number"], 7)
         + " " * 17
     )
     lines.append(header)
-
     total = 0
-    for i, row in enumerate(rows, start=1):
+    for row in rows:
         amount = int(row["amount"])
         total += amount
+        bank = bank_kana.get(row["bank_code"], "")
+        branch = branch_kana.get((row["bank_code"], row["branch_code"]), "")
+        if not bank or not branch:
+            raise ValueError(
+                f"{row['partner_name']}: 被仕向金融機関名/支店名をマスタから引けない "
+                f"({row['bank_code']}/{row['branch_code']})"
+            )
         data = (
             "2"
-            + row["bank_code"] + pad("", 15)          # 被仕向金融機関名は任意(コードが正)
-            + row["branch_code"] + pad("", 15)        # 被仕向支店名も同様
+            + row["bank_code"] + pad_name(bank, 15)    # 被仕向金融機関名(半角カナ)
+            + row["branch_code"] + pad_name(branch, 15)  # 被仕向支店名(半角カナ)
             + " " * 4                                  # 手形交換所番号
             + ACCOUNT_TYPE_CODE[row["account_type"]]
             + zfill(row["account_number"], 7)
             + pad(row["kana"], 30)
             + zfill(str(amount), 10)
-            + "1"                                      # 新規コード
-            + zfill(str(i), 10)                        # 顧客コード1(連番)
-            + " " * 10                                 # 顧客コード2
-            + "7"                                      # 振込指定区分: telegraphic
+            + "0"                                      # 新規コード: 0=その他
+            + " " * 10                                 # 顧客コード1(未使用)
+            + " " * 10                                 # 顧客コード2(未使用)
+            + "7"                                      # 振込指定区分: 7=テレ振込
             + " "                                      # 識別表示
             + " " * 7
         )
