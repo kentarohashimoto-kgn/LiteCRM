@@ -176,12 +176,14 @@ def main() -> int:
         w = csv.writer(fh, quoting=csv.QUOTE_ALL)
         w.writerow(["判定", "取引先名", "支払額", "金融機関名", "金融機関コード",
                     "支店名", "支店コード", "口座種別", "口座番号",
-                    "受取人名(原本表記)", "受取人名カナ(全銀用)", "証憑ID", "要確認事項"])
+                    "受取人名(原本表記)", "受取人名カナ(全銀用)", "証憑ID",
+                    "要確認事項", "備考(確認済みの論点)"])
         for r in all_rows:
             w.writerow([r["status"], r["partner_name"], r["amount"], r["bank_name"],
                         r["bank_code"], r["branch_name"], r["branch_code"],
                         r["account_type"], r["account_number"], r["holder_raw"],
-                        r["kana"], r["source"], " / ".join(r["problems"])])
+                        r["kana"], r["source"], " / ".join(r["problems"]),
+                        " / ".join(r.get("notes") or [])])
 
     # --- 全銀ファイル(確定分のみ) ----------------------------------------
     zengin_path = OUT / "zengin_soufuri_20260731.txt"
@@ -249,6 +251,12 @@ def main() -> int:
             f"| {r['branch_name']}({r['branch_code']}) | {r['account_type']} {r['account_number']} "
             f"| {r['kana']} |"
         )
+    noted = [r for r in confirmed if r.get("notes")]
+    if noted:
+        summary += ["", "### 確定分のうち、論点を確認のうえ収録したもの", ""]
+        for r in noted:
+            for note in r["notes"]:
+                summary.append(f"- **{r['partner_name']}**: {note}")
     summary += ["", "## 生成ファイル", "",
                 f"- `{list_path.name}` … 振込先一覧(全32件・確認用)",
                 f"- `{zengin_path.name}` … PayPay銀行WEB総振アップロード用(確定分のみ)",
