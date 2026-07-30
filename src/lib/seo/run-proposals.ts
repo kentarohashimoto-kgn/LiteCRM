@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { expectedValueFromClicks, iceScore, isInCooldown, ACTION_PRIORS } from "@/lib/seo/expected-value";
 import { estimateIntentLayer } from "@/lib/seo/benchmark";
+import { groupInsightsByPage, isPageScopedAction, type Insight } from "@/lib/seo/analyze";
 import { DEFAULT_RATES, type StrategyRates } from "@/lib/seo/strategy";
 import { todayJst } from "@/lib/seo/site-match";
 
@@ -150,11 +151,82 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
         }
       }
 
+      // ページ単位に束ねる。タイトルを1回書き換えれば、そのページに来る全クエリの
+      // CTRが動く。束ねないと「同じ記事のタイトル改善」が何件も並び、期待売上も
+      // 分割されて実際より小さく見え、承認の判断を誤らせる。
+      const asInsights = insights.map((ins) => ({
+        id: ins.id,
+        kind: ins.kind as Insight["kind"],
+        scope: "query" as const,
+        query: ins.query || null,
+        pagePath: ins.page_path || null,
+        title: ins.title,
+        severity: "medium" as const,
+        metric: (ins.metric_json ?? {}) as Record<string, number | string | null>,
+        opportunityScore: Number(ins.opportunity_score ?? 0),
+        actionType: ins.action_type ?? "rewrite",
+      }));
+      const { grouped, ungrouped } = groupInsightsByPage(asInsights);
+
+      type Candidate = {
+        actionType: string;
+        query: string;
+        page: string;
+        extraClicks: number;
+        title: string;
+        evidence: Record<string, unknown>;
+        layer1: boolean;
+        insightIds: string[];
+      };
+      const candidates: Candidate[] = [];
+
+      for (const g of grouped) {
+        const others = g.queries.length - 1;
+        candidates.push({
+          actionType: g.actionType,
+          query: g.primaryQuery,
+          page: g.pagePath,
+          extraClicks: g.totalExtraClicks,
+          title: `${g.pagePath} の${ACTION_PRIORS[g.actionType]?.label ?? g.actionType}（「${g.primaryQuery}」${
+            others > 0 ? ` ほか${others}語` : ""
+          }）`,
+          evidence: {
+            kind: g.kinds.join(","),
+            detected: `このページは ${g.queries.length}語 で機会があります（合計 +${g.totalExtraClicks}クリック/月の見込み）`,
+            queries: g.queries
+              .map((q) => `${q.query}（${q.position ?? "—"}位 / 表示${q.impressions} / +${q.extraClicks}クリック）`)
+              .join(" ／ "),
+            impressions: g.totalImpressions,
+            extraClicks: g.totalExtraClicks,
+          },
+          layer1: g.hasLayer1,
+          insightIds: g.sourceInsightIds,
+        });
+      }
+
+      for (const ins of ungrouped) {
+        // サイトレベルの構造課題(intent_mix)は「今日の1件を承認する」粒度ではないため、
+        // 提案化せず戦略ボードとサマリーの要対応で扱う。
+        if (ins.kind === "intent_mix") continue;
+        const actionType = ins.actionType;
+        if (isPageScopedAction(actionType) && ins.pagePath) continue; // 束ね済み
+        candidates.push({
+          actionType,
+          query: ins.query ?? "",
+          page: ins.pagePath ?? "",
+          extraClicks: Number(ins.metric.extraClicks ?? 0),
+          title: proposalTitleFor(actionType, ins.query, ins.pagePath),
+          evidence: { kind: ins.kind, detected: ins.title, ...ins.metric },
+          layer1: !!ins.query && estimateIntentLayer(ins.query) === 1,
+          insightIds: ins.id ? [ins.id] : [],
+        });
+      }
+      candidates.sort((a, b) => b.extraClicks - a.extraClicks);
+
       const rows: Record<string, unknown>[] = [];
-      for (const ins of insights) {
+      for (const c of candidates) {
         if (rows.length >= MAX_PER_DAY) break;
-        const actionType = ins.action_type ?? "rewrite";
-        const key = `${actionType}|${ins.query ?? ""}|${ins.page_path ?? ""}`;
+        const key = `${c.actionType}|${c.query}|${c.page}`;
         const last = lastByTarget.get(key);
         if (
           last &&
@@ -163,28 +235,21 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
           skipped += 1;
           continue;
         }
-
-        const extraClicks = Number(ins.metric_json?.extraClicks ?? 0);
-        const expected = expectedValueFromClicks(extraClicks, rates);
-        const intentLayer = ins.query ? estimateIntentLayer(ins.query) : null;
-        const ice = iceScore(
-          expected.revenue,
-          actionType,
-          { layer1: intentLayer === 1 },
-          weights,
-        );
+        const expected = expectedValueFromClicks(c.extraClicks, rates);
+        const intentLayer = c.query ? estimateIntentLayer(c.query) : null;
+        const ice = iceScore(expected.revenue, c.actionType, { layer1: c.layer1 }, weights);
 
         rows.push({
-          tenant_id: ins.tenant_id,
+          tenant_id: site.tenant_id as string,
           site_id: siteId,
-          insight_id: ins.id,
-          title: proposalTitle(ins, actionType),
-          action_type: actionType,
-          lever: LEVER_BY_KIND[ins.kind] ?? null,
-          intent_layer: intentLayer,
-          target_query: ins.query ?? "",
-          target_page: ins.page_path ?? "",
-          evidence_json: { kind: ins.kind, detected: ins.title, ...ins.metric_json },
+          insight_id: c.insightIds[0] ?? null,
+          title: c.title,
+          action_type: c.actionType,
+          lever: LEVER_BY_KIND[String(c.evidence.kind ?? "").split(",")[0]] ?? null,
+          intent_layer: c.layer1 ? 1 : intentLayer,
+          target_query: c.query,
+          target_page: c.page,
+          evidence_json: c.evidence,
           expected_json: expected,
           ice_impact: ice.impact,
           ice_confidence: ice.confidence,
@@ -212,9 +277,8 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
 }
 
 /** 承認画面でそのまま読める提案タイトル。何をするのかが一目で分かる形にする。 */
-function proposalTitle(ins: InsightRow, actionType: string): string {
+function proposalTitleFor(actionType: string, query: string | null, page: string | null): string {
   const label = ACTION_PRIORS[actionType]?.label ?? actionType;
-  const target = ins.query ? `「${ins.query}」` : ins.page_path || "サイト全体";
-  if (ins.kind === "intent_mix") return `発注検討層のキーワードを取りに行く（${label}）`;
+  const target = query ? `「${query}」` : page || "サイト全体";
   return `${target} の${label}`;
 }
