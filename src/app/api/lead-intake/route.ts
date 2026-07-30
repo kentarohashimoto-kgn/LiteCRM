@@ -39,8 +39,13 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: Request) {
-  const secret = process.env.LEAD_INTAKE_SECRET;
-  if (!secret) {
+  // 複数トークン対応: サイトごとに別トークンを配り、片方の作り直しが他方を壊さないようにする。
+  // LEAD_INTAKE_SECRET はキャリプラ等の既存フォームで使用中のため値を変えない。
+  // 新しい設置先(カトルセHP等)には LEAD_INTAKE_SECRET_2 を発行する。
+  const secrets = [process.env.LEAD_INTAKE_SECRET, process.env.LEAD_INTAKE_SECRET_2]
+    .map((s) => (s ?? "").trim())
+    .filter(Boolean);
+  if (secrets.length === 0) {
     return NextResponse.json({ ok: false, error: "intake not configured" }, { status: 503, headers: CORS_HEADERS });
   }
 
@@ -58,8 +63,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "invalid body" }, { status: 400, headers: CORS_HEADERS });
   }
 
-  const token = req.headers.get("x-intake-token") ?? body.token ?? "";
-  if (token !== secret) {
+  const token = (req.headers.get("x-intake-token") ?? body.token ?? "").trim();
+  if (!token || !secrets.includes(token)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401, headers: CORS_HEADERS });
   }
 

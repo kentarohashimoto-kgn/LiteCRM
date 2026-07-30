@@ -8,6 +8,7 @@ import { listGscSites } from "@/lib/seo/gsc";
 import { checkGa4Access } from "@/lib/seo/ga4";
 import { getSeoCredentialInfo } from "@/lib/seo/google-sa";
 import { runSeoIngest } from "@/lib/seo/run-ingest";
+import { buildInstruction, EXECUTION_MODE } from "@/lib/seo/instructions";
 
 const ADMIN_ROLES = ["owner", "admin"];
 const SETTINGS_PATH = "/app/seo/settings";
@@ -230,4 +231,283 @@ export async function setMilestoneStatusAction(formData: FormData): Promise<void
 
   revalidatePath("/app/seo/strategy");
   back("saved=milestone");
+}
+
+/** 提案の承認 / 却下。却下理由は再提案のクールダウンと学習に使う。 */
+export async function reviewProposalAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const site = String(formData.get("site") ?? "");
+  const back: (q: string) => never = (q) =>
+    redirect(`/app/seo/proposals?${site ? `site=${site}&` : ""}${q}`);
+  if (!["owner", "admin", "sales_manager"].includes(ctx.role)) back("error=forbidden");
+
+  const id = String(formData.get("id") ?? "").trim();
+  const to = String(formData.get("to") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim() || null;
+  if (!id || !["approved", "rejected", "snoozed"].includes(to)) back("error=invalid");
+
+  const sb = getSupabaseServer();
+  const up = await sb
+    .from("seo_proposals")
+    .update({
+      status: to,
+      reject_reason: to === "rejected" ? reason : null,
+      reviewed_by: ctx.userId,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select("insight_id");
+  if (up.error) back("error=save_failed");
+
+  // 承認された提案の元になった所見は、以後の検出対象から外す（同じ提案が翌日も出ないように）
+  const insightId = up.data?.[0]?.insight_id as string | null;
+  if (insightId) {
+    await sb
+      .from("seo_insights")
+      .update({ status: to === "approved" ? "proposed" : "ignored" })
+      .eq("id", insightId);
+  }
+
+  // 承認 = 実行チケット化。ここで指示書まで作るので、承認直後にHP担当へ渡せる。
+  if (to === "approved") {
+    const created = await createActionFromProposal(sb, ctx.userId, id);
+    revalidatePath("/app/seo/actions");
+    if (created === "duplicate_page") {
+      revalidatePath("/app/seo/proposals");
+      back("saved=approved_dup");
+    }
+  }
+
+  revalidatePath("/app/seo/proposals");
+  revalidatePath("/app/seo");
+  back(to === "approved" ? "saved=approved" : "saved=rejected");
+}
+
+/**
+ * 承認された提案から実行チケットを作る。
+ * 指示書は決定的テンプレートで生成するので、AIが未稼働でもそのまま渡せる。
+ *
+ * G3（同一ページに未完了施策を並走させない）はここで判定する。
+ * 並走すると効果がどちらの施策によるものか帰属できなくなる。
+ */
+async function createActionFromProposal(
+  sb: ReturnType<typeof getSupabaseServer>,
+  userId: string,
+  proposalId: string,
+): Promise<"ok" | "duplicate_page" | "skipped"> {
+  const { data: p } = await sb
+    .from("seo_proposals")
+    .select(
+      "id, tenant_id, site_id, title, action_type, target_query, target_page, expected_json, evidence_json, plan_md, seo_sites(name, base_url)",
+    )
+    .eq("id", proposalId)
+    .maybeSingle();
+  if (!p) return "skipped";
+
+  // 既に同じ提案からチケットを作っていれば二重に作らない
+  const { data: existing } = await sb.from("seo_actions").select("id").eq("proposal_id", proposalId).limit(1);
+  if (existing?.length) return "skipped";
+
+  const site = (p as { seo_sites?: { name?: string; base_url?: string } }).seo_sites;
+  const targetPage = (p.target_page as string) ?? "";
+
+  let duplicate = false;
+  if (targetPage) {
+    const { data: openOnPage } = await sb
+      .from("seo_actions")
+      .select("id")
+      .eq("site_id", p.site_id as string)
+      .eq("target_page", targetPage)
+      .not("status", "in", "(done,canceled)")
+      .limit(1);
+    duplicate = !!openOnPage?.length;
+  }
+
+  const actionType = p.action_type as string;
+  const instruction = buildInstruction({
+    actionType,
+    siteName: site?.name ?? "対象サイト",
+    baseUrl: site?.base_url ?? "",
+    targetQuery: (p.target_query as string) ?? "",
+    targetPage,
+    evidence: (p.evidence_json as Record<string, unknown>) ?? {},
+    expected: (p.expected_json as Record<string, number>) ?? {},
+  });
+  // AIが仮説・打ち手を書いていれば指示書に追記する（未生成でも成立する）
+  const plan = (p.plan_md as string) ?? "";
+  const deliverable = plan ? `${instruction}\n\n## AIが提案した打ち手\n${plan}` : instruction;
+
+  const mode = EXECUTION_MODE[actionType] ?? "external";
+  const { data: action } = await sb
+    .from("seo_actions")
+    .insert({
+      tenant_id: p.tenant_id as string,
+      site_id: p.site_id as string,
+      proposal_id: proposalId,
+      action_type: actionType,
+      execution_mode: mode,
+      title: p.title as string,
+      target_query: (p.target_query as string) ?? "",
+      target_page: targetPage,
+      expected_json: p.expected_json ?? {},
+      deliverable_md: deliverable,
+      status: "todo",
+      note: duplicate
+        ? "同じページに未完了の施策があります。効果の帰属が難しくなるため、先の施策の完了後に着手してください。"
+        : null,
+      created_by: userId,
+    })
+    .select("id")
+    .maybeSingle();
+
+  // 記事系はCRMの記事パイプラインに起票して、執筆フローに乗せる
+  if (mode === "content" && action) {
+    const { data: idea } = await sb
+      .from("content_ideas")
+      .insert({
+        tenant_id: p.tenant_id as string,
+        theme: "SEO施策",
+        title: (p.target_query as string) || (p.title as string),
+        angle: p.title as string,
+        target_keyword: (p.target_query as string) ?? null,
+        source: "web_trend",
+        status: "selected",
+        note: `SEO施策から起票（${actionType}）。対象: ${targetPage || "新規"}`,
+        created_by: userId,
+      })
+      .select("id")
+      .maybeSingle();
+    if (idea) await sb.from("seo_actions").update({ content_idea_id: idea.id }).eq("id", action.id);
+  }
+
+  return duplicate ? "duplicate_page" : "ok";
+}
+
+/** 施策の状態を進める。「反映しました」の記録が効果検証の起点になる。 */
+export async function updateActionStatusAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const site = String(formData.get("site") ?? "");
+  const back: (q: string) => never = (q) =>
+    redirect(`/app/seo/actions?${site ? `site=${site}&` : ""}${q}`);
+  if (!["owner", "admin", "sales_manager", "sales_rep"].includes(ctx.role)) back("error=forbidden");
+
+  const id = String(formData.get("id") ?? "").trim();
+  const to = String(formData.get("to") ?? "");
+  const allowed = ["todo", "in_progress", "review", "waiting_deploy", "deployed", "done", "canceled"];
+  if (!id || !allowed.includes(to)) back("error=invalid");
+
+  const patch: Record<string, unknown> = { status: to };
+  // 反映済みにした瞬間を効果検証の起点として記録する（DBトリガが検証期限を計算する）
+  if (to === "deployed") {
+    patch.applied_at = new Date().toISOString();
+    patch.applied_by = ctx.userId;
+  }
+  if (to === "canceled") patch.applied_at = null;
+
+  const sb = getSupabaseServer();
+  const up = await sb.from("seo_actions").update(patch).eq("id", id).select("id");
+  if (up.error || !up.data?.length) back("error=save_failed");
+
+  revalidatePath("/app/seo/actions");
+  revalidatePath("/app/seo");
+  back(to === "deployed" ? "saved=applied" : "saved=status");
+}
+
+/**
+ * 記事プランを記事ネタ（content_ideas）に起票して執筆フローに乗せる。
+ * サブKWを含めて起票するので、執筆者が「この記事で何語狙うのか」を見て書ける。
+ */
+export async function startArticlePlanAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const site = String(formData.get("site") ?? "");
+  const back: (q: string) => never = (q) =>
+    redirect(`/app/seo/plans?${site ? `site=${site}&` : ""}${q}`);
+  if (!["owner", "admin", "sales_manager"].includes(ctx.role)) back("error=forbidden");
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) back("error=invalid");
+
+  const sb = getSupabaseServer();
+  const { data: plan } = await sb
+    .from("seo_article_plans")
+    .select("id, tenant_id, title, main_keyword, angle, content_idea_id, seo_clusters(name)")
+    .eq("id", id)
+    .maybeSingle();
+  if (!plan) back("error=not_found");
+  if (plan.content_idea_id) back("error=already");
+
+  // この記事で狙う語を全部渡す。執筆者が構成を決める材料になる。
+  const { data: kws } = await sb
+    .from("seo_keywords")
+    .select("query, search_volume")
+    .eq("article_plan_id", id)
+    .order("search_volume", { ascending: false });
+  const kwList = (kws ?? [])
+    .map((k) => `${k.query}（月${k.search_volume ?? "—"}）`)
+    .join(" / ");
+
+  const cluster = (plan as { seo_clusters?: { name?: string } }).seo_clusters?.name ?? "SEO";
+  const { data: idea } = await sb
+    .from("content_ideas")
+    .insert({
+      tenant_id: plan.tenant_id as string,
+      theme: cluster,
+      title: plan.title as string,
+      angle: (plan.angle as string) ?? null,
+      target_keyword: plan.main_keyword as string,
+      source: "web_trend",
+      status: "selected",
+      note: `SEO記事プランから起票。この記事で狙う語: ${kwList || plan.main_keyword}`,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .maybeSingle();
+  if (!idea) back("error=save_failed");
+
+  await sb
+    .from("seo_article_plans")
+    .update({ content_idea_id: idea.id, status: "writing" })
+    .eq("id", id);
+
+  revalidatePath("/app/seo/plans");
+  revalidatePath("/app/content");
+  back("saved=started");
+}
+
+/**
+ * 記事プランの対策URLを保存する。
+ * 既存ページで狙うプランはURLが入って初めて「対策ページと実表示ページのズレ」
+ * （カニバリの兆候）を検出できるようになる。
+ */
+export async function savePlanUrlAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const site = String(formData.get("site") ?? "");
+  const back: (q: string) => never = (q) =>
+    redirect(`/app/seo/plans?${site ? `site=${site}&` : ""}${q}`);
+  if (!["owner", "admin", "sales_manager"].includes(ctx.role)) back("error=forbidden");
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) back("error=invalid");
+  const raw = String(formData.get("planned_url") ?? "").trim();
+  // 絶対URLで貼られてもパスに正規化する（GSCのページパスと突合するため）
+  let url: string | null = raw || null;
+  if (url && /^https?:\/\//i.test(url)) {
+    try {
+      url = new URL(url).pathname;
+    } catch {
+      back("error=invalid");
+    }
+  }
+
+  const sb = getSupabaseServer();
+  const up = await sb
+    .from("seo_article_plans")
+    .update({ planned_url: url, is_existing_page: url != null })
+    .eq("id", id)
+    .select("id");
+  if (up.error || !up.data?.length) back("error=save_failed");
+
+  revalidatePath("/app/seo/plans");
+  revalidatePath("/app/seo/keywords");
+  back("saved=url");
 }
