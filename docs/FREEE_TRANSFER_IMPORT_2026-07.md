@@ -27,6 +27,29 @@
 
 ---
 
+### 1-2. 追記（freee MCP 接続後）
+
+freee の MCP サーバー（Remote / 事業所: 株式会社カトルセ ID `2018395`）が接続され、
+公式スキル `freee-api-skill` を `.claude/skills/` に導入した。これにより状況が変わる。
+
+**取引先マスタは API から直接読める。** `GET /api/1/partners` のレスポンスには
+`partner_bank_account_attributes` が含まれ、必要な項目が揃っている:
+
+```
+bank_name / bank_name_kana / bank_code / branch_name / branch_kana
+branch_code / account_type / account_number / account_name / long_account_name
+```
+
+つまり **STEP 1 の「エクスポートCSVを人間が用意する」前提は不要になった**。
+口座種別の記法も実物から確定した: **`"ordinary"`**（「普通」でも「1」でもない）。
+これは CSV エクスポートでの表記とは異なる可能性が高く、
+「記法は実物から取る」という STEP 1 の原則がそのまま効いた形。
+
+サンプル3件はいずれも口座情報が空で、「ほぼ全件が口座未設定」という前提とも一致した。
+
+なお `PUT /api/1/partners/{id}` で口座情報の**書き込みも技術的には可能**だが、
+自動化はしない方針を維持する（§3 の理由による）。書き込むかどうかは人間の承認事項。
+
 ## 2. なぜ「実装を先に済ませる」のが正しいか
 
 このタスクの失敗モードは処理が遅いことではなく、**間違った口座番号がCSVに載ること**である。
