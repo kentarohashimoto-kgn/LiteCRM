@@ -302,6 +302,58 @@ export async function updateOppInlineAction(input: {
   return { ok: true, updated_at: res.updated_at, patch };
 }
 
+/**
+ * 次回アクションの消込(「今日のアポ・AC」画面から1タップ)。
+ * opportunities.next_action_date/text を空にして「期限超過」から外す。
+ * 誰がいつ何を消したか分からなくならないよう、消した内容を activities に社内メモで1件残す。
+ *
+ * ※ last_activity_at は意図的に更新しない。消込は顧客接点ではないため、
+ *   ここで触ると停滞判定(src/lib/risk.ts の stale / src/lib/pmo.ts)が
+ *   「最近動いた案件」と誤認して危険案件を見逃す。
+ * ※ CAS(updatedAt)で守る。他メンバーが直前に新しいACを入れていた場合に
+ *   それを黙って消さないため。
+ */
+export async function clearNextActionAction(input: {
+  id: string;
+  updatedAt: string;
+}): Promise<{ ok: boolean; error?: string; conflict?: boolean }> {
+  const ctx = await requireCtx();
+  const sb = getSupabaseServer();
+
+  const { data: cur } = await sb
+    .from("opportunities")
+    .select("id, account_id, next_action_date, next_action_text")
+    .eq("id", input.id)
+    .maybeSingle();
+  if (!cur) return { ok: false, error: "案件が見つかりません" };
+  const o = cur as { id: string; account_id: string | null; next_action_date: string | null; next_action_text: string | null };
+  // 連打・別タブでの二重消込。既に空なら成功扱い(空ログを積まない)。
+  if (!o.next_action_date && !o.next_action_text) return { ok: true };
+
+  const res = await casUpdate("opportunities", input.id, input.updatedAt, {
+    next_action_date: null,
+    next_action_text: null,
+  });
+  if (!res.ok) return { ok: false, error: res.error, conflict: res.conflict };
+
+  await sb.from("activities").insert({
+    tenant_id: ctx.tenantId,
+    opportunity_id: o.id,
+    account_id: o.account_id,
+    owner_user_id: ctx.userId,
+    activity_type: "internal_memo",
+    title: "次回アクションを消込",
+    body: `消込した次回アクション: ${o.next_action_date ?? "日付なし"}${o.next_action_text ? ` / ${o.next_action_text}` : ""}`,
+    activity_at: new Date().toISOString(),
+  });
+
+  revalidatePath("/app/today");
+  revalidatePath("/app/activities");
+  revalidatePath("/app/opportunities");
+  revalidatePath(`/app/opportunities/${o.id}`);
+  return { ok: true };
+}
+
 /* ============================================================
  * A-6 一括操作
  * ============================================================ */

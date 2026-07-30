@@ -4,6 +4,7 @@ import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { QuickLogForm } from "@/components/today/quick-log-form";
+import { ClearNextActionButton } from "@/components/today/clear-next-action-button";
 import { HotLeadsSection } from "@/components/today/hot-leads";
 import { formatYen } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ interface TodayOpp {
   first_meeting_date: string | null;
   next_action_date: string | null;
   next_action_text: string | null;
+  updated_at: string;
   accounts: { name: string } | null;
 }
 
@@ -42,7 +44,7 @@ export default async function TodayPage({ searchParams }: { searchParams: { all?
 
   let q = sb
     .from("opportunities")
-    .select("id, name, yomi, amount, account_id, appointment_at, first_meeting_date, next_action_date, next_action_text, accounts(name)")
+    .select("id, name, yomi, amount, account_id, appointment_at, first_meeting_date, next_action_date, next_action_text, updated_at, accounts(name)")
     .eq("status", "open")
     .or(`appointment_at.not.is.null,next_action_date.lte.${today},first_meeting_date.eq.${today}`)
     .limit(300);
@@ -63,7 +65,9 @@ export default async function TodayPage({ searchParams }: { searchParams: { all?
     .sort((a, b) => (a.next_action_date ?? "").localeCompare(b.next_action_date ?? ""))
     .slice(0, 30);
 
-  const Item = ({ o, badge }: { o: TodayOpp; badge?: string }) => (
+  // clearable: 次回ACが理由でこのリストに載っている行だけ「消込」を出す。
+  // 今日のアポ枠はアポが理由で載っているので、そこにACの消込を並べると意味が混ざる。
+  const Item = ({ o, badge, clearable }: { o: TodayOpp; badge?: string; clearable?: boolean }) => (
     <li className="card card-pad">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
@@ -84,6 +88,11 @@ export default async function TodayPage({ searchParams }: { searchParams: { all?
         <Link href={`/app/opportunities/${o.id}`} className="text-ink/25 shrink-0 mt-0.5"><ChevronRight size={18} /></Link>
       </div>
       <QuickLogForm opportunityId={o.id} accountId={o.account_id} />
+      {clearable && (
+        <div className="flex justify-end">
+          <ClearNextActionButton opportunityId={o.id} updatedAt={o.updated_at} nextActionDate={o.next_action_date} />
+        </div>
+      )}
     </li>
   );
 
@@ -127,7 +136,7 @@ export default async function TodayPage({ searchParams }: { searchParams: { all?
         {acsToday.length === 0 ? (
           <p className="text-sm text-ink/40 py-4 text-center">今日が期限の次回ACはありません</p>
         ) : (
-          <ul className="space-y-3">{acsToday.map((o) => <Item key={o.id} o={o} />)}</ul>
+          <ul className="space-y-3">{acsToday.map((o) => <Item key={o.id} o={o} clearable />)}</ul>
         )}
       </Section>
 
@@ -135,7 +144,7 @@ export default async function TodayPage({ searchParams }: { searchParams: { all?
         {overdue.length === 0 ? (
           <p className="text-sm text-ink/40 py-4 text-center">超過している次回ACはありません 🎉</p>
         ) : (
-          <ul className="space-y-3">{overdue.map((o) => <Item key={o.id} o={o} badge={`${o.next_action_date} 超過`} />)}</ul>
+          <ul className="space-y-3">{overdue.map((o) => <Item key={o.id} o={o} badge={`${o.next_action_date} 超過`} clearable />)}</ul>
         )}
       </Section>
     </div>
