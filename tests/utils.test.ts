@@ -2,7 +2,7 @@
  * E-5 回帰テスト: 金額表示・日付ユーティリティ。
  */
 import { describe, expect, it } from "vitest";
-import { formatYen, formatManYen, formatPercent, monthKey, daysSince, sameMonth, sum, formatAcquiredAt } from "@/lib/utils";
+import { formatYen, formatManYen, formatPercent, monthKey, daysSince, sameMonth, sum, formatAcquiredAt, formatDate, formatDateFull, formatDateTimeJst, formatDateTimeSecJst, formatTimeJst, toJstDate, formatMonth } from "@/lib/utils";
 
 describe("formatYen / formatManYen / formatPercent", () => {
   it("円表記", () => {
@@ -26,7 +26,8 @@ describe("日付ユーティリティ", () => {
     expect(monthKey(new Date(2026, 0, 1))).toBe("2026-01-01");
   });
   it("daysSince", () => {
-    const now = new Date(2026, 6, 15);
+    // 実行環境のTZに依存しないよう、基準は具体的な瞬間(UTC)で与える
+    const now = new Date("2026-07-15T00:00:00Z");
     expect(daysSince("2026-07-08", now)).toBe(7);
     expect(daysSince(null, now)).toBeNull();
     expect(daysSince("invalid", now)).toBeNull();
@@ -55,5 +56,35 @@ describe("リードの獲得日時", () => {
   });
   it("どちらも無ければダッシュ", () => {
     expect(formatAcquiredAt(null, null)).toBe("—");
+  });
+});
+
+describe("日時表示は実行環境のTZに依存せずJST固定", () => {
+  // サーバー(Vercel)はUTCで動くため、ローカル時刻ゲッターを使うとUTCのまま表示され
+  // JSTの0:00〜9:00は日付まで1日ずれる。以下はその回帰固定。
+  it("送信日時はJSTで表示される(UTC 14:26 → JST 23:26)", () => {
+    expect(formatDateTimeJst("2026-07-30T14:26:55.993Z")).toBe("2026/7/30 23:26");
+    expect(formatDateTimeSecJst("2026-07-30T14:26:55.993Z")).toBe("2026/7/30 23:26:55");
+  });
+  it("UTCで日付が変わらない時刻でもJSTでは翌日になる", () => {
+    // 2026-07-30 16:00 UTC = 2026-07-31 01:00 JST
+    expect(formatDateTimeJst("2026-07-30T16:00:00Z")).toBe("2026/7/31 01:00");
+    expect(formatDateFull("2026-07-30T16:00:00Z")).toBe("2026/7/31");
+    expect(formatDate("2026-07-30T16:00:00Z")).toBe("7/31");
+    expect(toJstDate("2026-07-30T16:00:00Z")).toBe("2026-07-31");
+    expect(formatMonth("2026-12-31T16:00:00Z")).toBe("2027年1月");
+  });
+  it("日付のみの値(獲得日など)は日付がずれない", () => {
+    expect(formatDateFull("2026-07-29")).toBe("2026/7/29");
+    expect(formatDate("2026-07-29")).toBe("7/29");
+  });
+  it("時刻は0埋め", () => {
+    expect(formatTimeJst("2026-07-30T00:05:00Z")).toBe("09:05");
+  });
+  it("空・不正値の扱いは変えない", () => {
+    expect(formatDateTimeJst(null)).toBe("—");
+    expect(formatDateTimeSecJst("not-a-date")).toBe("—");
+    expect(formatTimeJst(null)).toBe("");
+    expect(toJstDate(null)).toBeNull();
   });
 });

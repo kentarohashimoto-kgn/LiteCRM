@@ -6,6 +6,7 @@ import { PageHeader, Section, EmptyState } from "@/components/ui/primitives";
 import { HistoryToolbar } from "@/components/email/history-toolbar";
 import { jstRangeToUtc } from "@/lib/mail-export";
 import type { MailHistoryFilters } from "@/server/actions/mail-export";
+import { formatDateTimeSecJst } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -114,12 +115,12 @@ export default async function EmailHistoryPage({ searchParams }: {
                     <span className={`pill text-[10px] font-bold ${st.cls}`}>{st.label}</span>
                     <span className="font-medium text-sm text-ink/90 truncate">{m.subject || "(件名なし)"}</span>
                     <span className="text-xs text-ink/40">→ {(m.to_addrs ?? []).join(", ")}</span>
-                    {m.sent_at && <span className="ml-auto text-xs text-ink/40">{new Date(m.sent_at).toLocaleString("ja-JP")}</span>}
+                    {m.sent_at && <span className="ml-auto text-xs text-ink/40">{formatDateTimeSecJst(m.sent_at)}</span>}
                   </div>
                   <div className="flex items-center gap-4 text-xs text-ink/60">
                     <span className="inline-flex items-center gap-1">
                       <MailOpen size={13} className={m.open_count > 0 ? "text-teal-600" : "text-ink/30"} />
-                      開封 {m.open_count}回{m.last_opened_at && `（最終 ${new Date(m.last_opened_at).toLocaleString("ja-JP")}）`}
+                      開封 {m.open_count}回{m.last_opened_at && `（最終 ${formatDateTimeSecJst(m.last_opened_at)}）`}
                     </span>
                     <span className="inline-flex items-center gap-1">
                       <MousePointerClick size={13} className={m.click_count > 0 ? "text-accent" : "text-ink/30"} />

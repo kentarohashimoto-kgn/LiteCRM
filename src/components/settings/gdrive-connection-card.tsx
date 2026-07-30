@@ -1,6 +1,7 @@
 import { HardDriveDownload, RefreshCw } from "lucide-react";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { requireCtx } from "@/lib/session";
+import { formatDateFull } from "@/lib/utils";
 
 const ERROR_LABEL: Record<string, string> = {
   no_google: "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET が未設定です",
@@ -50,7 +51,7 @@ export async function GdriveConnectionCard({ searchParams }: { searchParams: { s
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-sm">
             接続中: <span className="font-medium">{conn.display_name}</span>
-            <span className="text-xs text-ink/40 ml-2">最終更新 {new Date(conn.updated_at).toLocaleDateString("ja-JP")}</span>
+            <span className="text-xs text-ink/40 ml-2">最終更新 {formatDateFull(conn.updated_at)}</span>
           </span>
           <a href="/api/oauth/gdrive/start" className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-1.5 text-sm hover:bg-black/[0.03]">
             <RefreshCw size={14} /> 再接続

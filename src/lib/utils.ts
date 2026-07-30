@@ -29,18 +29,36 @@ export function formatPercent(value: number | null | undefined, digits = 0): str
   return (value * 100).toFixed(digits) + "%";
 }
 
+/**
+ * 日時をJST(UTC+9)の年月日時分秒に分解する。
+ *
+ * 実行環境のタイムゾーンに依存しないことが要件。サーバー(Vercel)はUTCで動くため、
+ * getFullYear() 等のローカル時刻ゲッターをそのまま使うとUTCのまま表示され、
+ * JSTの0:00〜9:00は日付まで1日ずれる。日本はサマータイムが無いので固定+9hでよい。
+ */
+function jstParts(d: Date): { y: number; mo: number; d: number; h: number; mi: number; s: number } {
+  const j = new Date(d.getTime() + 9 * 3600 * 1000);
+  return { y: j.getUTCFullYear(), mo: j.getUTCMonth() + 1, d: j.getUTCDate(), h: j.getUTCHours(), mi: j.getUTCMinutes(), s: j.getUTCSeconds() };
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** JSTの「M/D」。 */
 export function formatDate(value?: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  const j = jstParts(d);
+  return `${j.mo}/${j.d}`;
 }
 
+/** JSTの「YYYY/M/D」。 */
 export function formatDateFull(value?: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+  const j = jstParts(d);
+  return `${j.y}/${j.mo}/${j.d}`;
 }
 
 /** ISO日時をJSTの「YYYY/M/D HH:MM」で表示(受付日時など)。 */
@@ -48,11 +66,17 @@ export function formatDateTimeJst(value?: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric", month: "numeric", day: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
+  const j = jstParts(d);
+  return `${j.y}/${j.mo}/${j.d} ${pad2(j.h)}:${pad2(j.mi)}`;
+}
+
+/** ISO日時をJSTの「YYYY/M/D HH:MM:SS」で表示(送信履歴など、秒まで要る場面)。 */
+export function formatDateTimeSecJst(value?: string | null): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  const j = jstParts(d);
+  return `${j.y}/${j.mo}/${j.d} ${pad2(j.h)}:${pad2(j.mi)}:${pad2(j.s)}`;
 }
 
 /**
@@ -70,7 +94,8 @@ export function formatTimeJst(value?: string | null): string {
   if (!value) return "";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
+  const j = jstParts(d);
+  return `${pad2(j.h)}:${pad2(j.mi)}`;
 }
 
 /** ISO日時をJST基準の YYYY-MM-DD に変換(日付グルーピング用)。 */
@@ -78,14 +103,16 @@ export function toJstDate(value?: string | null): string | null {
   if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" });
+  const j = jstParts(d);
+  return `${j.y}-${pad2(j.mo)}-${pad2(j.d)}`;
 }
 
 export function formatMonth(value?: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return `${d.getFullYear()}年${d.getMonth() + 1}月`;
+  const j = jstParts(d);
+  return `${j.y}年${j.mo}月`;
 }
 
 /** 2つの日付の差(日数)。a - b。 */
@@ -101,7 +128,7 @@ export function daysSince(value?: string | null, now: Date = new Date()): number
   return daysBetween(now, d);
 }
 
-/** YYYY-MM-01 形式の月キー */
+/** YYYY-MM-01 形式の月キー。startOfMonth/addMonths と対で使う(同じローカル基準)。 */
 export function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
@@ -114,10 +141,14 @@ export function addMonths(d: Date, n: number): Date {
   return new Date(d.getFullYear(), d.getMonth() + n, 1);
 }
 
+/** 同じ月か(JST基準)。実行環境のTZに依存しない。 */
 export function sameMonth(value: string | undefined | null, ref: Date): boolean {
   if (!value) return false;
   const d = new Date(value);
-  return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+  if (Number.isNaN(d.getTime())) return false;
+  const a = jstParts(d);
+  const b = jstParts(ref);
+  return a.y === b.y && a.mo === b.mo;
 }
 
 export function sum<T>(items: T[], fn: (item: T) => number): number {
