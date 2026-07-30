@@ -16,9 +16,12 @@ import { SchedulePicker } from "@/components/email/schedule-picker";
 import { formatJstSchedule } from "@/lib/schedule";
 import { searchOpportunitiesAction, type PickOption } from "@/server/actions/activities";
 import type { EmailTemplate } from "@/app/app/email/templates/page";
+import type { SenderVars } from "@/lib/sender";
 
 export interface ComposerInitial {
   senderName: string;
+  /** 差出人依存の差し込み値({sender_last}/{sender_email}/{signature})。サーバーで解決済み */
+  senderVars?: SenderVars;
   contact?: { id: string; name: string; email: string | null };
   opportunity?: { id: string; name: string };
   accountId?: string | null;
@@ -57,8 +60,9 @@ export function EmailComposer({ templates, initial, hasMailAccount }: { template
       company: company,
       opportunity: opportunity?.label ?? null,
       sender: initial.senderName,
+      ...(initial.senderVars ?? {}),
     }),
-    [contact, company, opportunity, initial.senderName],
+    [contact, company, opportunity, initial.senderName, initial.senderVars],
   );
 
   /** 定型文を選んだら件名・本文に差し込む(既入力を上書き)。 */

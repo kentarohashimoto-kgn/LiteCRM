@@ -215,8 +215,12 @@ table.mx td span{font-size:11px;color:var(--mut)}
 <tr><th>差し込み変数</th><th>展開される内容</th><th>データ元</th></tr>
 <tr><td class="mono" style="border:0;background:none;padding:4px 11px">{contact}</td><td>相手の氏名（例: 山田 太郎）</td><td>リードの担当者名</td></tr>
 <tr><td class="mono" style="border:0;background:none;padding:4px 11px">{company}</td><td>会社名（例: 株式会社〇〇）</td><td>リードの会社名</td></tr>
-<tr><td class="mono" style="border:0;background:none;padding:4px 11px">{sender}</td><td>差出人名（例: 橋本 健太郎）</td><td>メール送信アカウントの差出人名</td></tr>
+<tr><td class="mono" style="border:0;background:none;padding:4px 11px">{sender}</td><td>差出人名（例: 橋本　健太郎）</td><td>メール設定の差出人名（未設定ならプロフィール表示名）</td></tr>
+<tr><td class="mono" style="border:0;background:none;padding:4px 11px">{sender_last}</td><td>差出人の姓（例: 橋本）</td><td>同上から自動抽出。件名の「カトルセ橋本です」用</td></tr>
+<tr><td class="mono" style="border:0;background:none;padding:4px 11px">{sender_email}</td><td>差出人のメールアドレス</td><td>メール設定の送信元アドレス</td></tr>
+<tr><td class="mono" style="border:0;background:none;padding:4px 11px">{signature}</td><td>署名ブロック（会社名・役職・氏名・連絡先・SNS）</td><td><b>送信者ごとの署名</b>（<a href="/app/email/account" target="_blank">メール送信アカウント</a>画面で編集）</td></tr>
 </table>
+<div class="tip">✍ <b>1つのテンプレを全員で使い回せます。</b> 件名の <span class="mono" style="border:0;background:none;padding:0 3px">{sender_last}</span> と本文末尾の <span class="mono" style="border:0;background:none;padding:0 3px">{signature}</span> が送信者ごとに入れ替わるため、橋本が送れば「カトルセ橋本です」＋橋本の署名、平石が送れば平石の名前と署名で届きます。署名は各自が <a href="/app/email/account" target="_blank">メール設定</a> で一度登録すればOKです。</div>
 <div class="warn">⚠ 変数のスペルを間違えると（例: {contct}）そのまま文字として送られます。送信前のプレビューで、先頭リードでの実際の差し込み結果を必ず確認してください。</div>
 <div class="tip">🔍 <b>今どんなメールが送られるの？</b> → アプリの <a href="/app/email/templates/preview" target="_blank"><b>送信プレビュー（対比）</b></a> を開くと、<b>現在登録されているテンプレート</b>を選んで「左＝設定画面の原文（変数ハイライト付き）／右＝相手の受信画面イメージ（差し込み後・計測リンク・配信停止フッター込み）」を左右対比で確認できます。サンプルの氏名・会社名も自由に変えて試せます。<b>送信方法・内容</b>を切り替えると、配信停止フッターが付く場合／付かない場合の見え方も比較できます。</div>
 

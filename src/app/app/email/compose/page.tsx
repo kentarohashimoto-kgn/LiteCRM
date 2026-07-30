@@ -1,5 +1,6 @@
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { resolveSender } from "@/lib/sender";
 import { PageHeader } from "@/components/ui/primitives";
 import { EmailComposer, type ComposerInitial } from "@/components/email/email-composer";
 import type { EmailTemplate } from "@/app/app/email/templates/page";
@@ -17,13 +18,23 @@ export default async function EmailComposePage({ searchParams }: { searchParams:
   const [tplR, meR, acctR] = await Promise.all([
     sb.from("email_templates").select("id, name, category, subject_tmpl, body_tmpl").order("category").order("name"),
     sb.from("profiles").select("display_name, email").eq("id", ctx.userId).maybeSingle(),
-    sb.from("user_mail_accounts").select("status, verified_at").maybeSingle(),
+    sb.from("user_mail_accounts").select("status, verified_at, from_name, from_email, oauth_email, auth_method, signature").maybeSingle(),
   ]);
   const templates = (tplR.data ?? []) as EmailTemplate[];
   const senderName = (meR.data?.display_name as string) || (meR.data?.email as string) || "";
   const hasMailAccount = acctR.data?.status === "active";
 
-  const initial: ComposerInitial = { senderName };
+  // 差出人依存の差し込み値。メール未接続でも {sender} だけは表示名で埋める
+  const senderVars = resolveSender({
+    fromName: acctR.data?.from_name as string | null,
+    displayName: senderName,
+    fromEmail: acctR.data?.from_email as string | null,
+    oauthEmail: acctR.data?.oauth_email as string | null,
+    authMethod: acctR.data?.auth_method as string | null,
+    signature: acctR.data?.signature as string | null,
+  });
+
+  const initial: ComposerInitial = { senderName, senderVars };
 
   // 案件からの事前充填
   if (searchParams.opportunity) {

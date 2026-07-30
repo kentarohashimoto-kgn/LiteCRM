@@ -8,7 +8,7 @@ import { setLeadDispositionAction, setLeadHearingAction } from "@/server/actions
 import { setLeadHandlerAction } from "@/server/actions/lead-handlers";
 import { LEAD_DISPOSITIONS } from "@/lib/constants";
 import { GRADE_DEFS, type PriorityGrade } from "@/lib/engagement";
-import { cn, formatDateFull } from "@/lib/utils";
+import { cn, formatAcquiredAt, formatDateFull, formatDateTimeJst } from "@/lib/utils";
 
 /**
  * リード詳細サイドパネル。一覧から画面遷移せずに内容確認・その場でヒアリング/決着を更新できる。
@@ -192,10 +192,11 @@ export function LeadSidePanel({ leadId, onClose, handlers = [] }: { leadId: stri
                 ["従業員数", l.employeeSize],
                 ["流入", l.event],
                 ["獲得担当", l.acquirer],
-                ["獲得日", l.acquiredAt ? formatDateFull(l.acquiredAt) : null],
+                ["獲得日時", formatAcquiredAt(l.scannedAt, l.acquiredAt)],
+                ["取込日時", l.createdAt ? formatDateTimeJst(l.createdAt) : null],
               ].map(([label, value]) => (
                 <div key={label as string} className="flex gap-2 px-3 py-1.5">
-                  <span className="w-16 shrink-0 text-ink/40">{label}</span>
+                  <span className="w-20 shrink-0 text-ink/40">{label}</span>
                   <span className="text-ink/75 break-all">{(value as string) || "—"}</span>
                 </div>
               ))}
