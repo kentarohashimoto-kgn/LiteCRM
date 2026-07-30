@@ -6,6 +6,7 @@ import { ActionNotice } from "@/components/ui/action-notice";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { AUTOMATION_RECIPES, IMPLEMENTED_TRIGGERS } from "@/lib/automation";
 import { createRuleFromRecipeAction, toggleRuleAction, deleteRuleAction } from "@/server/actions/automation";
+import { formatDateTimeJst } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -170,7 +171,7 @@ export default async function AutomationPage({ searchParams }: { searchParams: {
               <tbody>
                 {runs.map((run) => (
                   <tr key={run.id} className="border-b border-black/[0.03]">
-                    <td className="py-2 pr-4 text-ink/70 whitespace-nowrap">{new Date(run.fired_at).toLocaleString("ja-JP")}</td>
+                    <td className="py-2 pr-4 text-ink/70 whitespace-nowrap">{formatDateTimeJst(run.fired_at)}</td>
                     <td className="py-2 pr-4 text-ink/80">{ruleNameById.get(run.rule_id) ?? "—"}</td>
                     <td className="py-2 pr-4">
                       <span className={`pill text-[10px] font-bold ${run.status === "success" ? "bg-emerald-100 text-emerald-700" : run.status === "partial" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
