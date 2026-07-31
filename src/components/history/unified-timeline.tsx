@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatDateTimeJst, formatDateFull } from "@/lib/utils";
 
 /**
  * C-1 統合タイムライン: 活動・商談・タスク・ステージ変更・コメント等を
@@ -27,12 +28,10 @@ const KIND_STYLE: Record<TimelineEvent["kind"], { pill: string; dot: string }> =
 };
 
 function fmt(at: string): string {
-  const d = new Date(at);
-  if (Number.isNaN(d.getTime())) return "—";
-  const base = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
-  // 日付のみ(時刻情報なし)は日付だけ表示
-  if (!at.includes("T") && !at.includes(":")) return base;
-  return `${base} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  // 日付のみ(時刻情報なし)は日付だけ表示。日時はJSTで表示する
+  // (サーバーレンダリングのローカル時刻はUTCのため、素のgetHours()だと9時間ずれる)
+  if (!at.includes("T") && !at.includes(":")) return formatDateFull(at);
+  return formatDateTimeJst(at);
 }
 
 export function UnifiedTimeline({ events, limit = 60 }: { events: TimelineEvent[]; limit?: number }) {
