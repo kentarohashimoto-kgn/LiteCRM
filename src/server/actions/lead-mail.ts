@@ -46,6 +46,9 @@ export interface LeadMailFilters {
   disposition?: string;
   rank?: string;        // 単一 or CSV("S,A")。ranks指定時は無視
   ranks?: string[];     // ランク複数選択
+  engRank?: string;     // エンゲージランク(S〜D)。CSV。Dは接点なし(集計行なし)も含む
+  grade?: string;       // 優先グレード(P1〜P5)。CSV
+  engMin?: number;      // エンゲージメント合計点の下限
   owner?: string;       // 社内担当者(取得担当の表示名。表記ゆれは名寄せ済み)
   handler?: string;     // 対応者(FS接客者。社長/責任者が接客したリード)
   from?: string;        // 獲得日 開始(YYYY-MM-DD)
@@ -78,7 +81,8 @@ interface TargetResolution {
 
 async function resolveTargets(filters: LeadMailFilters, templateId: string): Promise<TargetResolution> {
   const sb = getSupabaseServer();
-  let qy = sb.from("leads").select("id, email, company_name, contact_name, priority_score", { count: "exact" });
+  // 一覧画面(lead_list_eng / 0192)と同じビューを使い、エンゲージメント絞り込みも「表示=送信対象」で一致させる
+  let qy = sb.from("lead_list_eng").select("id, email, company_name, contact_name, priority_score", { count: "exact" });
   const pickedIds = (filters.leadIds ?? []).filter(Boolean).slice(0, 500);
   if (pickedIds.length > 0) {
     // チェックボックスでの個別選択が最優先(他の絞り込みは適用済みの画面上で選んだ結果のため)
@@ -93,6 +97,18 @@ async function resolveTargets(filters: LeadMailFilters, templateId: string): Pro
     const ranks = (filters.ranks ?? (filters.rank ? filters.rank.split(",") : [])).map((r) => r.trim()).filter(Boolean);
     if (ranks.length === 1) qy = qy.eq("rank", ranks[0]);
     else if (ranks.length > 1) qy = qy.in("rank", ranks);
+    // エンゲージランク(S〜D)。接点ゼロのリードは集計行が無い(null)ため、Dはnullも含めて拾う
+    // 値は許可値のみ通す(or()のフィルタ構文を壊さない。一覧の絞り込みと同一ロジック)
+    const ers = (filters.engRank ?? "").split(",").map((r) => r.trim()).filter((r) => ["S", "A", "B", "C", "D"].includes(r));
+    if (ers.includes("D")) qy = qy.or(`eng_rank.in.(${ers.join(",")}),eng_rank.is.null`);
+    else if (ers.length === 1) qy = qy.eq("eng_rank", ers[0]);
+    else if (ers.length > 1) qy = qy.in("eng_rank", ers);
+    // 優先グレード(P1〜P5)
+    const gs = (filters.grade ?? "").split(",").map((g) => g.trim()).filter((g) => ["P1", "P2", "P3", "P4", "P5"].includes(g));
+    if (gs.length === 1) qy = qy.eq("priority_grade", gs[0]);
+    else if (gs.length > 1) qy = qy.in("priority_grade", gs);
+    // エンゲージメント合計点の下限
+    if (filters.engMin && filters.engMin > 0) qy = qy.gte("eng_score", filters.engMin);
     // 社内担当者(取得担当)。表示名 → 表記ゆれを含む全rawへ展開(一覧の絞り込みと同一ロジック)
     if (filters.owner) {
       const raws = await resolveOwnerRaws(filters.owner);

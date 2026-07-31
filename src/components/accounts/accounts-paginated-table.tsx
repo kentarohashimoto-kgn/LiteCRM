@@ -9,9 +9,22 @@ import type { AccountPageRow, AccountPageFilter } from "@/lib/data/accounts-page
 import { formatYen, cn } from "@/lib/utils";
 
 interface Option { id: string; name: string; }
-type SortKey = "revenue" | "openAmount" | "oppCount" | "name" | "rank";
+type SortKey = "revenue" | "openAmount" | "oppCount" | "name" | "rank" | "engagement";
 const PAGE = 50;
 const statusLabel: Record<string, string> = { prospect: "見込み", customer: "顧客", inactive: "休眠" };
+
+// エンゲージランクの配色(リード一覧と同じ)と合計点の下限候補(ランク閾値に対応)
+const ENG_COLOR: Record<string, string> = {
+  S: "bg-rose-100 text-rose-600", A: "bg-amber-100 text-amber-700", B: "bg-teal-light text-teal-deep",
+  C: "bg-mist-soft text-ink/60", D: "bg-mist-soft text-ink/35",
+};
+const ENG_MIN_OPTS = [
+  { id: "1", name: "1pt以上（反応あり）" },
+  { id: "3", name: "3pt以上（C相当）" },
+  { id: "7", name: "7pt以上（B相当）" },
+  { id: "15", name: "15pt以上（A相当）" },
+  { id: "30", name: "30pt以上（S相当）" },
+];
 
 export function AccountsPaginatedTable({
   initialRows,
@@ -34,11 +47,13 @@ export function AccountsPaginatedTable({
   const [industry, setIndustry] = useState<string[]>([]);
   const [owner, setOwner] = useState<string[]>([]);
   const [active, setActive] = useState("");
+  const [engRank, setEngRank] = useState<string[]>([]);
+  const [engMin, setEngMin] = useState("");
   const [sort, setSort] = useState<SortKey>("revenue");
   const [asc, setAsc] = useState(false);
 
   const hasActiveFilters =
-    q.trim() !== "" || rank.length > 0 || focus.length > 0 || area.length > 0 || industry.length > 0 || owner.length > 0 || active !== "";
+    q.trim() !== "" || rank.length > 0 || focus.length > 0 || area.length > 0 || industry.length > 0 || owner.length > 0 || active !== "" || engRank.length > 0 || engMin !== "";
 
   function resetFilters() {
     setQ("");
@@ -48,6 +63,8 @@ export function AccountsPaginatedTable({
     setIndustry([]);
     setOwner([]);
     setActive("");
+    setEngRank([]);
+    setEngMin("");
   }
 
   const [rows, setRows] = useState<AccountPageRow[]>(initialRows);
@@ -65,8 +82,10 @@ export function AccountsPaginatedTable({
       industry: industry.length ? industry : undefined,
       owner: owner.length ? owner : undefined,
       active: active || undefined,
+      engRank: engRank.length ? engRank : undefined,
+      engMin: engMin || undefined,
     }),
-    [q, rank, focus, area, industry, owner, active],
+    [q, rank, focus, area, industry, owner, active, engRank, engMin],
   );
 
   const load = useCallback(
@@ -105,7 +124,7 @@ export function AccountsPaginatedTable({
   }
   function toggleSort(key: SortKey) {
     if (sort === key) setAsc((a) => !a);
-    else { setSort(key); setAsc(key === "name" || key === "rank"); }
+    else { setSort(key); setAsc(key === "name" || key === "rank"); }  // エンゲージ・金額系は降順始まり
   }
 
   // CSVエクスポート(現在の絞込条件で全件)
@@ -113,11 +132,12 @@ export function AccountsPaginatedTable({
   async function exportCsv() {
     setExporting(true);
     const res = await fetchAccountsPageAction({ filter, sort, asc, offset: 0, limit: 5000 });
-    const header = ["会社名", "ランク", "重点", "担当営業", "区分", "アクティブ", "案件数", "累積売上", "進行中見込", "エリア", "業種"];
+    const header = ["会社名", "ランク", "重点", "担当営業", "区分", "アクティブ", "エンゲージランク", "エンゲージ点", "案件数", "累積売上", "進行中見込", "エリア", "業種"];
     const escape = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const lines = res.rows.map((r) => [
       r.name, r.rank ?? "", r.focus ?? "", r.owner_name ?? "", statusLabel[r.status] ?? r.status,
-      r.is_active ? "アクティブ" : "非アクティブ", r.opp_count, r.lifetime_revenue, r.open_amount, r.area ?? "", r.industry ?? "",
+      r.is_active ? "アクティブ" : "非アクティブ", r.engagement_rank ?? "D", r.engagement_score ?? 0,
+      r.opp_count, r.lifetime_revenue, r.open_amount, r.area ?? "", r.industry ?? "",
     ].map(escape).join(","));
     const csv = "\uFEFF" + header.map(escape).join(",") + "\n" + lines.join("\n"); // BOM付きUTF-8(Excel対応)
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -149,6 +169,11 @@ export function AccountsPaginatedTable({
           <option value="active">アクティブのみ</option>
           <option value="inactive">非アクティブのみ</option>
         </select>
+        <MultiSelect selected={engRank} onChange={setEngRank} placeholder="エンゲージ" options={["S", "A", "B", "C", "D"].map((x) => ({ id: x, name: x === "D" ? "D（反応なし含む）" : x }))} />
+        <select value={engMin} onChange={(e) => setEngMin(e.target.value)} className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-primary">
+          <option value="">反応スコア：すべて</option>
+          {ENG_MIN_OPTS.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
         <button
           type="button"
           onClick={resetFilters}
@@ -179,6 +204,7 @@ export function AccountsPaginatedTable({
               <th className="th">担当営業</th>
               <th className="th">区分</th>
               <th className="th">ステータス</th>
+              <SortTh label="エンゲージ" k="engagement" sort={sort} asc={asc} onClick={toggleSort} />
               <SortTh label="案件数" k="oppCount" sort={sort} asc={asc} onClick={toggleSort} align="right" />
               <SortTh label="累積売上" k="revenue" sort={sort} asc={asc} onClick={toggleSort} align="right" />
               <SortTh label="進行中見込" k="openAmount" sort={sort} asc={asc} onClick={toggleSort} align="right" />
@@ -213,6 +239,10 @@ export function AccountsPaginatedTable({
                 <td className="td">
                   {r.is_active ? <span className="pill bg-teal-light text-teal-deep text-[11px]">アクティブ</span> : <span className="pill bg-mist-soft text-ink/40 text-[11px]">非アクティブ</span>}
                 </td>
+                <td className="td">
+                  <span className={cn("pill text-[10px] tabular-nums", ENG_COLOR[r.engagement_rank ?? "D"] ?? ENG_COLOR.D)} title={`エンゲージメント ${r.engagement_score ?? 0}pt`}>{r.engagement_rank ?? "D"}</span>
+                  <span className="ml-1 text-[10px] text-ink/45 tabular-nums">{r.engagement_score ?? 0}pt</span>
+                </td>
                 <td className="td text-right tabular-nums">{r.opp_count}</td>
                 <td className="td text-right tabular-nums font-semibold stat-accent">{formatYen(r.lifetime_revenue)}</td>
                 <td className="td text-right tabular-nums text-teal-deep">{formatYen(r.open_amount)}</td>
@@ -220,7 +250,7 @@ export function AccountsPaginatedTable({
               </tr>
             ))}
             {rows.length === 0 && !loading && (
-              <tr><td colSpan={10} className="td text-center text-ink/40 py-10">条件に一致する顧客がありません</td></tr>
+              <tr><td colSpan={11} className="td text-center text-ink/40 py-10">条件に一致する顧客がありません</td></tr>
             )}
           </tbody>
         </table>

@@ -39,14 +39,18 @@ export async function getLeadMetrics(_opps?: OppView[]): Promise<LeadMetrics> {
 }
 
 const LIST_PAGE = 100;
-const LIST_COLS = "id,company_name,contact_name,email,rank,job_title,employee_size,raw_event,priority_score,disposition,call_owner,phone,mobile_phone,account_id,status,funnel_stage,created_at,inquiry_media,inquiry_tags";
+const LIST_COLS = "id,company_name,contact_name,email,rank,job_title,employee_size,raw_event,priority_score,priority_grade,disposition,call_owner,phone,mobile_phone,account_id,status,funnel_stage,created_at,inquiry_media,inquiry_tags,eng_rank,eng_score";
 
-/** リード一覧: SQL でフィルタ＋優先度降順＋ページング(全件ロードしない)。 */
+/**
+ * リード一覧: SQL でフィルタ＋優先度降順＋ページング(全件ロードしない)。
+ * エンゲージメント(person_engagement)はビュー lead_list_eng(0192)でSQL結合済みのため、
+ * ランク・合計点での絞り込み/並べ替えもページングと両立する。
+ */
 export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[]; total: number; page: number; pageSize: number }> {
   const sb = getSupabaseServer();
   const page = Math.max(1, f.page ?? 1);
   const start = (page - 1) * LIST_PAGE;
-  let qy = sb.from("leads").select(LIST_COLS, { count: "exact" });
+  let qy = sb.from("lead_list_eng").select(LIST_COLS, { count: "exact" });
   const q = (f.q ?? "").replace(/[,%_()]/g, " ").trim();
   if (q) qy = qy.or(`company_name.ilike.%${q}%,contact_name.ilike.%${q}%`);
   if (f.sourceIdIn) qy = qy.in("lead_source_id", f.sourceIdIn);
@@ -64,6 +68,22 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
     if (ranks.length === 1) qy = qy.eq("rank", ranks[0]);
     else if (ranks.length > 1) qy = qy.in("rank", ranks);
   }
+  // エンゲージランク(S〜D)。接点ゼロのリードは集計行が無い(null)ため、Dはnullも含めて拾う
+  // 値はURL由来のため許可値のみ通す(or()のフィルタ構文を壊さない)
+  if (f.engRank) {
+    const ers = f.engRank.split(",").map((r) => r.trim()).filter((r) => ["S", "A", "B", "C", "D"].includes(r));
+    if (ers.includes("D")) qy = qy.or(`eng_rank.in.(${ers.join(",")}),eng_rank.is.null`);
+    else if (ers.length === 1) qy = qy.eq("eng_rank", ers[0]);
+    else if (ers.length > 1) qy = qy.in("eng_rank", ers);
+  }
+  // 優先グレード(P1〜P5)。エンゲージメントバッチが判定したリードのみ値を持つ
+  if (f.grade) {
+    const gs = f.grade.split(",").map((g) => g.trim()).filter((g) => ["P1", "P2", "P3", "P4", "P5"].includes(g));
+    if (gs.length === 1) qy = qy.eq("priority_grade", gs[0]);
+    else if (gs.length > 1) qy = qy.in("priority_grade", gs);
+  }
+  // エンゲージメント合計点の下限(nullは接点ゼロなので自動的に除外される)
+  if (f.engMin && f.engMin > 0) qy = qy.gte("eng_score", f.engMin);
   // 社内担当者(取得担当)。表示名 → 表記ゆれを含む全rawへ展開して絞る
   if (f.owner) {
     const raws = await resolveAcquirerRaws(f.owner);
@@ -74,37 +94,30 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
   // 獲得日の範囲
   if (f.from) qy = qy.gte("acquired_at", f.from);
   if (f.to) qy = qy.lte("acquired_at", f.to);
-  // 並べ替え。f.sort 指定時はそのカラムで(HP問合せタブ用)、無ければ優先度降順(既定)。
+  // 並べ替え。f.sort 指定時はそのカラムで(HP問合せタブ・エンゲージ列)、無ければ優先度降順(既定)。
   const SORT_COLS: Record<string, string> = {
     date: "created_at", media: "inquiry_media", detail: "raw_event", tags: "inquiry_tags", disposition: "disposition",
+    eng: "eng_score", grade: "priority_grade",
   };
   const sortCol = f.sort ? SORT_COLS[f.sort] : undefined;
   if (sortCol) {
-    qy = qy.order(sortCol, { ascending: f.dir === "asc", nullsFirst: false }).order("id");
+    const asc = f.dir === "asc";
+    // エンゲージ点の昇順では接点ゼロ(null)を先頭に置く(=0pt扱い)。それ以外はnullを末尾へ
+    qy = qy.order(sortCol, { ascending: asc, nullsFirst: sortCol === "eng_score" ? asc : false }).order("id");
   } else {
     qy = qy.order("priority_score", { ascending: false, nullsFirst: false }).order("id");
   }
   const { data, count } = await qy.range(start, start + LIST_PAGE - 1);
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const list = (data ?? []) as any[];
-  // エンゲージメント(person_engagement)をメールで突き合わせ
-  const emails = [...new Set(list.map((l) => (l.email ?? "").toLowerCase()).filter(Boolean))];
-  const engMap = new Map<string, { rank: string; score: number }>();
-  if (emails.length) {
-    const { data: eng } = await sb.from("person_engagement").select("email,rank,score").in("email", emails);
-    for (const e of eng ?? []) engMap.set(String(e.email).toLowerCase(), { rank: e.rank ?? "D", score: e.score ?? 0 });
-  }
-  const rows: WsListRow[] = list.map((l) => {
-    const e = engMap.get((l.email ?? "").toLowerCase());
-    return {
-      id: l.id, company: l.company_name ?? "", name: l.contact_name ?? "", rank: l.rank ?? "",
-      jobTitle: l.job_title ?? "", empSizeBucket: sizeBucket(l.employee_size ?? ""), event: l.raw_event ?? "",
-      score: l.priority_score ?? 0, disposition: l.disposition ?? "untouched", callOwner: l.call_owner ?? "",
-      phone: l.phone ?? "", mobilePhone: l.mobile_phone ?? "", converted: !!l.account_id || l.status === "converted",
-      engRank: e?.rank ?? "D", engScore: e?.score ?? 0, funnelStage: l.funnel_stage ?? "new",
-      createdAt: l.created_at ?? "", media: l.inquiry_media ?? "", tags: Array.isArray(l.inquiry_tags) ? l.inquiry_tags : [],
-    };
-  });
+  const rows: WsListRow[] = list.map((l) => ({
+    id: l.id, company: l.company_name ?? "", name: l.contact_name ?? "", rank: l.rank ?? "",
+    jobTitle: l.job_title ?? "", empSizeBucket: sizeBucket(l.employee_size ?? ""), event: l.raw_event ?? "",
+    score: l.priority_score ?? 0, disposition: l.disposition ?? "untouched", callOwner: l.call_owner ?? "",
+    phone: l.phone ?? "", mobilePhone: l.mobile_phone ?? "", converted: !!l.account_id || l.status === "converted",
+    engRank: l.eng_rank ?? "D", engScore: l.eng_score ?? 0, grade: l.priority_grade ?? "", funnelStage: l.funnel_stage ?? "new",
+    createdAt: l.created_at ?? "", media: l.inquiry_media ?? "", tags: Array.isArray(l.inquiry_tags) ? l.inquiry_tags : [],
+  }));
   /* eslint-enable @typescript-eslint/no-explicit-any */
   return { rows, total: count ?? 0, page, pageSize: LIST_PAGE };
 }

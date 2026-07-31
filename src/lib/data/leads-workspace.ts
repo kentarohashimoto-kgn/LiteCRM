@@ -17,7 +17,7 @@ export type AggLead = Pick<
 export interface WsListRow {
   id: string; company: string; name: string; rank: string; jobTitle: string; empSizeBucket: string;
   event: string; score: number; disposition: string; callOwner: string; phone: string; mobilePhone: string; converted: boolean;
-  engRank: string; engScore: number; funnelStage: string;
+  engRank: string; engScore: number; grade: string; funnelStage: string;
   // 「HP問合せ」タブ用: 受付日時・流入元メディア・集計タグ
   createdAt: string; media: string; tags: string[];
 }
@@ -46,6 +46,9 @@ export interface LeadsFilters {
   event?: string;        // 流入(raw_event)。複数選択はCSV("AIDX,ODEX")
   disposition?: string;
   rank?: string;         // ランク。複数選択はCSV("S,A")
+  engRank?: string;      // エンゲージランク(S〜D)。複数選択はCSV。Dは接点なし(集計行なし)も含む
+  grade?: string;        // 優先グレード(P1〜P5 = Fit×Engagementのステージ)。複数選択はCSV
+  engMin?: number;       // エンゲージメント合計点の下限(1/3/7/15/30)
   owner?: string;        // 社内担当者(取得担当 acquirer の表示名。表記ゆれは名寄せ済み)
   handler?: string;      // 対応者(FS接客者 handled_by。展示会で社長/責任者が接客した相手)
   from?: string;         // 獲得日 開始(YYYY-MM-DD)

@@ -13,6 +13,9 @@ export interface AccountPageRow {
   open_amount: number;
   opp_count: number;
   is_active: boolean;
+  // エンゲージメント(会社ロールアップ。0013/0193)。接点なしは null
+  engagement_score: number | null;
+  engagement_rank: string | null;
 }
 
 export interface AccountsPage {
@@ -29,4 +32,7 @@ export interface AccountPageFilter {
   industry?: string[] | string;
   owner?: string[] | string;
   active?: string;
+  // エンゲージメント: ランク(S〜D。Dは接点なしも含む)と合計点の下限
+  engRank?: string[] | string;
+  engMin?: string;
 }
