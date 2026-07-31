@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeAttribution } from "@/lib/seo/attribution";
 import { sendSystemMail } from "@/lib/mail-system";
-import { isRecaptchaEnabled, verifyRecaptcha } from "@/lib/recaptcha";
+import { isRecaptchaEnabled, verifyRecaptcha, recaptchaSecretCount } from "@/lib/recaptcha";
 import { buildClientAutoReply, buildInternalNotify, type InquiryFields } from "@/lib/inquiry-emails";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +33,21 @@ const CORS_HEADERS = {
 const DEFAULT_SOURCE = "HP問合せ";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * 失敗理由をDBに記録する（lead_intake_failures）。
+ * フォーム側には汎用メッセージしか出せず、Vercelログは運用者が読めないため、
+ * 「なぜ弾かれたか」をここに残して原因を確定できるようにする。個人情報は入れない。
+ * ログ失敗はレスポンスに影響させない。
+ */
+async function logIntakeFailure(stage: string, error: string, detail: Record<string, unknown>) {
+  try {
+    const admin = getSupabaseAdmin();
+    await admin.from("lead_intake_failures").insert({ stage, error, detail });
+  } catch {
+    /* 診断ログの失敗は無視 */
+  }
+}
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
@@ -65,6 +80,12 @@ export async function POST(req: Request) {
 
   const token = (req.headers.get("x-intake-token") ?? body.token ?? "").trim();
   if (!token || !secrets.includes(token)) {
+    await logIntakeFailure("auth", "unauthorized", {
+      hasToken: !!token,
+      tokenLength: token.length,
+      origin: req.headers.get("origin"),
+      secretsConfigured: secrets.length,
+    });
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401, headers: CORS_HEADERS });
   }
 
@@ -79,6 +100,12 @@ export async function POST(req: Request) {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
     const verdict = await verifyRecaptcha(captcha, ip);
     if (!verdict.ok) {
+      await logIntakeFailure("recaptcha", verdict.error, {
+        score: verdict.score ?? null,
+        captchaTokenLength: captcha.length,
+        origin: req.headers.get("origin"),
+        recaptchaSecretsConfigured: recaptchaSecretCount(),
+      });
       return NextResponse.json({ ok: false, error: "recaptcha failed" }, { status: 400, headers: CORS_HEADERS });
     }
   }
@@ -167,6 +194,7 @@ export async function POST(req: Request) {
     .select("id")
     .maybeSingle();
   if (error || !lead) {
+    await logIntakeFailure("insert", error?.message ?? "insert failed", { code: error?.code ?? null });
     return NextResponse.json({ ok: false, error: "insert failed" }, { status: 500, headers: CORS_HEADERS });
   }
   const leadId = lead.id as string;
