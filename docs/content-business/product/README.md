@@ -74,9 +74,9 @@
 | 第0章 この教材の使い方と到達点 | [00_orientation.md](00_orientation.md) | ✅ 初稿 |
 | 第1章 Day 0：作る前に決めたこと | [01_day0.md](01_day0.md) | ✅ 初稿 |
 | 第2章 初日：日曜の夜にMVP、未明に本番化 | [02_first-day.md](02_first-day.md) | ✅ 初稿 |
-| 第3章 第1〜2週：営業の「型」を埋め込む | 03_sales-method.md | ⬜ 未着手 |
-| 第4章 第3〜6週：多機能化と外部連携 | 04_expansion.md | ⬜ 未着手 |
-| 第5章 監査の日（2026-07-12） | 05_audit-day.md | ⬜ 未着手 |
+| 第3章 第1〜2週：営業の「型」を埋め込む | [03_sales-method.md](03_sales-method.md) | ✅ 初稿 |
+| 第4章 第3〜8週：多機能化と外部連携 | [04_expansion.md](04_expansion.md) | ✅ 初稿 |
+| 第5章 監査の日（2026-07-12） | [05_audit-day.md](05_audit-day.md) | ✅ 初稿 |
 | 第6章 ツール置き換えの記録 | 06_replacement.md | ⬜ 未着手 |
 | 第7章 リスクの全体像（安全編） | 07_risks.md | ⬜ 未着手 |
 | 第8章 安全に作る原則と習慣（安全編） | 08_safety-principles.md | ⬜ 未着手 |
