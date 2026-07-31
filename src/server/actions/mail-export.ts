@@ -8,6 +8,7 @@ import {
   MAIL_EXPORT_FIELD_MAP, MAIL_EXPORT_DEFAULT_COLUMNS, mailExportValue,
   jstRangeToUtc, type MailHistoryRow,
 } from "@/lib/mail-export";
+import { resolveMailRecipients } from "@/lib/data/mail-recipients";
 
 /**
  * メール送信履歴のCSV一括ダウンロード。
@@ -73,9 +74,6 @@ export async function exportEmailHistoryCsvAction(
 
   // --- 参照名の解決(いずれも id の集合に対する一括取得) ---
   const uniq = (xs: (string | null | undefined)[]) => [...new Set(xs.filter(Boolean) as string[])];
-  const leadIds = uniq(rows.map((r) => r.lead_id));
-  const contactIds = uniq(rows.map((r) => r.contact_id));
-  const accountIds = uniq(rows.map((r) => r.account_id));
   const tplIds = uniq(rows.map((r) => r.template_id));
   const batchIds = uniq(rows.map((r) => r.mail_batch_id));
   const userIds = uniq(rows.map((r) => r.logged_by));
@@ -88,30 +86,8 @@ export async function exportEmailHistoryCsvAction(
     return out;
   };
 
-  const leadMap = new Map<string, { company: string; contact: string; event: string }>();
-  await chunked(leadIds, async (s) => {
-    const { data } = await sb.from("leads").select("id, company_name, contact_name, raw_event").in("id", s);
-    for (const l of data ?? []) leadMap.set(l.id as string, {
-      company: (l.company_name as string) ?? "", contact: (l.contact_name as string) ?? "", event: (l.raw_event as string) ?? "",
-    });
-    return data ?? [];
-  });
-
-  const contactMap = new Map<string, { name: string; accountId: string | null }>();
-  await chunked(contactIds, async (s) => {
-    const { data } = await sb.from("contacts").select("id, name, account_id").in("id", s);
-    for (const c of data ?? []) contactMap.set(c.id as string, { name: (c.name as string) ?? "", accountId: (c.account_id as string) ?? null });
-    return data ?? [];
-  });
-
-  // 取引先担当者経由で判明する顧客IDも会社名の解決対象に含める
-  const allAccountIds = uniq([...accountIds, ...[...contactMap.values()].map((c) => c.accountId)]);
-  const accountMap = new Map<string, string>();
-  await chunked(allAccountIds, async (s) => {
-    const { data } = await sb.from("accounts").select("id, name").in("id", s);
-    for (const a of data ?? []) accountMap.set(a.id as string, (a.name as string) ?? "");
-    return data ?? [];
-  });
+  // 宛先(会社名・担当者名)はリード→取引先担当者→顧客の順に解決(送信履歴画面と共通)
+  const recipients = await resolveMailRecipients(rows);
 
   const tplMap = new Map<string, string>();
   await chunked(tplIds, async (s) => {
@@ -150,14 +126,12 @@ export async function exportEmailHistoryCsvAction(
   });
 
   const out: MailHistoryRow[] = rows.map((r) => {
-    const lead = r.lead_id ? leadMap.get(r.lead_id) : undefined;
-    const contact = r.contact_id ? contactMap.get(r.contact_id) : undefined;
-    const accId = (r.account_id as string | null) ?? contact?.accountId ?? null;
+    const rec = recipients.get(r.id as string);
     const email = String((r.to_addrs ?? [])[0] ?? "");
     return {
       sentAt: r.sent_at ?? null,
-      company: lead?.company || (accId ? accountMap.get(accId) ?? "" : ""),
-      contact: lead?.contact || contact?.name || "",
+      company: rec?.company ?? "",
+      contact: rec?.contact ?? "",
       email,
       subject: r.subject ?? null,
       status: r.status ?? "",
@@ -171,7 +145,7 @@ export async function exportEmailHistoryCsvAction(
       senderName: r.logged_by ? userMap.get(r.logged_by) ?? "" : "",
       templateName: r.template_id ? tplMap.get(r.template_id) ?? "" : "",
       segmentTitle: r.mail_batch_id ? batchMap.get(r.mail_batch_id) ?? "" : "",
-      event: lead?.event ?? "",
+      event: rec?.event ?? "",
       unsubscribed: suppressed.has(email.toLowerCase()),
     };
   });

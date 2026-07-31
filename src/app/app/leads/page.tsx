@@ -21,7 +21,7 @@ import { LeadsWorkspace, type LeadsTab } from "@/components/leads/leads-workspac
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; owner?: string; handler?: string; from?: string; to?: string; page?: string; scored?: string; md?: string; sort?: string; dir?: string };
+  searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; er?: string; gr?: string; emin?: string; owner?: string; handler?: string; from?: string; to?: string; page?: string; scored?: string; md?: string; sort?: string; dir?: string };
 }) {
   const tab = (["list", "inquiries", "funnel", "queue", "company", "analysis", "download", "batches"].includes(searchParams.tab ?? "")
     ? searchParams.tab
@@ -39,12 +39,19 @@ export default async function LeadsPage({
   const SORTABLE = ["date", "media", "detail", "tags", "disposition"];
   const inquirySort = SORTABLE.includes(searchParams.sort ?? "") ? (searchParams.sort as string) : "date";
   const inquiryDir: "asc" | "desc" = searchParams.dir === "asc" ? "asc" : "desc";
+  // 「リード一覧」タブの並べ替え(エンゲージ点・グレード)。既定は優先度降順(sort未指定)。
+  const LIST_SORTABLE = ["eng", "grade"];
+  const listSort = LIST_SORTABLE.includes(searchParams.sort ?? "") ? (searchParams.sort as string) : undefined;
+  const listDir: "asc" | "desc" = searchParams.dir === "asc" ? "asc" : "desc";
 
   const filters = {
     q: searchParams.q ?? "",
     event: tab === "inquiries" ? inquirySub : searchParams.ev ?? "",
     disposition: searchParams.disp ?? "",
     rank: searchParams.rank ?? "",
+    engRank: searchParams.er ?? "",
+    grade: searchParams.gr ?? "",
+    engMin: searchParams.emin ? Math.max(0, parseInt(searchParams.emin, 10) || 0) || undefined : undefined,
     owner: searchParams.owner ?? "",
     handler: searchParams.handler ?? "",
     from: searchParams.from ?? "",
@@ -52,8 +59,8 @@ export default async function LeadsPage({
     page: searchParams.page ? Math.max(1, parseInt(searchParams.page, 10) || 1) : 1,
     sourceIdIn: tab === "inquiries" ? inquirySources.map((s) => s.id) : undefined,
     media: tab === "inquiries" ? inquiryMediaSel : undefined,
-    sort: tab === "inquiries" ? inquirySort : undefined,
-    dir: tab === "inquiries" ? inquiryDir : undefined,
+    sort: tab === "inquiries" ? inquirySort : tab === "list" ? listSort : undefined,
+    dir: tab === "inquiries" ? inquiryDir : tab === "list" && listSort ? listDir : undefined,
   };
 
   // アクティブなタブに必要なデータだけ取得する(全件ロードを避ける)。

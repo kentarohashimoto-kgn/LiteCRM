@@ -7,7 +7,7 @@ import Link from "next/link";
 export interface TimelineEvent {
   id: string;
   at: string; // ISO日時 or YYYY-MM-DD
-  kind: "activity" | "meeting" | "task" | "stage" | "comment" | "milestone";
+  kind: "activity" | "meeting" | "task" | "stage" | "comment" | "milestone" | "mail" | "reaction";
   label: string; // pill表示(例: 商談 / 電話 / タスク / ステージ)
   title: string;
   body?: string | null;
@@ -22,6 +22,8 @@ const KIND_STYLE: Record<TimelineEvent["kind"], { pill: string; dot: string }> =
   stage: { pill: "bg-purple-50 text-purple-600", dot: "bg-purple-400" },
   comment: { pill: "bg-rose-50 text-rose-600", dot: "bg-rose-400" },
   milestone: { pill: "bg-emerald-50 text-emerald-600", dot: "bg-emerald-400" },
+  mail: { pill: "bg-sky-50 text-sky-700", dot: "bg-sky-400" },        // メール送受信
+  reaction: { pill: "bg-orange-50 text-orange-600", dot: "bg-orange-400" }, // 開封・クリック等の反応
 };
 
 function fmt(at: string): string {
