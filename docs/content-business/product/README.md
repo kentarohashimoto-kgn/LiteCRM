@@ -77,9 +77,9 @@
 | 第3章 第1〜2週：営業の「型」を埋め込む | [03_sales-method.md](03_sales-method.md) | ✅ 初稿 |
 | 第4章 第3〜8週：多機能化と外部連携 | [04_expansion.md](04_expansion.md) | ✅ 初稿 |
 | 第5章 監査の日（2026-07-12） | [05_audit-day.md](05_audit-day.md) | ✅ 初稿 |
-| 第6章 ツール置き換えの記録 | 06_replacement.md | ⬜ 未着手 |
-| 第7章 リスクの全体像（安全編） | 07_risks.md | ⬜ 未着手 |
-| 第8章 安全に作る原則と習慣（安全編） | 08_safety-principles.md | ⬜ 未着手 |
-| 第9章 本番化ゲート（安全編） | 09_production-gate.md | ⬜ 未着手 |
+| 第6章 ツール置き換えの記録 | [06_replacement.md](06_replacement.md) | ✅ 初稿 |
+| 第7章 リスクの全体像（安全編） | [07_risks.md](07_risks.md) | ✅ 初稿 |
+| 第8章 安全に作る原則と習慣（安全編） | [08_safety-principles.md](08_safety-principles.md) | ✅ 初稿 |
+| 第9章 本番化ゲート（安全編） | [09_production-gate.md](09_production-gate.md) | ✅ 初稿 |
 | 第11章〜 再現編 | 11_setup.md 〜 | ⬜ 未着手 |
 | 付録A〜D 資産編 | appendix-a〜d.md | ⬜ 未着手 |
