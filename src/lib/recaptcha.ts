@@ -29,6 +29,11 @@ export function isRecaptchaEnabled(): boolean {
   return recaptchaSecrets().length > 0;
 }
 
+/** 設定済みシークレット数。失敗ログの診断用（SECRET_2が本番に入っているかの確認）。 */
+export function recaptchaSecretCount(): number {
+  return recaptchaSecrets().length;
+}
+
 export type RecaptchaResult =
   | { ok: true; score?: number }
   | { ok: false; error: string; score?: number };
