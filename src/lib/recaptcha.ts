@@ -12,9 +12,21 @@ import "server-only";
 
 const VERIFY_URL = "https://www.google.com/recaptcha/api/siteverify";
 
-/** RECAPTCHA_SECRET が設定されていれば有効。 */
+/**
+ * 検証に使うシークレット一覧。
+ * サイト(キーペア)ごとにシークレットが異なるため、複数サイトのフォームが
+ * 同じエンドポイントに投げる構成では複数シークレットを順に試す。
+ * 例: キャリプラ=旧v2キー(RECAPTCHA_SECRET) / カトルセHP=新v3キー(RECAPTCHA_SECRET_2)
+ */
+function recaptchaSecrets(): string[] {
+  return [process.env.RECAPTCHA_SECRET, process.env.RECAPTCHA_SECRET_2]
+    .map((s) => (s ?? "").trim())
+    .filter(Boolean);
+}
+
+/** シークレットが1つでも設定されていれば有効。 */
 export function isRecaptchaEnabled(): boolean {
-  return !!process.env.RECAPTCHA_SECRET;
+  return recaptchaSecrets().length > 0;
 }
 
 export type RecaptchaResult =
@@ -27,36 +39,43 @@ export type RecaptchaResult =
  * @param remoteip 任意。クライアントIP(あれば精度向上)
  */
 export async function verifyRecaptcha(token: string, remoteip?: string | null): Promise<RecaptchaResult> {
-  const secret = process.env.RECAPTCHA_SECRET;
-  if (!secret) return { ok: true }; // 未設定なら検証しない(無効)
+  const secrets = recaptchaSecrets();
+  if (secrets.length === 0) return { ok: true }; // 未設定なら検証しない(無効)
   if (!token) return { ok: false, error: "missing token" };
 
   // v3 のスコア閾値(既定 0.5)。v2 では score が無いので判定に使われない。
   const minScore = Number(process.env.RECAPTCHA_MIN_SCORE ?? "0.5");
 
-  try {
-    const params = new URLSearchParams({ secret, response: token });
-    if (remoteip) params.set("remoteip", remoteip);
-    const res = await fetch(VERIFY_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString(),
-    });
-    const data = (await res.json()) as {
-      success?: boolean;
-      score?: number;
-      action?: string;
-      "error-codes"?: string[];
-    };
-    if (!data.success) {
-      return { ok: false, error: (data["error-codes"] ?? ["verification failed"]).join(","), score: data.score };
+  // トークンはキーペア固有。どのサイトのフォームか区別せず受けるため、
+  // 登録済みシークレットを順に試し、最初に success したもので判定する。
+  let last: RecaptchaResult = { ok: false, error: "verification failed" };
+  for (const secret of secrets) {
+    try {
+      const params = new URLSearchParams({ secret, response: token });
+      if (remoteip) params.set("remoteip", remoteip);
+      const res = await fetch(VERIFY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+      });
+      const data = (await res.json()) as {
+        success?: boolean;
+        score?: number;
+        action?: string;
+        "error-codes"?: string[];
+      };
+      if (!data.success) {
+        last = { ok: false, error: (data["error-codes"] ?? ["verification failed"]).join(","), score: data.score };
+        continue; // 別サイトのキーの可能性があるので次のシークレットを試す
+      }
+      // v3: スコアが返る場合は閾値で足切り
+      if (typeof data.score === "number" && data.score < (Number.isFinite(minScore) ? minScore : 0.5)) {
+        return { ok: false, error: "low score", score: data.score };
+      }
+      return { ok: true, score: data.score };
+    } catch (e) {
+      last = { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
-    // v3: スコアが返る場合は閾値で足切り
-    if (typeof data.score === "number" && data.score < (Number.isFinite(minScore) ? minScore : 0.5)) {
-      return { ok: false, error: "low score", score: data.score };
-    }
-    return { ok: true, score: data.score };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+  return last;
 }
