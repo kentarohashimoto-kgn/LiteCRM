@@ -126,6 +126,34 @@ python -m unittest discover -s tests -t .
 
 ---
 
+## 振込後の消込
+
+**freee API に「口座明細と未決済取引を紐づける」エンドポイントはない。**
+`/api/1/wallet_txns` は GET / POST / DELETE だけで、既存の明細に取引を当てる操作は
+提供されていない。`POST /api/1/deals/{id}/payments` は取引を決済済みにするが、
+明細は消込待ちのまま残るため、**同じ支払いが口座に二重計上される**。
+
+したがって消込操作そのものは freee の画面で行う。スクリプトの役割は
+「どの取引をどの明細に当てるか」の一覧を作るところまで。
+
+```bash
+# freee API のレスポンスを work/ に保存してから
+#   work/deals_unsettled.json  GET /api/1/deals?type=expense&status=unsettled
+#   work/partners.json         GET /api/1/partners (offset を進めて全件)
+PYTHONPATH=. python -m scripts_freee.rebuild_reconcile_plan \
+    --due-date 2026-07-31 --deals-total 13182347 --txn-amount 13191419
+```
+
+合計が一致する組合せが複数あれば確定せず、候補を出して止まる。
+金額の一致は正しさの証明にならない(別の組合せでも帳尻は合う)ので、
+どれを外すかは人間が決めて `--exclude` で明示する。
+
+計画は `work/` に出るため実行環境と一緒に消えるが、口座番号を含まないので
+このスクリプトで freee から作り直せる。**`work/` の口座情報は作り直せない**
+(請求書原本からの抽出をやり直すことになる)。
+
+---
+
 ## 次フェーズ(未実装)
 
 freee は振込依頼人コード(委託者コード)の入力を要求するが、
