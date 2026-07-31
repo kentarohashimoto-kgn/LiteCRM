@@ -6,6 +6,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { MAIL_PROVIDERS, MAIL_PROVIDER_MAP } from "@/lib/email";
 import { saveMailAccountAction, testMailAccountAction, disconnectMailAccountAction } from "@/server/actions/mail-account";
 import type { MailAccountView } from "@/app/app/email/account/page";
+import { formatDateTimeJst } from "@/lib/utils";
 
 export function MailAccountForm({ account, disabled }: { account: MailAccountView | null; disabled?: boolean }) {
   const [provider, setProvider] = useState(account?.provider ?? "gws");
@@ -100,7 +101,7 @@ export function MailAccountForm({ account, disabled }: { account: MailAccountVie
           </div>
           {account?.inbound_enabled && (
             <p className="text-[11px] text-ink/50">
-              最終取得: {account.inbound_last_run_at ? new Date(account.inbound_last_run_at).toLocaleString("ja-JP") : "未実行"}
+              最終取得: {account.inbound_last_run_at ? formatDateTimeJst(account.inbound_last_run_at) : "未実行"}
               {account.inbound_last_error && <span className="text-rose-600"> ／ エラー: {account.inbound_last_error}</span>}
             </p>
           )}

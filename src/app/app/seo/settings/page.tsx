@@ -5,6 +5,7 @@ import { PageHeader, Section, EmptyState } from "@/components/ui/primitives";
 import { ActionNotice } from "@/components/ui/action-notice";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { getSeoCredentialInfo } from "@/lib/seo/google-sa";
+import { formatDateTimeJst } from "@/lib/utils";
 import {
   runSeoDiagnosticsAction,
   runSeoIngestNowAction,
@@ -262,7 +263,7 @@ export default async function SeoSettingsPage({
               {p.gsc_checked_at && (
                 <div className="rounded-lg border border-black/[0.06] bg-black/[0.02] p-3 text-sm space-y-2">
                   <p className="text-xs text-ink/50">
-                    最終診断: {new Date(p.gsc_checked_at).toLocaleString("ja-JP")}
+                    最終診断: {formatDateTimeJst(p.gsc_checked_at)}
                   </p>
                   {otherCandidates.length > 0 && ownCandidates.length === 0 && (
                     <p className="text-xs text-amber-700">

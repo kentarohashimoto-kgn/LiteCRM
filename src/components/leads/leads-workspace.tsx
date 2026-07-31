@@ -9,6 +9,7 @@ import { LEAD_DISPOSITIONS, LEAD_DISPOSITION_MAP } from "@/lib/constants";
 import { setLeadDispositionAction, setLeadCallOwnerAction, setLeadFunnelStageAction, setLeadHearingAction, deleteImportBatchAction, setAcquirerAliasAction, upsertLeadsBatchAction, recomputeEngagementAction } from "@/server/actions";
 import { parseDelimited, detectDelim, rowToRawInput, dedupLeads, LEAD_KINDS } from "@/lib/lead-import";
 import { FUNNEL_STAGES, FUNNEL_STAGE_MAP, FUNNEL_MAIN, nextFunnelStage, SQL_CRITERIA, NURTURE_CRITERIA } from "@/lib/lead-funnel";
+import { GRADE_DEFS, type PriorityGrade } from "@/lib/engagement";
 import { PromoteLeadButton } from "@/components/leads/promote-button";
 import { BulkMailPanel } from "@/components/leads/bulk-mail-panel";
 import { LeadSidePanel } from "@/components/leads/lead-side-panel";
@@ -46,6 +47,19 @@ const ENG_COLOR: Record<string, string> = {
 function EngBadge({ rank, score }: { rank: string; score: number }) {
   return <span className={cn("pill text-[10px] tabular-nums", ENG_COLOR[rank] ?? ENG_COLOR.D)} title={`エンゲージメント ${score}pt`}>{rank}</span>;
 }
+
+const GRADE_COLOR: Record<string, string> = {
+  P1: "bg-rose-100 text-rose-700", P2: "bg-amber-100 text-amber-700", P3: "bg-teal-light text-teal-deep",
+  P4: "bg-mist-soft text-ink/60", P5: "bg-mist-soft text-ink/40",
+};
+/** エンゲージメント合計点の下限フィルタ候補(ランク閾値に対応)。 */
+const ENG_MIN_OPTS = [
+  { id: "1", name: "1pt以上（反応あり）" },
+  { id: "3", name: "3pt以上（C相当）" },
+  { id: "7", name: "7pt以上（B相当）" },
+  { id: "15", name: "15pt以上（A相当）" },
+  { id: "30", name: "30pt以上（S相当）" },
+];
 
 export function LeadsWorkspace({
   tab,
@@ -136,24 +150,33 @@ function LeadList({ list, filters, events, acquirers = [], handlers = [], tabKey
     if (f.media) p.set("md", f.media);
     if (f.disposition) p.set("disp", f.disposition);
     if (f.rank) p.set("rank", f.rank);
+    if (f.engRank) p.set("er", f.engRank);
+    if (f.grade) p.set("gr", f.grade);
+    if (f.engMin) p.set("emin", String(f.engMin));
     if (f.owner) p.set("owner", f.owner);
     if (f.handler) p.set("handler", f.handler);
     if (f.from) p.set("from", f.from);
     if (f.to) p.set("to", f.to);
-    if (isInquiries && f.sort && f.sort !== "date") p.set("sort", f.sort);
-    if (isInquiries && f.dir === "asc") p.set("dir", "asc");
+    if (isInquiries) {
+      if (f.sort && f.sort !== "date") p.set("sort", f.sort);
+      if (f.dir === "asc") p.set("dir", "asc");
+    } else if (f.sort) {
+      // リード一覧タブ: エンゲージ点・グレードの並べ替え(未指定=優先度降順)
+      p.set("sort", f.sort);
+      if (f.dir === "asc") p.set("dir", "asc");
+    }
     if (f.page && f.page > 1) p.set("page", String(f.page));
     router.push(`/app/leads?${p.toString()}`);
   };
 
   const pageCount = Math.max(1, Math.ceil(list.total / list.pageSize));
 
-  // 並べ替え(HP問合せタブ)。同じ列を押すと昇順/降順トグル、別列は既定方向へ。
-  const sortKey = filters.sort ?? "date";
+  // 並べ替え。同じ列を押すと昇順/降順トグル、別列は既定方向へ(日時・エンゲージ点は降順始まり)。
+  const sortKey = filters.sort ?? (isInquiries ? "date" : "");
   const sortDir = filters.dir ?? "desc";
   const toggleSort = (key: string) => {
     if (sortKey === key) go({ sort: key, dir: sortDir === "asc" ? "desc" : "asc", page: 1 });
-    else go({ sort: key, dir: key === "date" ? "desc" : "asc", page: 1 });
+    else go({ sort: key, dir: key === "date" || key === "eng" ? "desc" : "asc", page: 1 });
   };
 
   return (
@@ -180,6 +203,9 @@ function LeadList({ list, filters, events, acquirers = [], handlers = [], tabKey
         )}
         <Sel value={filters.disposition ?? ""} onChange={(v) => go({ disposition: v, page: 1 })} ph="決着" opts={LEAD_DISPOSITIONS.map((d) => ({ id: d.key, name: d.label }))} />
         {!isInquiries && <MultiSel label="ランク" value={filters.rank ?? ""} onChange={(v) => go({ rank: v, page: 1 })} opts={["S", "A", "B", "C", "D"].map((x) => ({ id: x, name: x }))} width="w-40" />}
+        {!isInquiries && <MultiSel label="エンゲージ" value={filters.engRank ?? ""} onChange={(v) => go({ engRank: v, page: 1 })} opts={["S", "A", "B", "C", "D"].map((x) => ({ id: x, name: x === "D" ? "D（反応なし含む）" : x }))} width="w-48" />}
+        {!isInquiries && <MultiSel label="グレード" value={filters.grade ?? ""} onChange={(v) => go({ grade: v, page: 1 })} opts={(["P1", "P2", "P3", "P4", "P5"] as PriorityGrade[]).map((g) => ({ id: g, name: GRADE_DEFS[g].label }))} width="w-48" />}
+        {!isInquiries && <Sel value={filters.engMin ? String(filters.engMin) : ""} onChange={(v) => go({ engMin: v ? parseInt(v, 10) : undefined, page: 1 })} ph="反応スコア" opts={ENG_MIN_OPTS} />}
         {!isInquiries && acquirers.length > 0 && (
           <Sel
             value={filters.owner ?? ""}
@@ -199,7 +225,7 @@ function LeadList({ list, filters, events, acquirers = [], handlers = [], tabKey
         {!isInquiries && <DateRange from={filters.from ?? ""} to={filters.to ?? ""} onChange={(from, to) => go({ from, to, page: 1 })} />}
         {!isInquiries && (
           <BulkMailPanel
-            filters={{ q: filters.q, event: filters.event, disposition: filters.disposition, rank: filters.rank, owner: filters.owner, handler: filters.handler, from: filters.from, to: filters.to }}
+            filters={{ q: filters.q, event: filters.event, disposition: filters.disposition, rank: filters.rank, engRank: filters.engRank, grade: filters.grade, engMin: filters.engMin, owner: filters.owner, handler: filters.handler, from: filters.from, to: filters.to }}
             selectedIds={[...selected]}
           />
         )}
@@ -269,7 +295,8 @@ function LeadList({ list, filters, events, acquirers = [], handlers = [], tabKey
               <th className="th">役職 / 規模</th>
               <th className="th">流入</th>
               <th className="th">ファネル</th>
-              <th className="th text-center">エンゲージ</th>
+              <SortTh label="エンゲージ" col="eng" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortTh label="グレード" col="grade" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <th className="th text-right">優先度</th>
               <th className="th">決着</th>
               <th className="th">架電担当</th>
@@ -290,7 +317,19 @@ function LeadList({ list, filters, events, acquirers = [], handlers = [], tabKey
                 <td className="td text-xs text-ink/60">{r.jobTitle || "—"}<span className="block text-ink/40">{r.empSizeBucket}</span></td>
                 <td className="td text-xs">{evLabel(r.event)}</td>
                 <td className="td"><StageSelect id={r.id} value={r.funnelStage} /></td>
-                <td className="td text-center"><EngBadge rank={r.engRank} score={r.engScore} /></td>
+                <td className="td text-center">
+                  <EngBadge rank={r.engRank} score={r.engScore} />
+                  <span className="block text-[10px] text-ink/45 tabular-nums">{r.engScore}pt</span>
+                </td>
+                <td className="td text-center">
+                  {r.grade ? (
+                    <span className={cn("pill text-[10px] font-bold", GRADE_COLOR[r.grade] ?? "bg-mist-soft text-ink/50")} title={GRADE_DEFS[r.grade as PriorityGrade] ? `${GRADE_DEFS[r.grade as PriorityGrade].label}：${GRADE_DEFS[r.grade as PriorityGrade].action}` : r.grade}>
+                      {r.grade}
+                    </span>
+                  ) : (
+                    <span className="text-ink/30 text-xs">—</span>
+                  )}
+                </td>
                 <td className="td text-right tabular-nums font-semibold">{r.score}</td>
                 <td className="td">
                   <form action={setLeadDispositionAction}>
@@ -312,7 +351,7 @@ function LeadList({ list, filters, events, acquirers = [], handlers = [], tabKey
                 </td>
               </tr>
             ))}
-            {list.rows.length === 0 && <tr><td colSpan={11} className="td text-center text-ink/40 py-8">該当するリードがありません</td></tr>}
+            {list.rows.length === 0 && <tr><td colSpan={12} className="td text-center text-ink/40 py-8">該当するリードがありません</td></tr>}
           </tbody>
         </table>
         )}
