@@ -1,0 +1,366 @@
+<title>自社専用CRMは、自分で作れる。― 安全なバイブコーディング実践大全 CRM/SFA編</title>
+<style>
+  :root{
+    --teal:#008C8C; --teal-deep:#006B6B; --teal-tint:#E3F0EF;
+    --orange:#F59A2A; --orange-deep:#D97F0E;
+    --ink:#16302E; --ink-2:#4A605D; --paper:#FFFFFF; --paper-2:#F4F7F6;
+    --line:#D8E2E0; --ok:#0E7A4A; --ng:#B0483B;
+    --shadow:0 2px 14px rgba(22,48,46,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --teal:#2BB3AE; --teal-deep:#59C6C0; --teal-tint:#12302E;
+      --orange:#F5A94C; --orange-deep:#F5A94C;
+      --ink:#E6F0EE; --ink-2:#9DB4B0; --paper:#0F1D1C; --paper-2:#152625;
+      --line:#27403D; --ok:#4DBB8A; --ng:#E08877;
+      --shadow:0 2px 14px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --teal:#2BB3AE; --teal-deep:#59C6C0; --teal-tint:#12302E;
+    --orange:#F5A94C; --orange-deep:#F5A94C;
+    --ink:#E6F0EE; --ink-2:#9DB4B0; --paper:#0F1D1C; --paper-2:#152625;
+    --line:#27403D; --ok:#4DBB8A; --ng:#E08877;
+    --shadow:0 2px 14px rgba(0,0,0,.35);
+  }
+  :root[data-theme="light"]{
+    --teal:#008C8C; --teal-deep:#006B6B; --teal-tint:#E3F0EF;
+    --orange:#F59A2A; --orange-deep:#D97F0E;
+    --ink:#16302E; --ink-2:#4A605D; --paper:#FFFFFF; --paper-2:#F4F7F6;
+    --line:#D8E2E0; --ok:#0E7A4A; --ng:#B0483B;
+    --shadow:0 2px 14px rgba(22,48,46,.08);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic UI",Meiryo,sans-serif;
+    line-height:1.9; font-size:16px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1020px; margin:0 auto; padding:0 24px}
+  section{padding:72px 0}
+  .alt{background:var(--paper-2)}
+  .eyebrow{
+    display:inline-block; color:var(--teal); font-weight:700; font-size:.8rem;
+    letter-spacing:.18em; border-left:4px solid var(--teal); padding-left:10px; margin:0 0 14px;
+  }
+  h1,h2,h3{line-height:1.4; text-wrap:balance; margin:0 0 20px; font-weight:800}
+  h2{font-size:clamp(1.5rem,3.2vw,2.1rem); letter-spacing:.01em}
+  h3{font-size:1.1rem; color:var(--teal-deep)}
+  p{margin:0 0 1.2em; max-width:42em}
+  .lead{font-size:1.06rem}
+  strong{color:var(--teal-deep)}
+  .em-orange{color:var(--orange-deep); font-style:normal; font-weight:800}
+
+  /* 数字は大きく、単位は小さく（デザインガイド準拠） */
+  .stat{font-variant-numeric:tabular-nums; font-weight:800; line-height:1.1}
+  .stat .n{font-size:clamp(2.4rem,6vw,3.6rem); letter-spacing:-.02em}
+  .stat .u{font-size:.85rem; font-weight:700; color:var(--ink-2); margin-left:2px}
+  .stat .cap{display:block; font-size:.8rem; font-weight:600; color:var(--ink-2); margin-top:6px; letter-spacing:.04em}
+
+  /* Hero */
+  .hero{padding:88px 0 56px}
+  .hero h1{font-size:clamp(1.9rem,5vw,3.1rem); font-weight:900; letter-spacing:.005em}
+  .hero .sub{font-size:1.08rem; max-width:38em}
+  .cta{
+    display:inline-block; background:var(--orange); color:#20180A; text-decoration:none;
+    font-weight:800; font-size:1.05rem; padding:16px 34px; border-radius:6px;
+    box-shadow:var(--shadow); transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .cta:hover{transform:translateY(-2px)}
+  .cta:focus-visible{outline:3px solid var(--teal); outline-offset:3px}
+  .cta-note{font-size:.82rem; color:var(--ink-2); margin-top:10px}
+  .statrow{display:flex; flex-wrap:wrap; gap:36px 56px; margin:44px 0 0; padding:28px 0 0; border-top:1px solid var(--line)}
+
+  /* 初日タイムライン */
+  .timeline{margin:26px 0 8px; padding:0; list-style:none; position:relative}
+  .timeline::before{content:""; position:absolute; left:7px; top:8px; bottom:8px; width:2px; background:var(--teal)}
+  .timeline li{position:relative; padding:0 0 18px 32px}
+  .timeline li:last-child{padding-bottom:0}
+  .timeline li::before{content:""; position:absolute; left:0; top:9px; width:16px; height:16px; border-radius:50%;
+    background:var(--paper); border:4px solid var(--teal)}
+  .timeline li.hl::before{border-color:var(--orange)}
+  .timeline .t{font-variant-numeric:tabular-nums; font-weight:800; color:var(--teal-deep); margin-right:10px}
+  .timeline li.hl .t{color:var(--orange-deep)}
+
+  /* 汎用パーツ */
+  .grid{display:grid; gap:20px}
+  @media(min-width:760px){.grid.c2{grid-template-columns:1fr 1fr}.grid.c4{grid-template-columns:repeat(4,1fr)}}
+  .card{background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:22px 24px; box-shadow:var(--shadow)}
+  .alt .card{background:var(--paper)}
+  .card h3{margin-bottom:10px}
+  .card p{font-size:.94rem; margin:0}
+  ul.checks{list-style:none; padding:0; margin:0 0 1.2em; max-width:44em}
+  ul.checks li{padding:6px 0 6px 30px; position:relative}
+  ul.checks li::before{content:"✓"; position:absolute; left:4px; color:var(--teal); font-weight:800}
+  ul.crosses li::before{content:"✕"; color:var(--ng)}
+  table{border-collapse:collapse; width:100%; font-size:.94rem}
+  th,td{border:1px solid var(--line); padding:12px 14px; text-align:left; vertical-align:top}
+  th{background:var(--teal-tint); color:var(--ink); font-weight:700}
+  .tablewrap{overflow-x:auto; margin:20px 0}
+  td .big{font-weight:800; color:var(--orange-deep)}
+
+  /* スクリーンショット・プレースホルダ */
+  .shot{
+    border:2px dashed var(--teal); border-radius:8px; background:var(--teal-tint);
+    color:var(--teal-deep); font-weight:700; text-align:center; padding:52px 20px;
+    font-size:.9rem; letter-spacing:.06em; margin:26px 0;
+  }
+  .shot small{display:block; font-weight:500; letter-spacing:0; color:var(--ink-2); margin-top:6px}
+
+  /* リスクセクション */
+  .honest{border-top:4px solid var(--teal)}
+  .risk{border-left:4px solid var(--ng); padding:2px 0 2px 18px; margin:0 0 14px; font-size:.97rem}
+
+  /* Offer */
+  .price{font-variant-numeric:tabular-nums}
+  .price .n{font-size:clamp(2.6rem,7vw,4rem); font-weight:900; letter-spacing:-.02em}
+  .price .u{font-size:1rem; font-weight:700; color:var(--ink-2)}
+  .roadmap{display:flex; flex-wrap:wrap; gap:10px; margin:14px 0 0; padding:0; list-style:none}
+  .roadmap li{border:1px solid var(--line); border-radius:999px; padding:6px 16px; font-size:.85rem; font-weight:600; background:var(--paper)}
+  .roadmap li.now{background:var(--teal); color:#fff; border-color:var(--teal)}
+
+  /* FAQ */
+  details{border-bottom:1px solid var(--line); padding:14px 4px}
+  summary{cursor:pointer; font-weight:700; list-style-position:outside}
+  summary:focus-visible{outline:2px solid var(--teal); outline-offset:2px}
+  details p{margin:12px 0 4px; font-size:.95rem}
+
+  footer{padding:48px 0 64px; font-size:.82rem; color:var(--ink-2)}
+  @media (prefers-reduced-motion: reduce){ .cta{transition:none} .cta:hover{transform:none} }
+</style>
+
+<!-- ============ Hero ============ -->
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow">安全なバイブコーディング実践大全 CRM/SFA編</p>
+    <h1>そのCRM、<br>借りるのをやめて、作りませんか。</h1>
+    <p class="sub lead">
+      最後にコードを書いたのは、20年前。平日は商談と面談と会食で潰れる経営者が、
+      日曜の夜にAIと作り始めて、<strong>月曜の未明には本番稼働</strong>。
+      そこから8週間・526コミットで、商談管理・売上予測・週次レビュー・メール配信・
+      SEO分析まで備えた自社専用のCRM/SFAに育てました。
+    </p>
+    <p class="sub">これは、その<strong>全記録</strong>と、あなたの会社で<strong>安全に再現するための全手順</strong>です。</p>
+    <p style="margin-top:28px"><a class="cta" href="#offer">全記録を手に入れる ― ¥100,000<span style="font-size:.8rem">（税別）</span></a></p>
+    <p class="cta-note">今後の章追加・テンプレート追加は、すべて無償アップデートで受け取れます。</p>
+
+    <div class="shot">ショット01：ダッシュボード実画面（目標との差額が残っている状態）<small>screenshot-plan.md #01</small></div>
+
+    <div class="statrow">
+      <div class="stat"><span class="n">526</span><span class="u">コミット</span><span class="cap">8週間の改善記録</span></div>
+      <div class="stat"><span class="n">35</span><span class="u">超の機能領域</span><span class="cap">商談管理からSEO分析まで</span></div>
+      <div class="stat"><span class="n">一晩</span><span class="u">で本番稼働</span><span class="cap">日曜23:27 → 月曜2:33</span></div>
+      <div class="stat"><span class="n">月数千円</span><span class="u">規模</span><span class="cap">インフラ実費</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Problem ============ -->
+<section class="alt">
+  <div class="wrap">
+    <p class="eyebrow">PROBLEM</p>
+    <h2>心当たりはありませんか。</h2>
+    <ul class="checks crosses">
+      <li>営業管理は、Excelと担当者の記憶頼み。ヨミも次アクションも属人化している</li>
+      <li>CRMを導入したが、自社の営業フローに合わず、結局使われなくなった</li>
+      <li>SFA・タスク管理・マインドマップ・分析ツール…契約は増えるのに、データはバラバラ</li>
+      <li>システム会社の見積は300万円。仕様変更のたびに追加費用</li>
+      <li>「AIで作れるらしい」とは聞くが、情報漏えいやデータ消失が怖くて踏み出せない</li>
+    </ul>
+    <p>問題はツールでも予算でもありません。<strong>「業務システムは、買うか借りるものだ」という前提</strong>です。<br>
+    その前提が、いま崩れています。</p>
+  </div>
+</section>
+
+<!-- ============ Affinity ============ -->
+<section>
+  <div class="wrap">
+    <p class="eyebrow">STORY</p>
+    <h2>私にも、時間はありませんでした。</h2>
+    <p>株式会社カトルセ代表の橋本です。平日の日中は新規商談、研修の講師、開発チームのマネジメント、採用面談。夜は会食。土日は平日にたまった提案資料とオペレーション改善で潰れる。おそらく、あなたと同じ毎日です。</p>
+    <p>正直に書くと、20代の頃は私も開発をしていました。ただし、それから20年以上コードには触っていません。いまの技術は何ひとつ知らない状態から、その毎日を変える手段として、AIとの対話でシステムを作る手法（バイブコーディング）で自社専用のCRM/SFAを作ることにしました。使えるのは、週末の夜だけ。</p>
+
+    <h3>2026年6月7日・日曜日の夜（開発記録より）</h3>
+    <ul class="timeline">
+      <li><span class="t">日曜 23:27</span>最初のバージョン完成 ― 52ファイル・7,127行。商談・ヨミ・売上予測・週次レビューが動く</li>
+      <li class="hl"><span class="t">月曜 02:33</span>本番化 ― 実際のログイン認証と権限管理（RLS）を装備</li>
+      <li><span class="t">月曜 02:46</span>公開手順書を作成</li>
+      <li><span class="t">月曜 03:02</span>最初のセキュリティ警告を修正して、就寝</li>
+    </ul>
+    <p>その後8週間・526コミット。<strong>改善の4割は土日の記録</strong>、残りは平日の夜と早朝。まとまった時間は、最後まで取れないままでした。それでも、社員が毎日ログインして使う営業基盤になりました。</p>
+    <p>順風満帆だったわけではありません。AIに曖昧に頼んで壊れたこと、セキュリティ設定をやり直したこと、遠回りした設計。<strong>その失敗ごと、すべて記録に残っています。だから教材になります。</strong></p>
+  </div>
+</section>
+
+<!-- ============ ①多機能 ============ -->
+<section class="alt">
+  <div class="wrap">
+    <p class="eyebrow">FEATURES</p>
+    <h2>「自作CRM」と聞いて想像するものの、<br>たぶん10倍作れます。</h2>
+    <div class="grid c2">
+      <div class="card"><h3>営業の中核</h3><p>商談管理／ヨミ・確度管理／売上予測（今月・来月・四半期・12ヶ月）／週次レビュー会議画面／危険案件の自動検知（放置・フォロー漏れ）</p></div>
+      <div class="card"><h3>顧客接点</h3><p>リード管理／HP問い合わせフォームからの自動取り込み／一括メール配信（署名・差し込み・配信停止対応）／名刺管理／セミナー管理</p></div>
+      <div class="card"><h3>マーケティング</h3><p>Search Console実データと連動したSEO分析・記事プラン・順位表。検索から受注金額までを1本の線で追跡</p></div>
+      <div class="card"><h3>経営・管理</h3><p>タスク・プロジェクト管理／マインドマップ／案件管理／原価管理／営業担当別・商品別・流入経路別の成果分析</p></div>
+    </div>
+    <div class="shot">ショット02〜04：週次レビュー／売上予測／危険案件アラート<small>screenshot-plan.md #02-04</small></div>
+    <p>これだけ作って、ランニングコストは<strong>インフラ費・月数千円規模</strong>。<br>
+    機能追加のたびに届く「見積書」は、もうありません。<span class="em-orange">AIに頼むだけです。</span></p>
+  </div>
+</section>
+
+<!-- ============ ②連携 ============ -->
+<section>
+  <div class="wrap">
+    <p class="eyebrow">INTEGRATIONS</p>
+    <h2>いま使っているツールと、つながる。</h2>
+    <p>CRMが定着しない最大の理由は「仕事の流れの外」にあるからです。このシステムは、日々使うツールと直接つながる形で作りました（すべて実働中）。</p>
+    <ul class="checks">
+      <li><strong>Gmail</strong> ― CRMから顧客へメール送信・一括配信。送信履歴も商談に紐づく</li>
+      <li><strong>Googleカレンダー</strong> ― 予定と商談・タスクを突き合わせ、事前準備の漏れを検出</li>
+      <li><strong>Google Chat</strong> ― 重要な動きを普段のチャットに自動通知</li>
+      <li><strong>Google Search Console</strong> ― 集客データが商談・受注金額まで一気通貫でつながる</li>
+      <li><strong>自社ホームページ</strong> ― 問い合わせフォームからリードが自動でCRMに入る</li>
+    </ul>
+    <div class="shot">ショット10・11：SEOアトリビューション／メール作成画面<small>screenshot-plan.md #10-11</small></div>
+  </div>
+</section>
+
+<!-- ============ ③置き換え ============ -->
+<section class="alt">
+  <div class="wrap">
+    <p class="eyebrow">REPLACE</p>
+    <h2>バラバラに払っている月額、<br>合計するといくらですか。</h2>
+    <div class="tablewrap">
+      <table>
+        <tr><th>いま契約しているもの</th><th>このシステムでの置き換え</th></tr>
+        <tr><td>SFA/CRM（1人あたり月数千円〜）</td><td>商談管理・ヨミ・売上予測</td></tr>
+        <tr><td>Asana等のタスク・プロジェクト管理</td><td>タスク管理・プロジェクト管理（ガント・サブタスク・メンション）</td></tr>
+        <tr><td>マインドマップツール</td><td>マインドマップ（カレンダー・案件と自動連動）</td></tr>
+        <tr><td>案件・原価管理ツール</td><td>案件管理・原価管理（稼働報告→粗利がリアルタイム）</td></tr>
+        <tr><td>BI・営業分析ツール</td><td>担当別・商品別・流入経路別の分析</td></tr>
+      </table>
+    </div>
+    <div class="shot">ショット07〜09：タスクボード／マインドマップ／原価管理<small>screenshot-plan.md #07-09</small></div>
+    <p>置き換えの効果は月額だけではありません。<strong>データが1箇所に集まるから、「タスクと商談」「集客と受注」がつながって見える。</strong>バラバラのツールでは決して出ない分析が、標準で手に入ります。</p>
+  </div>
+</section>
+
+<!-- ============ ④リスク（正直セクション） ============ -->
+<section class="honest">
+  <div class="wrap">
+    <p class="eyebrow">HONESTLY</p>
+    <h2>正直に言います。<br>バイブコーディングにはリスクがあります。</h2>
+    <p><strong>「AIで簡単に作れる」とだけ言う教材を、信用しないでください。</strong>実際にやった人間として言います。落とし穴は実在します。</p>
+    <div class="risk">認証や権限の設定を誤れば、<strong>顧客情報の漏えい</strong>につながる</div>
+    <div class="risk">AIは頼み方を誤ると、<strong>動いていた機能を壊しながら</strong>修正する</div>
+    <div class="risk">バックアップなしの運用は、<strong>データ消失</strong>と隣り合わせ</div>
+    <div class="risk">「動いた」で満足すると、<strong>社員に使わせてはいけない品質</strong>のまま本番化してしまう</div>
+    <p style="margin-top:24px">本教材は、この危険を認知した上で、<strong>安全に作るための手順</strong>をセットで教えます。データベースレベルの権限制御（RLS）、本番化前のセキュリティチェックリスト、壊さないための開発習慣、バックアップと変更記録。実際に受けたセキュリティ監査の記録も、教材の題材として公開します。</p>
+    <p><span class="em-orange">「すごいものが作れる」と「安全に運用できる」の間には、壁があります。</span><br>その壁の越え方こそ、この教材の核です。</p>
+    <div class="shot">ショット13：セキュリティ監査報告書（現物・冒頭）<small>screenshot-plan.md #13</small></div>
+  </div>
+</section>
+
+<!-- ============ Solution ============ -->
+<section class="alt">
+  <div class="wrap">
+    <p class="eyebrow">PRODUCT</p>
+    <h2>『自社専用CRMは、自分で作れる。』<br><span style="font-size:.75em; font-weight:700">― 安全なバイブコーディング実践大全 CRM/SFA編 ―</span></h2>
+    <p>本商品はプログラミング講座ではありません。<strong>「AIに正しく作らせ、安全に運用する技術」を、実在するシステムの開発全記録から学ぶ</strong>教材です。</p>
+    <div class="grid c4">
+      <div class="card"><h3>1. 実録編</h3><p>初日の本番稼働から8週間・526コミット。何をどの順に作り、どこで判断を誤り、どう立て直したか。全6章</p></div>
+      <div class="card"><h3>2. 安全編</h3><p>リスクの全体像と、社員に使わせてよい水準まで持っていく安全対策の全手順。全3章＋事例集</p></div>
+      <div class="card"><h3>3. 再現編</h3><p>環境構築から要件定義・構築・連携・本番化・週次改善まで、完了条件つきの実行手順。全6章</p></div>
+      <div class="card"><h3>4. 資産編</h3><p>プロンプト実例26本／書き込み式テンプレート9様式／チェックリスト合本／週次レビュー運用キット</p></div>
+    </div>
+    <p style="margin-top:22px; font-size:.9rem; color:var(--ink-2)">本文16章＋付録4点・約300〜400ページ相当。全記述は実在する開発記録・設計書36本・監査報告書と突合できます。</p>
+  </div>
+</section>
+
+<!-- ============ Offer ============ -->
+<section id="offer">
+  <div class="wrap">
+    <p class="eyebrow">OFFER</p>
+    <h2>価格：<span class="price"><span class="n">¥100,000</span><span class="u">（税別）</span></span></h2>
+    <p>高いと感じたら、比べてください。</p>
+    <div class="tablewrap">
+      <table>
+        <tr><th>選択肢</th><th>費用</th><th>手に入るもの</th></tr>
+        <tr><td>受託開発</td><td>300万円〜</td><td>1回きりのシステム。改修は都度見積</td></tr>
+        <tr><td>大手SaaS</td><td>年間50万円〜</td><td>借り物。解約したら何も残らない</td></tr>
+        <tr><td>ツールを個別契約</td><td>月数万円が続く</td><td>バラバラのデータと二重入力</td></tr>
+        <tr><td><strong>本商品</strong></td><td><span class="big">10万円</span></td><td><strong>システム＋安全に作り続けられる能力＋営業の型</strong></td></tr>
+      </table>
+    </div>
+    <h3>買った後も、増え続けます</h3>
+    <p><strong>無償アップデート永続。</strong>本編は今後も章・テンプレート・リスク事例集を追加し続けます。追加のたびに定価は上がりますが、購入者は追加費用なし。「今入っているもの」と「今後入るもの」は、すべてこのページで開示します。</p>
+    <ul class="roadmap">
+      <li class="now">v1 本文16章＋付録4点（現在）</li>
+      <li>v1.1 リスク事例集の増補</li>
+      <li>v1.2 応用展開ガイド（業種別）</li>
+      <li>v2 動画解説版</li>
+      <li>シリーズ：経理・採用 業務システム編</li>
+    </ul>
+    <p style="margin-top:32px"><a class="cta" href="#buy">¥100,000で全記録を手に入れる</a></p>
+    <p class="cta-note">次回の章追加時に価格改定を予定しています。現価格での購入は改定前まで。</p>
+  </div>
+</section>
+
+<!-- ============ Narrowing ============ -->
+<section class="alt">
+  <div class="wrap">
+    <p class="eyebrow">FOR WHOM</p>
+    <h2>向いていない方には、おすすめしません。</h2>
+    <ul class="checks crosses">
+      <li>「1クリックで全部できる魔法」を探している方</li>
+      <li>リスク対策を「面倒な話」だと感じる方（安全の手順を飛ばす方には売れません）</li>
+      <li>自分の業務を言語化する気がない方（AIはあなたの代わりに要件を決められません）</li>
+    </ul>
+    <ul class="checks">
+      <li>経営者・営業責任者として、1〜2週間本気で取り組める方</li>
+      <li>CRMを入口に、社内のAI活用の勝ちパターンを作りたい方</li>
+    </ul>
+    <p>正直に言えば、途中でつまずくポイントもあります。<br><strong>だからこそ、つまずいた記録ごと渡します。</strong></p>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section>
+  <div class="wrap">
+    <p class="eyebrow">FAQ</p>
+    <h2>よくある質問</h2>
+    <details><summary>プログラミング経験がなくても大丈夫ですか？</summary>
+      <p>書き手は20年以上コードを書いていない経営者で、現在の技術は知らない状態から始めました。扱うのはコードを書く技術ではなく「AIに作らせ、確かめる技術」です。なお書き手には昔の開発経験と、自社の開発チームの仕事の手順という下地がありました。だからこそ本教材は、その手順自体をチェックリストとして同梱しています。下地がない方は、それを借りてください。</p></details>
+    <details><summary>忙しくて時間が取れません。それでも作れますか？</summary>
+      <p>書き手も平日は商談・研修・面談・会食で、開発は週末と深夜だけでした（改善526回の4割が土日の記録です）。本教材の手順は「まとまった時間が週末しかない人」を前提に、区切りよく中断・再開できる形で設計しています。</p></details>
+    <details><summary>セキュリティが不安です。素人が作って大丈夫なのですか？</summary>
+      <p>その不安は正しいです。だから本教材は「安全に作る手順」を核にしています。権限管理・チェックリスト・やってはいけないことを、実例つきで解説します。それでも大規模・ミッションクリティカルな領域は専門家の併用を推奨する、という線引きも明示しています。</p></details>
+    <details><summary>どのAIツールを使いますか？費用は？</summary>
+      <p>使用ツールと月額費用の実額を教材内で開示しています（インフラは月数千円規模から）。</p></details>
+    <details><summary>今使っているGmailやGoogleカレンダーと連携できますか？</summary>
+      <p>できます。本編で扱うシステム自体が、Gmail・Googleカレンダー・Google Chat・Search Console・HPフォームと連携して実働しており、その接続手順を解説します。</p></details>
+    <details><summary>自社の業種でも再現できますか？</summary>
+      <p>要件定義シートに自社の営業フローを書き込む形式のため、BtoB営業であれば業種を問わず適用できます。適用が難しいケースも教材内で明示しています。</p></details>
+    <details><summary>購入後のサポートはありますか？</summary>
+      <p>現バージョンは自習型教材です。伴走支援は上位プランとして準備中で、購入者に優先案内します。</p></details>
+  </div>
+</section>
+
+<!-- ============ Final CTA ============ -->
+<section class="alt" id="buy">
+  <div class="wrap" style="text-align:left">
+    <p class="eyebrow">LAST MESSAGE</p>
+    <h2>借り続けるか、作れる会社になるか。</h2>
+    <p class="lead">差がつくのは、機能ではなく<strong>「安全に作れる」という前例が社内にあるかどうか</strong>です。</p>
+    <p style="margin-top:26px"><a class="cta" href="#">¥100,000で全記録を手に入れる</a></p>
+    <p class="cta-note">決済導線は販売プラットフォーム確定後に接続（platform-comparison.md 参照）</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>販売者：株式会社カトルセ ／ 特定商取引法に基づく表記（※販売開始前に必置。所在地・連絡先・引き渡し時期・返品ポリシー）／ プライバシーポリシー</p>
+    <p>© CATORCE Inc. 掲載の数値はすべて実在する開発リポジトリの記録に基づく実測値です。</p>
+  </div>
+</footer>
