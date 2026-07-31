@@ -81,5 +81,11 @@
 | 第7章 リスクの全体像（安全編） | [07_risks.md](07_risks.md) | ✅ 初稿 |
 | 第8章 安全に作る原則と習慣（安全編） | [08_safety-principles.md](08_safety-principles.md) | ✅ 初稿 |
 | 第9章 本番化ゲート（安全編） | [09_production-gate.md](09_production-gate.md) | ✅ 初稿 |
-| 第11章〜 再現編 | 11_setup.md 〜 | ⬜ 未着手 |
+| 第11章 準備：環境構築と費用 | [11_setup.md](11_setup.md) | ✅ 初稿 |
+| 第12章 要件定義ワーク | [12_requirements.md](12_requirements.md) | ✅ 初稿 |
+| 第13章 コア機能を作る＋差し戻しパターン集 | [13_core-build.md](13_core-build.md) | ✅ 初稿 |
+| 第14章 外部ツールとつなぐ | [14_integrations.md](14_integrations.md) | ✅ 初稿 |
+| 第15章 本番化の実作業 | 15_go-live.md | ⬜ 未着手（第9章ゲートの実行編） |
+| 第16章 育てる：週次の改善サイクル | 16_weekly-cycle.md | ⬜ 未着手 |
+| 第17章 応用展開ガイド | ― | v1.2追加予定（初版は骨子のみ） |
 | 付録A〜D 資産編 | appendix-a〜d.md | ⬜ 未着手 |
