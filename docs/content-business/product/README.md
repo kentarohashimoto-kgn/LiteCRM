@@ -45,7 +45,7 @@
 | PR数 | 147本 | PR番号実績 |
 | DBマイグレーション | 198本 | supabase/migrations |
 | fix修正 | 72件 | git log --grep fix |
-| 最多日 | 2026-07-12 に65コミット（全体監査の日） | git log |
+| 最多日 | 2026-07-12 に64コミット（全体監査の日） | git log（JST） |
 | 監査内容 | security 56件・performance 329件を全件精査、HIGH4件即日修正 | docs/AUDIT_2026-07-12 |
 | 設計書 | docs/ 36本 + exec-plan 14本（GUARDRAILS/MASTER_PLAN/WO-00〜） | ls docs |
 | 機能領域 | src/app/app 配下 35超 | ls |
@@ -60,7 +60,7 @@
   **週末にまとまった時間を取って開発を開始**（コミット履歴の週末集中と整合）
 - **20代のときは自身も開発者**。ただし**20年以上コードを触っていない**
 - 開始にあたり、**普段自社の開発メンバーが使っている手順を下敷きに実施**
-  （PR運用・マイグレーション・レビュー等の规律の出所）
+  （PR運用・マイグレーション・レビュー等の規律の出所）
 
 > 執筆ルール：書き手を「プログラミング未経験」「非エンジニア」と書かない。
 > 正確には「20年以上コードを書いていない経営者」「現代の開発スタックは未知」。
@@ -89,7 +89,7 @@
 | 第16章 育てる：週次の改善サイクル | [16_weekly-cycle.md](16_weekly-cycle.md) | ✅ 初稿 |
 | 第10章 リスク事例集 | ― | v1.1増補予定（初版は第5・7章の実例が母体） |
 | 第17章 応用展開ガイド | ― | v1.2追加予定 |
-| 付録A プロンプト実例集（25本） | [appendix-a_prompts.md](appendix-a_prompts.md) | ✅ 初稿 |
+| 付録A プロンプト実例集（26本） | [appendix-a_prompts.md](appendix-a_prompts.md) | ✅ 初稿 |
 | 付録B 書き込み式テンプレート集（9様式） | [appendix-b_templates.md](appendix-b_templates.md) | ✅ 初稿 |
 | 付録C チェックリスト合本（Day0〜事故対応） | [appendix-c_checklists.md](appendix-c_checklists.md) | ✅ 初稿 |
 | 付録D 週次レビュー運用キット | [appendix-d_weekly-review-kit.md](appendix-d_weekly-review-kit.md) | ✅ 初稿 |
