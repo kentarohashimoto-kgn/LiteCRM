@@ -85,7 +85,14 @@
 | 第12章 要件定義ワーク | [12_requirements.md](12_requirements.md) | ✅ 初稿 |
 | 第13章 コア機能を作る＋差し戻しパターン集 | [13_core-build.md](13_core-build.md) | ✅ 初稿 |
 | 第14章 外部ツールとつなぐ | [14_integrations.md](14_integrations.md) | ✅ 初稿 |
-| 第15章 本番化の実作業 | 15_go-live.md | ⬜ 未着手（第9章ゲートの実行編） |
-| 第16章 育てる：週次の改善サイクル | 16_weekly-cycle.md | ⬜ 未着手 |
-| 第17章 応用展開ガイド | ― | v1.2追加予定（初版は骨子のみ） |
-| 付録A〜D 資産編 | appendix-a〜d.md | ⬜ 未着手 |
+| 第15章 本番化の実作業（本番化ウィーク） | [15_go-live.md](15_go-live.md) | ✅ 初稿 |
+| 第16章 育てる：週次の改善サイクル | [16_weekly-cycle.md](16_weekly-cycle.md) | ✅ 初稿 |
+| 第10章 リスク事例集 | ― | v1.1増補予定（初版は第5・7章の実例が母体） |
+| 第17章 応用展開ガイド | ― | v1.2追加予定 |
+| 付録A プロンプト実例集（25本） | [appendix-a_prompts.md](appendix-a_prompts.md) | ✅ 初稿 |
+| 付録B 書き込み式テンプレート集（9様式） | [appendix-b_templates.md](appendix-b_templates.md) | ✅ 初稿 |
+| 付録C チェックリスト合本（Day0〜事故対応） | [appendix-c_checklists.md](appendix-c_checklists.md) | ✅ 初稿 |
+| 付録D 週次レビュー運用キット | [appendix-d_weekly-review-kit.md](appendix-d_weekly-review-kit.md) | ✅ 初稿 |
+
+**→ 初版（v1）の原稿一式が揃いました。** 残タスク：【橋本追記】の回収と本文への織り込み、
+通し読みでの整合性チェック、スクリーンショット選定、PDF/Web化。
