@@ -23,6 +23,5 @@ claude/sales-automation-design-lv1ikt
 claude/seo-analysis-improvement-execution-u838gg
 claude/task-description-url-fields-m80jur
 claude/task-feature-asana-redesign-swpt21
-claude/branch-cleanup-workflow-remnant-placeholder
 chore/branch-cleanup-workflow
 chore/branch-cleanup-run
