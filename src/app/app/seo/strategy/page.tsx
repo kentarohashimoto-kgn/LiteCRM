@@ -4,6 +4,7 @@ import { requireCtx } from "@/lib/session";
 import { PageHeader, Section, EmptyState } from "@/components/ui/primitives";
 import { ActionNotice } from "@/components/ui/action-notice";
 import { listSeoSites, getSeoFunnel, getCrmRates } from "@/lib/data/seo";
+import { SiteSwitcher } from "@/components/seo/site-switcher";
 import { getStrategy, getClusterProgress, getIntentCoverage, getMilestones } from "@/lib/data/seo-strategy";
 import { buildFunnelTargets, findBottleneck, INTENT_LABELS } from "@/lib/seo/strategy";
 import { setMilestoneStatusAction } from "@/server/actions/seo";
@@ -106,23 +107,7 @@ export default async function SeoStrategyPage({
         errorMessages={{ forbidden: "この操作を行う権限がありません。" }}
       />
 
-      {active.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {active.map((s) => (
-            <Link
-              key={s.id}
-              href={`/app/seo/strategy?site=${s.id}`}
-              className={`rounded-full border px-3 py-1 text-xs ${
-                s.id === current.id
-                  ? "border-teal-500 bg-teal-50 text-teal-800"
-                  : "border-black/10 text-ink/60 hover:bg-black/[0.03]"
-              }`}
-            >
-              {s.name}
-            </Link>
-          ))}
-        </div>
-      )}
+      <SiteSwitcher sites={sites} currentId={current.id} basePath="/app/seo/strategy" />
 
       {/* A. 売上逆算ファネル — 戦略 §1.2 */}
       <Section title="売上逆算ファネル（目標に対して何が足りないか）" icon={<Target size={15} />}>

@@ -12,6 +12,7 @@ import {
   LAYER_LABEL,
 } from "@/lib/data/seo-keywords";
 import { startArticlePlanAction, savePlanUrlAction } from "@/server/actions/seo";
+import { SiteSwitcher } from "@/components/seo/site-switcher";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +85,8 @@ export default async function SeoPlansPage({
           </div>
         }
       />
+
+      <SiteSwitcher sites={sites} currentId={current.id} basePath="/app/seo/plans" />
 
       <ActionNotice
         saved={searchParams.saved}

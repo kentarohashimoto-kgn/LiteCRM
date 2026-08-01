@@ -10,6 +10,7 @@ import {
   Compass,
 } from "lucide-react";
 import { requireCtx } from "@/lib/session";
+import { SiteSwitcher } from "@/components/seo/site-switcher";
 import { PageHeader, Section, EmptyState } from "@/components/ui/primitives";
 import {
   listSeoSites,
@@ -127,24 +128,7 @@ export default async function SeoPage({ searchParams }: { searchParams: { site?:
         }
       />
 
-      {active.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {active.map((s) => (
-            <Link
-              key={s.id}
-              href={`/app/seo?site=${s.id}`}
-              className={`rounded-full border px-3 py-1 text-xs ${
-                s.id === current.id
-                  ? "border-teal-500 bg-teal-50 text-teal-800"
-                  : "border-black/10 text-ink/60 hover:bg-black/[0.03]"
-              }`}
-            >
-              {s.name}
-              <span className="ml-1 text-ink/40">{s.audience.toUpperCase()}</span>
-            </Link>
-          ))}
-        </div>
-      )}
+      <SiteSwitcher sites={sites} currentId={current.id} basePath="/app/seo" />
 
       {!connected && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
