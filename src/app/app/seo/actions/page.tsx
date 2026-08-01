@@ -9,6 +9,7 @@ import { CopyArea } from "@/components/marketing/copy-area";
 import { listSeoSites } from "@/lib/data/seo";
 import { ACTION_PRIORS } from "@/lib/seo/expected-value";
 import { recordActionPublishedAction, updateActionStatusAction } from "@/server/actions/seo";
+import { SiteSwitcher } from "@/components/seo/site-switcher";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +106,8 @@ export default async function SeoActionsPage({
           </div>
         }
       />
+
+      <SiteSwitcher sites={sites} currentId={current.id} basePath="/app/seo/actions" />
 
       <ActionNotice
         saved={searchParams.saved}

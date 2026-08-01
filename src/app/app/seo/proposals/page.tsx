@@ -8,6 +8,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { listSeoSites } from "@/lib/data/seo";
 import { ACTION_PRIORS } from "@/lib/seo/expected-value";
 import { reviewProposalAction } from "@/server/actions/seo";
+import { SiteSwitcher } from "@/components/seo/site-switcher";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,8 @@ export default async function SeoProposalsPage({
           </div>
         }
       />
+
+      <SiteSwitcher sites={sites} currentId={current.id} basePath="/app/seo/proposals" />
 
       <ActionNotice
         saved={searchParams.saved}

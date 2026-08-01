@@ -21,6 +21,7 @@ import {
   type KeywordWeekPoint,
 } from "@/lib/data/seo-keywords";
 import { createProposalFromKeywordAction } from "@/server/actions/seo";
+import { SiteSwitcher } from "@/components/seo/site-switcher";
 
 export const dynamic = "force-dynamic";
 
@@ -250,6 +251,8 @@ export default async function SeoKeywordsPage({
           </div>
         }
       />
+
+      <SiteSwitcher sites={sites} currentId={current.id} basePath="/app/seo/keywords" />
 
       <ActionNotice
         saved={searchParams.saved}
