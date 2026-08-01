@@ -1,0 +1,208 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEO集客 運用マニュアル｜CATORCE Sales OS</title>
+<style>
+:root{--ink:#1b2733;--mut:#5f6f7e;--line:#e4e9ef;--accent:#0f766e;--accent2:#0b5c55;--violet:#7c3aed;--amber:#b45309;--rose:#be123c;--bg:#f7f9fb}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;color:var(--ink);background:var(--bg);line-height:1.75}
+.wrap{max-width:1080px;margin:0 auto;background:#fff}
+header.hero{padding:44px 40px 32px;background:linear-gradient(135deg,#0f766e,#0b5c55);color:#fff}
+header.hero h1{margin:0;font-size:25px;letter-spacing:-.01em}
+header.hero .s{margin-top:10px;font-size:13.5px;opacity:.92;line-height:1.9}
+.pill{display:inline-block;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:3px 12px;font-size:12px;margin:2px 4px 2px 0}
+main{padding:8px 40px 72px}
+.toc{background:#fbfdfe;border:1px solid var(--line);border-radius:12px;padding:16px 22px;margin:26px 0}
+.toc h2{margin:0 0 8px;font-size:14px;color:var(--accent)}
+.toc ol{margin:0;padding-left:20px;font-size:13px;columns:2;column-gap:34px}
+.toc a{color:var(--ink);text-decoration:none}
+.toc a:hover{color:var(--accent);text-decoration:underline}
+h2.sec{font-size:19px;margin:46px 0 6px;padding-top:16px;border-top:3px solid var(--accent);color:var(--accent2)}
+h3{font-size:15px;margin:22px 0 8px}
+p{font-size:13.5px;margin:8px 0}
+.lead{font-size:14px;color:#2b3a47}
+.why{margin:12px 0;padding:12px 16px;border-left:4px solid var(--accent);background:#f0fbf9;border-radius:8px;font-size:13px}
+.why b{color:var(--accent2)}
+.tip{margin:12px 0;font-size:12.5px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 12px;color:#92400e}
+.warn{margin:12px 0;font-size:12.5px;background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:9px 12px;color:#9f1239}
+.fig{margin:18px 0;padding:18px 16px;border:1px solid var(--line);border-radius:12px;background:#fbfdfe}
+.fig .cap{font-size:11.5px;color:var(--mut);margin-top:12px;text-align:center}
+/* 横並びフロー(ボックス→ボックス) */
+.flow{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px}
+.fb{min-width:96px;text-align:center;border:1.5px solid var(--accent);border-radius:10px;padding:8px 10px;background:#fff;font-size:12.5px;line-height:1.5}
+.fb b{display:block;font-size:13px;color:var(--accent2)}
+.fb .n{display:block;font-size:15px;font-weight:700;color:var(--ink)}
+.fb .sub{display:block;font-size:10.5px;color:var(--mut)}
+.fb.goal{border-color:var(--amber);background:#fffbeb}
+.fb.goal b{color:var(--amber)}
+.fb.dim{border-style:dashed;border-color:#9aa7b4}
+.fa{font-size:17px;color:#9aa7b4;padding:0 2px;flex-shrink:0}
+/* 画面つながりマップ */
+.map{display:grid;grid-template-columns:1fr;gap:8px}
+.maprow{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px}
+.scrbox{border:1.5px solid var(--accent);border-radius:10px;background:#fff;padding:8px 12px;min-width:150px;text-align:center}
+.scrbox b{display:block;font-size:13px;color:var(--accent2)}
+.scrbox span{font-size:11px;color:var(--mut)}
+.scrbox.auto{border-color:var(--violet);background:#faf7ff}
+.scrbox.auto b{color:var(--violet)}
+.vline{text-align:center;color:#9aa7b4;font-size:16px;line-height:1}
+/* PDCA 2x2 */
+.pdca{display:grid;grid-template-columns:1fr 34px 1fr;grid-template-rows:auto 34px auto;gap:6px;max-width:640px;margin:0 auto}
+.pd{border:1.5px solid var(--accent);border-radius:12px;background:#fff;padding:12px 14px}
+.pd h4{margin:0 0 4px;font-size:13px;color:var(--accent2)}
+.pd h4 .tag{display:inline-block;background:var(--accent);color:#fff;border-radius:6px;font-size:11px;padding:1px 7px;margin-right:6px}
+.pd ul{margin:0;padding-left:16px;font-size:12px;color:#2b3a47}
+.pd li{margin:2px 0}
+.pdar{display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:20px;font-weight:700}
+/* 手順ステップ(縦) */
+.steps{counter-reset:st;margin:10px 0;padding:0;list-style:none}
+.steps li{position:relative;padding:8px 8px 8px 44px;margin:6px 0;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px}
+.steps li::before{counter-increment:st;content:counter(st);position:absolute;left:12px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.steps li b.scr{color:var(--accent2)}
+.steps li .who{display:inline-block;font-size:10.5px;border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:1px}
+.who.me{background:#e0f2f1;color:#0b5c55}.who.ai{background:#ede9fe;color:#6d28d9}.who.hp{background:#fef3c7;color:#92400e}
+table.t{width:100%;border-collapse:collapse;font-size:12.5px;margin:10px 0}
+table.t th{background:#f0f7f6;color:var(--accent2);text-align:left;padding:7px 10px;border:1px solid var(--line);font-size:12px}
+table.t td{padding:7px 10px;border:1px solid var(--line);vertical-align:top}
+table.t td b{color:var(--accent2)}
+.foot{padding:20px 40px 40px;font-size:12px;color:var(--mut);border-top:1px solid var(--line)}
+.foot a{color:var(--accent)}
+@media(max-width:760px){main{padding:8px 18px 60px}header.hero{padding:32px 20px 26px}.toc ol{columns:1}.pdca{grid-template-columns:1fr;grid-template-rows:none}.pdca .pdar{transform:rotate(90deg)}}
+@media print{body{background:#fff}.wrap{max-width:none}}
+</style></head><body><div class="wrap">
+<header class="hero">
+<h1>SEO集客 運用マニュアル</h1>
+<div class="s">検索からの問い合わせで売上をつくるための、<b>7つの画面のつなぎ方とPDCAの回し方</b>。<br>
+「何のためにやるのか」→「いつ何をするのか」の順で説明します。各画面の詳しい操作は<a href="/help/manual.html#s45" style="color:#fff;text-decoration:underline">操作マニュアル 45〜51</a>へ。</div>
+<div style="margin-top:12px"><span class="pill">対象: 代表・管理者</span><span class="pill">週の作業時間: 約15〜30分</span><span class="pill">2026-08-01版</span></div>
+</header>
+<main>
+
+<div class="toc"><h2>目次</h2><ol>
+<li><a href="#g">何のためにやるのか（ゴール）</a></li>
+<li><a href="#z">全体像 — 7画面のつながり</a></li>
+<li><a href="#r">運用リズム — いつ・何を・どれだけ</a></li>
+<li><a href="#p">週次PDCAの回し方</a></li>
+<li><a href="#c">ケース別フロー（4シナリオ）</a></li>
+<li><a href="#h">各画面の目的 早見表</a></li>
+<li><a href="#o">落とし穴 5つ</a></li>
+</ol></div>
+
+<h2 class="sec" id="g">1. 何のためにやるのか（ゴール）</h2>
+<p class="lead">このシステムの目的はひとつ。<b>「検索で見つけてもらい、問い合わせをもらい、月300万円の売上をつくる」</b>ことです。すべての画面・すべての作業はこの逆算に紐づいています。</p>
+<div class="fig">
+<div class="flow">
+<div class="fb goal"><b>売上目標</b><span class="n">月300万</span></div><div class="fa">←</div>
+<div class="fb"><b>受注</b><span class="n">1.7件</span><span class="sub">成約率48.5%</span></div><div class="fa">←</div>
+<div class="fb"><b>問い合わせ</b><span class="n">20件</span><span class="sub">CVR 2%</span></div><div class="fa">←</div>
+<div class="fb"><b>セッション</b><span class="n">1,000</span><span class="sub">CTR 3.8%</span></div><div class="fa">←</div>
+<div class="fb"><b>検索表示</b><span class="n">26,300</span><span class="sub">/月</span></div>
+</div>
+<div class="cap">図1｜逆算ファネル：売上から逆算すると「月26,300回、検索結果に表示される」が必要になる。数字は自社CRM実績から算出</div>
+</div>
+<div class="why"><b>なぜ逆算か:</b> 「アクセスを増やそう」では何をどれだけやればいいか分からない。売上から逆算すれば「今週は表示回数をあと◯◯増やす記事を書く」と<b>作業が数字で決まる</b>。現在地とのギャップは戦略ボードでいつでも見られる。</div>
+
+<h2 class="sec" id="z">2. 全体像 — 7画面のつながり</h2>
+<p class="lead">7つの画面は「作戦を立てる → 記事を作る → 順位を測る → 直す → 売上で確かめる」の一本道でつながっています。紫の画面は毎朝4時に<b>自動で動く</b>ので、人がやるのは緑の画面だけです。</p>
+<div class="fig">
+<div class="map">
+<div class="maprow"><div class="scrbox"><b>① 戦略ボード</b><span>作戦を立てる／狙いを決める</span></div><div class="fa">→</div><div class="scrbox"><b>② 記事プラン</b><span>どのページで何の語を取るか</span></div><div class="fa">→</div><div class="scrbox"><b>③ 記事を書く・直す</b><span>記事ネタ・ブログ／HP担当</span></div></div>
+<div class="vline">↓ 公開・リライトの結果をGoogleが評価（2〜4週）</div>
+<div class="maprow"><div class="scrbox auto"><b>⚙ 自動取込（毎朝4時）</b><span>Search Console / GA4 → CRM</span></div><div class="fa">→</div><div class="scrbox"><b>④ KW順位表</b><span>狙った語が何位か・週次で確認</span></div><div class="fa">→</div><div class="scrbox"><b>⑤ 改善提案</b><span>直す価値の高い順に提案</span></div></div>
+<div class="vline">↓ 承認したものだけ実行する</div>
+<div class="maprow"><div class="scrbox"><b>⑥ 施策実行</b><span>かんばんで進める→「反映しました」</span></div><div class="fa">→</div><div class="scrbox"><b>⑦ 集客サマリー</b><span>問い合わせ・売上で効果を確かめる</span></div><div class="fa">→</div><div class="scrbox dim"><b>①へ戻る</b><span>作戦を見直す</span></div></div>
+</div>
+<div class="cap">図2｜画面のつながり：①→⑦がひと回りのループ。④以降は自動取込データが燃料になる</div>
+</div>
+<div class="why"><b>なぜ複数画面に分かれているか:</b> 「作戦」「設計」「計測」「実行」「検証」は判断の種類が違うため。1画面に全部入れると、毎週やること（④⑤）と月1でやること（①）が混ざって迷子になる。<b>迷ったら図2の左上（①戦略ボード）から右下へ順にたどれば現在地が分かる</b>。</div>
+
+<h2 class="sec" id="r">3. 運用リズム — いつ・何を・どれだけ</h2>
+<p class="lead">毎日やることは<b>ありません</b>（取込は自動）。人の作業は週1回のチェックと、記事の執筆・リライトだけです。</p>
+<table class="t">
+<tr><th style="width:110px">頻度</th><th style="width:150px">使う画面</th><th>やること</th><th style="width:90px">目安時間</th></tr>
+<tr><td><b>毎朝4時</b></td><td>（自動）</td><td>Search Console / GA4からデータ取込 → 問題検知 → 提案作成。<b>人の作業なし</b></td><td>—</td></tr>
+<tr><td><b>週1回</b><br>（月曜推奨）</td><td>④ KW順位表</td><td>前週比で順位の動きを確認。「対策ページと不一致」バッジ（カニバリ兆候）と「拾い物」をチェック</td><td>10分</td></tr>
+<tr><td>〃</td><td>⑤ 改善提案 → ⑥ 施策実行</td><td>提案を期待値の大きい順に承認/却下。承認済み施策の進み具合を確認、HP反映済みなら「反映しました」</td><td>10分</td></tr>
+<tr><td><b>随時</b></td><td>② 記事プラン → 記事ネタ</td><td>難易度の低いプランから順に起票→執筆。公開したら対策URLを登録</td><td>記事による</td></tr>
+<tr><td><b>月1回</b></td><td>① 戦略ボード・⑦ 集客サマリー</td><td>逆算ファネルの現在地とボトルネックを確認。注力クラスタを見直す</td><td>15分</td></tr>
+</table>
+<div class="tip">💡 Search Consoleのデータは2〜3日遅れで届く仕様です。「昨日の数字」は存在しないので、日々の上下に一喜一憂せず<b>週次の前週比</b>で判断してください。</div>
+
+<h2 class="sec" id="p">4. 週次PDCAの回し方</h2>
+<p class="lead">週1回・15分のチェックをPDCAに当てはめると、使う画面がそのまま決まります。</p>
+<div class="fig">
+<div class="pdca">
+<div class="pd"><h4><span class="tag">P</span>狙いを決める</h4><ul><li>戦略ボード：注力クラスタ・フェーズ</li><li>記事プラン：次に書く記事（難易度低い順）</li></ul></div>
+<div class="pdar">→</div>
+<div class="pd"><h4><span class="tag">D</span>作る・直す</h4><ul><li>記事ネタで執筆 → 公開 → 対策URL登録</li><li>施策実行：指示書どおりHP修正 → 「反映しました」</li></ul></div>
+<div class="pdar" style="grid-column:1;grid-row:2">↑</div>
+<div></div>
+<div class="pdar" style="grid-column:3;grid-row:2">↓</div>
+<div class="pd"><h4><span class="tag">A</span>次の一手を選ぶ</h4><ul><li>改善提案：期待値の大きい順に承認</li><li>効かなかった施策は別の打ち手へ</li></ul></div>
+<div class="pdar">←</div>
+<div class="pd"><h4><span class="tag">C</span>測る</h4><ul><li>KW順位表：前週比・ギャップの変化</li><li>集客サマリー：問い合わせ・売上への波及</li></ul></div>
+</div>
+<div class="cap">図3｜週次PDCA：C（測る）とA（選ぶ）は毎週15分。P・Dは記事執筆のペースに合わせて</div>
+</div>
+<div class="why"><b>なぜ「提案の承認」がA（改善）なのか:</b> 何を直すべきかはシステムが毎朝データから検知して期待値順に並べてくれる。人の役割は<b>「やる/やらないの判断」に絞る</b>設計。全部自分で分析する必要はない。</div>
+
+<h2 class="sec" id="c">5. ケース別フロー（4シナリオ）</h2>
+
+<h3>ケースA｜新しい記事を書いて上位を取る</h3>
+<ol class="steps">
+<li><b class="scr">記事プラン</b>で難易度の低い未着手プランを選ぶ<span class="who me">自分</span> — 検索数の大きい語からではなく<b>勝てる語から</b></li>
+<li>「記事ネタに起票」→ 記事ネタ・ブログで執筆<span class="who me">自分</span> — メインKW1語＋サブKW数語を1記事で狙う</li>
+<li>HPに公開<span class="who hp">HP担当</span> → 記事プランに<b>対策URLを登録</b><span class="who me">自分</span></li>
+<li>2〜4週待つ（Googleの評価には時間がかかる）<span class="who ai">自動</span></li>
+<li><b class="scr">KW順位表</b>で順位が付いたか確認<span class="who me">自分</span> — 「未対応」→「21位以下」に変われば第一関門クリア</li>
+</ol>
+
+<h3>ケースB｜改善提案が来た（毎週の定常運用）</h3>
+<ol class="steps">
+<li><b class="scr">改善提案</b>を開き、期待値の大きい順に内容を読む<span class="who me">自分</span></li>
+<li>納得できるものを「承認」→ 施策カードが自動作成<span class="who me">自分</span> — 迷う/情報不足なら「様子見」（7日後に再判断）</li>
+<li><b class="scr">施策実行</b>の指示書をHP担当に共有<span class="who hp">HP担当</span></li>
+<li>HP修正が完了したら<b>「反映しました」を押す</b><span class="who me">自分</span> — ここから効果検証が始まる</li>
+<li>検証予定日以降、順位・クリックの変化で当たり外れを確認<span class="who ai">自動</span></li>
+</ol>
+
+<h3>ケースC｜順位が落ちた・カニバリを見つけた</h3>
+<ol class="steps">
+<li><b class="scr">KW順位表</b>の前週比▼や「対策ページと不一致」バッジに気づく<span class="who me">自分</span></li>
+<li>対策ページと「実際に表示されているページ」を<b>両方クリックで開いて</b>見比べる<span class="who me">自分</span></li>
+<li>翌朝の自動検知で改善提案が出るのを待つ／急ぐ場合はSEO設定の「今すぐ取込」<span class="who ai">自動</span></li>
+<li>提案を承認してケースBの流れへ<span class="who me">自分</span></li>
+</ol>
+
+<h3>ケースD｜問い合わせが入った（成果の確認）</h3>
+<ol class="steps">
+<li>HPフォームからの問い合わせが<b>リード</b>に自動登録（着地ページ・検索流入元つき）<span class="who ai">自動</span></li>
+<li><b class="scr">集客サマリー</b>の「ページ別売上貢献」で、どの記事が問い合わせ・売上を生んだかを確認<span class="who me">自分</span></li>
+<li>売上を生んだ記事のパターン（テーマ・型）を<b class="scr">記事プラン</b>の次の執筆に反映<span class="who me">自分</span></li>
+</ol>
+
+<h2 class="sec" id="h">6. 各画面の目的 早見表</h2>
+<table class="t">
+<tr><th style="width:130px">画面</th><th>ひとことで言うと</th><th style="width:120px">開くタイミング</th><th>ここから次に行く画面</th></tr>
+<tr><td><b>① 戦略ボード</b></td><td>売上からの逆算と作戦。<b>「なぜやるか」の原点</b></td><td>月1</td><td>記事プラン</td></tr>
+<tr><td><b>② 記事プラン</b></td><td>どのページでどの語を取るかの設計図（1検索意図=1ページ）</td><td>執筆のたび</td><td>記事ネタ・ブログ（起票）</td></tr>
+<tr><td><b>④ KW順位表</b></td><td>狙った語が何位か。<b>SEOの成績表</b></td><td>週1</td><td>改善提案／実ページ（リンク）</td></tr>
+<tr><td><b>⑤ 改善提案</b></td><td>直す価値の高い順の提案。<b>承認/却下だけすればいい</b></td><td>週1</td><td>施策実行（承認で自動作成）</td></tr>
+<tr><td><b>⑥ 施策実行</b></td><td>承認済み施策のかんばん。HP反映→「反映しました」</td><td>週1</td><td>集客サマリー（効果確認）</td></tr>
+<tr><td><b>⑦ 集客サマリー</b></td><td>表示→問い合わせ→売上のファネル。<b>成果はここで見る</b></td><td>月1〜週1</td><td>戦略ボード（作戦見直し）</td></tr>
+<tr><td><b>SEO設定</b></td><td>Google接続と取込。エラー時の診断もここ</td><td>問題時のみ</td><td>—</td></tr>
+</table>
+
+<h2 class="sec" id="o">7. 落とし穴 5つ</h2>
+<div class="warn"><b>①「反映しました」の押し忘れ。</b>押さないと効果検証が始まらず、施策が効いたか永久に分からない。HP修正が済んだら必ずその日に押す。</div>
+<div class="warn"><b>② 1語1記事にしてしまう。</b>似た語ごとに記事を量産するとカニバリ（共食い）が起きてサイト全体が沈む。必ず記事プランの設計（1検索意図=1ページ）に従う。</div>
+<div class="warn"><b>③ 検索数の大きい語から書く。</b>「生成AI研修」のような大物は大手が占有していて、今のドメイン力では届かない。難易度の低い語で実績を積んでから挑む。</div>
+<div class="warn"><b>④ 日々の順位変動に反応する。</b>データは2〜3日遅れ・順位は日々揺れる。判断は週次の前週比で。毎日見ても得るものは少ない。</div>
+<div class="warn"><b>⑤ 記事を公開したのに対策URLを入れない。</b>URL未登録だと順位計測とカニバリ検出が働かず、書きっぱなしになる。公開とURL登録はセット。</div>
+
+</main>
+<div class="foot">
+各画面の詳しい操作説明: <a href="/help/manual.html#s45">操作マニュアル 45〜51</a> ／ SEO用語: <a href="/help/manual.html">操作マニュアル 付録C</a><br>
+設計の背景: docs/SEO_STRATEGY_V2_KEYWORD_DRIVEN_2026-07.md・docs/SEO_KEYWORD_PAGE_MAP_2026-07.md ／ 2026-08-01作成
+</div>
+</div></body></html>
