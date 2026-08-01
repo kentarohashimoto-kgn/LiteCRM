@@ -110,7 +110,7 @@ table.t td b{color:var(--accent2)}
 <div class="vline">↓ 公開・リライトの結果をGoogleが評価（2〜4週）</div>
 <div class="maprow"><div class="scrbox auto"><b>⚙ 自動取込（毎朝4時）</b><span>Search Console / GA4 → CRM</span></div><div class="fa">→</div><div class="scrbox"><b>④ KW順位表</b><span>狙った語が何位か・週次で確認</span></div><div class="fa">→</div><div class="scrbox"><b>⑤ 改善提案</b><span>直す価値の高い順に提案</span></div></div>
 <div class="vline">↓ 承認したものだけ実行する</div>
-<div class="maprow"><div class="scrbox"><b>⑥ 施策実行</b><span>かんばんで進める→「反映しました」</span></div><div class="fa">→</div><div class="scrbox"><b>⑦ 集客サマリー</b><span>問い合わせ・売上で効果を確かめる</span></div><div class="fa">→</div><div class="scrbox dim"><b>①へ戻る</b><span>作戦を見直す</span></div></div>
+<div class="maprow"><div class="scrbox"><b>⑥ 施策実行</b><span>指示書を別AIで実施→公開URLを貼って反映記録</span></div><div class="fa">→</div><div class="scrbox"><b>⑦ 集客サマリー</b><span>問い合わせ・売上で効果を確かめる</span></div><div class="fa">→</div><div class="scrbox dim"><b>①へ戻る</b><span>作戦を見直す</span></div></div>
 </div>
 <div class="cap">図2｜画面のつながり：①→⑦がひと回りのループ。④以降は自動取込データが燃料になる</div>
 </div>
@@ -122,7 +122,7 @@ table.t td b{color:var(--accent2)}
 <tr><th style="width:110px">頻度</th><th style="width:150px">使う画面</th><th>やること</th><th style="width:90px">目安時間</th></tr>
 <tr><td><b>毎朝4時</b></td><td>（自動）</td><td>Search Console / GA4からデータ取込 → 問題検知 → 提案作成。<b>人の作業なし</b></td><td>—</td></tr>
 <tr><td><b>週1回</b><br>（月曜推奨）</td><td>④ KW順位表</td><td>前週比で順位の動きを確認。「対策ページと不一致」バッジ（カニバリ兆候）と「拾い物」をチェック</td><td>10分</td></tr>
-<tr><td>〃</td><td>⑤ 改善提案 → ⑥ 施策実行</td><td>提案を期待値の大きい順に承認/却下。承認済み施策の進み具合を確認、HP反映済みなら「反映しました」</td><td>10分</td></tr>
+<tr><td>〃</td><td>⑤ 改善提案 → ⑥ 施策実行</td><td>提案を期待値の大きい順に承認/却下。承認済み施策の進み具合を確認、公開・修正が済んだものはURLを貼って反映を記録</td><td>10分</td></tr>
 <tr><td><b>随時</b></td><td>② 記事プラン → 記事ネタ</td><td>難易度の低いプランから順に起票→執筆。公開したら対策URLを登録</td><td>記事による</td></tr>
 <tr><td><b>月1回</b></td><td>① 戦略ボード・⑦ 集客サマリー</td><td>逆算ファネルの現在地とボトルネックを確認。注力クラスタを見直す</td><td>15分</td></tr>
 </table>
@@ -134,7 +134,7 @@ table.t td b{color:var(--accent2)}
 <div class="pdca">
 <div class="pd"><h4><span class="tag">P</span>狙いを決める</h4><ul><li>戦略ボード：注力クラスタ・フェーズ</li><li>記事プラン：次に書く記事（難易度低い順）</li></ul></div>
 <div class="pdar">→</div>
-<div class="pd"><h4><span class="tag">D</span>作る・直す</h4><ul><li>記事ネタで執筆 → 公開 → 対策URL登録</li><li>施策実行：指示書どおりHP修正 → 「反映しました」</li></ul></div>
+<div class="pd"><h4><span class="tag">D</span>作る・直す</h4><ul><li>記事ネタで執筆 → 公開 → 対策URL登録</li><li>施策実行：指示書（プロンプト）を別AIやHP担当に渡して作成・修正 → 公開したページのURLを貼って反映を記録</li></ul></div>
 <div class="pdar" style="grid-column:1;grid-row:2">↑</div>
 <div></div>
 <div class="pdar" style="grid-column:3;grid-row:2">↓</div>
@@ -161,8 +161,8 @@ table.t td b{color:var(--accent2)}
 <ol class="steps">
 <li><b class="scr">改善提案</b>を開き、期待値の大きい順に内容を読む<span class="who me">自分</span></li>
 <li>納得できるものを「承認」→ 施策カードが自動作成<span class="who me">自分</span> — 迷う/情報不足なら「様子見」（7日後に再判断）</li>
-<li><b class="scr">施策実行</b>の指示書をHP担当に共有<span class="who hp">HP担当</span></li>
-<li>HP修正が完了したら<b>「反映しました」を押す</b><span class="who me">自分</span> — ここから効果検証が始まる</li>
+<li><b class="scr">施策実行</b>の指示書（プロンプト）をコピーして別AIやHP担当に渡す<span class="who hp">HP担当</span></li>
+<li>公開・修正が完了したら<b>そのページのURLを貼って「反映を記録」を押す</b><span class="who me">自分</span> — ここから効果検証が始まる</li>
 <li>検証予定日以降、順位・クリックの変化で当たり外れを確認<span class="who ai">自動</span></li>
 </ol>
 
@@ -188,13 +188,13 @@ table.t td b{color:var(--accent2)}
 <tr><td><b>② 記事プラン</b></td><td>どのページでどの語を取るかの設計図（1検索意図=1ページ）</td><td>執筆のたび</td><td>記事ネタ・ブログ（起票）</td></tr>
 <tr><td><b>④ KW順位表</b></td><td>狙った語が何位か。<b>SEOの成績表</b></td><td>週1</td><td>改善提案／実ページ（リンク）</td></tr>
 <tr><td><b>⑤ 改善提案</b></td><td>直す価値の高い順の提案。<b>承認/却下だけすればいい</b></td><td>週1</td><td>施策実行（承認で自動作成）</td></tr>
-<tr><td><b>⑥ 施策実行</b></td><td>承認済み施策のかんばん。HP反映→「反映しました」</td><td>週1</td><td>集客サマリー（効果確認）</td></tr>
+<tr><td><b>⑥ 施策実行</b></td><td>承認済み施策のかんばん。公開URLを貼って反映記録</td><td>週1</td><td>集客サマリー（効果確認）</td></tr>
 <tr><td><b>⑦ 集客サマリー</b></td><td>表示→問い合わせ→売上のファネル。<b>成果はここで見る</b></td><td>月1〜週1</td><td>戦略ボード（作戦見直し）</td></tr>
 <tr><td><b>SEO設定</b></td><td>Google接続と取込。エラー時の診断もここ</td><td>問題時のみ</td><td>—</td></tr>
 </table>
 
 <h2 class="sec" id="o">7. 落とし穴 5つ</h2>
-<div class="warn"><b>①「反映しました」の押し忘れ。</b>押さないと効果検証が始まらず、施策が効いたか永久に分からない。HP修正が済んだら必ずその日に押す。</div>
+<div class="warn"><b>①公開URLの貼り忘れ。</b>記録しないと効果検証が始まらず、施策が効いたか永久に分からない。公開・修正が済んだら必ずその日にURLを貼って「反映を記録」を押す。</div>
 <div class="warn"><b>② 1語1記事にしてしまう。</b>似た語ごとに記事を量産するとカニバリ（共食い）が起きてサイト全体が沈む。必ず記事プランの設計（1検索意図=1ページ）に従う。</div>
 <div class="warn"><b>③ 検索数の大きい語から書く。</b>「生成AI研修」のような大物は大手が占有していて、今のドメイン力では届かない。難易度の低い語で実績を積んでから挑む。</div>
 <div class="warn"><b>④ 日々の順位変動に反応する。</b>データは2〜3日遅れ・順位は日々揺れる。判断は週次の前週比で。毎日見ても得るものは少ない。</div>
