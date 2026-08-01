@@ -1,4 +1,4 @@
-import { BookOpen, Presentation, GraduationCap, ExternalLink, ArrowRight, Flame } from "lucide-react";
+import { BookOpen, Presentation, GraduationCap, ExternalLink, ArrowRight, Flame, Search } from "lucide-react";
 import { requireCtx } from "@/lib/session";
 import { PageHeader, Section } from "@/components/ui/primitives";
 
@@ -35,6 +35,16 @@ const DOCS = [
     lead: "展示会リードの取込〜一括お礼メール〜反応スコア〜ホット通知〜架電までを、フロー図・マトリクス付きで説明します。",
     points: ["取込2経路とFit×Engagementの優先グレード", "一括メールの送り方・テンプレの可変部分", "反応の点数・通知の条件・セグメント分析"],
     meta: "図解リファレンス ／ IS・営業向け",
+  },
+  {
+    href: "/help/seo-manual.html",
+    icon: Search,
+    tag: "SEO集客の回し方",
+    tagCls: "bg-teal-deep text-white",
+    title: "SEO集客 運用マニュアル",
+    lead: "検索からの問い合わせで売上をつくるための、7画面のつなぎ方とPDCAの回し方を図解で説明します。",
+    points: ["逆算ファネル図と画面のつながりマップ", "週次PDCA・運用リズム（週15〜30分）", "ケース別フロー4本・落とし穴5つ"],
+    meta: "図解リファレンス ／ 代表・管理者向け",
   },
   {
     href: "/help/onboarding.html",
