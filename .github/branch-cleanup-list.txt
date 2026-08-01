@@ -2,26 +2,4 @@
 # このファイルを編集して main に push すると、記載ブランチが削除される。
 # （main とデフォルトブランチは常にスキップされる）
 claude/keen-mayer-yJCVC
-claude/business-card-crm-sync-qr21rs
-claude/calendar-duplicate-investigation-prhhlg
-claude/conditions-and-solution-8we2by
-claude/crm-customer-ranking-notes-klic4t
-claude/crm-presentation-dummy-data-xeny4p
-claude/customer-detail-screen-info-es14t4
-claude/customizable-dashboard-mi5lb0
-claude/email-history-engagement-filtering-g0wdbx
-claude/email-send-setup-o03r5h
-claude/email-workflow-automation-spec-ueyrcz
-claude/f201-202-203-requirements-ev3mh5
-claude/feature-audit-roadmap-n7bxfm
-claude/google-chat-integration-agi8qf
-claude/google-chat-llm-integration-uo4c1r
-claude/hp-inquiry-form-db-integration-tjky49
-claude/lead-scoring-appointment-design-65a7w8
-claude/mobile-mode-optimization-0pbmwo
-claude/sales-automation-design-lv1ikt
-claude/seo-analysis-improvement-execution-u838gg
-claude/task-description-url-fields-m80jur
-claude/task-feature-asana-redesign-swpt21
-chore/branch-cleanup-workflow
-chore/branch-cleanup-run
+chore/branch-cleanup-run2
