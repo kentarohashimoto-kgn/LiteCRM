@@ -8,7 +8,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { CopyArea } from "@/components/marketing/copy-area";
 import { listSeoSites } from "@/lib/data/seo";
 import { ACTION_PRIORS } from "@/lib/seo/expected-value";
-import { updateActionStatusAction } from "@/server/actions/seo";
+import { recordActionPublishedAction, updateActionStatusAction } from "@/server/actions/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +27,12 @@ interface ActionRow {
   applied_at: string | null;
   verify_due_at: string | null;
   content_idea_id: string | null;
+  published_url: string | null;
   note: string | null;
 }
+
+/** URL登録＝反映記録を受け付ける（未完了の）状態。 */
+const OPEN_STATES = ["todo", "in_progress", "review", "waiting_deploy"];
 
 /** 状態の並び順と表示名。左から右へ進む。 */
 const COLUMNS: Array<{ key: string; label: string; next?: string; nextLabel?: string }> = [
@@ -75,7 +79,7 @@ export default async function SeoActionsPage({
   const { data } = await sb
     .from("seo_actions")
     .select(
-      "id, title, action_type, execution_mode, target_query, target_page, expected_json, deliverable_md, status, applied_at, verify_due_at, content_idea_id, note",
+      "id, title, action_type, execution_mode, target_query, target_page, expected_json, deliverable_md, status, applied_at, verify_due_at, content_idea_id, published_url, note",
     )
     .eq("site_id", current.id)
     .neq("status", "canceled")
@@ -88,7 +92,7 @@ export default async function SeoActionsPage({
     <div className="space-y-5">
       <PageHeader
         title="施策の実行"
-        subtitle={`${current.name} — 承認した打ち手の成果物と、反映の記録。反映日から14日後に効果を自動判定します。`}
+        subtitle={`${current.name} — 指示書（プロンプト）をコピーして別AIで実施し、公開したページのURLを貼るだけで反映を記録できます。反映日から14日後に効果を判定します。`}
         action={
           <div className="flex items-center gap-2">
             <Link href="/app/seo/proposals" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
@@ -109,7 +113,10 @@ export default async function SeoActionsPage({
           applied: "反映を記録しました。14日後に効果を自動判定します。",
           status: "状態を更新しました。",
         }}
-        errorMessages={{ forbidden: "この操作を行う権限がありません。" }}
+        errorMessages={{
+          forbidden: "この操作を行う権限がありません。",
+          invalid_url: "URLが正しくありません。https:// から始まる公開ページのURLを貼ってください。",
+        }}
       />
 
       {/* 進捗の要約。反映待ちが溜まっていないかを一目で分かるようにする */}
@@ -159,16 +166,34 @@ export default async function SeoActionsPage({
                             <input type="hidden" name="id" value={a.id} />
                             <input type="hidden" name="site" value={current.id} />
                             <input type="hidden" name="to" value={col.next} />
-                            <SubmitButton
-                              className={col.next === "deployed" ? "btn-primary text-xs" : "btn-secondary text-xs"}
-                              pendingLabel="…"
-                            >
+                            <SubmitButton className="btn-secondary text-xs" pendingLabel="…">
                               {col.nextLabel}
                             </SubmitButton>
                           </form>
                         )}
                       </div>
                     </div>
+
+                    {/* 主導線: 別AIで公開したURLを貼る＝反映記録。途中の状態送りは踏まなくてよい */}
+                    {OPEN_STATES.includes(col.key) && (
+                      <form
+                        action={recordActionPublishedAction}
+                        className="mt-2 flex flex-wrap items-center gap-2"
+                      >
+                        <input type="hidden" name="id" value={a.id} />
+                        <input type="hidden" name="site" value={current.id} />
+                        <input
+                          name="url"
+                          type="text"
+                          required
+                          placeholder="公開・更新したページのURLを貼る（貼った時点で反映を記録します）"
+                          className="input min-w-[260px] flex-1 !py-1.5 text-xs"
+                        />
+                        <SubmitButton className="btn-primary text-xs" pendingLabel="記録中…">
+                          反映を記録
+                        </SubmitButton>
+                      </form>
+                    )}
 
                     {a.note && (
                       <div className="mt-2 flex items-start gap-1.5 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
@@ -177,18 +202,37 @@ export default async function SeoActionsPage({
                       </div>
                     )}
 
-                    {a.applied_at && (
-                      <div className="mt-2 text-xs text-ink/50">
-                        反映日 {new Date(a.applied_at).toLocaleDateString("ja-JP")}
-                        {a.verify_due_at &&
-                          ` ／ 効果判定 ${new Date(a.verify_due_at).toLocaleDateString("ja-JP")}`}
+                    {(a.applied_at || a.published_url) && (
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink/50">
+                        {a.applied_at && (
+                          <span>
+                            反映日 {new Date(a.applied_at).toLocaleDateString("ja-JP")}
+                            {a.verify_due_at &&
+                              ` ／ 効果判定 ${new Date(a.verify_due_at).toLocaleDateString("ja-JP")}`}
+                          </span>
+                        )}
+                        {a.published_url && (
+                          <a
+                            href={
+                              /^https?:\/\//i.test(a.published_url)
+                                ? a.published_url
+                                : `${current.baseUrl.replace(/\/$/, "")}${a.published_url}`
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 break-all text-teal-deep hover:underline"
+                          >
+                            <ExternalLink size={12} />
+                            {a.published_url}
+                          </a>
+                        )}
                       </div>
                     )}
 
                     {a.deliverable_md && col.key !== "done" && (
                       <details className="mt-2">
                         <summary className="cursor-pointer text-xs text-ink/60">
-                          指示書を開く（コピーしてHP担当へ渡せます）
+                          指示書（プロンプト）を開く — コピーして別AIやHP担当へ渡せます
                         </summary>
                         <div className="mt-2">
                           <CopyArea text={a.deliverable_md} rows={14} />

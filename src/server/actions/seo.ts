@@ -9,6 +9,7 @@ import { checkGa4Access } from "@/lib/seo/ga4";
 import { getSeoCredentialInfo } from "@/lib/seo/google-sa";
 import { runSeoIngest } from "@/lib/seo/run-ingest";
 import { buildInstruction, EXECUTION_MODE } from "@/lib/seo/instructions";
+import { normalizePath } from "@/lib/seo/site-match";
 
 const ADMIN_ROLES = ["owner", "admin"];
 const SETTINGS_PATH = "/app/seo/settings";
@@ -411,6 +412,63 @@ export async function updateActionStatusAction(formData: FormData): Promise<void
   revalidatePath("/app/seo/actions");
   revalidatePath("/app/seo");
   back(to === "deployed" ? "saved=applied" : "saved=status");
+}
+
+/**
+ * 公開URLの登録と反映記録を1操作で行う。
+ *
+ * 運用実態は「指示書(プロンプト)を別AIに渡して記事を作り、公開したURLを持って戻る」
+ * なので、着手→反映依頼→反映の3クリックを踏ませず、URLを貼った時点で
+ * 反映済み(deployed)にする。applied_at はDBトリガで検証期限の起点になる。
+ */
+export async function recordActionPublishedAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const site = String(formData.get("site") ?? "");
+  const back: (q: string) => never = (q) =>
+    redirect(`/app/seo/actions?${site ? `site=${site}&` : ""}${q}`);
+  if (!["owner", "admin", "sales_manager", "sales_rep"].includes(ctx.role)) back("error=forbidden");
+
+  const id = String(formData.get("id") ?? "").trim();
+  const url = String(formData.get("url") ?? "").trim();
+  if (!id) back("error=invalid");
+  // 絶対URLかパスのみ受け付ける（貼り間違いをここで弾く）
+  if (!/^https?:\/\//i.test(url) && !url.startsWith("/")) back("error=invalid_url");
+
+  const sb = getSupabaseServer();
+  const { data: action } = await sb
+    .from("seo_actions")
+    .select("id, target_page, content_idea_id, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (!action) back("error=save_failed");
+
+  const path = normalizePath(url);
+  const patch: Record<string, unknown> = {
+    status: "deployed",
+    applied_at: new Date().toISOString(),
+    applied_by: ctx.userId,
+    published_url: url,
+  };
+  // 新規記事はチケット作成時点で対象ページが無い。公開URLで確定させると
+  // G3(同一ページ並走の検出)と効果検証がこのページに対して効くようになる。
+  if (!action.target_page) patch.target_page = path;
+
+  const up = await sb.from("seo_actions").update(patch).eq("id", id).select("id");
+  if (up.error || !up.data?.length) back("error=save_failed");
+
+  // 紐づく記事ネタも公開済みへ同期する。パイプライン側を別途進める手間を無くす。
+  if (action.content_idea_id) {
+    await sb
+      .from("content_ideas")
+      .update({ status: "published" })
+      .eq("id", action.content_idea_id)
+      .neq("status", "published");
+    revalidatePath("/app/content");
+  }
+
+  revalidatePath("/app/seo/actions");
+  revalidatePath("/app/seo");
+  back("saved=applied");
 }
 
 /**
