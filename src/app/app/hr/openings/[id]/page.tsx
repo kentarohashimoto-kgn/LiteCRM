@@ -7,7 +7,8 @@ import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { OpeningForm, type OpeningRecord } from "@/components/hr/opening-form";
 import { updateJobOpeningStatusAction, deleteJobOpeningAction } from "@/server/actions/hr";
-import { KIND_LABEL, OPENING_STATUSES, OPENING_STATUS_LABEL, CLOSE_REASONS } from "@/lib/hr-constants";
+import { KIND_LABEL, OPENING_STATUSES, OPENING_STATUS_LABEL, CLOSE_REASONS, CANDIDATE_STATUS_LABEL, CANDIDATE_CLOSED } from "@/lib/hr-constants";
+import { CandidateMetaLine } from "@/components/hr/candidate-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,10 @@ const COLS =
   "id, kind, title, client_name, role_description, rate_note, status, close_reason, headcount, priority, work_style, employment_types, workload, pay_rate, start_on, required_skills, recruit_channel, end_client, upstream_company, distribution, client_rate, pay_limit, expected_margin, settlement_terms, payment_site, interview_count, project_start_on, project_end_on, opened_at";
 
 type Row = OpeningRecord & { status: string; close_reason: string | null; opened_at: string };
+
+interface CandRow { id: string; name: string; status: string; age: number | null; desired_workload: string | null; desired_pay: string | null; notes: string | null; }
+interface CandLink { id: string; role_note: string | null; candidates: CandRow | CandRow[] | null; }
+const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
 
 /** 求人案件 詳細/編集ページ。区分別の全項目編集・ステータス管理・削除。 */
 export default async function OpeningDetailPage({
@@ -29,10 +34,15 @@ export default async function OpeningDetailPage({
   const { data } = await sb.from("job_openings").select(COLS).eq("id", params.id).maybeSingle();
   if (!data) notFound();
   const o = data as Row;
-  const { count: candCount } = await sb
+  const { data: candLinks } = await sb
     .from("candidate_openings")
-    .select("id", { count: "exact", head: true })
-    .eq("job_opening_id", o.id);
+    .select("id, role_note, candidates(id, name, status, age, desired_workload, desired_pay, notes)")
+    .eq("job_opening_id", o.id)
+    .order("created_at", { ascending: false });
+  const linkedCands = ((candLinks ?? []) as CandLink[])
+    .map((l) => ({ link: l, cand: one(l.candidates) }))
+    .filter((x): x is { link: CandLink; cand: CandRow } => !!x.cand);
+  const candCount = linkedCands.length;
 
   return (
     <div className="max-w-3xl">
@@ -71,9 +81,29 @@ export default async function OpeningDetailPage({
             </select>
           </div>
           <SubmitButton className="btn-ghost" pendingLabel="更新中…">状態を更新</SubmitButton>
-          <span className="text-xs text-ink/45 ml-1">候補者 {candCount ?? 0}名 ・ {o.opened_at}〜</span>
+          <span className="text-xs text-ink/45 ml-1">候補者 {candCount}名 ・ {o.opened_at}〜</span>
         </form>
         <p className="text-xs text-ink/40 mt-2">「クローズ」→「募集中」に戻すと、クローズ理由は自動でクリアされます（充足はクローズ理由に含まれます）。</p>
+      </Section>
+
+      {/* 紐付き候補者(候補者一覧と同じ主要条件を表示) */}
+      <Section title={`紐付き候補者（${candCount}）`} className="mb-5">
+        {candCount === 0 ? (
+          <p className="text-sm text-ink/40 py-2">この求人に紐付いた候補者はまだいません。候補者ページから紐付けできます。</p>
+        ) : (
+          <ul className="space-y-2">
+            {linkedCands.map(({ link, cand }) => (
+              <li key={link.id} className={`rounded-xl border border-black/[0.05] p-3 ${CANDIDATE_CLOSED.has(cand.status) && cand.status !== "joined" ? "opacity-60" : ""}`}>
+                <div className="flex items-center gap-2.5 flex-wrap text-sm">
+                  <Link href={`/app/hr/candidates/${cand.id}`} className="font-medium hover:text-teal-deep">{cand.name}</Link>
+                  <span className={`pill text-[10px] ${cand.status === "joined" ? "bg-teal-light text-teal-deep" : "bg-black/[0.04] text-ink/55"}`}>{CANDIDATE_STATUS_LABEL[cand.status] ?? cand.status}</span>
+                  {link.role_note && <span className="text-xs text-ink/45">{link.role_note}</span>}
+                </div>
+                <CandidateMetaLine c={cand} />
+              </li>
+            ))}
+          </ul>
+        )}
       </Section>
 
       {/* 全項目編集(区分別) */}

@@ -12,6 +12,11 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 // フォーム値の取り出しヘルパ
 const str = (fd: FormData, k: string): string | null => (String(fd.get(k) || "").trim() || null);
 const dateOrNull = (fd: FormData, k: string): string | null => (String(fd.get(k) || "").trim() || null);
+/** 年齢など: 整数のみ。空はnull。 */
+const intOrNull = (fd: FormData, k: string): number | null => {
+  const raw = String(fd.get(k) || "").replace(/[^\d]/g, "");
+  return raw ? Number(raw) : null;
+};
 /** 募集人数など: 小数点1桁までの数値。空はnull。 */
 const num1 = (fd: FormData, k: string): number | null => {
   const raw = String(fd.get(k) || "").replace(/[^\d.]/g, "");
@@ -126,6 +131,7 @@ export async function createCandidateAction(formData: FormData): Promise<void> {
       job_opening_id: openingId,
       name,
       email: str(formData, "email"),
+      age: intOrNull(formData, "age"),
       source: str(formData, "source"),
       assignee_user_id: ctx.userId,
     })
@@ -157,8 +163,9 @@ export async function saveCandidateAction(formData: FormData): Promise<void> {
       email: str(formData, "email"),
       phone: str(formData, "phone"),
       area: str(formData, "area"),
+      age: intOrNull(formData, "age"),
       source: str(formData, "source"),
-      notes: str(formData, "notes"), // メモ
+      notes: str(formData, "notes"), // 人事コメント
       desired_conditions: str(formData, "desired_conditions"),
       desired_contract: str(formData, "desired_contract"),
       available_from: str(formData, "available_from"),
@@ -183,15 +190,19 @@ export async function updateCandidateStatusAction(formData: FormData): Promise<v
     .from("candidates")
     .update({ status })
     .eq("id", id)
-    .select("id, name, status")
+    .select("id, name, status, email, skills, notes")
     .maybeSingle();
   if (cand && status === "joined") {
     const { data: exists } = await sb.from("talents").select("id").eq("candidate_id", id).limit(1);
     if (!exists?.length) {
+      // 候補者に入力済みの情報(メール/スキル/人事コメント)は台帳へ引き継ぐ
       await sb.from("talents").insert({
         tenant_id: ctx.tenantId,
         candidate_id: id,
         name: cand.name as string,
+        email: (cand.email as string | null) ?? null,
+        skills: (cand.skills as string | null) ?? null,
+        notes: (cand.notes as string | null) ?? null,
         joined_on: new Date().toISOString().slice(0, 10),
       });
     }

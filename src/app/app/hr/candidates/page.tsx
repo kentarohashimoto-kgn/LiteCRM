@@ -6,12 +6,14 @@ import { PageHeader, Section, Card } from "@/components/ui/primitives";
 import { createCandidateAction, updateCandidateStatusAction } from "@/server/actions/hr";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { CANDIDATE_STATUSES, CANDIDATE_STATUS_LABEL, CANDIDATE_CLOSED } from "@/lib/hr-constants";
+import { CandidateMetaLine } from "@/components/hr/candidate-meta";
 
 export const dynamic = "force-dynamic";
 
 interface Candidate {
   id: string; name: string; email: string | null; phone: string | null;
   source: string | null; status: string; created_at: string;
+  age: number | null; desired_workload: string | null; desired_pay: string | null; notes: string | null;
 }
 interface Opening { id: string; title: string; client_name: string | null; kind: string; status: string; }
 interface Link_ { candidate_id: string; job_openings: { title: string } | { title: string }[] | null; }
@@ -21,7 +23,7 @@ export default async function CandidatesPage() {
   await requireHrCtx();
   const sb = getSupabaseServer();
   const [candR, linkR, openR] = await Promise.all([
-    sb.from("candidates").select("id, name, email, phone, source, status, created_at").order("created_at", { ascending: false }).limit(300),
+    sb.from("candidates").select("id, name, email, phone, source, status, created_at, age, desired_workload, desired_pay, notes").order("created_at", { ascending: false }).limit(300),
     sb.from("candidate_openings").select("candidate_id, job_openings(title)").limit(2000),
     sb.from("job_openings").select("id, title, client_name, kind, status").order("created_at", { ascending: false }).limit(200),
   ]);
@@ -60,6 +62,7 @@ export default async function CandidatesPage() {
             </select>
           </div>
           <div><label className="label">メール</label><input name="email" type="email" className="input" /></div>
+          <div><label className="label">年齢</label><input name="age" type="number" min={0} max={99} inputMode="numeric" className="input w-20" /></div>
           <div><label className="label">経路</label><input name="source" className="input" placeholder="紹介/媒体名など" /></div>
           <SubmitButton className="btn-accent" pendingLabel="追加中…">追加して詳細へ</SubmitButton>
         </form>
@@ -92,6 +95,8 @@ export default async function CandidatesPage() {
                     </form>
                     <Link href={`/app/hr/candidates/${c.id}`} className="pill bg-black/[0.04] text-ink/55 text-[10px]">{CANDIDATE_STATUS_LABEL[c.status] ?? c.status}</Link>
                   </div>
+                  {/* 主要条件: 年齢・稼働量・単価・人事コメント */}
+                  <CandidateMetaLine c={c} />
                 </li>
               );
             })}

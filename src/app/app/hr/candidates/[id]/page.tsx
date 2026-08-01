@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 
 interface Candidate {
   id: string; name: string; furigana: string | null; email: string | null; phone: string | null;
-  area: string | null; source: string | null; status: string; notes: string | null;
+  area: string | null; source: string | null; status: string; notes: string | null; age: number | null;
   desired_conditions: string | null; desired_contract: string | null; available_from: string | null;
   desired_workload: string | null; desired_pay: string | null; work_location_pref: string | null; skills: string | null;
 }
@@ -63,7 +63,7 @@ export default async function CandidateDetailPage({
   const sb = getSupabaseServer();
   const { data: cand } = await sb
     .from("candidates")
-    .select("id, name, furigana, email, phone, area, source, status, notes, desired_conditions, desired_contract, available_from, desired_workload, desired_pay, work_location_pref, skills")
+    .select("id, name, furigana, email, phone, area, source, status, notes, age, desired_conditions, desired_contract, available_from, desired_workload, desired_pay, work_location_pref, skills")
     .eq("id", params.id)
     .maybeSingle();
   if (!cand) notFound();
@@ -116,6 +116,7 @@ export default async function CandidateDetailPage({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Field label="氏名 *"><input name="name" required defaultValue={c.name} className="input" /></Field>
                 <Field label="フリガナ"><input name="furigana" defaultValue={v(c.furigana)} className="input" /></Field>
+                <Field label="年齢"><input name="age" type="number" min={0} max={99} inputMode="numeric" defaultValue={c.age != null ? String(c.age) : ""} className="input" /></Field>
                 <Field label="メール"><input name="email" type="email" defaultValue={v(c.email)} className="input" /></Field>
                 <Field label="電話番号"><input name="phone" defaultValue={v(c.phone)} className="input" /></Field>
                 <Field label="居住地域"><input name="area" defaultValue={v(c.area)} className="input" /></Field>
@@ -128,7 +129,7 @@ export default async function CandidateDetailPage({
               </div>
               <Field label="希望・稼働条件"><textarea name="desired_conditions" defaultValue={v(c.desired_conditions)} rows={2} className="input resize-y" /></Field>
               <Field label="スキル情報"><textarea name="skills" defaultValue={v(c.skills)} rows={3} className="input resize-y" placeholder="保有スキル・経験・得意領域など（改行可）" /></Field>
-              <Field label="メモ"><textarea name="notes" defaultValue={v(c.notes)} rows={2} className="input resize-y" /></Field>
+              <Field label="人事コメント"><textarea name="notes" defaultValue={v(c.notes)} rows={2} className="input resize-y" placeholder="選考所感・申し送りなど（一覧にも表示されます）" /></Field>
               <SubmitButton className="btn-accent" pendingLabel="保存中…">基本情報を保存</SubmitButton>
             </form>
           </Section>
