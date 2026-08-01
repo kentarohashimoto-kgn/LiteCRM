@@ -5,6 +5,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { gatherChatContext } from "@/lib/chat/messages";
 import {
   PMO_MODE_MAP,
   PMO_SYSTEM_PROMPT,
@@ -270,7 +271,9 @@ export async function generateAndSavePmoReport(opts: {
   }
   // 前回までの社内コメントをフィードバックとして取り込む(人間→AIのループ)。
   const feedback = await gatherPmoFeedback(opts.sb, opts.tenantId);
-  const digest = buildPmoDigest(data, alerts) + channelDigest;
+  // 社内チャット(Google Chat)の直近の会話を文脈として取り込む(蓄積が無ければ空)。
+  const chatContext = await gatherChatContext(opts.sb, opts.tenantId);
+  const digest = buildPmoDigest(data, alerts) + channelDigest + (chatContext ? "\n\n" + chatContext : "");
 
   const memo = (opts.memo ?? "").trim().slice(0, 2000);
   const userPrompt =

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { verifyPubsubPush } from "@/lib/chat/pubsub-verify";
 import { handleReactionCreated } from "@/lib/chat/reactions";
+import { handleMessageCreated } from "@/lib/chat/messages";
 import {
   handleChatInteraction,
   isChatInteractionEvent,
@@ -50,8 +51,10 @@ export async function POST(req: Request) {
 
   // 新型（Workspaceアドオン形式）のインタラクションはクラシック形式に正規化。
   const interaction = normalizeChatEvent(event);
+  // Workspace Events はイベント種別を Pub/Sub attributes（ce-type）で運ぶ場合がある。
+  const ceType: string | undefined = pubsubMsg?.attributes?.["ce-type"];
   const eventType: string =
-    event?.eventType ?? interaction?.type ?? event?.type ?? "unknown";
+    event?.eventType ?? ceType ?? interaction?.type ?? event?.type ?? "unknown";
   const admin = getSupabaseAdmin();
 
   // 冪等性: Pub/Sub messageId をキーに記録。重複なら即終了。
@@ -87,7 +90,12 @@ export async function POST(req: Request) {
       const r = await handleReactionCreated(event);
       return NextResponse.json({ ok: true, ...r });
     }
-    // 他イベント（reaction.deleted, message.created 等）は現状 no-op。
+    // P4: メッセージ作成イベント → chat_messages に蓄積（AIのソースにする）。
+    if (eventType === "google.workspace.chat.message.v1.created") {
+      const r = await handleMessageCreated(event);
+      return NextResponse.json({ ok: true, ...r });
+    }
+    // 他イベント（reaction.deleted 等）は現状 no-op。
     return NextResponse.json({ ok: true, ignored: eventType });
   } catch (e) {
     // 処理失敗でも 200（再送で二重実行を避ける。詳細はログで追う）。
