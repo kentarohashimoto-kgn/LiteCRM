@@ -1,8 +1,9 @@
 name: Branch Cleanup
 
-# マージ済みブランチの一括削除（手動実行専用）。
-# Actions タブ → Branch Cleanup → Run workflow で、削除したいブランチ名を
-# スペース区切りで指定して実行する。デフォルトブランチと main は常にスキップ。
+# マージ済みブランチの一括削除。起動方法は2つ:
+#   1. Actions タブ → Branch Cleanup → Run workflow（ブランチ名をスペース区切りで指定）
+#   2. .github/branch-cleanup-list.txt を編集して main に push（リストの内容を削除）
+# デフォルトブランチと main は常にスキップ。
 
 on:
   workflow_dispatch:
@@ -11,6 +12,9 @@ on:
         description: "削除するブランチ名（スペース区切り）"
         required: true
         type: string
+  push:
+    branches: ["main"]
+    paths: [".github/branch-cleanup-list.txt"]
 
 permissions:
   contents: write
@@ -20,15 +24,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+
       - name: Delete branches
         env:
           GH_TOKEN: ${{ github.token }}
-          BRANCHES: ${{ inputs.branches }}
+          INPUT_BRANCHES: ${{ inputs.branches || '' }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -u
+          if [ -n "$INPUT_BRANCHES" ]; then
+            LIST="$INPUT_BRANCHES"
+          else
+            LIST=$(grep -v '^#' .github/branch-cleanup-list.txt | tr '\n' ' ')
+          fi
           failed=0
-          for b in $BRANCHES; do
+          for b in $LIST; do
+            [ -z "$b" ] && continue
             if [ "$b" = "$DEFAULT_BRANCH" ] || [ "$b" = "main" ]; then
               echo "SKIP (default): $b"
               continue
