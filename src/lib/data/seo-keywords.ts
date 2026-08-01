@@ -98,6 +98,151 @@ export async function getKeywordGap(siteId: string): Promise<KeywordGapRow[]> {
 }
 
 /**
+ * KWごとの「対応状況」。台帳を提案→実施→検証→完了のハブにするための突合。
+ *
+ * 順位表の1行から「この語に今、手が打たれているか」が見えないと、
+ * 未対応の語が放置されているのか進行中なのか区別できず、台帳が眺めるだけの表になる。
+ */
+export type KeywordWorkState = "none" | "proposed" | "executing" | "verifying" | "done";
+
+export interface KeywordWork {
+  state: KeywordWorkState;
+  /** 実行チケット（あれば）。検証中・完了の成果表示に使う */
+  actionId: string | null;
+  actionStatus: string | null;
+  appliedAt: string | null;
+  verifyDueAt: string | null;
+  publishedUrl: string | null;
+}
+
+export const WORK_LABEL: Record<KeywordWorkState, string> = {
+  none: "未対応",
+  proposed: "提案中",
+  executing: "実施中",
+  verifying: "検証中",
+  done: "完了",
+};
+
+const EXECUTING_STATUSES = new Set(["todo", "in_progress", "review", "waiting_deploy"]);
+
+/**
+ * サイトの提案・実行チケットを引き、クエリ／対策ページの両方をキーに引けるMapを返す。
+ * 同じ対象に複数ある場合は「今動いているもの」を優先する（実施中 > 検証中 > 完了 > 提案中）。
+ */
+export async function getKeywordWork(
+  siteId: string,
+): Promise<{ byQuery: Map<string, KeywordWork>; byPage: Map<string, KeywordWork> }> {
+  const sb = getSupabaseServer();
+  const [propR, actR] = await Promise.all([
+    sb
+      .from("seo_proposals")
+      .select("id, target_query, target_page")
+      .eq("site_id", siteId)
+      .eq("status", "pending_review"),
+    sb
+      .from("seo_actions")
+      .select("id, status, target_query, target_page, applied_at, verify_due_at, published_url")
+      .eq("site_id", siteId)
+      .neq("status", "canceled")
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const byQuery = new Map<string, KeywordWork>();
+  const byPage = new Map<string, KeywordWork>();
+  const rank: Record<KeywordWorkState, number> = { executing: 4, verifying: 3, done: 2, proposed: 1, none: 0 };
+  const put = (map: Map<string, KeywordWork>, key: string | null | undefined, w: KeywordWork) => {
+    const k = (key ?? "").trim().toLowerCase();
+    if (!k) return;
+    const cur = map.get(k);
+    if (!cur || rank[w.state] > rank[cur.state]) map.set(k, w);
+  };
+
+  for (const a of actR.data ?? []) {
+    const st = String(a.status);
+    const state: KeywordWorkState = EXECUTING_STATUSES.has(st) ? "executing" : st === "deployed" ? "verifying" : "done";
+    const w: KeywordWork = {
+      state,
+      actionId: String(a.id),
+      actionStatus: st,
+      appliedAt: (a.applied_at as string) ?? null,
+      verifyDueAt: (a.verify_due_at as string) ?? null,
+      publishedUrl: (a.published_url as string) ?? null,
+    };
+    put(byQuery, a.target_query as string, w);
+    put(byPage, a.target_page as string, w);
+  }
+  for (const p of propR.data ?? []) {
+    const w: KeywordWork = {
+      state: "proposed",
+      actionId: null,
+      actionStatus: null,
+      appliedAt: null,
+      verifyDueAt: null,
+      publishedUrl: null,
+    };
+    put(byQuery, p.target_query as string, w);
+    put(byPage, p.target_page as string, w);
+  }
+  return { byQuery, byPage };
+}
+
+/** KWの週次順位の時系列。スパークラインと「反映後に動いたか」の判定に使う。 */
+export interface KeywordWeekPoint {
+  week: string; // YYYY-MM-DD（週の月曜）
+  position: number | null;
+  clicks: number;
+}
+
+export async function getKeywordHistories(
+  siteId: string,
+  queries: string[],
+  weeks = 12,
+): Promise<Map<string, KeywordWeekPoint[]>> {
+  const out = new Map<string, KeywordWeekPoint[]>();
+  if (!queries.length) return out;
+  const since = new Date(Date.now() - weeks * 7 * 86400000).toISOString().slice(0, 10);
+
+  const sb = getSupabaseServer();
+  const { data } = await sb
+    .from("seo_query_weekly")
+    .select("query, week_start, impressions, clicks, position")
+    .eq("site_id", siteId)
+    .gte("week_start", since)
+    .in("query", queries)
+    .limit(8000);
+
+  // (query, week) 単位でページ横断の加重平均順位に畳む
+  const agg = new Map<string, Map<string, { posNum: number; posDen: number; clicks: number }>>();
+  for (const r of data ?? []) {
+    const q = String(r.query).toLowerCase();
+    const wk = String(r.week_start);
+    const imp = Number(r.impressions ?? 0);
+    const byWeek = agg.get(q) ?? new Map();
+    const cur = byWeek.get(wk) ?? { posNum: 0, posDen: 0, clicks: 0 };
+    cur.clicks += Number(r.clicks ?? 0);
+    if (r.position != null && imp > 0) {
+      cur.posNum += Number(r.position) * imp;
+      cur.posDen += imp;
+    }
+    byWeek.set(wk, cur);
+    agg.set(q, byWeek);
+  }
+  for (const [q, byWeek] of agg) {
+    out.set(
+      q,
+      [...byWeek.entries()]
+        .map(([week, v]) => ({
+          week,
+          position: v.posDen > 0 ? Math.round((v.posNum / v.posDen) * 10) / 10 : null,
+          clicks: v.clicks,
+        }))
+        .sort((a, b) => a.week.localeCompare(b.week)),
+    );
+  }
+  return out;
+}
+
+/**
  * 「狙っていなかったが取れている語」= 拾い物。
  * 捨てるのではなく仮説の種として扱う。ここから台帳に昇格させる。
  */

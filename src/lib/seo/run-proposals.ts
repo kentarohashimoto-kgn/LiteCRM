@@ -50,9 +50,12 @@ interface InsightRow {
   action_type: string | null;
 }
 
+/** DBクライアントの最小要件。admin/serverどちらのクライアントでも使えるようにする。 */
+type DbClient = Pick<ReturnType<typeof getSupabaseAdmin>, "from">;
+
 /** 戦略からレートと係数を取り、CRM実績で置ける値は実績を優先する。 */
-async function loadRates(
-  admin: ReturnType<typeof getSupabaseAdmin>,
+export async function loadRates(
+  admin: DbClient,
   siteId: string,
 ): Promise<{ rates: StrategyRates; weights: { priorityCluster: number; layer1: number; currentPhase: number }; priorityClusterIds: Set<string> }> {
   const { data: st } = await admin

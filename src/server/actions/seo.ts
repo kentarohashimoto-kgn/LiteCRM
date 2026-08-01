@@ -9,7 +9,10 @@ import { checkGa4Access } from "@/lib/seo/ga4";
 import { getSeoCredentialInfo } from "@/lib/seo/google-sa";
 import { runSeoIngest } from "@/lib/seo/run-ingest";
 import { buildInstruction, EXECUTION_MODE } from "@/lib/seo/instructions";
-import { normalizePath } from "@/lib/seo/site-match";
+import { normalizePath, todayJst } from "@/lib/seo/site-match";
+import { loadRates } from "@/lib/seo/run-proposals";
+import { expectedValueFromClicks, iceScore, ACTION_PRIORS } from "@/lib/seo/expected-value";
+import { benchmarkCtr } from "@/lib/seo/benchmark";
 
 const ADMIN_ROLES = ["owner", "admin"];
 const SETTINGS_PATH = "/app/seo/settings";
@@ -412,6 +415,107 @@ export async function updateActionStatusAction(formData: FormData): Promise<void
   revalidatePath("/app/seo/actions");
   revalidatePath("/app/seo");
   back(to === "deployed" ? "saved=applied" : "saved=status");
+}
+
+/**
+ * KW順位表の1行から改善提案を即時起票する。
+ *
+ * 夜間バッチは1日10件の上限とクールダウンで提案を絞るため、
+ * 「台帳に未対応の語が並んでいるのに提案が来ない」待ち時間が生まれる。
+ * 人が順位表を見て「これを先にやる」と決めた瞬間に起票できる導線が要る。
+ * 期待値・スコアの算術はバッチと同一（loadRates / expectedValueFromClicks / iceScore）。
+ */
+export async function createProposalFromKeywordAction(formData: FormData): Promise<void> {
+  const ctx = await requireCtx();
+  const site = String(formData.get("site") ?? "");
+  const back: (q: string) => never = (q) =>
+    redirect(`/app/seo/keywords?${site ? `site=${site}&` : ""}${q}`);
+  if (!["owner", "admin", "sales_manager"].includes(ctx.role)) back("error=forbidden");
+
+  const keywordId = String(formData.get("keyword_id") ?? "").trim();
+  if (!keywordId || !site) back("error=invalid");
+
+  const sb = getSupabaseServer();
+  // 順位表RPCの行をそのまま根拠にする（ギャップ状態・実測クリック・目標順位）
+  const { data: rows } = await sb.rpc("seo_keyword_rankings", { p_site: site, p_weeks: 2 });
+  const kw = ((rows ?? []) as Record<string, unknown>[]).find((r) => String(r.keyword_id) === keywordId);
+  if (!kw) back("error=not_found");
+
+  const query = String(kw.query ?? "");
+  const { data: existing } = await sb
+    .from("seo_proposals")
+    .select("id")
+    .eq("site_id", site)
+    .eq("target_query", query)
+    .eq("status", "pending_review")
+    .limit(1);
+  if (existing?.length) back("saved=proposal_exists");
+
+  const gap = String(kw.gap_status ?? "no_page");
+  const actionType =
+    gap === "no_page" || gap === "out" ? "new_article" : gap === "far" || gap === "striking" ? "rewrite" : "title_meta";
+  const page = (kw.ranking_page as string) ?? (kw.planned_url as string) ?? "";
+
+  const volume = Number(kw.search_volume ?? 0);
+  const targetPos = Number(kw.target_position_12m ?? kw.target_position_6m ?? 10);
+  const currentClicks = Number(kw.clicks ?? 0);
+  const targetCtr = benchmarkCtr(Math.min(targetPos, 10)) ?? 0.03;
+  const extraClicks = Math.max(0, Math.round(volume * targetCtr - currentClicks));
+
+  const { rates, weights } = await loadRates(sb, site);
+  const expected = expectedValueFromClicks(extraClicks, rates);
+  const layer = kw.intent_layer == null ? null : Number(kw.intent_layer);
+  const ice = iceScore(expected.revenue, actionType, { layer1: layer === 1 }, weights);
+
+  const statusLabel =
+    gap === "no_page"
+      ? "対策ページが無い"
+      : gap === "out"
+        ? "ページはあるが圏外"
+        : kw.current_position != null
+          ? `${kw.current_position}位`
+          : "順位計測中";
+
+  const { data: siteRow } = await sb.from("seo_sites").select("tenant_id").eq("id", site).maybeSingle();
+  if (!siteRow) back("error=not_found");
+
+  const up = await sb.from("seo_proposals").upsert(
+    {
+      tenant_id: siteRow.tenant_id as string,
+      site_id: site,
+      title: `狙う語「${query}」を取る（${ACTION_PRIORS[actionType]?.label ?? actionType}）`,
+      action_type: actionType,
+      lever: actionType === "title_meta" ? "ctr" : "position",
+      intent_layer: layer,
+      target_query: query,
+      target_page: page,
+      evidence_json: {
+        kind: "keyword_gap",
+        detected: `KW順位表から手動起票。現状: ${statusLabel} / 想定検索数 月${volume} / 目標 ${targetPos}位`,
+        searchVolume: volume,
+        targetPosition: targetPos,
+        currentPosition: kw.current_position ?? "圏外",
+        impressions: Number(kw.impressions ?? 0),
+        clicks: currentClicks,
+        extraClicks,
+        gapStatus: gap,
+      },
+      expected_json: expected,
+      ice_impact: ice.impact,
+      ice_confidence: ice.confidence,
+      ice_effort: ice.effort,
+      strategy_weight: ice.strategyWeight,
+      ice_score: ice.score,
+      status: "pending_review",
+      proposed_date: todayJst(),
+    },
+    { onConflict: "site_id,proposed_date,action_type,target_query,target_page" },
+  );
+  if (up.error) back("error=save_failed");
+
+  revalidatePath("/app/seo/proposals");
+  revalidatePath("/app/seo/keywords");
+  back("saved=proposal_created");
 }
 
 /**
