@@ -2,15 +2,21 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { checkBearer } from "@/lib/secure-compare";
 import { isChatConfigured } from "@/lib/chat/client";
-import { createReactionSubscription, renewSubscription } from "@/lib/chat/events-api";
+import {
+  SUBSCRIPTION_EVENT_TYPES,
+  createSpaceSubscription,
+  renewSubscription,
+  updateSubscriptionEventTypes,
+} from "@/lib/chat/events-api";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * P3: Workspace Events 購読の作成/更新（Vercel Cron から起動）。
- * 有効な group スペースごとに、リアクション購読を作成し、
+ * P3/P4: Workspace Events 購読の作成/更新（Vercel Cron から起動）。
+ * 有効な group スペースごとに、リアクション+メッセージ購読を作成し、
  * 期限が近いものは延長する。購読は期限切れするため定期実行が必須。
+ * P3で作成済みの購読（リアクションのみ）は、イベント種別を最新セットへ更新する。
  *
  * 必要な環境変数: CRON_SECRET（認可）, GOOGLE_CHAT_PUBSUB_TOPIC（通知先）,
  *                 GOOGLE_CHAT_SA_CREDENTIALS（アプリ認証）。未設定なら no-op。
@@ -37,6 +43,7 @@ export async function GET(req: Request) {
   const soon = Date.now() + 6 * 3600 * 1000; // 6時間以内に切れるものは更新
   let created = 0;
   let renewed = 0;
+  let upgraded = 0;
   let failed = 0;
 
   for (const s of spaces ?? []) {
@@ -45,14 +52,32 @@ export async function GET(req: Request) {
     try {
       const { data: sub } = await admin
         .from("chat_subscriptions")
-        .select("subscription_name, expire_time")
+        .select("subscription_name, expire_time, event_types")
         .eq("tenant_id", tenantId)
         .eq("space_name", spaceName)
         .maybeSingle();
 
       if (sub?.subscription_name) {
+        const currentTypes = (sub.event_types ?? []) as string[];
+        const missingTypes = SUBSCRIPTION_EVENT_TYPES.some((t) => !currentTypes.includes(t));
         const exp = sub.expire_time ? new Date(sub.expire_time as string).getTime() : 0;
-        if (exp < soon) {
+        if (missingTypes) {
+          // P3時代の購読（リアクションのみ）→ message.created を含む最新セットへ更新。
+          const r = await updateSubscriptionEventTypes(sub.subscription_name as string);
+          if (r) {
+            await admin
+              .from("chat_subscriptions")
+              .update({
+                event_types: SUBSCRIPTION_EVENT_TYPES,
+                expire_time: r.expireTime ?? null,
+                state: "active",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("tenant_id", tenantId)
+              .eq("space_name", spaceName);
+            upgraded += 1;
+          }
+        } else if (exp < soon) {
           const r = await renewSubscription(sub.subscription_name as string);
           if (r) {
             await admin
@@ -64,14 +89,14 @@ export async function GET(req: Request) {
           }
         }
       } else {
-        const r = await createReactionSubscription(spaceName, topic);
+        const r = await createSpaceSubscription(spaceName, topic);
         if (r?.name) {
           await admin.from("chat_subscriptions").upsert(
             {
               tenant_id: tenantId,
               space_name: spaceName,
               subscription_name: r.name,
-              event_types: ["google.workspace.chat.reaction.v1.created", "google.workspace.chat.reaction.v1.deleted"],
+              event_types: SUBSCRIPTION_EVENT_TYPES,
               expire_time: r.expireTime ?? null,
               state: "active",
               updated_at: new Date().toISOString(),
@@ -86,5 +111,5 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, created, renewed, failed, spaces: (spaces ?? []).length });
+  return NextResponse.json({ ok: true, created, renewed, upgraded, failed, spaces: (spaces ?? []).length });
 }

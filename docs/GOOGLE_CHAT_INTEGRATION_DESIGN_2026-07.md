@@ -304,6 +304,33 @@ Chat App のインタラクションイベントを受ける（HTTP endpoint 方
 
 ---
 
+## 7.5 P4: メッセージ蓄積とAI活用（2026-08 追加）
+
+チャットの会話そのものをAI（AI-PMO等）のソースにするため、Workspace Events の購読対象に
+`google.workspace.chat.message.v1.created` を追加し、Bot が参加しているスペースの
+人間の発言を `chat_messages` テーブルに蓄積する。
+
+- **購読**: `SUBSCRIPTION_EVENT_TYPES`（events-api.ts）にメッセージ作成イベントを追加。
+  P3 時代の既存購読は cron が検出してイベント種別を PATCH で最新セットへ更新（`upgraded` カウント）。
+  スコープは既存の `chat.app.messages.readonly`（アプリ認証）で足りる。
+  ※ Google Workspace 管理者によるアプリ認証の承認が済んでいることが前提。
+- **蓄積**（`src/lib/chat/messages.ts` / migration `0194_chat_messages.sql`）:
+  - Bot 自身の投稿・本文が空のメッセージは蓄積しない。
+  - テナントは `chat_space_bindings`（アクティブ紐付け）から解決。未紐付けスペースは破棄。
+  - 送信者は `chat_identities` 既存マッピングで CRM ユーザーに解決（未登録なら null のまま保存）。
+  - 冪等性: `chat_event_log`（Pub/Sub messageId）+ `chat_messages.unique(message_name)`。
+  - RLS: 参照はテナント内メンバー、書き込みは service role のみ。
+- **AIへの注入**: `gatherChatContext()` が直近14日・最大200件を整形し、
+  AI-PMO のレポート生成プロンプト（`src/lib/data/pmo.ts`）に「社内チャットの直近の会話」
+  セクションとして注入する。蓄積が無ければセクションごと省略（挙動不変）。
+- **制約**:
+  - 読めるのは **Bot を追加したスペースのみ**。購読開始以降のメッセージのみ（過去ログの遡り不可。
+    遡りには `chat.messages.readonly` のユーザーOAuthが別途必要）。
+  - メッセージの編集/削除（message.updated/deleted）は未購読 = 蓄積内容は投稿時点のスナップショット。
+  - 運用上の注意: スペース参加者の発言が記録されるため、対象スペースの参加者への周知を行うこと。
+
+---
+
 ## 8. 追加する API ルート / ファイル一覧
 
 | パス | 役割 | 要件 |
@@ -314,6 +341,7 @@ Chat App のインタラクションイベントを受ける（HTTP endpoint 方
 | `src/lib/chat/targets.ts` | ChatTarget→Space 解決（DM/space/entity） | R1 |
 | `src/lib/chat/commands.ts` | メンション本文パース→アクション | R3 |
 | `src/lib/chat/reactions.ts` | リアクション→トリガー照合・実行 | R2 |
+| `src/lib/chat/messages.ts` | メッセージ蓄積・AIプロンプト用整形 | P4 |
 | `src/app/api/chat/events/route.ts` | インタラクション受信（メンション/DM/カード） | R3 |
 | `src/app/api/chat/pubsub/route.ts` | Events API 受信（リアクション等） | R2 |
 | `src/app/api/cron/chat-subscriptions/route.ts` | 購読の作成/更新 | R2 |
