@@ -121,6 +121,23 @@ export async function listDeliveryForecasts(): Promise<ForecastData> {
 
   const rows: ForecastRow[] = ((data ?? []) as ForecastDbRow[]).map(mapDbRow);
 
+  // 紐づけ先の案件が論理削除(ゴミ箱)済みの場合はリンクを外す。
+  // FK の on delete set null は物理削除にしか効かず、参照が残ると案件詳細へのリンクが404になるため。
+  // ここで外すだけなら非破壊なので、案件を復元すれば再び辿れる。
+  const oppIds = [...new Set(rows.map((r) => r.opportunityId).filter((v): v is string => !!v))];
+  if (oppIds.length > 0) {
+    const { data: opps, error: oppErr } = await sb
+      .from("opportunities")
+      .select("id")
+      .in("id", oppIds)
+      .is("deleted_at", null);
+    if (oppErr) throw new Error(`見込みの案件参照チェックに失敗: ${oppErr.message}`);
+    const alive = new Set(((opps ?? []) as { id: string }[]).map((o) => o.id));
+    for (const r of rows) {
+      if (r.opportunityId && !alive.has(r.opportunityId)) r.opportunityId = null;
+    }
+  }
+
   // 今月から12ヶ月のロールアップ
   const windowMonths: string[] = Array.from({ length: 12 }, (_, i) => addMonths(nowMonth, i));
   const inWindow = new Set(windowMonths);
