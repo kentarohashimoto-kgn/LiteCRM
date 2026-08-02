@@ -19,11 +19,20 @@ export type RecordingRow = {
 
 /** 商談に紐づく録音一覧（新しい順）。RLSで参照権限を担保。 */
 export async function listMeetingRecordings(meetingId: string): Promise<RecordingRow[]> {
+  return listRecordingsByColumn("meeting_id", meetingId);
+}
+
+/** メモ・議事録ページに紐づく録音一覧（新しい順）。 */
+export async function listMemoPageRecordings(memoPageId: string): Promise<RecordingRow[]> {
+  return listRecordingsByColumn("memo_page_id", memoPageId);
+}
+
+async function listRecordingsByColumn(column: "meeting_id" | "memo_page_id", value: string): Promise<RecordingRow[]> {
   const sb = getSupabaseServer();
   const { data } = await sb
     .from("meeting_recordings")
     .select("id,title,status,duration_sec,size_bytes,transcript,transcript_source,summary,error,storage_path,created_at")
-    .eq("meeting_id", meetingId)
+    .eq(column, value)
     .order("created_at", { ascending: false });
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const rows = (data ?? []) as any[];

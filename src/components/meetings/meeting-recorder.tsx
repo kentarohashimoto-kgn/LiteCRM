@@ -36,15 +36,18 @@ const fmtDur = (s?: number | null) => (s == null ? "" : `${Math.floor(s / 60)}:$
 const fmtSize = (b?: number | null) => (b == null ? "" : b > 1e6 ? `${(b / 1e6).toFixed(1)}MB` : `${Math.max(1, Math.round(b / 1e3))}KB`);
 
 export function MeetingRecorder({
-  meetingId,
-  opportunityId,
-  accountId,
+  meetingId = null,
+  opportunityId = null,
+  accountId = null,
+  memoPageId = null,
   defaultTitle,
   recordings,
 }: {
-  meetingId: string;
-  opportunityId: string;
-  accountId: string | null;
+  meetingId?: string | null;
+  opportunityId?: string | null;
+  accountId?: string | null;
+  /** メモ・議事録ページからの録音時に指定（商談・案件なしでも録音できる）。 */
+  memoPageId?: string | null;
   defaultTitle: string;
   recordings: RecordingRow[];
 }) {
@@ -128,7 +131,7 @@ export function MeetingRecorder({
     rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
     rec.onstop = onStop;
 
-    const created = await createRecordingAction({ opportunityId, meetingId, accountId, title: defaultTitle });
+    const created = await createRecordingAction({ opportunityId, meetingId, accountId, memoPageId, title: defaultTitle });
     if (!created.ok) {
       setError(created.error);
       cleanupStreams();

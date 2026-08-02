@@ -25,6 +25,7 @@ export async function createRecordingAction(input: {
   opportunityId?: string | null;
   meetingId?: string | null;
   accountId?: string | null;
+  memoPageId?: string | null;
   title?: string | null;
 }): Promise<Ok<{ id: string }> | Err> {
   const ctx = await requireCtx();
@@ -36,6 +37,7 @@ export async function createRecordingAction(input: {
     opportunity_id: input.opportunityId ?? null,
     meeting_id: input.meetingId ?? null,
     account_id: input.accountId ?? null,
+    memo_page_id: input.memoPageId ?? null,
     owner_user_id: ctx.userId,
     created_by: ctx.userId,
     title: (input.title ?? "").slice(0, 200) || null,
@@ -113,6 +115,7 @@ export async function finishRecordingAction(input: { id: string; durationSec?: n
     meta: { durationSec: input.durationSec ?? null, sizeBytes: input.sizeBytes ?? null }, ip: clientIp(),
   });
   revalidatePath("/app/opportunities", "layout");
+  revalidatePath("/app/memos", "layout");
   return { ok: true };
 }
 
@@ -151,5 +154,6 @@ export async function deleteRecordingAction(input: { id: string }): Promise<{ ok
     }
   }
   revalidatePath("/app/opportunities", "layout");
+  revalidatePath("/app/memos", "layout");
   return { ok: true };
 }
