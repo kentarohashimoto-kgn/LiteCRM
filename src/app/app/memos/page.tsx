@@ -1,12 +1,10 @@
-import Link from "next/link";
-import { NotebookPen, Mic, Plus, Search, FileText, Link2, CornerDownRight } from "lucide-react";
+import { NotebookPen, Mic, Plus, Search } from "lucide-react";
 import { requireCtx } from "@/lib/session";
 import { listMemoPages } from "@/lib/data/memos";
-import { MEMO_KIND_LABEL } from "@/lib/memo";
 import { PageHeader, Section, EmptyState } from "@/components/ui/primitives";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { MemoListView } from "@/components/memos/memo-list-view";
 import { createMemoPageAction } from "@/server/actions/memos";
-import { formatDateTimeJst } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -69,44 +67,7 @@ export default async function MemosPage({ searchParams }: { searchParams: { q?: 
             }
           />
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {pages.map((p) => (
-              <Link
-                key={p.id}
-                href={`/app/memos/${p.id}`}
-                className="block rounded-xl border border-black/[0.06] p-4 hover:border-teal-primary/40 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="min-w-0 font-bold text-ink line-clamp-1">{p.title}</span>
-                  <span className={`pill shrink-0 ${p.kind === "minutes" ? "bg-teal-light text-teal-deep" : "bg-mist-soft text-ink/60"}`}>
-                    {MEMO_KIND_LABEL[p.kind]}
-                  </span>
-                </div>
-                {p.parentTitle && (
-                  <div className="mt-0.5 flex items-center gap-1 text-[11px] text-ink/40">
-                    <CornerDownRight size={11} /> {p.parentTitle}
-                  </div>
-                )}
-                {p.bodyPreview && <p className="mt-1 line-clamp-2 text-xs text-ink/50 whitespace-pre-wrap">{p.bodyPreview}</p>}
-                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-ink/45">
-                  {p.oppName && (
-                    <span className="pill bg-amber-50 text-accent-orange inline-flex items-center gap-1">
-                      <Link2 size={10} /> {p.oppName}
-                      {p.meetingTitle ? ` / ${p.meetingTitle}` : ""}
-                    </span>
-                  )}
-                  {p.recordingCount > 0 && (
-                    <span className="pill bg-rose-50 text-rose-600 inline-flex items-center gap-1">
-                      <Mic size={10} /> 録音 {p.recordingCount}
-                    </span>
-                  )}
-                  <span className="ml-auto inline-flex items-center gap-1 tabular-nums">
-                    <FileText size={11} /> {formatDateTimeJst(p.updated_at)}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
+          <MemoListView pages={pages} />
         )}
       </Section>
     </div>
