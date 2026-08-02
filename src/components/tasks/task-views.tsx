@@ -178,7 +178,7 @@ export function TaskViews(props: Props) {
 
   // 絞り込み: 担当者 + 完了を隠すモード + サブタスク表示（プロジェクトのみ）
   const [assignee, setAssignee] = useState<string>("all");
-  const [hideDone, setHideDone] = useState(false);
+  const [hideDone, setHideDone] = useState(true);
   const [showSubs, setShowSubs] = useState(false);
 
   // 「完了」セクション（プロジェクトのみ）。完了にしたら自動でここへ移す。
