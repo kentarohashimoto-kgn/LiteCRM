@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Plus, PhoneCall, Target, ClipboardList, CheckSquare } from "lucide-react";
+import { Plus, PhoneCall, Target, ClipboardList, CheckSquare, NotebookPen } from "lucide-react";
 
 /** 全画面共通のクイック追加(＋)。よく使う登録動線へ1クリックで移動。 */
 export function QuickAdd() {
@@ -18,6 +18,7 @@ export function QuickAdd() {
   }, []);
 
   const items = [
+    { href: "/app/memos", label: "メモ・議事録", desc: "1クリックで書き始める", icon: NotebookPen },
     { href: "/app/appointments/new", label: "アポ登録", desc: "架電でアポ獲得", icon: PhoneCall },
     { href: "/app/activities/new", label: "活動を記録", desc: "商談後5分入力", icon: ClipboardList },
     { href: "/app/opportunities/new", label: "案件を作成", desc: "新規案件", icon: Target },

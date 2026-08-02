@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { checkBearer } from "@/lib/secure-compare";
 import { getActiveConnection } from "@/lib/storage/connections";
 import { deleteDriveFile } from "@/lib/storage/gdrive";
+import { buildTranscriptBody, isBlankBody } from "@/lib/memo";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,7 @@ export async function GET(req: Request) {
   }
 
   // 未処理を取得（uploaded 優先、詰まった transcribing(2h超)も回収）。音声実体はSupabase/ドライブどちらでも可
-  const cols = "id, storage_path, drive_file_id, mime_type, title, duration_sec, meeting_id, opportunity_id, account_id";
+  const cols = "id, storage_path, drive_file_id, mime_type, title, duration_sec, meeting_id, opportunity_id, account_id, memo_page_id";
   const hasAudio = "storage_path.not.is.null,drive_file_id.not.is.null";
   const { data: a } = await admin
     .from("meeting_recordings")
@@ -88,14 +89,17 @@ export async function GET(req: Request) {
   const meetingIds = Array.from(new Set(picked.map((r) => r.meeting_id).filter(Boolean)));
   const oppIds = Array.from(new Set(picked.map((r) => r.opportunity_id).filter(Boolean)));
   const accIds = Array.from(new Set(picked.map((r) => r.account_id).filter(Boolean)));
-  const [mR, oR, aR] = await Promise.all([
+  const memoIds = Array.from(new Set(picked.map((r) => r.memo_page_id).filter(Boolean)));
+  const [mR, oR, aR, pR] = await Promise.all([
     meetingIds.length ? admin.from("meetings").select("id, title, meeting_date").in("id", meetingIds) : Promise.resolve({ data: [] as any[] }),
     oppIds.length ? admin.from("opportunities").select("id, name").in("id", oppIds) : Promise.resolve({ data: [] as any[] }),
     accIds.length ? admin.from("accounts").select("id, name").in("id", accIds) : Promise.resolve({ data: [] as any[] }),
+    memoIds.length ? admin.from("memo_pages").select("id, title").in("id", memoIds) : Promise.resolve({ data: [] as any[] }),
   ]);
   const mMap = new Map((mR.data ?? []).map((m: any) => [m.id, m])); /* eslint-disable-line @typescript-eslint/no-explicit-any */
   const oMap = new Map((oR.data ?? []).map((o: any) => [o.id, o.name])); /* eslint-disable-line @typescript-eslint/no-explicit-any */
   const aMap = new Map((aR.data ?? []).map((x: any) => [x.id, x.name])); /* eslint-disable-line @typescript-eslint/no-explicit-any */
+  const pMap = new Map((pR.data ?? []).map((x: any) => [x.id, x.title])); /* eslint-disable-line @typescript-eslint/no-explicit-any */
 
   // 音声DLはアプリ経由のプロキシで配信する（CCR実行環境は supabase.co へ直接到達できないため）。
   const base = (process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin).replace(/\/$/, "");
@@ -108,11 +112,12 @@ export async function GET(req: Request) {
       audioUrl,
       mimeType: r.mime_type ?? "audio/webm",
       durationSec: r.duration_sec ?? null,
-      title: r.title ?? (m?.title ?? "商談"),
+      title: r.title ?? m?.title ?? (r.memo_page_id ? pMap.get(r.memo_page_id) ?? null : null) ?? "商談",
       meetingTitle: m?.title ?? null,
       meetingDate: m?.meeting_date ?? null,
       accountName: r.account_id ? aMap.get(r.account_id) ?? null : null,
       oppName: r.opportunity_id ? oMap.get(r.opportunity_id) ?? null : null,
+      memoPageTitle: r.memo_page_id ? pMap.get(r.memo_page_id) ?? null : null,
     });
   }
   // 二重処理防止に transcribing へ
@@ -147,7 +152,7 @@ export async function POST(req: Request) {
     .from("meeting_recordings")
     .update({ status: "done", transcript, summary, transcript_source: source, error: null, processed_at: new Date().toISOString() })
     .eq("id", id)
-    .select("meeting_id")
+    .select("meeting_id, memo_page_id")
     .maybeSingle();
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
@@ -162,6 +167,20 @@ export async function POST(req: Request) {
       if (Object.keys(patch).length) await admin.from("meetings").update(patch).eq("id", meetingId);
     } catch {
       /* 商談反映失敗は無視（録音側には保存済み） */
+    }
+  }
+
+  // メモ・議事録ページへ非破壊で反映（本文が空のときだけ埋める）
+  const memoPageId = (rec as { memo_page_id: string | null } | null)?.memo_page_id ?? null;
+  if (memoPageId && (summary || transcript)) {
+    try {
+      const { data: page } = await admin.from("memo_pages").select("body").eq("id", memoPageId).maybeSingle();
+      if (isBlankBody((page as { body?: string | null } | null)?.body)) {
+        const body = buildTranscriptBody({ summary, transcript });
+        if (body) await admin.from("memo_pages").update({ body }).eq("id", memoPageId);
+      }
+    } catch {
+      /* ページ反映失敗は無視（録音側には保存済み） */
     }
   }
   return NextResponse.json({ ok: true });

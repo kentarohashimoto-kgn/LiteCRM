@@ -58,6 +58,7 @@ const groups: NavGroup[] = [
     items: [
       { href: "/app/mypage", label: "マイページ", icon: Home },
       { href: "/app/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
+      { href: "/app/memos", label: "メモ・議事録", icon: NotebookPen },
       { href: "/app/today", label: "今日のアポ・AC", icon: Sun },
       { href: "/app/review", label: "AI確認キュー", icon: Inbox },
       { href: "/app/tasks", label: "タスク", icon: CheckSquare },
@@ -124,6 +125,7 @@ const boGroups: NavGroup[] = [
     heading: "バックオフィス",
     items: [
       { href: "/app/bo", label: "BOダッシュボード", icon: LayoutDashboard },
+      { href: "/app/memos", label: "メモ・議事録", icon: NotebookPen },
       { href: "/app/bo/subsidies", label: "助成金トラッカー", icon: BadgeCheck },
       { href: "/app/bo/followups", label: "研修後フォロー", icon: CalendarCheck },
       { href: "/app/bo/expos", label: "展示会準備WBS", icon: Presentation },
@@ -183,6 +185,7 @@ const insideSalesGroups: NavGroup[] = [
     heading: "ホーム",
     items: [
       { href: "/app/mypage", label: "マイページ", icon: Home },
+      { href: "/app/memos", label: "メモ・議事録", icon: NotebookPen },
       { href: "/app/appointments/new", label: "アポ・商談登録", icon: CalendarCheck },
       { href: "/app/opportunities", label: "案件（表・ボード）", icon: Target },
       { href: "/app/tasks", label: "タスク", icon: CheckSquare },
