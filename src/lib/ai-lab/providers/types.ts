@@ -81,12 +81,19 @@ export interface ImageReference {
   data: Buffer;
 }
 
+/**
+ * 画像の品質。gpt-image は同一モデルでも low/medium/high で単価が約35倍変わるため、
+ * 指定しない(＝プロバイダ既定に任せる)状態にしない。
+ */
+export type ImageQuality = "low" | "medium" | "high";
+
 export interface ImageProvider {
   generate(opts: {
     modelId: string;
     prompt: string;
     n: number;
     signal: AbortSignal;
+    quality: ImageQuality;
     /** 1件以上あれば「参照つきの生成」(images/edits)になる。 */
     references?: ImageReference[];
   }): Promise<GeneratedImage[]>;

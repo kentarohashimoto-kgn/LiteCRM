@@ -73,6 +73,8 @@ export const LAB_ERROR_MESSAGES: Record<string, string> = {
   too_large: "添付ファイルが大きすぎます。点数を減らすか、小さいファイルでお試しください。",
   attachment_rejected: "この形式のファイルは添付できません。",
   provider_error: "AIの応答中にエラーが発生しました。もう一度お試しください。",
+  plan_failed: "構成案をうまく作れませんでした。指示を具体的にして、もう一度お試しください。",
+  slides_not_ready: "まだ生成済みのスライドがありません。先に画像を作ってください。",
   empty_message: "メッセージを入力してください。",
   not_found: "会話が見つかりません。",
   unauthorized: "セッションが切れました。再度ログインしてください。",

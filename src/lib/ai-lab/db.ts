@@ -262,6 +262,8 @@ export interface LabAttachmentRow {
   id: string;
   conversation_id: string | null;
   message_id: string | null;
+  /** スライド作成のデッキに紐づく添付・生成物。 */
+  deck_id: string | null;
   origin: "upload" | "generated";
   kind: "image" | "document" | "output";
   file_name: string;
@@ -271,8 +273,8 @@ export interface LabAttachmentRow {
   created_at: string;
 }
 
-const ATTACHMENT_COLS =
-  "id, conversation_id, message_id, origin, kind, file_name, mime, size_bytes, storage_path, created_at";
+export const ATTACHMENT_COLS =
+  "id, conversation_id, message_id, deck_id, origin, kind, file_name, mime, size_bytes, storage_path, created_at";
 
 export const UPLOAD_BUCKET = "ai-lab-uploads";
 export const OUTPUT_BUCKET = "ai-lab-generated";
@@ -293,6 +295,7 @@ export async function createAttachment(params: {
   storagePath: string;
   conversationId?: string | null;
   messageId?: string | null;
+  deckId?: string | null;
 }): Promise<LabAttachmentRow | null> {
   const { data } = await labDb()
     .from("ai_lab_attachments")
@@ -308,6 +311,7 @@ export async function createAttachment(params: {
       storage_path: params.storagePath,
       conversation_id: params.conversationId ?? null,
       message_id: params.messageId ?? null,
+      deck_id: params.deckId ?? null,
     })
     .select(ATTACHMENT_COLS)
     .single();

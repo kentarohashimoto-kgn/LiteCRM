@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import type { NextRequest } from "next/server";
 import { imageResultNote } from "@/lib/ai-lab/attachments";
+import { DEFAULT_SLIDE_QUALITY } from "@/lib/ai-lab/slides";
 import { addUsage, labDb, signImageUrls } from "@/lib/ai-lab/db";
 import { getImageProvider, LabProviderError } from "@/lib/ai-lab/providers";
 import { prepareLabTurn, saveAssistantMessage } from "@/lib/ai-lab/turn";
@@ -52,6 +53,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       modelId: turn.model.modelId(),
       prompt: imageInput.prompt,
       n: IMAGE_COUNT,
+      // 品質は必ず明示する。既定任せにすると単価が読めない（low/high で約35倍違う）。
+      quality: DEFAULT_SLIDE_QUALITY,
       // デザインガイド等を渡していれば、それに合わせて作らせる。
       references: imageInput.references,
       signal: req.signal,
