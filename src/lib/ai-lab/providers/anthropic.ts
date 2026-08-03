@@ -18,6 +18,7 @@ export const anthropicChat: ChatProvider = {
     const client = new Anthropic();
     let inputTokens = 0;
     let outputTokens = 0;
+    let stopReason: string | null = null;
 
     try {
       const stream = await client.messages.create(
@@ -38,6 +39,7 @@ export const anthropicChat: ChatProvider = {
           opts.onDelta(event.delta.text);
         } else if (event.type === "message_delta") {
           outputTokens = event.usage?.output_tokens ?? outputTokens;
+          stopReason = event.delta?.stop_reason ?? stopReason;
         }
       }
     } catch (e) {
@@ -47,6 +49,10 @@ export const anthropicChat: ChatProvider = {
       if (e instanceof Anthropic.APIError) throw new LabProviderError("provider_error", `Anthropic API エラー(${e.status})`);
       throw new LabProviderError("provider_error", "Anthropic への接続に失敗しました");
     }
+
+    // 安全機構による拒否は HTTP 200 で返る。本文が空のまま成功扱いにすると
+    // 受講者には「無言の空欄」に見えるので、理由の分かるエラーとして扱う。
+    if (stopReason === "refusal") throw new LabProviderError("refused");
 
     return { inputTokens, outputTokens };
   },

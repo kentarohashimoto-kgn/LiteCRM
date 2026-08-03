@@ -64,7 +64,7 @@
 
 | 用途 | 接続 | 備考 |
 |---|---|---|
-| Claude 4種 | `@anthropic-ai/sdk`（既存 ^0.110.0）`messages.stream()` | モデルID: `claude-fable-5` / `claude-opus-5` / `claude-sonnet-5` / `claude-haiku-4-5-20251001`（カタログで管理） |
+| Claude 4種 | `@anthropic-ai/sdk`（既存 ^0.110.0）`messages.stream()` | モデルID: `claude-fable-5` / `claude-opus-5` / `claude-sonnet-5` / `claude-haiku-4-5`（カタログで管理） |
 | ChatGPT 最新 | **OpenAI REST API を `fetch` で直接呼ぶ**（`/v1/chat/completions`、SSEストリーミング） | モデルIDは `OPENAI_CHAT_MODEL`。SDK を足さない判断は §9 参照 |
 | 画像生成 | OpenAI Images API（`/v1/images/generations`、`gpt-image-2`）。`ImageProvider` インターフェースで抽象化し将来の差し替えに備える | モデルIDは `AILAB_IMAGE_MODEL`（既定 `gpt-image-2`） |
 

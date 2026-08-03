@@ -44,7 +44,8 @@ describe("モデルカタログ", () => {
     expect(byKey["claude-fable"]).toBe("claude-fable-5");
     expect(byKey["claude-opus"]).toBe("claude-opus-5");
     expect(byKey["claude-sonnet"]).toBe("claude-sonnet-5");
-    expect(byKey["claude-haiku"]).toBe("claude-haiku-4-5-20251001");
+    // 日付サフィックス付きの完全IDではなくエイリアスを使う（公式ガイドの指定）
+    expect(byKey["claude-haiku"]).toBe("claude-haiku-4-5");
   });
 
   it("画像生成の既定は gpt-image-2", () => {

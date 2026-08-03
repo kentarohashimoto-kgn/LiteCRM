@@ -1,6 +1,12 @@
 /** AI Lab から呼ぶ生成プロバイダの共通インターフェース。 */
 
-export type LabErrorCode = "config_error" | "rate_limited" | "provider_error" | "aborted";
+export type LabErrorCode =
+  | "config_error"
+  | "rate_limited"
+  | "provider_error"
+  | "aborted"
+  /** モデルの安全機構が応答を拒否した(HTTP 200 で stop_reason=refusal が返る)。 */
+  | "refused";
 
 /** プロバイダ固有の例外を、画面に出す原因区分へ正規化して運ぶ。 */
 export class LabProviderError extends Error {

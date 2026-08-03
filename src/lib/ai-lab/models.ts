@@ -57,7 +57,7 @@ export const LAB_MODELS: LabModel[] = [
     label: "Claude Haiku",
     provider: "anthropic",
     kind: "text",
-    modelId: () => process.env.AILAB_MODEL_HAIKU || "claude-haiku-4-5-20251001",
+    modelId: () => process.env.AILAB_MODEL_HAIKU || "claude-haiku-4-5",
     hint: "最速。短い質問や下書きに",
   },
   {

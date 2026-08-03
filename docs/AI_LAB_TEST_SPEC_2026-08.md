@@ -50,7 +50,7 @@
 
 | ID | 内容 |
 |---|---|
-| UT-M01 | 6モデルキーが定義され、Claude 4種の既定 modelId が `claude-fable-5` / `claude-opus-5` / `claude-sonnet-5` / `claude-haiku-4-5-20251001` |
+| UT-M01 | 6モデルキーが定義され、Claude 4種の既定 modelId が `claude-fable-5` / `claude-opus-5` / `claude-sonnet-5` / `claude-haiku-4-5`（日付サフィックスは付けない） |
 | UT-M02 | 環境変数（`AILAB_MODEL_SONNET` 等）設定時は modelId が上書きされる |
 | UT-M03 | `OPENAI_CHAT_MODEL` 未設定時 `openai-chat` は isModelAvailable=false |
 | UT-M04 | resolveModel: 未知キーは null（例外にしない） |

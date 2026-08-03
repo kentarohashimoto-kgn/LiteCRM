@@ -254,7 +254,7 @@ export const LAB_MODELS: LabModel[] = [
   { key: "claude-sonnet", label: "Claude Sonnet", provider: "anthropic", kind: "text",
     modelId: () => process.env.AILAB_MODEL_SONNET ?? "claude-sonnet-5" },
   { key: "claude-haiku",  label: "Claude Haiku",  provider: "anthropic", kind: "text",
-    modelId: () => process.env.AILAB_MODEL_HAIKU  ?? "claude-haiku-4-5-20251001" },
+    modelId: () => process.env.AILAB_MODEL_HAIKU  ?? "claude-haiku-4-5" },
   { key: "openai-chat",   label: "ChatGPT（最新）", provider: "openai",  kind: "text",
     modelId: () => process.env.OPENAI_CHAT_MODEL ?? "gpt-5.1" },
   { key: "image-gen",     label: "画像生成",       provider: "openai",  kind: "image",

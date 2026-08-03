@@ -69,6 +69,7 @@ export const LAB_ERROR_MESSAGES: Record<string, string> = {
   rate_limited: "送信が集中しています。1分ほど待って再度お試しください。",
   budget_exceeded: "利用上限に達しました。担当者にお問い合わせください。",
   config_error: "環境設定に問題があります。運営にご連絡ください。",
+  refused: "この内容にはお答えできませんでした。表現を変えてお試しください。",
   provider_error: "AIの応答中にエラーが発生しました。もう一度お試しください。",
   empty_message: "メッセージを入力してください。",
   not_found: "会話が見つかりません。",
