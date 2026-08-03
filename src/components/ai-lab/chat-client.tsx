@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUp, Paperclip, Square, X } from "lucide-react";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/ai-lab/attachments";
 import { labErrorMessage } from "@/lib/ai-lab/limits";
+import { conversationTitleFrom } from "@/lib/ai-lab/validate";
 import type {
   LabPendingAttachment,
   LabUiFile,
@@ -12,6 +13,7 @@ import type {
   LabUiModel,
   LabUiPreset,
 } from "@/lib/ai-lab/ui-types";
+import { useLabChat } from "./lab-chat-context";
 import { MessageBubble } from "./message-bubble";
 
 interface Props {
@@ -42,6 +44,7 @@ export function ChatClient({
   activePreset,
 }: Props) {
   const router = useRouter();
+  const { showConversation, newChatToken } = useLabChat();
   const [convId, setConvId] = useState<string | null>(conversationId);
   const [messages, setMessages] = useState<LabUiMessage[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -62,10 +65,35 @@ export function ChatClient({
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // 会話IDは非同期処理の途中でも正しい値を見たいので、stateとは別にrefでも持つ。
+  const convIdRef = useRef<string | null>(conversationId);
+  /** サーバー確定前に履歴ペインへ出した仮エントリのID。 */
+  const optimisticIdRef = useRef<string | null>(null);
+  const newChatTokenRef = useRef(newChatToken);
+  newChatTokenRef.current = newChatToken;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
+
+  // 「新しいチャット」はルーターの現在地がずれていても効いてほしいので、
+  // ナビゲーションに頼らずこの場で初期状態へ戻す。
+  const seenNewChatToken = useRef(newChatToken);
+  useEffect(() => {
+    if (seenNewChatToken.current === newChatToken) return;
+    seenNewChatToken.current = newChatToken;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    convIdRef.current = null;
+    optimisticIdRef.current = null;
+    setConvId(null);
+    setMessages([]);
+    setInput("");
+    setPending([]);
+    setError(null);
+    setPresetId(null);
+    setStreaming(false);
+  }, [newChatToken]);
 
   const patchLast = useCallback((patch: Partial<LabUiMessage>) => {
     setMessages((prev) => {
@@ -86,16 +114,23 @@ export function ChatClient({
     });
   }, []);
 
-  /** 新規会話ができたらURLだけ差し替える(ナビゲーションさせないので入力中の状態が消えない)。 */
+  /**
+   * 新規会話ができたらURLだけ差し替える(ナビゲーションさせないので入力中の状態が消えない)。
+   * あわせて履歴ペインの仮エントリを本物のIDへ差し替える。
+   */
   const adoptConversation = useCallback(
-    (id: string) => {
-      setConvId((prev) => {
-        if (prev) return prev;
-        window.history.replaceState(null, "", `/lab/${slug}/chat/${id}`);
-        return id;
-      });
+    (id: string, title?: string) => {
+      if (convIdRef.current) return;
+      convIdRef.current = id;
+      setConvId(id);
+      window.history.replaceState(null, "", `/lab/${slug}/chat/${id}`);
+      showConversation(
+        { id, title: title || "新しいチャット", updatedAt: new Date().toISOString() },
+        optimisticIdRef.current,
+      );
+      optimisticIdRef.current = null;
     },
-    [slug],
+    [slug, showConversation],
   );
 
   /** ファイル選択時にすぐアップロードして、送信時はIDだけ渡す(送信操作を軽く保つ)。 */
@@ -130,7 +165,7 @@ export function ChatClient({
     }
   }
 
-  async function sendImage(body: Record<string, unknown>) {
+  async function sendImage(body: Record<string, unknown>, isCurrent: () => boolean) {
     const res = await fetch("/api/lab/image", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -139,18 +174,21 @@ export function ChatClient({
     const json = (await res.json().catch(() => ({}))) as {
       error?: string;
       conversationId?: string;
+      title?: string;
       images?: string[];
     };
+    // 待っている間に「新しいチャット」で画面が切り替わっていたら、もう書き込まない。
+    if (!isCurrent()) return;
     if (!res.ok || json.error) {
       patchLast({ errorCode: json.error ?? "provider_error" });
       setError(labErrorMessage(json.error));
       return;
     }
-    if (json.conversationId) adoptConversation(json.conversationId);
+    if (json.conversationId) adoptConversation(json.conversationId, json.title);
     patchLast({ content: "（画像を生成しました）", images: json.images ?? [] });
   }
 
-  async function sendText(body: Record<string, unknown>, signal: AbortSignal) {
+  async function sendText(body: Record<string, unknown>, signal: AbortSignal, isCurrent: () => boolean) {
     const res = await fetch("/api/lab/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -160,6 +198,7 @@ export function ChatClient({
 
     if (!res.ok || !res.body) {
       const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!isCurrent()) return;
       patchLast({ errorCode: json.error ?? "provider_error" });
       setError(labErrorMessage(json.error));
       return;
@@ -179,6 +218,7 @@ export function ChatClient({
         if (!line.startsWith("data:")) continue;
         let event: {
           conversationId?: string;
+          title?: string;
           delta?: string;
           done?: boolean;
           error?: string;
@@ -189,7 +229,9 @@ export function ChatClient({
         } catch {
           continue; // 壊れた行は捨てて受信を続ける
         }
-        if (event.conversationId) adoptConversation(event.conversationId);
+        // 「新しいチャット」で画面が切り替わったら、以降の断片は捨てる。
+        if (!isCurrent()) return;
+        if (event.conversationId) adoptConversation(event.conversationId, event.title);
         if (event.delta) appendDelta(event.delta);
         if (event.files?.length) patchLast({ files: event.files });
         if (event.error) {
@@ -211,6 +253,19 @@ export function ChatClient({
     setInput("");
     const sentAttachments = pending;
     setPending([]);
+
+    // 会話IDが決まるのは応答が返ってから。待たずに履歴ペインへ出しておき、
+    // サーバー確定時に本物のIDへ差し替える(タイトルの決め方はサーバーと同じ関数)。
+    if (!convIdRef.current) {
+      const placeholderId = tempId();
+      optimisticIdRef.current = placeholderId;
+      showConversation({
+        id: placeholderId,
+        title: conversationTitleFrom(text),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
     setMessages((prev) => [
       ...prev,
       {
@@ -248,10 +303,14 @@ export function ChatClient({
 
     const controller = new AbortController();
     abortRef.current = controller;
+    // 送信中に「新しいチャット」へ切り替わったら、この送信の結果は破棄する。
+    const tokenAtSend = newChatTokenRef.current;
+    const isCurrent = () => newChatTokenRef.current === tokenAtSend;
     try {
-      if (currentModel.kind === "image") await sendImage(body);
-      else await sendText(body, controller.signal);
+      if (currentModel.kind === "image") await sendImage(body, isCurrent);
+      else await sendText(body, controller.signal, isCurrent);
     } catch (e) {
+      if (!isCurrent()) return;
       // 停止ボタンによる中断は失敗として扱わない(サーバー側も途中までを保存している)。
       if ((e as Error)?.name === "AbortError") patchLast({ errorCode: "aborted" });
       else {
@@ -259,8 +318,10 @@ export function ChatClient({
         setError(labErrorMessage("provider_error"));
       }
     } finally {
-      abortRef.current = null;
-      setStreaming(false);
+      if (isCurrent()) {
+        abortRef.current = null;
+        setStreaming(false);
+      }
       // 履歴一覧(タイトル・並び順)をサーバーから取り直す。入力中の状態は保持される。
       router.refresh();
     }

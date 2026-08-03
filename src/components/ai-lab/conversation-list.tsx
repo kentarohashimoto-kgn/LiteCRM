@@ -7,20 +7,18 @@ import { Check, MessageSquare, Pencil, Trash2, X } from "lucide-react";
 import { archiveLabConversation, renameLabConversation } from "@/server/actions/ai-lab-chat";
 import type { LabUiConversation } from "@/lib/ai-lab/ui-types";
 import { cn } from "@/lib/utils";
+import { useLabChat } from "./lab-chat-context";
 
 export function ConversationList({
   slug,
-  conversations,
-  activeId,
   onNavigate,
 }: {
   slug: string;
-  conversations: LabUiConversation[];
-  activeId: string | null;
   /** モバイルのドロワーを閉じるためのフック。 */
   onNavigate?: () => void;
 }) {
   const router = useRouter();
+  const { conversations, activeId, startNewChat } = useLabChat();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
@@ -45,7 +43,12 @@ export function ConversationList({
     startTransition(async () => {
       await archiveLabConversation({ slug, conversationId: c.id });
       // 開いている会話を消したときは新規チャットへ戻す。
-      if (activeId === c.id) router.push(`/lab/${slug}/chat`);
+      // URLだけ差し替えている場合ルーターの現在地がずれているため、画面の初期化も明示的に行う。
+      if (activeId === c.id) {
+        startNewChat();
+        window.history.replaceState(null, "", `/lab/${slug}/chat`);
+        router.push(`/lab/${slug}/chat`);
+      }
       router.refresh();
     });
   }
