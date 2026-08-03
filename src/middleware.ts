@@ -40,8 +40,10 @@ async function labGate(request: NextRequest, path: string): Promise<NextResponse
  */
 export async function middleware(request: NextRequest) {
   // /lab は顧客向けの体験環境。CRMの認証系とは独立して処理する。
-  if (request.nextUrl.pathname.startsWith("/lab")) {
-    return labGate(request, request.nextUrl.pathname);
+  // 前方一致にしないのは、将来 /labor のような別ルートを巻き込まないため。
+  const path = request.nextUrl.pathname;
+  if (path === "/lab" || path.startsWith("/lab/")) {
+    return labGate(request, path);
   }
   // AI Lab のAPIは受講者セッション(ailab_session)で認可する。
   // CRMのセッション更新は不要なので、ストリーミング要求に余計な往復を足さない。
@@ -76,7 +78,6 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const path = request.nextUrl.pathname;
   // /help 配下はヘルプ資料(静的HTML)。社内向けのためログイン必須にする。
   const isAppRoute = path.startsWith("/app") || path.startsWith("/help");
   const isLogin = path === "/login";
