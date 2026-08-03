@@ -12,9 +12,15 @@ import { prepareLabTurn, saveAssistantMessage, saveGeneratedFiles } from "@/lib/
  */
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+// ファイル生成はコードを書いて実行する往復が入るぶん長くなる。
+export const maxDuration = 300;
 
 const MAX_OUTPUT_TOKENS = 8000;
+/**
+ * ファイル生成時はコードを書いて実行する往復が入るため、通常より広く取る。
+ * ここが狭いと、複数シートを組み立てている途中で打ち切られて生成物が残らない。
+ */
+const MAX_OUTPUT_TOKENS_WITH_FILES = 24000;
 
 export async function POST(req: NextRequest): Promise<Response> {
   let body: {
@@ -74,7 +80,7 @@ export async function POST(req: NextRequest): Promise<Response> {
           modelId: turn.model.modelId(),
           system: turn.system,
           messages: turn.history,
-          maxTokens: MAX_OUTPUT_TOKENS,
+          maxTokens: turn.fileToolsEnabled ? MAX_OUTPUT_TOKENS_WITH_FILES : MAX_OUTPUT_TOKENS,
           signal: abort.signal,
           // ファイル生成はコード実行を伴うため、会社設定で無効なら付けない。
           enableFileTools: turn.fileToolsEnabled,
