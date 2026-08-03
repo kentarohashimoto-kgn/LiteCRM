@@ -82,6 +82,7 @@ export async function createLabCompanyAction(formData: FormData): Promise<void> 
       monthly_token_budget: parseBudget(formData.get("budget")),
       starts_on: optionalText(formData.get("startsOn")),
       ends_on: optionalText(formData.get("endsOn")),
+      file_tools_enabled: String(formData.get("fileTools") ?? "") === "1",
       created_by: ctx.userId,
     })
     .select("id")
@@ -133,6 +134,8 @@ export async function updateLabCompanyAction(formData: FormData): Promise<void> 
     monthly_token_budget: parseBudget(formData.get("budget")),
     starts_on: optionalText(formData.get("startsOn")),
     ends_on: optionalText(formData.get("endsOn")),
+    // チェックボックスは未チェックだと値が来ないので、明示的に false を書き込む。
+    file_tools_enabled: String(formData.get("fileTools") ?? "") === "1",
   };
 
   const basicUser = String(formData.get("basicUser") ?? "").trim();

@@ -6,7 +6,9 @@ export type LabErrorCode =
   | "provider_error"
   | "aborted"
   /** モデルの安全機構が応答を拒否した(HTTP 200 で stop_reason=refusal が返る)。 */
-  | "refused";
+  | "refused"
+  /** 添付を含めたリクエストがプロバイダの上限を超えた。 */
+  | "too_large";
 
 /** プロバイダ固有の例外を、画面に出す原因区分へ正規化して運ぶ。 */
 export class LabProviderError extends Error {
@@ -19,9 +21,19 @@ export class LabProviderError extends Error {
   }
 }
 
+/** モデルへ渡す添付。テキストは本文へ差し込み済みなので、ここには来ない。 */
+export interface ChatAttachment {
+  kind: "image" | "document";
+  mime: string;
+  fileName: string;
+  /** base64 エンコード済みの中身。 */
+  data: string;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  attachments?: ChatAttachment[];
 }
 
 export interface ChatStreamOptions {
@@ -32,11 +44,25 @@ export interface ChatStreamOptions {
   signal: AbortSignal;
   /** 生成された断片が届くたびに呼ばれる。 */
   onDelta: (text: string) => void;
+  /**
+   * xlsx / docx / pptx / pdf の生成を許可するか。
+   * コード実行を伴い従量課金が発生しうるため、会社設定で切り替えられるようにしている。
+   */
+  enableFileTools?: boolean;
+}
+
+/** モデルが生成したファイル(スプレッドシート等)。 */
+export interface GeneratedFile {
+  fileName: string;
+  mime: string;
+  data: Buffer;
 }
 
 export interface ChatUsage {
   inputTokens: number;
   outputTokens: number;
+  /** enableFileTools のときのみ入りうる。 */
+  files?: GeneratedFile[];
 }
 
 export interface ChatProvider {

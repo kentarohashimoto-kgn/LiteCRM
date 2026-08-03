@@ -2,9 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowUp, Square } from "lucide-react";
+import { AlertCircle, ArrowUp, Paperclip, Square, X } from "lucide-react";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/ai-lab/attachments";
 import { labErrorMessage } from "@/lib/ai-lab/limits";
-import type { LabUiMessage, LabUiModel, LabUiPreset } from "@/lib/ai-lab/ui-types";
+import type {
+  LabPendingAttachment,
+  LabUiFile,
+  LabUiMessage,
+  LabUiModel,
+  LabUiPreset,
+} from "@/lib/ai-lab/ui-types";
 import { MessageBubble } from "./message-bubble";
 
 interface Props {
@@ -41,6 +48,8 @@ export function ChatClient({
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<string | null>(activePreset?.id ?? null);
+  const [pending, setPending] = useState<LabPendingAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   // プリセットがモデルを固定していればそれを使う。していなければ会社の既定モデル。
   const preset = activePreset ?? presets.find((p) => p.id === presetId) ?? null;
@@ -52,6 +61,7 @@ export function ChatClient({
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
@@ -87,6 +97,38 @@ export function ChatClient({
     },
     [slug],
   );
+
+  /** ファイル選択時にすぐアップロードして、送信時はIDだけ渡す(送信操作を軽く保つ)。 */
+  async function uploadFiles(list: FileList | null) {
+    if (!list || list.length === 0) return;
+    if (pending.length + list.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+      setError(`一度に添付できるのは ${MAX_ATTACHMENTS_PER_MESSAGE} 件までです`);
+      return;
+    }
+    setError(null);
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("slug", slug);
+      for (const f of Array.from(list)) form.append("files", f);
+      const res = await fetch("/api/lab/upload", { method: "POST", body: form });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        attachments?: LabPendingAttachment[];
+      };
+      if (!res.ok || !json.attachments) {
+        setError(json.message ?? labErrorMessage(json.error));
+        return;
+      }
+      setPending((prev) => [...prev, ...json.attachments!]);
+    } catch {
+      setError("ファイルのアップロードに失敗しました");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   async function sendImage(body: Record<string, unknown>) {
     const res = await fetch("/api/lab/image", {
@@ -135,7 +177,13 @@ export function ChatClient({
         const line = buffer.slice(0, nl).trim();
         buffer = buffer.slice(nl + 1);
         if (!line.startsWith("data:")) continue;
-        let event: { conversationId?: string; delta?: string; done?: boolean; error?: string };
+        let event: {
+          conversationId?: string;
+          delta?: string;
+          done?: boolean;
+          error?: string;
+          files?: LabUiFile[];
+        };
         try {
           event = JSON.parse(line.slice(5).trim());
         } catch {
@@ -143,6 +191,7 @@ export function ChatClient({
         }
         if (event.conversationId) adoptConversation(event.conversationId);
         if (event.delta) appendDelta(event.delta);
+        if (event.files?.length) patchLast({ files: event.files });
         if (event.error) {
           if (event.error === "aborted") patchLast({ errorCode: "aborted" });
           else {
@@ -160,10 +209,31 @@ export function ChatClient({
 
     setError(null);
     setInput("");
+    const sentAttachments = pending;
+    setPending([]);
     setMessages((prev) => [
       ...prev,
-      { id: tempId(), role: "user", content: text, modelKey: currentModel.key, images: [], errorCode: null },
-      { id: tempId(), role: "assistant", content: "", modelKey: currentModel.key, images: [], errorCode: null },
+      {
+        id: tempId(),
+        role: "user",
+        content: text,
+        modelKey: currentModel.key,
+        images: [],
+        // 送信直後は署名URLが無いので、確定後の router.refresh() で本来の表示に置き換わる。
+        attachments: sentAttachments.map((a) => ({ id: a.id, fileName: a.fileName, mime: a.mime, url: "" })),
+        files: [],
+        errorCode: null,
+      },
+      {
+        id: tempId(),
+        role: "assistant",
+        content: "",
+        modelKey: currentModel.key,
+        images: [],
+        attachments: [],
+        files: [],
+        errorCode: null,
+      },
     ]);
     setStreaming(true);
 
@@ -173,6 +243,7 @@ export function ChatClient({
       presetId: convId ? null : presetId,
       modelKey: currentModel.key,
       message: text,
+      attachmentIds: sentAttachments.map((a) => a.id),
     };
 
     const controller = new AbortController();
@@ -288,7 +359,48 @@ export function ChatClient({
           {error && (
             <p className="mb-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600">{error}</p>
           )}
+
+          {pending.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {pending.map((a) => (
+                <span
+                  key={a.id}
+                  className="inline-flex max-w-[240px] items-center gap-1.5 rounded-lg border border-black/10 bg-mist-soft px-2 py-1 text-xs"
+                >
+                  <Paperclip size={12} className="shrink-0 text-ink/40" />
+                  <span className="truncate">{a.fileName}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPending((prev) => prev.filter((p) => p.id !== a.id))}
+                    className="shrink-0 text-ink/40 hover:text-rose-600"
+                    aria-label={`${a.fileName} を外す`}
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-end gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.csv"
+              className="hidden"
+              onChange={(e) => void uploadFiles(e.target.files)}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || streaming || currentModel?.kind === "image"}
+              className="btn-ghost h-[44px] px-3"
+              title="PDF・画像・テキストを添付"
+              aria-label="ファイルを添付"
+            >
+              <Paperclip size={16} />
+            </button>
             <textarea
               ref={textareaRef}
               value={input}
@@ -329,7 +441,9 @@ export function ChatClient({
             )}
           </div>
           <p className="mt-1.5 text-[11px] text-ink/35 text-legible">
-            AIの回答には誤りが含まれることがあります。重要な内容は必ずご確認ください。
+            {uploading
+              ? "ファイルをアップロード中です…"
+              : "PDF・画像・テキストを添付できます。Excel などのファイル作成も依頼できます。AIの回答には誤りが含まれることがあります。"}
           </p>
         </div>
       </div>

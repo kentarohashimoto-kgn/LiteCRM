@@ -2,12 +2,14 @@ import { notFound } from "next/navigation";
 import {
   getConversation,
   listActivePresets,
+  listAttachmentsForConversation,
   listConversations,
   listMessages,
+  signAttachmentUrls,
   signImageUrlMap,
 } from "@/lib/ai-lab/db";
 import { requireLabCtx } from "@/lib/ai-lab/session";
-import type { LabUiMessage, LabUiPreset } from "@/lib/ai-lab/ui-types";
+import type { LabUiFile, LabUiMessage, LabUiPreset } from "@/lib/ai-lab/ui-types";
 import { ChatClient } from "./chat-client";
 import { LabShell } from "./lab-shell";
 
@@ -45,15 +47,38 @@ export async function ChatScreen({
     if (!conv || conv.is_archived) notFound();
 
     const rows = await listMessages(conv.id);
-    const signed = await signImageUrlMap(rows.flatMap((r) => r.image_paths ?? []));
-    messages = rows.map((r) => ({
-      id: r.id,
-      role: r.role,
-      content: r.content,
-      modelKey: r.model_key,
-      images: (r.image_paths ?? []).map((p) => signed[p]).filter(Boolean),
-      errorCode: r.error_code,
-    }));
+    const attachmentRows = await listAttachmentsForConversation(conv.id);
+    const [signed, attachmentUrls] = await Promise.all([
+      signImageUrlMap(rows.flatMap((r) => r.image_paths ?? [])),
+      signAttachmentUrls(attachmentRows),
+    ]);
+
+    const toUiFile = (a: (typeof attachmentRows)[number]): LabUiFile => ({
+      id: a.id,
+      fileName: a.file_name,
+      mime: a.mime,
+      url: attachmentUrls[a.id] ?? "",
+    });
+    const byMessage = new Map<string, typeof attachmentRows>();
+    for (const a of attachmentRows) {
+      if (!a.message_id) continue;
+      byMessage.set(a.message_id, [...(byMessage.get(a.message_id) ?? []), a]);
+    }
+
+    messages = rows.map((r) => {
+      const files = byMessage.get(r.id) ?? [];
+      return {
+        id: r.id,
+        role: r.role,
+        content: r.content,
+        modelKey: r.model_key,
+        images: (r.image_paths ?? []).map((p) => signed[p]).filter(Boolean),
+        // 署名に失敗したものは表示しない(リンク切れを出さない)。
+        attachments: files.filter((a) => a.origin === "upload").map(toUiFile).filter((f) => f.url),
+        files: files.filter((a) => a.origin === "generated").map(toUiFile).filter((f) => f.url),
+        errorCode: r.error_code,
+      };
+    });
     activePreset = conv.preset_id ? (presets.find((p) => p.id === conv.preset_id) ?? null) : null;
   }
 

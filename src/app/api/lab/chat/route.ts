@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import type { NextRequest } from "next/server";
 import { addUsage } from "@/lib/ai-lab/db";
 import { getChatProvider, LabProviderError } from "@/lib/ai-lab/providers";
-import { prepareLabTurn, saveAssistantMessage } from "@/lib/ai-lab/turn";
+import { prepareLabTurn, saveAssistantMessage, saveGeneratedFiles } from "@/lib/ai-lab/turn";
 
 /**
  * AI Lab のテキスト生成(SSEストリーミング)。
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     presetId?: string | null;
     modelKey?: string;
     message?: string;
+    attachmentIds?: string[];
   };
   try {
     body = await req.json();
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     presetId: body.presetId ?? null,
     modelKey: String(body.modelKey ?? ""),
     message: String(body.message ?? ""),
+    attachmentIds: Array.isArray(body.attachmentIds) ? body.attachmentIds.map(String) : [],
   });
   if (!prep.ok) return Response.json({ error: prep.error.code }, { status: prep.error.status });
 
@@ -74,6 +76,8 @@ export async function POST(req: NextRequest): Promise<Response> {
           messages: turn.history,
           maxTokens: MAX_OUTPUT_TOKENS,
           signal: abort.signal,
+          // ファイル生成はコード実行を伴うため、会社設定で無効なら付けない。
+          enableFileTools: turn.fileToolsEnabled,
           onDelta: (delta) => {
             text += delta;
             send({ delta });
@@ -86,6 +90,8 @@ export async function POST(req: NextRequest): Promise<Response> {
           inputTokens: usage.inputTokens,
           outputTokens: usage.outputTokens,
         });
+        const files = await saveGeneratedFiles(turn, messageId, usage.files ?? []);
+        if (files.length > 0) send({ files });
         await addUsage({
           tenantId: turn.ctx.company.tenant_id,
           companyId: turn.ctx.company.id,

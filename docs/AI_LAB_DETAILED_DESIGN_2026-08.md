@@ -20,7 +20,8 @@ src/app/
 │           └── [conversationId]/page.tsx   既存会話
 ├── api/lab/
 │   ├── chat/route.ts             POST: テキスト生成（SSEストリーミング, runtime=nodejs, maxDuration=120）
-│   └── image/route.ts            POST: 画像生成（JSON応答, maxDuration=120）
+│   ├── image/route.ts            POST: 画像生成（JSON応答, maxDuration=120）
+│   └── upload/route.ts           POST: 添付アップロード（multipart, 送信前に受け取りIDを返す）
 └── app/ai-lab/                   ← CRM管理画面（既存 /app レイアウト配下）
     ├── page.tsx                  会社一覧＋新規作成
     └── [companyId]/
@@ -420,3 +421,45 @@ recharts を初回バンドルから外す。
 5. 利用集計・予算/レート制限・プレビューリンク（P3）
 
 各PRで `docs/AI_LAB_TEST_SPEC_2026-08.md` の該当ユニットテストを同梱する。
+
+
+---
+
+## 14. ファイルの入出力（AL-210〜214）
+
+### 14.1 入力（添付）
+
+| 形式 | 渡し方 |
+|---|---|
+| 画像 PNG/JPEG/GIF/WebP | `image` コンテンツブロック（base64） |
+| PDF | `document` コンテンツブロック（base64・`title` にファイル名）。ページ画像とテキストの両方が読まれる |
+| テキスト TXT/MD/CSV | 本文へ差し込み（`## 添付ファイル: <名前>`）。ブロック型を増やさないための割り切り |
+
+アップロードは **送信時ではなくファイル選択時** に `/api/lab/upload` で受け取り、Storage（`ai-lab-uploads`）へ置いてIDだけ返す。
+送信リクエストが実ファイルで膨らまないので、大きなPDFを添付しても送信操作は軽いまま。
+この時点では会話が未確定なので、会話・メッセージへの紐付けは送信時（`prepareLabTurn`）に行う。
+
+**再送の制御が要点**: API はステートレスなので、過去の添付も毎回送り直すことになる。
+`selectWithinBudget`（`src/lib/ai-lab/attachments.ts`）で **新しい順に詰め、入らない分は古いものから落とす**。
+直近の質問に紐づく資料が落ちると会話が成立しないため、この順序は崩さない。
+落とした添付はファイル名だけ本文に注記し、黙って消えないようにする。実体のダウンロードは予算に残ったものだけに絞る。
+
+### 14.2 出力（ファイル生成）
+
+Anthropic の Agent Skills（`xlsx` / `docx` / `pptx` / `pdf`）＋ コード実行ツールを使う。
+`client.beta.messages.stream` に `container.skills` と `code_execution_20260521` を渡し、
+betas は `code-execution-2025-08-25` / `skills-2025-10-02` / `files-api-2025-04-14`。
+
+- 逐次テキストは `stream.on("text")` で受け、**生成物の取り出しは `finalMessage()` の完成ブロックから行う**
+  （ストリーム中の部分ブロックを自前で組み立てない）。
+- サーバー側ツールが上限に達すると `stop_reason: "pause_turn"` で返るため、
+  アシスタント発言を積んで最大4回まで投げ直す。
+- 生成ファイルは Files API から取得して `ai-lab-generated` へ保存し、`ai_lab_attachments`（`origin='generated'`）に記録。
+  表示は都度の署名URL。1件の取得失敗で回答ごと失わせないよう、取れたものだけ返す。
+- コード実行には従量課金が発生しうるため、`ai_lab_companies.file_tools_enabled` で会社ごとに切れる（既定オン）。
+  無効の会社ではツールも `FILE_TOOLS_NOTE` も付けない。
+
+### 14.3 データ
+
+`ai_lab_attachments` は添付と生成物を同じ表で扱い、`origin`（upload / generated）と `kind`（image / document / output）で区別する。
+入力として送り返すのは `origin='upload'` のみ（AIの生成物を入力に戻さない）。

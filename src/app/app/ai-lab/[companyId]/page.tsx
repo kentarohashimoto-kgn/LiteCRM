@@ -22,6 +22,7 @@ interface Company {
   default_model: string;
   monthly_token_budget: number | null;
   is_active: boolean;
+  file_tools_enabled: boolean;
   starts_on: string | null;
   ends_on: string | null;
 }
@@ -39,7 +40,7 @@ export default async function AiLabCompanyPage({
   const [{ data }, accountsR] = await Promise.all([
     sb
       .from("ai_lab_companies")
-      .select("id, name, slug, account_id, basic_user, allowed_models, default_model, monthly_token_budget, is_active, starts_on, ends_on")
+      .select("id, name, slug, account_id, basic_user, allowed_models, default_model, monthly_token_budget, is_active, file_tools_enabled, starts_on, ends_on")
       .eq("id", params.companyId)
       .maybeSingle(),
     sb.from("accounts").select("id, name").order("name").limit(500),
@@ -193,6 +194,25 @@ export default async function AiLabCompanyPage({
             <label className="label">利用終了日</label>
             <input name="endsOn" type="date" className="input" defaultValue={company.ends_on ?? ""} />
           </div>
+          <div className="md:col-span-2">
+            <label className="flex items-start gap-2 rounded-xl border border-black/10 px-3 py-2.5 text-sm">
+              <input
+                type="checkbox"
+                name="fileTools"
+                value="1"
+                defaultChecked={company.file_tools_enabled}
+                className="mt-0.5"
+              />
+              <span>
+                ファイル作成を許可する（Excel / Word / PowerPoint / PDF）
+                <span className="mt-0.5 block text-[11px] text-ink/45 text-legible">
+                  受講者が「表にして」と頼むとファイルを作って返せます。裏側でコード実行を使うため、
+                  無効にするとその分の課金が発生しません。
+                </span>
+              </span>
+            </label>
+          </div>
+
           <div className="md:col-span-2">
             <label className="label">CRMの顧客に紐付ける</label>
             <select name="accountId" className="input" defaultValue={company.account_id ?? ""}>

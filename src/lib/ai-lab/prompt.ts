@@ -19,6 +19,18 @@ export const BASE_GUARDRAIL = [
 /** プリセットのアセットをシステムプロンプトへ注入する上限(文字数)。 */
 export const ASSET_INJECT_LIMIT = 24_000;
 
+/**
+ * ファイル生成が使えるときにだけ足す案内。
+ * 何が作れるかを明示しないと、モデルは表をテキストで返して終わることが多い。
+ */
+export const FILE_TOOLS_NOTE = [
+  "",
+  "あなたは Excel(.xlsx)・Word(.docx)・PowerPoint(.pptx)・PDF のファイルを作成できます。",
+  "- 表・集計・一覧を求められたら、本文で要点を説明したうえでファイルとしても出力してください。",
+  "- 受講者が添付した資料（PDF・画像）から数値や項目を読み取って、表計算ファイルにまとめることもできます。",
+  "- 日本語のファイル名を付け、列見出しと単位を明示してください。",
+].join("\n");
+
 export interface PromptPreset {
   system_prompt: string | null;
 }
@@ -88,12 +100,12 @@ export const HISTORY_CHAR_BUDGET = 60_000;
  * 直近から遡って詰め、最新のメッセージは予算を超えても必ず残す(質問自体が消えないように)。
  * 中身が空の行(エラー時に記録した assistant 行など)は文脈にならないので除外する。
  */
-export function buildHistory(
-  messages: HistoryMessage[],
+export function buildHistory<T extends HistoryMessage>(
+  messages: T[],
   charBudget = HISTORY_CHAR_BUDGET,
-): HistoryMessage[] {
+): T[] {
   const usable = messages.filter((m) => m.content && m.content.trim().length > 0);
-  const kept: HistoryMessage[] = [];
+  const kept: T[] = [];
   let used = 0;
   for (let i = usable.length - 1; i >= 0; i--) {
     const m = usable[i];
