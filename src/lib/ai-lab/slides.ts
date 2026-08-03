@@ -12,11 +12,30 @@ export const MIN_SLIDES = 1;
 export const DEFAULT_SLIDES = 8;
 
 /**
- * 画像の品質。当面 medium 固定。
- * low は文字が崩れて研修の体験にならず、high は枚数がかさむと費用が読みにくい。
+ * 画像の品質。既定は medium。
+ * low は文字が崩れやすく、high は単価が medium の約4倍になる。
+ * high だけは1人1日の枚数制限をかける(limits.ts)。
  */
 export const DEFAULT_SLIDE_QUALITY = "medium" as const;
 export type SlideQuality = "low" | "medium" | "high";
+
+export const SLIDE_QUALITIES: readonly SlideQuality[] = ["low", "medium", "high"] as const;
+
+export function isSlideQuality(value: unknown): value is SlideQuality {
+  return typeof value === "string" && (SLIDE_QUALITIES as readonly string[]).includes(value);
+}
+
+/** 指定が無い・不正なら既定へ寄せる。画面からの値をそのまま信じない。 */
+export function toSlideQuality(value: unknown, fallback: SlideQuality = DEFAULT_SLIDE_QUALITY): SlideQuality {
+  return isSlideQuality(value) ? value : fallback;
+}
+
+/** 画面に出す画質の説明。1枚あたりの目安(1ドル150円換算)を添える。 */
+export const SLIDE_QUALITY_LABELS: Record<SlideQuality, { label: string; hint: string }> = {
+  low: { label: "低（速い・約1円/枚）", hint: "下書き向け。文字が崩れることがあります" },
+  medium: { label: "標準（約8円/枚）", hint: "提案書にそのまま使える品質です" },
+  high: { label: "高（約32円/枚）", hint: "最終納品物向け。1人1日10枚までです" },
+};
 
 export interface SlidePlanItem {
   title: string;

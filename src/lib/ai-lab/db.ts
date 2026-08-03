@@ -34,6 +34,8 @@ export interface LabUserRow {
   password_hash: string;
   is_active: boolean;
   is_preview: boolean;
+  /** 画質Highの1日あたり枚数制限を免除する(運営の検証アカウント)。 */
+  is_unlimited: boolean;
   failed_attempts: number;
   locked_until: string | null;
   last_login_at: string | null;
@@ -240,6 +242,8 @@ export async function addUsage(params: {
   inputTokens: number;
   outputTokens: number;
   images?: number;
+  /** うち画質Highの枚数。制限の判定に使うため images とは別に数える。 */
+  highImages?: number;
 }): Promise<void> {
   const now = new Date();
   const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -253,7 +257,22 @@ export async function addUsage(params: {
     p_in: params.inputTokens,
     p_out: params.outputTokens,
     p_images: params.images ?? 0,
+    p_high_images: params.highImages ?? 0,
   });
+}
+
+/**
+ * 当日その利用者が生成した画質Highの枚数。
+ * 日付は addUsage と同じくサーバーのローカル日付で揃える(境界がずれると1日ぶん多く使える)。
+ */
+export async function highImagesToday(userId: string, now = new Date()): Promise<number> {
+  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const { data } = await labDb()
+    .from("ai_lab_usage_daily")
+    .select("high_images")
+    .eq("user_id", userId)
+    .eq("date", date);
+  return ((data as { high_images: number }[] | null) ?? []).reduce((acc, r) => acc + Number(r.high_images ?? 0), 0);
 }
 
 // ===================== 添付・生成ファイル =====================

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getLabCtx } from "@/lib/ai-lab/session";
+import { toSlideQuality, type SlideQuality } from "@/lib/ai-lab/slides";
 import { deleteDeck, getDeck, getSlideItem, updateDeck, updateSlideItem } from "@/lib/ai-lab/slides-db";
 
 /**
@@ -55,6 +56,26 @@ export async function updateSlideItemAction(params: {
   });
   revalidatePath(`/lab/${params.slug}/slides/${deck.id}`);
   return { ok: true };
+}
+
+/**
+ * 画質の変更。生成前・生成後どちらでも変えられる。
+ * 変えても既存の画像は消さない(作り直すかは受講者の判断)。
+ */
+export async function setSlideDeckQualityAction(params: {
+  slug: string;
+  deckId: string;
+  quality: string;
+}): Promise<{ ok: boolean; quality: SlideQuality | null }> {
+  const ctx = await getLabCtx(params.slug);
+  if (!ctx) return { ok: false, quality: null };
+  const deck = await getDeck(ctx.user.id, params.deckId);
+  if (!deck) return { ok: false, quality: null };
+
+  const quality = toSlideQuality(params.quality, deck.quality);
+  await updateDeck(deck.id, { quality });
+  revalidatePath(`/lab/${params.slug}/slides/${deck.id}`);
+  return { ok: true, quality };
 }
 
 export async function deleteSlideDeckAction(params: { slug: string; deckId: string }): Promise<{ ok: boolean }> {

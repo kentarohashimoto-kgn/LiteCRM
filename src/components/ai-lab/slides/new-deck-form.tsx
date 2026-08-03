@@ -5,7 +5,15 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, Paperclip, Sparkles, X } from "lucide-react";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/ai-lab/attachments";
 import { labErrorMessage } from "@/lib/ai-lab/limits";
-import { MAX_SLIDES, MIN_SLIDES, DEFAULT_SLIDES } from "@/lib/ai-lab/slides";
+import {
+  DEFAULT_SLIDES,
+  DEFAULT_SLIDE_QUALITY,
+  MAX_SLIDES,
+  MIN_SLIDES,
+  SLIDE_QUALITIES,
+  SLIDE_QUALITY_LABELS,
+  type SlideQuality,
+} from "@/lib/ai-lab/slides";
 import type { LabPendingAttachment } from "@/lib/ai-lab/ui-types";
 
 /**
@@ -16,6 +24,7 @@ export function NewDeckForm({ slug, canGenerate }: { slug: string; canGenerate: 
   const router = useRouter();
   const [instruction, setInstruction] = useState("");
   const [count, setCount] = useState(DEFAULT_SLIDES);
+  const [quality, setQuality] = useState<SlideQuality>(DEFAULT_SLIDE_QUALITY);
   const [pending, setPending] = useState<LabPendingAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [planning, setPlanning] = useState(false);
@@ -69,6 +78,7 @@ export function NewDeckForm({ slug, canGenerate }: { slug: string; canGenerate: 
           slug,
           instruction,
           count,
+          quality,
           attachmentIds: pending.map((a) => a.id),
         }),
       });
@@ -127,7 +137,20 @@ export function NewDeckForm({ slug, canGenerate }: { slug: string; canGenerate: 
           onChange={(e) => setCount(Math.min(MAX_SLIDES, Math.max(MIN_SLIDES, Number(e.target.value) || DEFAULT_SLIDES)))}
           className="input w-20 py-1.5 text-sm"
         />
-        <span className="text-[11px] text-ink/45">最大 {MAX_SLIDES} 枚（研修環境の上限）</span>
+        <span className="text-[11px] text-ink/45">最大 {MAX_SLIDES} 枚</span>
+
+        <label className="text-xs font-semibold text-ink/50">画質</label>
+        <select
+          value={quality}
+          onChange={(e) => setQuality(e.target.value as SlideQuality)}
+          className="input w-auto py-1.5 text-sm"
+        >
+          {SLIDE_QUALITIES.map((q) => (
+            <option key={q} value={q}>
+              {SLIDE_QUALITY_LABELS[q].label}
+            </option>
+          ))}
+        </select>
 
         <input
           ref={fileInputRef}
@@ -147,6 +170,8 @@ export function NewDeckForm({ slug, canGenerate }: { slug: string; canGenerate: 
           資料を添付
         </button>
       </div>
+
+      <p className="mt-2 text-[11px] text-ink/45">{SLIDE_QUALITY_LABELS[quality].hint}</p>
 
       {pending.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
