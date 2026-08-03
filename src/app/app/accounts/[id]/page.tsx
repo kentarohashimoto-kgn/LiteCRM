@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { MoneyInput } from "@/components/ui/money-input";
 import Link from "next/link";
-import { ChevronLeft, Trash2 } from "lucide-react";
+import { ChevronLeft, FlaskConical, Trash2 } from "lucide-react";
 import { getWorkspaceForAccount } from "@/lib/data/workspace";
 import {
   getAccount,
@@ -58,7 +58,7 @@ export default async function AccountDetailPage({ params, searchParams }: { para
   const orFilter = oppIds.length > 0
     ? `account_id.eq.${account.id},opportunity_id.in.(${oppIds.join(",")})`
     : `account_id.eq.${account.id}`;
-  const [packages, souvenirs, transitions, businessCards, activitiesR, tasksR, leadCandR] = await Promise.all([
+  const [packages, souvenirs, transitions, businessCards, activitiesR, tasksR, leadCandR, labCompanyR] = await Promise.all([
     getSolutionPackages(),
     getAccountSouvenirs(account.id),
     getTransitionsByAccount(account.id),
@@ -66,7 +66,10 @@ export default async function AccountDetailPage({ params, searchParams }: { para
     sb.from("activities").select("id,activity_type,title,body,activity_at,owner_user_id").or(orFilter).order("activity_at", { ascending: false }).limit(60),
     sb.from("tasks").select("id,title,due_date,status,assigned_to").or(orFilter).order("due_date", { ascending: false }).limit(30),
     leadCandidatesQuery(sb, account.id, account.name),
+    // AI体験環境(/lab)。RLSで owner/admin 以外は結果が空になるため、非管理者には表示されない。
+    sb.from("ai_lab_companies").select("id, name, slug, is_active").eq("account_id", account.id).limit(1).maybeSingle(),
   ]);
+  const labCompany = labCompanyR.data as { id: string; name: string; slug: string; is_active: boolean } | null;
   // 担当者：各担当者が窓口(アカウンター)になっている案件と、リード候補（名刺）を用意。
   const accounterByContact: Record<string, { id: string; name: string }[]> = {};
   for (const op of ws.opportunities.filter((x) => x.account_id === account.id)) {
@@ -162,6 +165,28 @@ export default async function AccountDetailPage({ params, searchParams }: { para
         <Card><div className="text-xs text-ink/50">累計受注額(LTV)</div><div className="text-2xl font-bold mt-1 stat-accent tabular-nums">{formatYen(sum(won, (o) => o.amount))}</div></Card>
         <Card><div className="text-xs text-ink/50">担当者</div><div className="stat-value mt-1">{contacts.length}<span className="stat-unit">名</span></div></Card>
       </div>
+
+      {/* AI研修で使う生成AI体験環境。紐付けがあるときだけ出す */}
+      {labCompany && (
+        <div className="card card-pad mb-5 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <FlaskConical size={15} className="text-teal-primary" />
+              <span className="text-sm font-semibold text-ink">AI体験環境</span>
+              {!labCompany.is_active && <span className="pill bg-ink/10 text-ink/55">停止中</span>}
+            </div>
+            <p className="mt-0.5 text-xs text-ink/50">
+              受講者用URL: <span className="font-mono">/lab/{labCompany.slug}</span>
+            </p>
+          </div>
+          <Link href={`/app/ai-lab/${labCompany.id}`} className="btn-ghost text-sm">
+            管理する
+          </Link>
+          <a href={`/lab/${labCompany.slug}`} target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">
+            体験環境を開く
+          </a>
+        </div>
+      )}
 
       {/* 顧客メモ: 顧客とのやりとりまとめ・AI分析(満足度/業務課題解決度)・戦略提言を集約 */}
       <div className="mb-5">
