@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { LogOut, Menu, Plus, X } from "lucide-react";
+import { LogOut, Menu, Plus, Presentation, X } from "lucide-react";
 import { labSignOut } from "@/server/actions/ai-lab-auth";
 import type { LabUiConversation } from "@/lib/ai-lab/ui-types";
+import { cn } from "@/lib/utils";
 import { ConversationList } from "./conversation-list";
 import { LabChatProvider, useLabChat } from "./lab-chat-context";
 
@@ -18,6 +19,7 @@ export function LabShell({
   displayName,
   conversations,
   activeId,
+  slidesActive,
   children,
 }: {
   slug: string;
@@ -25,11 +27,18 @@ export function LabShell({
   displayName: string;
   conversations: LabUiConversation[];
   activeId: string | null;
+  /** スライド作成画面を開いているか(ナビの選択表示に使う)。 */
+  slidesActive?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <LabChatProvider conversations={conversations} activeId={activeId}>
-      <LabShellInner slug={slug} companyName={companyName} displayName={displayName}>
+      <LabShellInner
+        slug={slug}
+        companyName={companyName}
+        displayName={displayName}
+        slidesActive={slidesActive}
+      >
         {children}
       </LabShellInner>
     </LabChatProvider>
@@ -40,11 +49,13 @@ function LabShellInner({
   slug,
   companyName,
   displayName,
+  slidesActive,
   children,
 }: {
   slug: string;
   companyName: string;
   displayName: string;
+  slidesActive?: boolean;
   children: React.ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -78,6 +89,17 @@ function LabShellInner({
         >
           <Plus size={16} />
           新しいチャット
+        </Link>
+        <Link
+          href={`/lab/${slug}/slides`}
+          onClick={() => setDrawerOpen(false)}
+          className={cn(
+            "mt-2 flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors",
+            slidesActive ? "bg-white/25 text-white" : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white",
+          )}
+        >
+          <Presentation size={16} />
+          スライド作成
         </Link>
       </div>
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">

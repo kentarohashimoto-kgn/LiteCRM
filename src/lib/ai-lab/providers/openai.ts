@@ -6,6 +6,7 @@ import {
   type ChatUsage,
   type GeneratedImage,
   type ImageProvider,
+  type ImageQuality,
   type ImageReference,
 } from "./types";
 
@@ -171,12 +172,14 @@ function imageEditForm(
   modelId: string,
   prompt: string,
   n: number,
+  quality: ImageQuality,
   references: ImageReference[],
 ): FormData {
   const form = new FormData();
   form.append("model", modelId);
   form.append("prompt", prompt);
   form.append("n", String(n));
+  form.append("quality", quality);
   const field = references.length > 1 ? "image[]" : "image";
   for (const ref of references) {
     // Buffer は SharedArrayBuffer 由来でありうる型なので、Blob に渡せる形へ写し取る。
@@ -186,7 +189,7 @@ function imageEditForm(
 }
 
 export const openaiImage: ImageProvider = {
-  async generate({ modelId, prompt, n, signal, references }): Promise<GeneratedImage[]> {
+  async generate({ modelId, prompt, n, signal, quality, references }): Promise<GeneratedImage[]> {
     const key = apiKey();
     const refs = references ?? [];
     let res: Response;
@@ -195,13 +198,13 @@ export const openaiImage: ImageProvider = {
         ? await fetch(`${OPENAI_BASE}/images/edits`, {
             method: "POST",
             headers: { authorization: `Bearer ${key}` },
-            body: imageEditForm(modelId, prompt, n, refs),
+            body: imageEditForm(modelId, prompt, n, quality, refs),
             signal,
           })
         : await fetch(`${OPENAI_BASE}/images/generations`, {
             method: "POST",
             headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-            body: JSON.stringify({ model: modelId, prompt, n }),
+            body: JSON.stringify({ model: modelId, prompt, n, quality }),
             signal,
           });
     } catch (e) {
