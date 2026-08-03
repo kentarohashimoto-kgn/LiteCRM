@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import type { NextRequest } from "next/server";
+import { imageResultNote } from "@/lib/ai-lab/attachments";
 import { addUsage, labDb, signImageUrls } from "@/lib/ai-lab/db";
 import { getImageProvider, LabProviderError } from "@/lib/ai-lab/providers";
 import { prepareLabTurn, saveAssistantMessage } from "@/lib/ai-lab/turn";
@@ -11,12 +12,19 @@ import { prepareLabTurn, saveAssistantMessage } from "@/lib/ai-lab/turn";
  */
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+// 参照画像つきの生成は素の生成より時間がかかる。
+export const maxDuration = 300;
 
 const IMAGE_COUNT = 1;
 
 export async function POST(req: NextRequest): Promise<Response> {
-  let body: { slug?: string; conversationId?: string | null; presetId?: string | null; message?: string };
+  let body: {
+    slug?: string;
+    conversationId?: string | null;
+    presetId?: string | null;
+    message?: string;
+    attachmentIds?: string[];
+  };
   try {
     body = await req.json();
   } catch {
@@ -29,18 +37,23 @@ export async function POST(req: NextRequest): Promise<Response> {
     presetId: body.presetId ?? null,
     modelKey: "image-gen",
     message: String(body.message ?? ""),
+    attachmentIds: Array.isArray(body.attachmentIds) ? body.attachmentIds.map(String) : [],
   });
   if (!prep.ok) return Response.json({ error: prep.error.code }, { status: prep.error.status });
 
   const turn = prep.turn;
-  if (turn.model.kind !== "image") return Response.json({ error: "model_not_allowed" }, { status: 400 });
+  if (turn.model.kind !== "image" || !turn.imageInput) {
+    return Response.json({ error: "model_not_allowed" }, { status: 400 });
+  }
 
-  const prompt = String(body.message ?? "").trim();
+  const imageInput = turn.imageInput;
   try {
     const images = await getImageProvider(turn.model).generate({
       modelId: turn.model.modelId(),
-      prompt,
+      prompt: imageInput.prompt,
       n: IMAGE_COUNT,
+      // デザインガイド等を渡していれば、それに合わせて作らせる。
+      references: imageInput.references,
       signal: req.signal,
     });
 
@@ -55,9 +68,14 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
     if (paths.length === 0) throw new LabProviderError("provider_error", "画像の保存に失敗しました");
 
+    // 何を参照したか・何が使えなかったかを本文に残す(履歴からも追える)。
+    const content = imageResultNote(
+      imageInput.references.map((r) => r.fileName),
+      imageInput.skipped,
+    );
     const messageId = await saveAssistantMessage({
       turn,
-      content: "（画像を生成しました）",
+      content,
       inputTokens: 0,
       outputTokens: 0,
       imagePaths: paths,
@@ -76,6 +94,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       conversationId: turn.conversation.id,
       title: turn.conversation.title,
       messageId,
+      content,
       images: await signImageUrls(paths),
     });
   } catch (e) {

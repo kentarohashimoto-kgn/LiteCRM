@@ -6,7 +6,6 @@ import { AlertCircle, ArrowUp, Paperclip, Square, X } from "lucide-react";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/ai-lab/attachments";
 import { labErrorMessage } from "@/lib/ai-lab/limits";
 import { conversationTitleFrom } from "@/lib/ai-lab/validate";
-import { cn } from "@/lib/utils";
 import type {
   LabPendingAttachment,
   LabUiFile,
@@ -176,6 +175,7 @@ export function ChatClient({
       error?: string;
       conversationId?: string;
       title?: string;
+      content?: string;
       images?: string[];
     };
     // 待っている間に「新しいチャット」で画面が切り替わっていたら、もう書き込まない。
@@ -186,7 +186,8 @@ export function ChatClient({
       return;
     }
     if (json.conversationId) adoptConversation(json.conversationId, json.title);
-    patchLast({ content: "（画像を生成しました）", images: json.images ?? [] });
+    // 参照した添付・使えなかった添付の注記はサーバー側で組み立てている。
+    patchLast({ content: json.content ?? "（画像を生成しました）", images: json.images ?? [] });
   }
 
   async function sendText(body: Record<string, unknown>, signal: AbortSignal, isCurrent: () => boolean) {
@@ -252,11 +253,8 @@ export function ChatClient({
 
     setError(null);
     setInput("");
-    // 画像生成は添付を受け取らない。ここで消すと、アップロード済みのファイルが
-    // 送られもせず入力欄から消えるだけになるので、そのまま預かっておく。
-    const usesAttachments = currentModel.kind !== "image";
-    const sentAttachments = usesAttachments ? pending : [];
-    if (usesAttachments) setPending([]);
+    const sentAttachments = pending;
+    setPending([]);
 
     // 会話IDが決まるのは応答が返ってから。待たずに履歴ペインへ出しておき、
     // サーバー確定時に本物のIDへ差し替える(タイトルの決め方はサーバーと同じ関数)。
@@ -333,18 +331,11 @@ export function ChatClient({
 
   const isNewChat = !convId && messages.length === 0;
 
-  /**
-   * 添付が使えない理由。使えるときは null。
-   *
-   * 画像生成はプロンプトから作るだけで入力ファイルを受け取らないため添付できない。
-   * ただしボタンを disabled にするだけだと、受講者からは「押しても何も起きない」
-   * としか見えない(disabled 要素は hover を出さないので title も出ない)ので、
-   * 理由を文言として持ち、入力欄の下に常時表示する。
-   */
-  const attachDisabledReason =
+  /** 入力欄の下に出す案内。モデルによって添付の扱いが変わるので、そこだけ言い分ける。 */
+  const composerHint =
     currentModel?.kind === "image"
-      ? "画像生成モデルではファイルを添付できません。添付を使うときは、上のメニューでモデルを Claude に切り替えてください。"
-      : null;
+      ? "デザインガイドなどの画像（PNG・JPEG・WebP）を添付すると、それに合わせて生成します。PDF は参照に使えません。"
+      : "PDF・画像・テキストを添付できます。Excel などのファイル作成も依頼できます。AIの回答には誤りが含まれることがあります。";
 
   if (models.length === 0) {
     return (
@@ -472,10 +463,10 @@ export function ChatClient({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading || streaming || attachDisabledReason !== null}
+              disabled={uploading || streaming}
               className="btn-ghost h-[44px] px-3 disabled:cursor-not-allowed"
-              title={attachDisabledReason ?? "PDF・画像・テキストを添付"}
-              aria-label={attachDisabledReason ?? "ファイルを添付"}
+              title="PDF・画像・テキストを添付"
+              aria-label="ファイルを添付"
             >
               <Paperclip size={16} />
             </button>
@@ -518,20 +509,8 @@ export function ChatClient({
               </button>
             )}
           </div>
-          {/*
-            添付ボタンを disabled にすると、ブラウザは hover イベントを出さないので
-            title のツールチップが表示されない。理由はここに常時出す。
-          */}
-          <p
-            className={cn(
-              "mt-1.5 text-[11px] text-legible",
-              attachDisabledReason && !uploading ? "text-accent-orange" : "text-ink/35",
-            )}
-          >
-            {uploading
-              ? "ファイルをアップロード中です…"
-              : (attachDisabledReason ??
-                "PDF・画像・テキストを添付できます。Excel などのファイル作成も依頼できます。AIの回答には誤りが含まれることがあります。")}
+          <p className="mt-1.5 text-[11px] text-ink/35 text-legible">
+            {uploading ? "ファイルをアップロード中です…" : composerHint}
           </p>
         </div>
       </div>
