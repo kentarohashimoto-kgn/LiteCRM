@@ -5,6 +5,7 @@ import {
   estimateCostUsd,
   isModelAvailable,
   modelLabel,
+  modelPrices,
   resolveDefaultModel,
   resolveModel,
 } from "@/lib/ai-lab/models";
@@ -99,26 +100,56 @@ describe("モデルの利用可否", () => {
 });
 
 describe("概算コスト", () => {
-  it("単価未設定なら priced=false（画面は「—」表示）", () => {
+  it("環境変数なしでもカタログの標準価格で算出できる", () => {
     delete process.env.AILAB_PRICES;
-    expect(estimateCostUsd([{ model_key: "claude-sonnet", input_tokens: 1000, output_tokens: 1000 }])).toEqual({
-      usd: 0,
-      priced: false,
-    });
-  });
-
-  it("単価が設定されていればトークン数から算出する", () => {
-    process.env.AILAB_PRICES = JSON.stringify({ "claude-sonnet": { in: 3, out: 15 } });
-    const { usd, priced } = estimateCostUsd([
+    // Sonnet 標準: 入力 $3 / 出力 $15 per 1M
+    const { usd, complete } = estimateCostUsd([
       { model_key: "claude-sonnet", input_tokens: 1_000_000, output_tokens: 1_000_000 },
-      { model_key: "claude-haiku", input_tokens: 1_000_000, output_tokens: 1_000_000 }, // 単価未定義は0円扱い
     ]);
-    expect(priced).toBe(true);
     expect(usd).toBeCloseTo(18, 6);
+    expect(complete).toBe(true);
   });
 
-  it("AILAB_PRICES が壊れたJSONでも例外にしない", () => {
+  it("Claude 4モデルすべてに標準価格がある（上位ほど高い）", () => {
+    delete process.env.AILAB_PRICES;
+    const prices = modelPrices();
+    for (const key of ["claude-fable", "claude-opus", "claude-sonnet", "claude-haiku"]) {
+      expect(prices[key]).toBeDefined();
+    }
+    expect(prices["claude-fable"].out).toBeGreaterThan(prices["claude-opus"].out);
+    expect(prices["claude-opus"].out).toBeGreaterThan(prices["claude-sonnet"].out);
+    expect(prices["claude-sonnet"].out).toBeGreaterThan(prices["claude-haiku"].out);
+  });
+
+  it("AILAB_PRICES は標準価格を上書きし、指定しなかったモデルは標準のまま", () => {
+    process.env.AILAB_PRICES = JSON.stringify({ "claude-sonnet": { in: 2, out: 10 } });
+    const prices = modelPrices();
+    expect(prices["claude-sonnet"]).toEqual({ in: 2, out: 10 });
+    expect(prices["claude-haiku"]).toEqual({ in: 1, out: 5 });
+  });
+
+  it("単価を持たないモデルの利用は complete=false で申告する", () => {
+    delete process.env.AILAB_PRICES;
+    const { usd, complete, unpricedModels } = estimateCostUsd([
+      { model_key: "claude-haiku", input_tokens: 1_000_000, output_tokens: 0 },
+      { model_key: "image-gen", input_tokens: 0, output_tokens: 100 },
+    ]);
+    expect(usd).toBeCloseTo(1, 6);
+    expect(complete).toBe(false);
+    expect(unpricedModels).toEqual(["image-gen"]);
+  });
+
+  it("利用実績ゼロのモデルは「単価不明」に数えない", () => {
+    delete process.env.AILAB_PRICES;
+    const { complete } = estimateCostUsd([{ model_key: "image-gen", input_tokens: 0, output_tokens: 0 }]);
+    expect(complete).toBe(true);
+  });
+
+  it("AILAB_PRICES が壊れたJSONでも例外にせず標準価格で続行する", () => {
     process.env.AILAB_PRICES = "{not json";
-    expect(estimateCostUsd([{ model_key: "claude-sonnet", input_tokens: 1, output_tokens: 1 }]).priced).toBe(false);
+    expect(estimateCostUsd([{ model_key: "claude-haiku", input_tokens: 1_000_000, output_tokens: 0 }]).usd).toBeCloseTo(
+      1,
+      6,
+    );
   });
 });

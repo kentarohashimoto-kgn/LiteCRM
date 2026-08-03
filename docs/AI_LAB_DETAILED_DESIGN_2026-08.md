@@ -27,8 +27,9 @@ src/app/
         ├── page.tsx              会社詳細（基本設定・接続情報・プレビュー）
         ├── users/page.tsx        受講者管理（一括発行・PW再発行・無効化・ロック解除）
         ├── presets/page.tsx      プリセット・アセット管理
-        ├── usage/page.tsx        利用状況・会話一覧
+        ├── usage/page.tsx        利用状況（直近12か月の推移＋期間指定の明細）・会話一覧
         └── usage/[conversationId]/page.tsx  会話ログ閲覧（読み取り専用）
+    └── reports/page.tsx          会社横断の月別レポート（AL-608）
 ```
 
 セッション検証は layout ではなく **`ChatScreen`（`src/components/ai-lab/chat-screen.tsx`）の `requireLabCtx()`** で行う。
@@ -369,7 +370,14 @@ createLabPreviewToken(companyId)             // §3.3
 - **会社詳細**: 基本設定フォーム、接続情報カード（URL・Basic ID・「体験環境を開く」外部リンク・プレビューリンク発行ボタン）、`accounts` リンク設定。
 - **利用者**: 一覧（最終ログイン/状態/ロック）＋一括発行モーダル（複数行入力→結果テーブルをコピー可能表示）。
 - **プリセット**: 一覧＋編集ドロワー（system_prompt テキストエリア・モデル固定セレクト・アセット一覧＋アップロード・注入プレビュー: 合成後文字数と truncated 警告、AL-604）。
-- **利用状況**: 期間セレクタ＋`ai_lab_usage_daily` 集計テーブル（利用者×モデル）＋概算コスト＋会話ドリルダウン（read-only メッセージビュー、AL-605）。
+- **利用状況**: 直近12か月の推移（グラフ＋明細表＋前月比、AL-607）／期間セレクタ＋`ai_lab_usage_daily` 集計テーブル（利用者×モデル）＋概算コスト／会話ドリルダウン（read-only メッセージビュー、AL-605）。
+- **月別レポート** `/app/ai-lab/reports`: 対象月セレクタ＋会社別内訳＋モデル別内訳＋会社×月のマトリクス（AL-608）。
+
+集計は **`src/lib/ai-lab/usage-report.ts`**（DBアクセスを持たない純関数）に寄せる。
+`ai_lab_usage_daily` は「日 × 会社 × 利用者 × モデル」の粒度なので、月・会社・モデルへ畳む処理を1か所にまとめ、
+集計の取り違えをユニットテストで固定できるようにしている。グラフは既存の遅延ロード方式
+（`src/components/charts/ai-lab-usage-chart.tsx` がラッパー、`.impl.tsx` が recharts 本体）に合わせ、
+recharts を初回バンドルから外す。
 
 ### 10.3 動線（AL-701/702）
 

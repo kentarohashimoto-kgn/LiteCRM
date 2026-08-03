@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, Plus, Sparkles } from "lucide-react";
+import { Building2, Plus, Sparkles, TrendingUp } from "lucide-react";
 import { requireAdminCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { ActionNotice } from "@/components/ui/action-notice";
@@ -54,6 +54,12 @@ export default async function AiLabPage({ searchParams }: { searchParams: { save
       <PageHeader
         title="AI体験環境"
         subtitle="契約済み顧客のAI研修で使う生成AI体験環境です。会社ごとに個別URL・Basic認証・受講者アカウントを発行します。"
+        action={
+          <Link href="/app/ai-lab/reports" className="btn-ghost inline-flex items-center gap-1.5">
+            <TrendingUp size={14} />
+            月別レポート
+          </Link>
+        }
       />
 
       <ActionNotice
