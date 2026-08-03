@@ -7,7 +7,7 @@ import { clientIp, logAudit } from "@/lib/audit-events";
 import { requireAdminCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { sha256Hex } from "@/lib/ai-lab/basic-auth";
-import { LAB_MODELS } from "@/lib/ai-lab/models";
+import { LAB_MODELS, isModelAvailable } from "@/lib/ai-lab/models";
 import { generatePassword, hashPassword } from "@/lib/ai-lab/password";
 import type { IssuedLabUser } from "@/lib/ai-lab/ui-types";
 import { validateAssetText, validateLoginId, validateSlug } from "@/lib/ai-lab/validate";
@@ -34,6 +34,17 @@ function parseModels(formData: FormData): string[] {
     .getAll("models")
     .map((v) => String(v))
     .filter((v) => MODEL_KEYS.includes(v as (typeof MODEL_KEYS)[number]));
+}
+
+/**
+ * APIキー未設定のモデルは画面でチェックボックスが disabled になり、
+ * disabled の入力はフォーム送信に含まれない。そのまま保存すると、
+ * 「キーを入れれば使えるはずの設定」が保存操作のたびに黙って消えてしまう。
+ * 管理者が外せなかったものは、意思表示が無かったとみなして残す。
+ */
+function mergeUnavailableModels(submitted: string[], current: string[]): string[] {
+  const kept = current.filter((key) => !isModelAvailable(key));
+  return Array.from(new Set([...submitted, ...kept]));
 }
 
 function parseBudget(raw: FormDataEntryValue | null): number | null {
@@ -122,8 +133,17 @@ export async function updateLabCompanyAction(formData: FormData): Promise<void> 
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) failTo(path, "会社名を入力してください");
-  const models = parseModels(formData);
-  if (models.length === 0) failTo(path, "利用可能なモデルを1つ以上選んでください");
+
+  const sb = getSupabaseServer();
+  const { data: existing } = await sb
+    .from("ai_lab_companies")
+    .select("allowed_models")
+    .eq("id", id)
+    .maybeSingle();
+
+  const submitted = parseModels(formData);
+  if (submitted.length === 0) failTo(path, "利用可能なモデルを1つ以上選んでください");
+  const models = mergeUnavailableModels(submitted, (existing?.allowed_models as string[] | null) ?? []);
   const defaultModel = String(formData.get("defaultModel") ?? models[0]);
 
   const patch: Record<string, unknown> = {
@@ -144,7 +164,6 @@ export async function updateLabCompanyAction(formData: FormData): Promise<void> 
   const basicPassword = String(formData.get("basicPassword") ?? "");
   if (basicPassword) patch.basic_secret_hash = await sha256Hex(basicPassword);
 
-  const sb = getSupabaseServer();
   const { error } = await sb.from("ai_lab_companies").update(patch).eq("id", id);
   if (error) failTo(path, "保存に失敗しました");
 

@@ -157,7 +157,13 @@ export default async function AiLabCompanyPage({
                       defaultChecked={company.allowed_models.includes(m.key)}
                     />
                     {m.label}
-                    {!available && <span className="text-[10px]">（キー未設定）</span>}
+                    {!available && (
+                      <span className="text-[10px]">
+                        {company.allowed_models.includes(m.key)
+                          ? "（許可済み・キー未設定）"
+                          : "（キー未設定）"}
+                      </span>
+                    )}
                   </label>
                 );
               })}
