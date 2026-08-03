@@ -224,6 +224,21 @@ export function droppedNote(names: string[]): string {
   return `\n\n（注: 添付「${names.join("」「")}」は容量の都合でこの回答には渡されていません。必要なら添付し直してください）`;
 }
 
+/**
+ * ストレージのオブジェクトキーに使える形へ落とす。
+ *
+ * Supabase Storage のキーは ASCII しか受け付けない。日本語を含めると
+ * アップロードが弾かれる（画像は連番のASCIIキーなので通り、日本語名の生成物だけが落ちる、
+ * という分かりにくい壊れ方をする）。
+ * 表示・ダウンロード時のファイル名は DB の file_name を使うので、
+ * ここで日本語が消えても受け手には影響しない。
+ */
+export function storageSafeName(fileName: string, fallback = "file"): string {
+  const safe = (fileName ?? "").replace(/[^\w.\-]/g, "_").replace(/_{2,}/g, "_").slice(0, 80);
+  // 記号だけになった場合(日本語のみのファイル名など)は代替名にする。
+  return /[\w]/.test(safe.replace(/_/g, "")) ? safe : fallback;
+}
+
 /** テキスト添付を本文へ差し込む形に整える。 */
 export function inlineTextAttachment(fileName: string, text: string): string {
   const body = text.length > MAX_TEXT_ATTACHMENT_CHARS ? `${text.slice(0, MAX_TEXT_ATTACHMENT_CHARS)}\n…(以下省略)` : text;

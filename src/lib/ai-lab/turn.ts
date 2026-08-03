@@ -4,6 +4,7 @@ import {
   inlineTextAttachment,
   selectImageReferences,
   selectWithinBudget,
+  storageSafeName,
   validateMessageAttachments,
   type AttachmentRef,
   type SkippedReference,
@@ -371,7 +372,7 @@ export async function saveGeneratedFiles(
   const rows: LabAttachmentRow[] = [];
 
   for (const f of files) {
-    const safeName = f.fileName.replace(/[^\w.\-]/g, "_") || "output";
+    const safeName = storageSafeName(f.fileName, "output");
     const path = `${turn.ctx.company.id}/${turn.conversation.id}/${crypto.randomUUID()}-${safeName}`;
     const { error } = await db.storage
       .from(OUTPUT_BUCKET)

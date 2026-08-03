@@ -75,6 +75,7 @@ export const LAB_ERROR_MESSAGES: Record<string, string> = {
   provider_error: "AIの応答中にエラーが発生しました。もう一度お試しください。",
   plan_failed: "構成案をうまく作れませんでした。指示を具体的にして、もう一度お試しください。",
   slides_not_ready: "まだ生成済みのスライドがありません。先に画像を作ってください。",
+  pptx_failed: "PPTXの作成に失敗しました。時間をおいて再度お試しください（続く場合は運営にご連絡ください）。",
   empty_message: "メッセージを入力してください。",
   not_found: "会話が見つかりません。",
   unauthorized: "セッションが切れました。再度ログインしてください。",
