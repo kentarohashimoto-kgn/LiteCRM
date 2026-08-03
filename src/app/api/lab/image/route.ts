@@ -1,8 +1,9 @@
 import * as Sentry from "@sentry/nextjs";
 import type { NextRequest } from "next/server";
 import { imageResultNote } from "@/lib/ai-lab/attachments";
-import { DEFAULT_SLIDE_QUALITY } from "@/lib/ai-lab/slides";
-import { addUsage, labDb, signImageUrls } from "@/lib/ai-lab/db";
+import { toSlideQuality } from "@/lib/ai-lab/slides";
+import { addUsage, highImagesToday, labDb, signImageUrls } from "@/lib/ai-lab/db";
+import { canUseHighImages, highImageQuota } from "@/lib/ai-lab/limits";
 import { getImageProvider, LabProviderError } from "@/lib/ai-lab/providers";
 import { prepareLabTurn, saveAssistantMessage } from "@/lib/ai-lab/turn";
 
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     presetId?: string | null;
     message?: string;
     attachmentIds?: string[];
+    quality?: string;
   };
   try {
     body = await req.json();
@@ -47,6 +49,16 @@ export async function POST(req: NextRequest): Promise<Response> {
     return Response.json({ error: "model_not_allowed" }, { status: 400 });
   }
 
+  const quality = toSlideQuality(body.quality);
+  // High は単価が高いので1人1日の枚数で止める。運営の検証アカウントは対象外。
+  if (quality === "high") {
+    const quota = highImageQuota(await highImagesToday(turn.ctx.user.id), turn.ctx.user.is_unlimited);
+    if (!canUseHighImages(quota)) {
+      await saveAssistantMessage({ turn, content: "", inputTokens: 0, outputTokens: 0, errorCode: "high_quota_exceeded" });
+      return Response.json({ error: "high_quota_exceeded" }, { status: 429 });
+    }
+  }
+
   const imageInput = turn.imageInput;
   try {
     const images = await getImageProvider(turn.model).generate({
@@ -54,7 +66,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       prompt: imageInput.prompt,
       n: IMAGE_COUNT,
       // 品質は必ず明示する。既定任せにすると単価が読めない（low/high で約35倍違う）。
-      quality: DEFAULT_SLIDE_QUALITY,
+      quality,
       // デザインガイド等を渡していれば、それに合わせて作らせる。
       references: imageInput.references,
       signal: req.signal,
@@ -91,6 +103,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       inputTokens: 0,
       outputTokens: 0,
       images: paths.length,
+      highImages: quality === "high" ? paths.length : 0,
     });
 
     return Response.json({

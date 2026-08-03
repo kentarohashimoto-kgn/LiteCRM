@@ -11,9 +11,9 @@ import { createDeckWithPlan } from "@/lib/ai-lab/slides-db";
 import {
   buildPlanInstruction,
   clampSlideCount,
-  DEFAULT_SLIDE_QUALITY,
   parseSlidePlan,
   requestedSlideCount,
+  toSlideQuality,
 } from "@/lib/ai-lab/slides";
 
 /**
@@ -30,7 +30,7 @@ export const maxDuration = 300;
 const MAX_OUTPUT_TOKENS = 8000;
 
 export async function POST(req: NextRequest): Promise<Response> {
-  let body: { slug?: string; instruction?: string; attachmentIds?: string[]; count?: number };
+  let body: { slug?: string; instruction?: string; attachmentIds?: string[]; count?: number; quality?: string };
   try {
     body = await req.json();
   } catch {
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       companyId: ctx.company.id,
       userId: ctx.user.id,
       instruction,
-      quality: DEFAULT_SLIDE_QUALITY,
+      quality: toSlideQuality(body.quality),
       plan,
       attachmentIds: pending.map((a) => a.id),
     });

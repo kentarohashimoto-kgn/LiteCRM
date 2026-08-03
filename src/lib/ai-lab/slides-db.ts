@@ -167,7 +167,7 @@ export async function listDeckGenerated(deckId: string): Promise<Map<string, Lab
 
 export async function updateDeck(
   deckId: string,
-  patch: Partial<Pick<LabSlideDeckRow, "title" | "status" | "error_code" | "style_guide" | "pptx_attachment_id">>,
+  patch: Partial<Pick<LabSlideDeckRow, "title" | "status" | "error_code" | "style_guide" | "pptx_attachment_id" | "quality">>,
 ): Promise<void> {
   await labDb()
     .from("ai_lab_slide_decks")

@@ -4,9 +4,14 @@ import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Check, Download, Image as ImageIcon, Pencil, Play, RefreshCw, Square } from "lucide-react";
 import { labErrorMessage } from "@/lib/ai-lab/limits";
-import { slideProgress } from "@/lib/ai-lab/slides";
+import {
+  slideProgress,
+  SLIDE_QUALITIES,
+  SLIDE_QUALITY_LABELS,
+  type SlideQuality,
+} from "@/lib/ai-lab/slides";
 import type { LabUiDeck, LabUiSlideItem } from "@/lib/ai-lab/slides-ui-types";
-import { updateSlideItemAction } from "@/server/actions/ai-lab-slides";
+import { setSlideDeckQualityAction, updateSlideItemAction } from "@/server/actions/ai-lab-slides";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,6 +32,7 @@ export function DeckClient({ slug, deck }: { slug: string; deck: LabUiDeck }) {
     fileName: deck.pptxFileName,
   });
   const [exporting, setExporting] = useState(false);
+  const [quality, setQuality] = useState<SlideQuality>(deck.quality);
   const stopRef = useRef(false);
 
   const progress = slideProgress(items);
@@ -143,6 +149,29 @@ export function DeckClient({ slug, deck }: { slug: string; deck: LabUiDeck }) {
             </div>
           </div>
 
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-ink/50">画質</label>
+            <select
+              value={quality}
+              onChange={(e) => {
+                const next = e.target.value as SlideQuality;
+                setQuality(next);
+                // 反映はサーバー側の値が正。失敗したら元に戻す。
+                void setSlideDeckQualityAction({ slug, deckId: deck.id, quality: next }).then((r) => {
+                  if (!r.ok || !r.quality) setQuality(deck.quality);
+                });
+              }}
+              disabled={running}
+              className="input w-auto py-1.5 text-sm disabled:bg-mist-soft"
+            >
+              {SLIDE_QUALITIES.map((q) => (
+                <option key={q} value={q}>
+                  {SLIDE_QUALITY_LABELS[q].label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {running ? (
             <button type="button" onClick={() => (stopRef.current = true)} className="btn-ghost">
               <Square size={16} />
@@ -166,6 +195,7 @@ export function DeckClient({ slug, deck }: { slug: string; deck: LabUiDeck }) {
           </button>
         </div>
 
+        <p className="mt-2 text-[11px] text-ink/45">{SLIDE_QUALITY_LABELS[quality].hint}</p>
         {running && current != null && (
           <p className="mt-3 text-xs text-teal-deep">{current} 枚目を生成しています…（1枚あたり30秒ほどかかります）</p>
         )}

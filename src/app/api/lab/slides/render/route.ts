@@ -1,8 +1,14 @@
 import * as Sentry from "@sentry/nextjs";
 import type { NextRequest } from "next/server";
 import { selectImageReferences } from "@/lib/ai-lab/attachments";
-import { addUsage, downloadAttachment, monthlyTokensUsed, signAttachmentUrls } from "@/lib/ai-lab/db";
-import { isBudgetExceeded, monthRange } from "@/lib/ai-lab/limits";
+import {
+  addUsage,
+  downloadAttachment,
+  highImagesToday,
+  monthlyTokensUsed,
+  signAttachmentUrls,
+} from "@/lib/ai-lab/db";
+import { canUseHighImages, highImageQuota, isBudgetExceeded, monthRange } from "@/lib/ai-lab/limits";
 import { resolveModel } from "@/lib/ai-lab/models";
 import { getImageProvider, LabProviderError } from "@/lib/ai-lab/providers";
 import type { ImageReference } from "@/lib/ai-lab/providers/types";
@@ -70,6 +76,14 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
   }
 
+  // High は単価が高いので1人1日の枚数で止める。運営の検証アカウントは対象外。
+  if (deck.quality === "high") {
+    const quota = highImageQuota(await highImagesToday(ctx.user.id), ctx.user.is_unlimited);
+    if (!canUseHighImages(quota)) {
+      return Response.json({ error: "high_quota_exceeded" }, { status: 429 });
+    }
+  }
+
   const items = await listSlideItems(deck.id);
   const prompt = buildSlideImagePrompt({
     styleGuide: deck.style_guide,
@@ -106,6 +120,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       inputTokens: 0,
       outputTokens: 0,
       images: 1,
+      highImages: deck.quality === "high" ? 1 : 0,
     });
 
     // 最後の1枚が終わったらデッキを ready にする(統合ボタンの活性判定に使う)。

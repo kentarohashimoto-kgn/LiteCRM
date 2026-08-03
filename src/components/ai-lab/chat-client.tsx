@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUp, Paperclip, Square, X } from "lucide-react";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/ai-lab/attachments";
 import { labErrorMessage } from "@/lib/ai-lab/limits";
+import {
+  DEFAULT_SLIDE_QUALITY,
+  SLIDE_QUALITIES,
+  SLIDE_QUALITY_LABELS,
+  type SlideQuality,
+} from "@/lib/ai-lab/slides";
 import { conversationTitleFrom } from "@/lib/ai-lab/validate";
 import type {
   LabPendingAttachment,
@@ -53,6 +59,8 @@ export function ChatClient({
   const [presetId, setPresetId] = useState<string | null>(activePreset?.id ?? null);
   const [pending, setPending] = useState<LabPendingAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  // 画像生成の画質。High は単価が高いので1人1日の枚数制限がかかる。
+  const [imageQuality, setImageQuality] = useState<SlideQuality>(DEFAULT_SLIDE_QUALITY);
 
   // プリセットがモデルを固定していればそれを使う。していなければ会社の既定モデル。
   const preset = activePreset ?? presets.find((p) => p.id === presetId) ?? null;
@@ -301,6 +309,7 @@ export function ChatClient({
       modelKey: currentModel.key,
       message: text,
       attachmentIds: sentAttachments.map((a) => a.id),
+      quality: imageQuality,
     };
 
     const controller = new AbortController();
@@ -334,7 +343,7 @@ export function ChatClient({
   /** 入力欄の下に出す案内。モデルによって添付の扱いが変わるので、そこだけ言い分ける。 */
   const composerHint =
     currentModel?.kind === "image"
-      ? "デザインガイドなどの画像（PNG・JPEG・WebP）を添付すると、それに合わせて生成します。PDF は参照に使えません。"
+      ? `デザインガイドなどの画像（PNG・JPEG・WebP）を添付すると、それに合わせて生成します。${SLIDE_QUALITY_LABELS[imageQuality].hint}`
       : "PDF・画像・テキストを添付できます。Excel などのファイル作成も依頼できます。AIの回答には誤りが含まれることがあります。";
 
   if (models.length === 0) {
@@ -367,6 +376,22 @@ export function ChatClient({
               </option>
             ))}
           </select>
+          {currentModel?.kind === "image" && (
+            <>
+              <label className="text-xs font-semibold text-ink/50">画質</label>
+              <select
+                value={imageQuality}
+                onChange={(e) => setImageQuality(e.target.value as SlideQuality)}
+                className="input w-auto py-1.5 text-sm"
+              >
+                {SLIDE_QUALITIES.map((q) => (
+                  <option key={q} value={q}>
+                    {SLIDE_QUALITY_LABELS[q].label}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
           {lockedModel && <span className="text-[11px] text-ink/45">このチャットはモデル固定です</span>}
           {!lockedModel && currentModel && (
             <span className="hidden text-[11px] text-ink/45 sm:inline">{currentModel.hint}</span>

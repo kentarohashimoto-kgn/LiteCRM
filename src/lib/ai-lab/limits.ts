@@ -13,6 +13,46 @@ export function isRateLimited(recentCount: number, kind: "text" | "image"): bool
   return recentCount >= rateLimitFor(kind);
 }
 
+/**
+ * 画質 High の1日あたり枚数上限(1利用者あたり)。
+ *
+ * High は Medium の約4倍・Low の約35倍の単価になる。選べるようにする以上、
+ * 連打されても費用が読める上限を置く。運営の検証アカウント(is_unlimited)は対象外。
+ */
+export const HIGH_IMAGE_DAILY_LIMIT = 10;
+
+export interface HighQuotaState {
+  /** 当日すでに生成した High の枚数。 */
+  used: number;
+  /** 上限。無制限なら null。 */
+  limit: number | null;
+  /** あと何枚作れるか。無制限なら null。 */
+  remaining: number | null;
+  /** これ以上 High を作れないか。 */
+  exhausted: boolean;
+}
+
+/**
+ * High の残枚数を求める。
+ * 免除アカウントは上限そのものを持たない(0枚に見えて止まる、という事故を避ける)。
+ */
+export function highImageQuota(
+  usedToday: number,
+  isUnlimited: boolean,
+  limit = HIGH_IMAGE_DAILY_LIMIT,
+): HighQuotaState {
+  const used = Math.max(0, usedToday);
+  if (isUnlimited) return { used, limit: null, remaining: null, exhausted: false };
+  const remaining = Math.max(0, limit - used);
+  return { used, limit, remaining, exhausted: remaining <= 0 };
+}
+
+/** これから n 枚を High で作れるか。足りなければ false。 */
+export function canUseHighImages(quota: HighQuotaState, count = 1): boolean {
+  if (quota.remaining == null) return true;
+  return quota.remaining >= count;
+}
+
 /** 月間トークン予算(入出力合算)。null は無制限。 */
 export function isBudgetExceeded(usedTokens: number, budget: number | null | undefined): boolean {
   if (budget == null) return false;
@@ -76,6 +116,7 @@ export const LAB_ERROR_MESSAGES: Record<string, string> = {
   plan_failed: "構成案をうまく作れませんでした。指示を具体的にして、もう一度お試しください。",
   slides_not_ready: "まだ生成済みのスライドがありません。先に画像を作ってください。",
   pptx_failed: "PPTXの作成に失敗しました。時間をおいて再度お試しください（続く場合は運営にご連絡ください）。",
+  high_quota_exceeded: "画質「高」は1日10枚までです。標準か低に切り替えるか、明日また試してください。",
   empty_message: "メッセージを入力してください。",
   not_found: "会話が見つかりません。",
   unauthorized: "セッションが切れました。再度ログインしてください。",
