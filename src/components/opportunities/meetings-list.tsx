@@ -2,9 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, X } from "lucide-react";
 import type { MeetingListRow } from "@/server/actions/opportunities";
+import { MeetingSidePanel } from "./meeting-side-panel";
 import { YomiBadge } from "@/components/ui/badges";
+import { YOMI_OPTIONS } from "@/lib/constants";
 import { cn, formatDateFull, formatTimeJst, toJstDate } from "@/lib/utils";
 
 interface Option { id: string; name: string; color?: string; }
@@ -18,6 +20,11 @@ function heldDate(m: MeetingListRow): string {
 export function MeetingsList({ rows, owners }: { rows: MeetingListRow[]; owners: Option[] }) {
   const [sortKey, setSortKey] = useState<SortKey>("held");
   const [asc, setAsc] = useState(false); // 既定: 新しい順(降順)
+  const [yomi, setYomi] = useState("");   // 絞り込み: ヨミ
+  const [owner, setOwner] = useState(""); // 絞り込み: 営業担当(表示上の担当＝案件担当での補完も対象)
+  const [from, setFrom] = useState("");   // 絞り込み: 商談実施日(開始)
+  const [to, setTo] = useState("");       // 絞り込み: 商談実施日(終了)
+  const [panelId, setPanelId] = useState<string | null>(null); // サイドパネルで開いている商談
 
   // 営業担当は商談の担当を優先し、未設定なら親案件の担当を代わりに表示する。
   const ownerOf = useMemo(() => {
@@ -31,10 +38,29 @@ export function MeetingsList({ rows, owners }: { rows: MeetingListRow[]; owners:
     };
   }, [owners]);
 
+  /** 表示上の担当ID(商談の担当→無ければ案件の担当)。絞り込みは見えている担当と一致させる。 */
+  const shownOwnerId = (m: MeetingListRow) => m.owner_user_id ?? m.opp_owner_user_id ?? "";
+
+  const filtered = useMemo(() => {
+    return rows.filter((m) => {
+      if (yomi && (m.yomi ?? "") !== yomi) return false;
+      if (owner && shownOwnerId(m) !== owner) return false;
+      const d = heldDate(m);
+      // 日付未設定の商談は、日付で絞り込んでいる間は除外する
+      if ((from || to) && !d) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  }, [rows, yomi, owner, from, to]);
+
+  const hasFilter = Boolean(yomi || owner || from || to);
+  function clearFilters() { setYomi(""); setOwner(""); setFrom(""); setTo(""); }
+
   const sorted = useMemo(() => {
     const dir = asc ? 1 : -1;
     const key = (m: MeetingListRow) => (sortKey === "created" ? m.created_at : heldDate(m));
-    return [...rows].sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       const ka = key(a);
       const kb = key(b);
       // 空(未設定)は常に末尾へ
@@ -43,7 +69,7 @@ export function MeetingsList({ rows, owners }: { rows: MeetingListRow[]; owners:
       if (!kb) return -1;
       return ka < kb ? -dir : ka > kb ? dir : 0;
     });
-  }, [rows, sortKey, asc]);
+  }, [filtered, sortKey, asc]);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
@@ -58,15 +84,40 @@ export function MeetingsList({ rows, owners }: { rows: MeetingListRow[]; owners:
     <div className="card overflow-hidden">
       <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-black/[0.06]">
         <span className="text-sm font-bold text-ink">商談一覧</span>
-        <span className="pill bg-mist-soft text-ink/50">{rows.length}</span>
+        <span className="pill bg-mist-soft text-ink/50">
+          {hasFilter ? `${sorted.length} / ${rows.length}` : rows.length}
+        </span>
         <span className="ml-2 text-xs text-ink/45">並び替え</span>
         <SortButton label="商談登録日" active={sortKey === "created"} asc={asc} onClick={() => toggleSort("created")} />
         <SortButton label="商談実施日" active={sortKey === "held"} asc={asc} onClick={() => toggleSort("held")} />
-        <span className="ml-auto text-[11px] text-ink/35">案件 › 商談。行の商談名/案件名から詳細へ移動できます。</span>
+        <span className="ml-auto text-[11px] text-ink/35">案件 › 商談。商談名をクリックすると右パネルで内容を確認できます。</span>
+      </div>
+
+      {/* 絞り込み: ヨミ・営業担当・商談実施日(期間) */}
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-black/[0.06] bg-mist-soft/20">
+        <select value={yomi} onChange={(e) => setYomi(e.target.value)} className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-primary">
+          <option value="">ヨミ：すべて</option>
+          {YOMI_OPTIONS.map((y) => <option key={y.key} value={y.key}>{y.label}</option>)}
+        </select>
+        <select value={owner} onChange={(e) => setOwner(e.target.value)} className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-primary">
+          <option value="">営業担当：すべて</option>
+          {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+        <span className="ml-1 text-xs text-ink/45">商談実施日</span>
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-primary" aria-label="商談実施日(開始)" />
+        <span className="text-xs text-ink/35">〜</span>
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-xl border border-black/10 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-primary" aria-label="商談実施日(終了)" />
+        {hasFilter && (
+          <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1 rounded-lg border border-black/10 px-2 py-1 text-xs text-ink/55 hover:text-ink">
+            <X size={12} /> クリア
+          </button>
+        )}
       </div>
 
       {rows.length === 0 ? (
         <p className="text-sm text-ink/40 py-10 text-center">商談がありません。アポ・商談登録から作成できます。</p>
+      ) : sorted.length === 0 ? (
+        <p className="text-sm text-ink/40 py-10 text-center">絞り込み条件に一致する商談がありません。</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -94,9 +145,15 @@ export function MeetingsList({ rows, owners }: { rows: MeetingListRow[]; owners:
                     <Link href={`/app/opportunities/${m.opportunity_id}`} className="text-teal-deep hover:underline" title={m.opp_name}>{m.opp_name}</Link>
                   </td>
                   <td className="td max-w-[150px] truncate">
-                    {m.title
-                      ? <Link href={`/app/opportunities/${m.opportunity_id}/meetings/${m.id}`} className="hover:underline text-ink/80" title={m.title}>{m.title}</Link>
-                      : <span className="text-ink/30">—</span>}
+                    {/* 画面遷移せず、右のサイドパネルで内容を確認する（編集はパネルから詳細へ） */}
+                    <button
+                      type="button"
+                      onClick={() => setPanelId(m.id)}
+                      className="max-w-full truncate text-left hover:underline text-ink/80"
+                      title={m.title ? `${m.title}（クリックで詳細パネル）` : "詳細パネルを開く"}
+                    >
+                      {m.title || <span className="text-ink/30">（商談名なし）</span>}
+                    </button>
                   </td>
                   <td className="td"><YomiBadge yomi={m.yomi} /></td>
                   <td className="td whitespace-nowrap"><OwnerCell owner={ownerOf(m)} /></td>
@@ -107,6 +164,8 @@ export function MeetingsList({ rows, owners }: { rows: MeetingListRow[]; owners:
           </table>
         </div>
       )}
+
+      <MeetingSidePanel meetingId={panelId} onClose={() => setPanelId(null)} />
     </div>
   );
 }
