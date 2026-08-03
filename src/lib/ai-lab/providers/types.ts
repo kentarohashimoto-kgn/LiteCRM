@@ -74,8 +74,22 @@ export interface GeneratedImage {
   mime: string;
 }
 
+/** 画像生成に渡す参照画像(デザインガイド等)。 */
+export interface ImageReference {
+  fileName: string;
+  mime: string;
+  data: Buffer;
+}
+
 export interface ImageProvider {
-  generate(opts: { modelId: string; prompt: string; n: number; signal: AbortSignal }): Promise<GeneratedImage[]>;
+  generate(opts: {
+    modelId: string;
+    prompt: string;
+    n: number;
+    signal: AbortSignal;
+    /** 1件以上あれば「参照つきの生成」(images/edits)になる。 */
+    references?: ImageReference[];
+  }): Promise<GeneratedImage[]>;
 }
 
 /** 中断(ユーザーの停止ボタン・切断)かどうか。 */

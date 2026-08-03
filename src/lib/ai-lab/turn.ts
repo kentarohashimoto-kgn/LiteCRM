@@ -2,9 +2,11 @@ import {
   TEXT_MIMES,
   droppedNote,
   inlineTextAttachment,
+  selectImageReferences,
   selectWithinBudget,
   validateMessageAttachments,
   type AttachmentRef,
+  type SkippedReference,
 } from "./attachments";
 import {
   OUTPUT_BUCKET,
@@ -27,7 +29,7 @@ import {
 import { isBudgetExceeded, isRateLimited, monthRange } from "./limits";
 import { resolveModel, type LabModel } from "./models";
 import { FILE_TOOLS_NOTE, buildHistory, buildSystemPrompt } from "./prompt";
-import type { ChatAttachment, ChatMessage, GeneratedFile } from "./providers/types";
+import type { ChatAttachment, ChatMessage, GeneratedFile, ImageReference } from "./providers/types";
 import { getLabCtx, type LabCtx } from "./session";
 import { conversationTitleFrom } from "./validate";
 
@@ -44,6 +46,16 @@ export interface TurnError {
   status: number;
 }
 
+/** 画像生成のときだけ組み立てる入力。 */
+export interface ImageTurnInput {
+  /** 本文＋テキスト添付を差し込んだ、モデルに渡すプロンプト。 */
+  prompt: string;
+  /** デザインガイド等の参照画像。 */
+  references: ImageReference[];
+  /** 参照に使えなかった添付と理由。 */
+  skipped: SkippedReference[];
+}
+
 export interface PreparedTurn {
   ctx: LabCtx;
   model: LabModel;
@@ -53,6 +65,8 @@ export interface PreparedTurn {
   userMessageId: string;
   /** この会社でファイル生成(コード実行)を許可しているか。 */
   fileToolsEnabled: boolean;
+  /** 画像生成のときだけ埋まる。テキスト生成では null。 */
+  imageInput: ImageTurnInput | null;
 }
 
 export interface TurnInput {
@@ -166,9 +180,17 @@ export async function prepareLabTurn(
   const built = buildSystemPrompt(preset, assets);
   const system = fileToolsEnabled ? `${built.system}\n${FILE_TOOLS_NOTE}` : built.system;
 
-  const all = await listMessages(conversation.id);
-  const kept = buildHistory(all.map((m) => ({ id: m.id, role: m.role, content: m.content })));
-  const history = await attachFilesToHistory(conversation.id, kept);
+  // 画像生成は会話履歴を送らない(プロンプト1本で作る)ので、履歴の組み立ては行わない。
+  // 代わりに、参照として渡せる画像だけを集める。
+  let history: ChatMessage[] = [];
+  let imageInput: ImageTurnInput | null = null;
+  if (model.kind === "image") {
+    imageInput = await buildImageInput(conversation.id, message);
+  } else {
+    const all = await listMessages(conversation.id);
+    const kept = buildHistory(all.map((m) => ({ id: m.id, role: m.role, content: m.content })));
+    history = await attachFilesToHistory(conversation.id, kept);
+  }
 
   return {
     ok: true,
@@ -180,8 +202,54 @@ export async function prepareLabTurn(
       history,
       userMessageId,
       fileToolsEnabled,
+      imageInput,
     },
   };
+}
+
+/**
+ * 画像生成の入力を組み立てる。
+ *
+ * 会話中に添付された画像はすべて参照の候補にする。デザインガイドを1度渡したあと
+ * 「もう少し明るく」と続けたときにも、ガイドが効き続けてほしいため。
+ * 画像として渡せないもの(PDF・GIF等)は落とし、理由を呼び出し側へ返す。
+ * テキスト添付は本文へ差し込む(トンマナをテキストで渡す使い方に対応する)。
+ */
+async function buildImageInput(conversationId: string, message: string): Promise<ImageTurnInput> {
+  const all = await listAttachmentsForConversation(conversationId);
+  const uploads = all.filter((a) => a.origin === "upload" && a.message_id);
+
+  const textRows = uploads.filter((a) => (TEXT_MIMES as readonly string[]).includes(a.mime));
+  const nonText = uploads.filter((a) => !(TEXT_MIMES as readonly string[]).includes(a.mime));
+
+  const { used, skipped } = selectImageReferences(
+    nonText.map((row) => ({
+      id: row.id,
+      fileName: row.file_name,
+      mime: row.mime,
+      sizeBytes: Number(row.size_bytes),
+      row,
+    })),
+  );
+
+  const references: ImageReference[] = [];
+  const failed: SkippedReference[] = [...skipped];
+  for (const ref of used) {
+    const buf = await downloadAttachment(ref.row);
+    if (!buf) {
+      failed.push({ fileName: ref.fileName, reason: "ファイルを読み込めませんでした" });
+      continue;
+    }
+    references.push({ fileName: ref.fileName, mime: ref.mime, data: buf });
+  }
+
+  let prompt = message;
+  for (const row of textRows) {
+    const buf = await downloadAttachment(row);
+    if (buf) prompt += inlineTextAttachment(row.file_name, buf.toString("utf8"));
+  }
+
+  return { prompt, references, skipped: failed };
 }
 
 /**

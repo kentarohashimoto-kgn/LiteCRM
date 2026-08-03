@@ -6,6 +6,7 @@ import {
   type ChatUsage,
   type GeneratedImage,
   type ImageProvider,
+  type ImageReference,
 } from "./types";
 
 /**
@@ -161,17 +162,48 @@ export const openaiChat: ChatProvider = {
   },
 };
 
+/**
+ * 参照画像つきの生成は multipart の /images/edits を使う。
+ * 複数枚は image[]、1枚は image というのが OpenAI 側の受け口
+ * (content-type は境界文字列を fetch に決めさせるため、こちらでは付けない)。
+ */
+function imageEditForm(
+  modelId: string,
+  prompt: string,
+  n: number,
+  references: ImageReference[],
+): FormData {
+  const form = new FormData();
+  form.append("model", modelId);
+  form.append("prompt", prompt);
+  form.append("n", String(n));
+  const field = references.length > 1 ? "image[]" : "image";
+  for (const ref of references) {
+    // Buffer は SharedArrayBuffer 由来でありうる型なので、Blob に渡せる形へ写し取る。
+    form.append(field, new Blob([new Uint8Array(ref.data)], { type: ref.mime }), ref.fileName);
+  }
+  return form;
+}
+
 export const openaiImage: ImageProvider = {
-  async generate({ modelId, prompt, n, signal }): Promise<GeneratedImage[]> {
+  async generate({ modelId, prompt, n, signal, references }): Promise<GeneratedImage[]> {
     const key = apiKey();
+    const refs = references ?? [];
     let res: Response;
     try {
-      res = await fetch(`${OPENAI_BASE}/images/generations`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model: modelId, prompt, n }),
-        signal,
-      });
+      res = refs.length
+        ? await fetch(`${OPENAI_BASE}/images/edits`, {
+            method: "POST",
+            headers: { authorization: `Bearer ${key}` },
+            body: imageEditForm(modelId, prompt, n, refs),
+            signal,
+          })
+        : await fetch(`${OPENAI_BASE}/images/generations`, {
+            method: "POST",
+            headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+            body: JSON.stringify({ model: modelId, prompt, n }),
+            signal,
+          });
     } catch (e) {
       if (isAbortError(e)) throw new LabProviderError("aborted");
       throw new LabProviderError("provider_error", "OpenAI への接続に失敗しました");

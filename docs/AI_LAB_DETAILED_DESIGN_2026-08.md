@@ -20,7 +20,7 @@ src/app/
 │           └── [conversationId]/page.tsx   既存会話
 ├── api/lab/
 │   ├── chat/route.ts             POST: テキスト生成（SSEストリーミング, runtime=nodejs, maxDuration=120）
-│   ├── image/route.ts            POST: 画像生成（JSON応答, maxDuration=120）
+│   ├── image/route.ts            POST: 画像生成（JSON応答, maxDuration=300）
 │   └── upload/route.ts           POST: 添付アップロード（multipart, 送信前に受け取りIDを返す）
 └── app/ai-lab/                   ← CRM管理画面（既存 /app レイアウト配下）
     ├── page.tsx                  会社一覧＋新規作成
@@ -291,7 +291,8 @@ export interface ImageProvider {
 
 - `anthropic.ts`: `client.messages.stream()`。エラー分類は `src/server/actions/ai.ts` と同一（AuthenticationError→`config_error` / RateLimitError→`rate_limited` / APIError→`provider_error`）。
 - `openai.ts`: `fetch("https://api.openai.com/v1/chat/completions", { stream: true, stream_options: { include_usage: true } })` を SSE パース（`data: ` 行を逐次 JSON パース、`[DONE]` で終端）。HTTP 401→`config_error` / 429→`rate_limited` / その他→`provider_error`。
-- `image-openai.ts`: `fetch("https://api.openai.com/v1/images/generations", { model: "gpt-image-2", prompt, n })` → `b64_json` を Buffer 化。`getImageProvider()` が実装を返す1関数のみの切替点で、将来別プロバイダを足す際もここだけを触る。
+- `image-openai.ts`: 参照画像が無ければ `POST /v1/images/generations`（JSON, `{ model, prompt, n }`）。参照画像があれば `POST /v1/images/edits`（multipart。複数枚は `image[]`、1枚は `image`。content-type は境界文字列のため付けない）。どちらも `b64_json`（URL 返却時はその場で取得）を Buffer 化する。`getImageProvider()` が実装を返す1関数のみの切替点で、将来別プロバイダを足す際もここだけを触る。
+- 参照に渡せるのは PNG / JPEG / WebP のみ（gpt-image の制約）。選定は `selectImageReferences()` に純関数として切り出し、新しいものを優先して「8件・合計24MB」で止める。落とした分は理由つきで回答本文に注記する。
 
 ## 7. プロンプト合成 `src/lib/ai-lab/prompt.ts`（AL-503/506）
 

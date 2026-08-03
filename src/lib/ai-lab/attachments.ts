@@ -136,6 +136,88 @@ export function selectWithinBudget<T extends AttachmentRef>(
   return result;
 }
 
+/**
+ * 画像生成の参照に渡せるMIME。
+ * gpt-image の編集エンドポイントは PNG / JPEG / WebP のみで、GIF は受け付けない
+ * (添付そのものは GIF も許可しているので、ここで落として理由を伝える)。
+ */
+export const IMAGE_REFERENCE_MIMES = ["image/png", "image/jpeg", "image/webp"] as const;
+
+/** 参照として渡す枚数の上限。APIは16枚までだが、研修用途では手前で止める。 */
+export const MAX_IMAGE_REFERENCES = 8;
+
+/**
+ * 参照画像の合計サイズの上限。
+ * 1件15MBを8枚まで通すと、実体・コピー・multipart で同時に何倍も抱えることになり
+ * 関数のメモリが尽きる。枚数とは別に合計でも止める。
+ */
+export const MAX_IMAGE_REFERENCE_BYTES = 24 * 1024 * 1024;
+
+export interface SkippedReference {
+  fileName: string;
+  reason: string;
+}
+
+export interface ImageReferenceSelection<T extends AttachmentRef = AttachmentRef> {
+  /** 実際に参照として渡すもの(古い順)。 */
+  used: T[];
+  /** 渡せなかったものと理由。黙って無視すると「効いていない」原因が分からなくなる。 */
+  skipped: SkippedReference[];
+}
+
+/**
+ * 添付から画像生成の参照に使えるものを選ぶ。
+ *
+ * 枚数が上限を超えるときは新しいものを優先する。デザインガイドを渡して作らせる用途では、
+ * 直近に添付した資料が効かないと体験にならないため。
+ */
+export function selectImageReferences<T extends AttachmentRef>(
+  attachments: T[],
+  max = MAX_IMAGE_REFERENCES,
+  byteBudget = MAX_IMAGE_REFERENCE_BYTES,
+): ImageReferenceSelection<T> {
+  const skipped: SkippedReference[] = [];
+  const usable: T[] = [];
+
+  for (const a of attachments) {
+    if ((IMAGE_REFERENCE_MIMES as readonly string[]).includes(a.mime)) {
+      usable.push(a);
+    } else {
+      skipped.push({ fileName: a.fileName, reason: "画像生成の参照は PNG / JPEG / WebP のみ使えます" });
+    }
+  }
+
+  // 新しい順に詰め、枚数か合計サイズで入らなくなったものを落とす。
+  const kept: T[] = [];
+  const dropped: SkippedReference[] = [];
+  let used = 0;
+  for (let i = usable.length - 1; i >= 0; i--) {
+    const a = usable[i];
+    if (kept.length >= max) {
+      dropped.push({ fileName: a.fileName, reason: `参照できるのは新しい ${max} 件までです` });
+    } else if (used + a.sizeBytes > byteBudget) {
+      dropped.push({
+        fileName: a.fileName,
+        reason: `参照画像の合計が上限（${Math.floor(byteBudget / 1024 / 1024)}MB）を超えました`,
+      });
+    } else {
+      kept.push(a);
+      used += a.sizeBytes;
+    }
+  }
+
+  // 落とした分も添付順(古い順)に並べ直して返す。
+  return { used: kept.reverse(), skipped: [...skipped, ...dropped.reverse()] };
+}
+
+/** 画像生成の結果に添える説明。何を参照し、何を使えなかったかを受講者に見せる。 */
+export function imageResultNote(usedNames: string[], skipped: SkippedReference[]): string {
+  const lines = ["（画像を生成しました）"];
+  if (usedNames.length > 0) lines.push(`参照した添付: ${usedNames.join("、")}`);
+  for (const s of skipped) lines.push(`注: 「${s.fileName}」は使えませんでした（${s.reason}）`);
+  return lines.join("\n");
+}
+
 /** 落とした添付を本文に伝えるための注記。 */
 export function droppedNote(names: string[]): string {
   if (names.length === 0) return "";
