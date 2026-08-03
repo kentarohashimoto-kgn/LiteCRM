@@ -17,8 +17,16 @@ async function labGate(request: NextRequest, path: string): Promise<NextResponse
   const slug = path.split("/")[2];
   if (!slug) return notFound;
 
-  const company = await getEdgeCompany(slug);
-  if (!company || !company.is_active) return notFound;
+  const result = await getEdgeCompany(slug);
+  // 環境変数の設定漏れは「会社が無い」と紛らわしいので、切り分けできる応答にする。
+  if (result.kind === "not_configured") {
+    return new NextResponse(
+      "AI体験環境が未設定です。NEXT_PUBLIC_SUPABASE_URL と SUPABASE_SERVICE_ROLE_KEY を設定してください。",
+      { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } },
+    );
+  }
+  if (result.kind === "not_found" || !result.company.is_active) return notFound;
+  const company = result.company;
 
   const ok = await verifyBasicCredentials(
     request.headers.get("authorization"),
