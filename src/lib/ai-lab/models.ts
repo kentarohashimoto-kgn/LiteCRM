@@ -80,7 +80,7 @@ export const LAB_MODELS: LabModel[] = [
     label: "ChatGPT（最新）",
     provider: "openai",
     kind: "text",
-    modelId: () => process.env.OPENAI_CHAT_MODEL || "gpt-5.1",
+    modelId: () => process.env.OPENAI_CHAT_MODEL || "gpt-5.6",
     hint: "OpenAI の最新チャットモデル",
   },
   {

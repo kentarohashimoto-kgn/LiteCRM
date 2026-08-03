@@ -108,7 +108,7 @@
 | Claude Opus | Anthropic | `claude-opus-5` | テキスト |
 | Claude Sonnet | Anthropic | `claude-sonnet-5` | テキスト |
 | Claude Haiku | Anthropic | `claude-haiku-4-5` | テキスト |
-| ChatGPT（最新） | OpenAI | 環境変数 `OPENAI_CHAT_MODEL` で指定（既定 `gpt-5.1`） | テキスト |
+| ChatGPT（最新） | OpenAI | 環境変数 `OPENAI_CHAT_MODEL` で指定（既定 `gpt-5.6`） | テキスト |
 | 画像生成 | OpenAI | 環境変数 `AILAB_IMAGE_MODEL` で指定（既定 `gpt-image-2`） | 画像 |
 
 - **AL-402**: 実モデルIDはコード内カタログ＋環境変数で一元管理し、モデル改廃時に **設定変更のみ** で追従できる構造にする（受講者向け表示名は変えない）。
