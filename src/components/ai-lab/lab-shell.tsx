@@ -6,6 +6,7 @@ import { LogOut, Menu, Plus, X } from "lucide-react";
 import { labSignOut } from "@/server/actions/ai-lab-auth";
 import type { LabUiConversation } from "@/lib/ai-lab/ui-types";
 import { ConversationList } from "./conversation-list";
+import { LabChatProvider, useLabChat } from "./lab-chat-context";
 
 /**
  * 顧客向け体験環境の2ペインレイアウト。
@@ -26,7 +27,42 @@ export function LabShell({
   activeId: string | null;
   children: React.ReactNode;
 }) {
+  return (
+    <LabChatProvider conversations={conversations} activeId={activeId}>
+      <LabShellInner slug={slug} companyName={companyName} displayName={displayName}>
+        {children}
+      </LabShellInner>
+    </LabChatProvider>
+  );
+}
+
+function LabShellInner({
+  slug,
+  companyName,
+  displayName,
+  children,
+}: {
+  slug: string;
+  companyName: string;
+  displayName: string;
+  children: React.ReactNode;
+}) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { startNewChat } = useLabChat();
+
+  /**
+   * 新規会話ができたときURLだけ差し替えている(入力中の内容を消さないため)関係で、
+   * ルーターの現在地は /chat のままになる。そのため Link だけに任せると
+   * 「同じページ」と判断されて何も起きない。押した瞬間に効かせたいので、
+   * 画面の初期化とURLの戻しはここで直接行う。
+   */
+  function handleNewChat(e: React.MouseEvent) {
+    setDrawerOpen(false);
+    // 別タブで開く操作(Ctrl/⌘+クリック等)のときは今のチャットに触らない。
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    startNewChat();
+    window.history.replaceState(null, "", `/lab/${slug}/chat`);
+  }
 
   const sidebar = (
     <div className="flex h-full flex-col bg-teal-deep">
@@ -37,7 +73,7 @@ export function LabShell({
       <div className="px-3 pb-3">
         <Link
           href={`/lab/${slug}/chat`}
-          onClick={() => setDrawerOpen(false)}
+          onClick={handleNewChat}
           className="flex items-center justify-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/25"
         >
           <Plus size={16} />
@@ -45,12 +81,7 @@ export function LabShell({
         </Link>
       </div>
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        <ConversationList
-          slug={slug}
-          conversations={conversations}
-          activeId={activeId}
-          onNavigate={() => setDrawerOpen(false)}
-        />
+        <ConversationList slug={slug} onNavigate={() => setDrawerOpen(false)} />
       </nav>
       <div className="border-t border-white/10 px-3 py-3">
         <p className="truncate px-1 text-xs text-white/70">{displayName}</p>
