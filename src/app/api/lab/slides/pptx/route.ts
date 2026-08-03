@@ -71,7 +71,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       missing: items.length - slides.length,
     });
   } catch (e) {
+    // 失敗理由(ストレージのエラーメッセージ等)は例外に載せてある。受講者には出さず記録に残す。
     Sentry.captureException(e);
-    return Response.json({ error: "provider_error" }, { status: 500 });
+    return Response.json({ error: "pptx_failed" }, { status: 500 });
   }
 }

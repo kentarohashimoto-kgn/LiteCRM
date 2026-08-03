@@ -11,6 +11,7 @@ import {
   selectWithinBudget,
   validateMessageAttachments,
   validateUpload,
+  storageSafeName,
 } from "@/lib/ai-lab/attachments";
 
 describe("MIMEの正規化", () => {
@@ -150,5 +151,41 @@ describe("テキスト添付の差し込み", () => {
     const out = inlineTextAttachment("big.txt", "あ".repeat(MAX_TEXT_ATTACHMENT_CHARS + 100));
     expect(out).toContain("以下省略");
     expect(out.length).toBeLessThan(MAX_TEXT_ATTACHMENT_CHARS + 200);
+  });
+});
+
+describe("ストレージのオブジェクトキー", () => {
+  // Supabase Storage のキーは ASCII のみ。日本語を含めるとアップロードが弾かれ、
+  // 「連番の画像は保存できるのに、日本語名のPPTXだけ保存に失敗する」という
+  // 分かりにくい壊れ方をする。実際にこれで PPTX 出力が落ちた。
+  it("日本語はキーに残さない", () => {
+    const key = storageSafeName("AI導入で失敗する会社・成功する会社の違い.pptx");
+    expect(key).not.toMatch(/[^\x20-\x7E]/);
+    expect(key.endsWith(".pptx")).toBe(true);
+  });
+
+  it("英数字・ドット・ハイフンは残す", () => {
+    expect(storageSafeName("report-2026.v1.pptx")).toBe("report-2026.v1.pptx");
+  });
+
+  it("パスを壊す記号を落とす", () => {
+    expect(storageSafeName("a/b\\c:d*e?.png")).not.toMatch(/[/\\:*?]/);
+  });
+
+  it("日本語だけの名前は代替名にする(アンダースコアの羅列にしない)", () => {
+    expect(storageSafeName("提案書.pptx", "slides.pptx")).toContain("pptx");
+    expect(storageSafeName("提案書", "slides.pptx")).toBe("slides.pptx");
+  });
+
+  it("空文字でも代替名を返す", () => {
+    expect(storageSafeName("", "output")).toBe("output");
+  });
+
+  it("連続したアンダースコアはまとめる", () => {
+    expect(storageSafeName("あいうえお_x.png")).toBe("_x.png");
+  });
+
+  it("長すぎるキーは切る", () => {
+    expect(storageSafeName("a".repeat(300)).length).toBeLessThanOrEqual(80);
   });
 });

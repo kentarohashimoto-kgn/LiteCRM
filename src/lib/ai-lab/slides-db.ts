@@ -5,6 +5,7 @@ import {
   OUTPUT_BUCKET,
   type LabAttachmentRow,
 } from "./db";
+import { storageSafeName } from "./attachments";
 import { PPTX_MIME } from "./pptx";
 import type { SlidePlan, SlideQuality } from "./slides";
 
@@ -231,12 +232,12 @@ export async function saveDeckPptx(params: {
   data: Buffer;
 }): Promise<LabAttachmentRow | null> {
   const db = labDb();
-  const safe = params.fileName.replace(/[^\w.\-ぁ-んァ-ヶ一-龠ー]/g, "_");
-  const path = `${params.deck.company_id}/slides/${params.deck.id}/${crypto.randomUUID()}-${safe}`;
+  // ストレージのキーは ASCII のみ。日本語のファイル名は DB の file_name 側で保持する。
+  const path = `${params.deck.company_id}/slides/${params.deck.id}/${crypto.randomUUID()}-${storageSafeName(params.fileName, "slides.pptx")}`;
   const { error } = await db.storage
     .from(OUTPUT_BUCKET)
     .upload(path, params.data, { contentType: PPTX_MIME, upsert: false });
-  if (error) return null;
+  if (error) throw new Error(`pptxの保存に失敗しました: ${error.message}`);
 
   // 作り直しのたびに古い pptx が積み上がらないようにする。
   if (params.deck.pptx_attachment_id) {
