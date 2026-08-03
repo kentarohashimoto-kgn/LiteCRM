@@ -77,7 +77,7 @@ labSignIn(slug, loginId, password):
   1. 会社解決（slug, is_active）
   2. ai_lab_users から company_id + login_id で取得（is_active）
   3. locked_until > now() → 汎用エラー（AL-105: 残り時間は出さない）
-  4. bcrypt.compare 失敗 → failed_attempts+1（5回目で locked_until = now()+15min）→ 汎用エラー
+  4. verifyPassword（scrypt・timingSafeEqual）失敗 → failed_attempts+1（5回目で locked_until = now()+15min）→ 汎用エラー
   5. 成功 → failed_attempts=0, last_login_at 更新 → signLabSession → Cookie → redirect(chat)
 labSignOut(slug): Cookie破棄 → redirect(login)
 ```
@@ -118,7 +118,7 @@ create table public.ai_lab_users (
   company_id uuid not null references ai_lab_companies(id) on delete cascade,
   login_id text not null,
   display_name text not null,
-  password_hash text not null,                -- bcrypt
+  password_hash text not null,                -- scrypt$N$r$p$salt$hash（Node crypto）
   is_active boolean not null default true,
   is_preview boolean not null default false,  -- __preview__ ユーザー（ログインフォームからは常に拒否）
   failed_attempts int not null default 0,
@@ -149,12 +149,10 @@ create table public.ai_lab_assets (
   tenant_id uuid not null references tenants(id) on delete cascade,
   company_id uuid not null references ai_lab_companies(id) on delete cascade,
   preset_id uuid not null references ai_lab_presets(id) on delete cascade,
-  file_name text not null,
-  mime text not null,
-  size_bytes bigint not null,
-  storage_path text not null,                 -- bucket: ai-lab-assets
-  extracted_text text,                        -- 抽出済テキスト（注入用）
-  extract_status text not null default 'pending',  -- pending|done|failed
+  file_name text not null,                    -- 表示名（「デザインガイド.md」等）
+  mime text not null default 'text/plain',
+  size_bytes bigint not null default 0,
+  extracted_text text not null default '',    -- 注入されるテキスト本体
   created_at timestamptz not null default now()
 );
 
@@ -252,9 +250,9 @@ export const LAB_MODELS: LabModel[] = [
   { key: "claude-haiku",  label: "Claude Haiku",  provider: "anthropic", kind: "text",
     modelId: () => process.env.AILAB_MODEL_HAIKU  ?? "claude-haiku-4-5-20251001" },
   { key: "openai-chat",   label: "ChatGPT（最新）", provider: "openai",  kind: "text",
-    modelId: () => process.env.OPENAI_CHAT_MODEL ?? "" },   // 未設定なら isModelAvailable=false
+    modelId: () => process.env.OPENAI_CHAT_MODEL ?? "gpt-5.1" },
   { key: "image-gen",     label: "画像生成",       provider: "openai",  kind: "image",
-    modelId: () => process.env.AILAB_IMAGE_MODEL ?? "" },   // provider は AILAB_IMAGE_PROVIDER で上書き
+    modelId: () => process.env.AILAB_IMAGE_MODEL ?? "gpt-image-2" },
 ];
 
 export function isModelAvailable(key: ModelKey): boolean;   // APIキー・modelId 設定有無で判定
@@ -284,8 +282,8 @@ export interface ImageProvider {
 ```
 
 - `anthropic.ts`: `client.messages.stream()`。エラー分類は `src/server/actions/ai.ts` と同一（AuthenticationError→`config_error` / RateLimitError→`rate_limited` / APIError→`provider_error`）。
-- `openai.ts`: `client.chat.completions.create({ stream: true, stream_options: { include_usage: true } })`。
-- `image-openai.ts` / `image-google.ts`: `AILAB_IMAGE_PROVIDER` で `getImageProvider()` が返す実装を切替（要件 §8-1 未確定の吸収層）。
+- `openai.ts`: `fetch("https://api.openai.com/v1/chat/completions", { stream: true, stream_options: { include_usage: true } })` を SSE パース（`data: ` 行を逐次 JSON パース、`[DONE]` で終端）。HTTP 401→`config_error` / 429→`rate_limited` / その他→`provider_error`。
+- `image-openai.ts`: `fetch("https://api.openai.com/v1/images/generations", { model: "gpt-image-2", prompt, n })` → `b64_json` を Buffer 化。`getImageProvider()` が実装を返す1関数のみの切替点で、将来別プロバイダを足す際もここだけを触る。
 
 ## 7. プロンプト合成 `src/lib/ai-lab/prompt.ts`（AL-503/506）
 
@@ -333,7 +331,7 @@ runtime = "nodejs"; export const maxDuration = 120;
 | `lab-shell.tsx` | 2ペインレイアウト。左: 会話リスト＋「＋新しいチャット」＋ユーザー名/ログアウト。md未満は左ペインをドロワー化 |
 | `conversation-list.tsx` | 会話一覧（50件ページング）。リネーム（インライン）・削除（confirm→is_archived、AL-302/303） |
 | `chat-client.tsx` | "use client"。メッセージ表示・SSE受信・停止・エラー表示・再送。楽観追加→確定IDで置換 |
-| `message-bubble.tsx` | user/assistant吹き出し。assistant は `react-markdown`+`remark-gfm`、コードブロックにコピーボタン、下部にモデル名（AL-404）。画像は署名URLで表示＋ダウンロードリンク（AL-206） |
+| `message-bubble.tsx` | user/assistant吹き出し。assistant は自前Markdownレンダラ（`src/lib/ai-lab/markdown.ts` のASTをReact要素化。`dangerouslySetInnerHTML` 不使用）、コードブロックにコピーボタン、下部にモデル名（AL-404）。画像は署名URLで表示＋ダウンロードリンク（AL-206） |
 | `model-picker.tsx` | 許可モデルのセレクト。プリセットの model_key 固定時は disabled 表示（AL-505） |
 | `preset-picker.tsx` | 新規会話開始時のみ表示。「標準（プリセットなし）」+ 有効プリセット（name/description のみ、AL-502/504） |
 | `lab-login-form.tsx` | ログインフォーム（会社名表示・エラー文言は §3.2） |
@@ -352,8 +350,8 @@ createLabCompany / updateLabCompany / setLabCompanyActive
 createLabUsers(companyId, rows[])            // 一括発行。初期PWは自動生成(12字) → 戻り値でのみ平文返却（AL-603）
 resetLabUserPassword / setLabUserActive / unlockLabUser
 saveLabPreset / deleteLabPreset / reorderLabPresets
-uploadLabAsset(FormData)                     // 10MB上限・mime検査(pdf/md/txt) → Storage保存 → テキスト抽出
-                                             //   → extracted_text 保存（失敗時 extract_status='failed'）
+saveLabAsset(presetId, { fileName, text })   // v1はテキスト/Markdown（貼付 or .txt/.md アップロード）。
+                                             //   1件20万字上限。extracted_text に保存
 deleteLabAsset
 createLabPreviewToken(companyId)             // §3.3
 ```

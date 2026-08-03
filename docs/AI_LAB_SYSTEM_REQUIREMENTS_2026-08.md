@@ -65,8 +65,8 @@
 | 用途 | 接続 | 備考 |
 |---|---|---|
 | Claude 4種 | `@anthropic-ai/sdk`（既存 ^0.110.0）`messages.stream()` | モデルID: `claude-fable-5` / `claude-opus-5` / `claude-sonnet-5` / `claude-haiku-4-5-20251001`（カタログで管理） |
-| ChatGPT 最新 | `openai` SDK を新規依存に追加。ストリーミング | モデルIDは `OPENAI_CHAT_MODEL` |
-| 画像生成 | `ImageProvider` インターフェースで抽象化。実装A: OpenAI Images API（既定）/ 実装B: Google Imagen（Gemini API）。`AILAB_IMAGE_PROVIDER` で切替 | 要件定義 §8-1 の確認後に既定を確定 |
+| ChatGPT 最新 | **OpenAI REST API を `fetch` で直接呼ぶ**（`/v1/chat/completions`、SSEストリーミング） | モデルIDは `OPENAI_CHAT_MODEL`。SDK を足さない判断は §9 参照 |
+| 画像生成 | OpenAI Images API（`/v1/images/generations`、`gpt-image-2`）。`ImageProvider` インターフェースで抽象化し将来の差し替えに備える | モデルIDは `AILAB_IMAGE_MODEL`（既定 `gpt-image-2`） |
 
 - チャットは **Route Handler（`/api/lab/chat`、Node runtime）から SSE ストリーミング**。Server Actions はストリーミング応答に不向きのため使わない（更新系のみServer Action）。
 - システムプロンプト合成順: ①コード内ベースガードレール → ②プリセット system_prompt → ③アセット抽出テキスト（合計 24,000 字上限で切詰め）。
@@ -77,11 +77,10 @@
 | 変数 | 用途 | 必須 |
 |---|---|---|
 | `AILAB_SESSION_SECRET` | セッション/プレビュートークン署名鍵（32byte以上ランダム） | ✔ |
-| `OPENAI_API_KEY` | ChatGPT・画像生成（既定構成時）。`.env.example` 既存キーを本番設定 | ✔ |
-| `OPENAI_CHAT_MODEL` | 「ChatGPT最新」の実モデルID | ✔ |
-| `AILAB_IMAGE_PROVIDER` | `openai` \| `google`（既定 `openai`） | – |
-| `AILAB_IMAGE_MODEL` | 画像生成の実モデルID | ✔ |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | 実装B選択時のみ（.env.example 既存） | – |
+| `OPENAI_API_KEY` | ChatGPT・画像生成。`.env.example` 既存キーを本番設定 | ✔ |
+| `OPENAI_CHAT_MODEL` | 「ChatGPT最新」の実モデルID（既定 `gpt-5.1`） | – |
+| `AILAB_IMAGE_MODEL` | 画像生成の実モデルID（既定 `gpt-image-2`） | – |
+| `AILAB_MODEL_FABLE` / `_OPUS` / `_SONNET` / `_HAIKU` | Claude 各モデルIDの上書き（改廃時の追従用） | – |
 
 既存の `ANTHROPIC_API_KEY` / `NEXT_PUBLIC_APP_URL` / Supabase系はそのまま利用。
 
@@ -110,13 +109,15 @@
 
 ## 9. 新規依存パッケージ
 
-| パッケージ | 用途 | 備考 |
-|---|---|---|
-| `openai` | ChatGPT・画像生成 | 公式SDK |
-| `bcryptjs` | 受講者パスワードハッシュ | pure JS（Vercel Node runtimeで安全） |
-| `react-markdown` + `remark-gfm` | 回答のMarkdown描画 | 既存に無ければ追加 |
+**なし。**（`package.json` 無変更でリリースできる構成とした）
 
-セッション署名は Web Crypto 自前実装のため追加依存なし。
+| 必要機能 | 採用手段 | 依存を足さない理由 |
+|---|---|---|
+| OpenAI チャット/画像生成 | REST API を `fetch` で直接呼ぶ | 使うのは2エンドポイントのみ。SDK追加はビルド重量とバージョン追従コストに見合わない |
+| 受講者パスワードハッシュ | Node 標準 `crypto.scrypt`（N=16384, r=8, p=1, salt16B, keylen64B） | bcryptjs 同等の強度をゼロ依存で得られる。保存形式 `scrypt$N$r$p$salt$hash` で将来のパラメータ変更に対応 |
+| セッション署名 | Web Crypto の HMAC-SHA256 | Edge/Node 両対応。JWTライブラリ不要 |
+| Markdown 描画 | 自前レンダラ `src/lib/ai-lab/markdown.ts`（見出し/箇条書き/番号付き/表/コードブロック/インラインコード/強調/リンク） | react-markdown+remark-gfm の追加を避け、出力をユニットテストで固定できる。**HTMLは埋め込まずReact要素を組み立てるためXSS面が閉じる**（`dangerouslySetInnerHTML` を使わない） |
+| PDFテキスト抽出 | v1は **テキスト/Markdownのみ受け付ける**。PDFは管理者がテキスト貼付で登録 | pdf-parse系の追加を避ける。PDF対応は P4 として切り出し |
 
 ## 10. 段階リリース計画
 
