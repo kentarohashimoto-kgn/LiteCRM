@@ -23,10 +23,59 @@ function apiKey(): string {
   return key;
 }
 
-function toLabError(status: number): LabProviderError {
-  if (status === 401 || status === 403) return new LabProviderError("config_error", "APIキーが無効です");
-  if (status === 429) return new LabProviderError("rate_limited");
-  return new LabProviderError("provider_error", `OpenAI API エラー(${status})`);
+/**
+ * OpenAI のエラー応答を画面の原因区分へ落とす。
+ *
+ * ステータスだけでは足りない場面が多い。特に 429 は「混雑」と「残高不足」が同じ番号で来るため、
+ * 本文の code を見ないと受講者に「1分待ってください」と誤った案内をしてしまう。
+ * 本文はそのまま message に残す(受講者には出ないが、Sentry と管理者の切り分けに要る)。
+ */
+export function openaiErrorFor(status: number, bodyText = ""): LabProviderError {
+  let code = "";
+  let message = "";
+  try {
+    const parsed = JSON.parse(bodyText) as { error?: { code?: string; message?: string; type?: string } };
+    code = parsed.error?.code ?? parsed.error?.type ?? "";
+    message = parsed.error?.message ?? "";
+  } catch {
+    message = bodyText.slice(0, 500);
+  }
+  const detail = message ? ` / ${message}` : "";
+
+  // 残高不足は 429 で来る。待っても直らないので混雑と分けて扱う。
+  if (code === "insufficient_quota" || /quota|billing|credit/i.test(message)) {
+    return new LabProviderError("config_error", `OpenAI の残高・請求設定を確認してください${detail}`);
+  }
+  if (status === 429) return new LabProviderError("rate_limited", `OpenAI 混雑${detail}`);
+
+  if (status === 401) return new LabProviderError("config_error", `OPENAI_API_KEY が無効です${detail}`);
+  if (status === 403) {
+    // gpt-image 系は組織の本人確認が済むまで 403 で弾かれる。キーの誤りと紛らわしい。
+    return new LabProviderError(
+      "config_error",
+      `OpenAI にモデルへのアクセスを拒否されました。組織の本人確認(Verify Organization)が必要な可能性があります${detail}`,
+    );
+  }
+  if (status === 404 || code === "model_not_found") {
+    return new LabProviderError("config_error", `モデルIDが見つかりません。環境変数の指定を確認してください${detail}`);
+  }
+  if (status === 413) return new LabProviderError("too_large", `リクエストが大きすぎます${detail}`);
+  // 画像生成では内容ブロックが日常的に起きる。設定不備ではないので受講者に言い換えを促す。
+  if (code === "moderation_blocked" || /safety|content[_ ]policy|moderation/i.test(message)) {
+    return new LabProviderError("refused", `OpenAI が生成を拒否しました${detail}`);
+  }
+  return new LabProviderError("provider_error", `OpenAI API エラー(${status})${detail}`);
+}
+
+/** エラー応答の本文まで読んでから区分する。本文は一度しか読めないので失敗しても握りつぶす。 */
+async function toLabError(res: Response): Promise<LabProviderError> {
+  let body = "";
+  try {
+    body = await res.text();
+  } catch {
+    // 本文が読めなくてもステータスだけで判定を続ける。
+  }
+  return openaiErrorFor(res.status, body);
 }
 
 /** SSE のバイト列を「data: 以降の1行」単位に切り出す。`[DONE]` は呼び出し側で判定する。 */
@@ -81,10 +130,8 @@ export const openaiChat: ChatProvider = {
       throw new LabProviderError("provider_error", "OpenAI への接続に失敗しました");
     }
 
-    if (!res.ok || !res.body) {
-      if (!res.ok) throw toLabError(res.status);
-      throw new LabProviderError("provider_error", "OpenAI から応答本文が得られませんでした");
-    }
+    if (!res.ok) throw await toLabError(res);
+    if (!res.body) throw new LabProviderError("provider_error", "OpenAI から応答本文が得られませんでした");
 
     try {
       await readSseStream(res.body, (payload) => {
@@ -129,7 +176,7 @@ export const openaiImage: ImageProvider = {
       if (isAbortError(e)) throw new LabProviderError("aborted");
       throw new LabProviderError("provider_error", "OpenAI への接続に失敗しました");
     }
-    if (!res.ok) throw toLabError(res.status);
+    if (!res.ok) throw await toLabError(res);
 
     const json = (await res.json()) as { data?: { b64_json?: string; url?: string }[] };
     const items = json.data ?? [];
