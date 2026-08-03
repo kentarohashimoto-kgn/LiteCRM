@@ -1,16 +1,33 @@
 import {
+  TEXT_MIMES,
+  droppedNote,
+  inlineTextAttachment,
+  selectWithinBudget,
+  validateMessageAttachments,
+  type AttachmentRef,
+} from "./attachments";
+import {
+  OUTPUT_BUCKET,
+  attachToMessage,
+  createAttachment,
+  downloadAttachment,
   getConversation,
+  getPendingAttachments,
   getPreset,
   labDb,
   listAssets,
+  listAttachmentsForConversation,
   listMessages,
   monthlyTokensUsed,
   recentUserMessageCount,
+  signAttachmentUrls,
+  type LabAttachmentRow,
   type LabConversationRow,
 } from "./db";
 import { isBudgetExceeded, isRateLimited, monthRange } from "./limits";
 import { resolveModel, type LabModel } from "./models";
-import { buildHistory, buildSystemPrompt, type HistoryMessage } from "./prompt";
+import { FILE_TOOLS_NOTE, buildHistory, buildSystemPrompt } from "./prompt";
+import type { ChatAttachment, ChatMessage, GeneratedFile } from "./providers/types";
 import { getLabCtx, type LabCtx } from "./session";
 import { conversationTitleFrom } from "./validate";
 
@@ -32,8 +49,10 @@ export interface PreparedTurn {
   model: LabModel;
   conversation: LabConversationRow;
   system: string;
-  history: HistoryMessage[];
+  history: ChatMessage[];
   userMessageId: string;
+  /** この会社でファイル生成(コード実行)を許可しているか。 */
+  fileToolsEnabled: boolean;
 }
 
 export interface TurnInput {
@@ -42,6 +61,8 @@ export interface TurnInput {
   presetId?: string | null;
   modelKey: string;
   message: string;
+  /** アップロード済みで未送信の添付ID。 */
+  attachmentIds?: string[];
 }
 
 export async function prepareLabTurn(
@@ -107,6 +128,17 @@ export async function prepareLabTurn(
     conversation = data as LabConversationRow;
   }
 
+  // 添付は「本人がアップロードした未送信のもの」だけを受け付ける。
+  const requestedIds = input.attachmentIds ?? [];
+  const pending = requestedIds.length
+    ? await getPendingAttachments(ctx.company.id, ctx.user.id, requestedIds)
+    : [];
+  if (pending.length !== requestedIds.length) {
+    return { ok: false, error: { code: "attachment_rejected", status: 400 } };
+  }
+  const sizeError = validateMessageAttachments(pending.map((a) => ({ size: Number(a.size_bytes) })));
+  if (sizeError) return { ok: false, error: { code: "too_large", status: 413 } };
+
   const { data: inserted, error: msgError } = await db
     .from("ai_lab_messages")
     .insert({
@@ -122,18 +154,101 @@ export async function prepareLabTurn(
     .single();
   if (msgError || !inserted) return { ok: false, error: { code: "provider_error", status: 500 } };
 
+  const userMessageId = inserted.id as string;
+  await attachToMessage(
+    pending.map((a) => a.id),
+    conversation.id,
+    userMessageId,
+  );
+
+  const fileToolsEnabled = ctx.company.file_tools_enabled !== false && model.provider === "anthropic";
   const assets = preset ? await listAssets(ctx.company.id, preset.id) : [];
-  const { system } = buildSystemPrompt(preset, assets);
+  const built = buildSystemPrompt(preset, assets);
+  const system = fileToolsEnabled ? `${built.system}\n${FILE_TOOLS_NOTE}` : built.system;
 
   const all = await listMessages(conversation.id);
-  const history = buildHistory(
-    all.map((m) => ({ role: m.role, content: m.content })),
-  );
+  const kept = buildHistory(all.map((m) => ({ id: m.id, role: m.role, content: m.content })));
+  const history = await attachFilesToHistory(conversation.id, kept);
 
   return {
     ok: true,
-    turn: { ctx, model, conversation, system, history, userMessageId: inserted.id as string },
+    turn: {
+      ctx,
+      model,
+      conversation,
+      system,
+      history,
+      userMessageId,
+      fileToolsEnabled,
+    },
   };
+}
+
+/**
+ * 履歴に添付を載せる。
+ *
+ * APIはステートレスなので、過去の添付も毎回送り直すことになる。
+ * 全部送るとすぐ上限に当たるため、新しいものを優先して予算内に収め、
+ * 落とした分はファイル名だけ本文に注記する(黙って消すと会話が噛み合わなくなる)。
+ * 実体のダウンロードは、予算に残ったものだけに絞ってから行う。
+ */
+async function attachFilesToHistory(
+  conversationId: string,
+  kept: { id: string; role: "user" | "assistant"; content: string }[],
+): Promise<ChatMessage[]> {
+  const all = await listAttachmentsForConversation(conversationId);
+  // 生成物(AIの出力)は入力として送り返さない。受講者が添付したものだけが対象。
+  const uploads = all.filter((a) => a.origin === "upload" && a.message_id);
+  if (uploads.length === 0) return kept.map((m) => ({ role: m.role, content: m.content }));
+
+  const byMessage = new Map<string, LabAttachmentRow[]>();
+  for (const a of uploads) {
+    byMessage.set(a.message_id!, [...(byMessage.get(a.message_id!) ?? []), a]);
+  }
+
+  const refs: { messageId: string; attachments: (AttachmentRef & { row: LabAttachmentRow })[] }[] = kept.map((m) => ({
+    messageId: m.id,
+    attachments: (byMessage.get(m.id) ?? []).map((row) => ({
+      id: row.id,
+      fileName: row.file_name,
+      mime: row.mime,
+      sizeBytes: Number(row.size_bytes),
+      row,
+    })),
+  }));
+
+  const budgeted = selectWithinBudget(refs);
+
+  const out: ChatMessage[] = [];
+  for (let i = 0; i < kept.length; i++) {
+    const msg = kept[i];
+    const slot = budgeted[i];
+    let content = msg.content;
+    const attachments: ChatAttachment[] = [];
+
+    for (const ref of slot.attachments) {
+      const row = ref.row;
+      const buf = await downloadAttachment(row);
+      if (!buf) {
+        slot.droppedNames.push(row.file_name);
+        continue;
+      }
+      if ((TEXT_MIMES as readonly string[]).includes(row.mime)) {
+        content += inlineTextAttachment(row.file_name, buf.toString("utf8"));
+      } else {
+        attachments.push({
+          kind: row.kind === "image" ? "image" : "document",
+          mime: row.mime,
+          fileName: row.file_name,
+          data: buf.toString("base64"),
+        });
+      }
+    }
+
+    content += droppedNote(slot.droppedNames);
+    out.push({ role: msg.role, content, attachments: attachments.length ? attachments : undefined });
+  }
+  return out;
 }
 
 /** アシスタントの発言を記録し、会話の更新時刻・最終モデルを合わせる。 */
@@ -172,4 +287,47 @@ export async function saveAssistantMessage(params: {
     .eq("id", turn.conversation.id);
 
   return (data?.id as string) ?? null;
+}
+
+/**
+ * モデルが作ったファイル(xlsx等)を保存し、ダウンロード用の署名URLを返す。
+ * 1件の保存失敗で回答ごと失わせないよう、成功したものだけを返す。
+ */
+export async function saveGeneratedFiles(
+  turn: PreparedTurn,
+  messageId: string | null,
+  files: GeneratedFile[],
+): Promise<{ id: string; fileName: string; mime: string; url: string }[]> {
+  if (files.length === 0) return [];
+  const db = labDb();
+  const rows: LabAttachmentRow[] = [];
+
+  for (const f of files) {
+    const safeName = f.fileName.replace(/[^\w.\-]/g, "_") || "output";
+    const path = `${turn.ctx.company.id}/${turn.conversation.id}/${crypto.randomUUID()}-${safeName}`;
+    const { error } = await db.storage
+      .from(OUTPUT_BUCKET)
+      .upload(path, f.data, { contentType: f.mime, upsert: false });
+    if (error) continue;
+
+    const row = await createAttachment({
+      tenantId: turn.ctx.company.tenant_id,
+      companyId: turn.ctx.company.id,
+      userId: turn.ctx.user.id,
+      origin: "generated",
+      kind: "output",
+      fileName: f.fileName,
+      mime: f.mime,
+      sizeBytes: f.data.length,
+      storagePath: path,
+      conversationId: turn.conversation.id,
+      messageId,
+    });
+    if (row) rows.push(row);
+  }
+
+  const urls = await signAttachmentUrls(rows);
+  return rows
+    .filter((r) => urls[r.id])
+    .map((r) => ({ id: r.id, fileName: r.file_name, mime: r.mime, url: urls[r.id] }));
 }

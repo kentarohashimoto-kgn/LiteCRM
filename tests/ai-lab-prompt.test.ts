@@ -1,5 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { BASE_GUARDRAIL, buildHistory, buildSystemPrompt } from "@/lib/ai-lab/prompt";
+import { BASE_GUARDRAIL, FILE_TOOLS_NOTE, buildHistory, buildSystemPrompt } from "@/lib/ai-lab/prompt";
+
+describe("ファイル作成の案内", () => {
+  // 「表を貼り付けてください」と手順だけ返す挙動を防ぐための指示。消えると機能が事実上死ぬ。
+  it("実ファイルを作るよう明示し、手順だけの回答を禁じている", () => {
+    expect(FILE_TOOLS_NOTE).toContain("必ず実ファイルを作成");
+    expect(FILE_TOOLS_NOTE).toContain("コピー&ペースト");
+  });
+
+  it("複数シートと数式に踏み込むよう促している", () => {
+    expect(FILE_TOOLS_NOTE).toContain("複数シート");
+    expect(FILE_TOOLS_NOTE).toContain("数式");
+    expect(FILE_TOOLS_NOTE).toContain("openpyxl");
+  });
+
+  it("作れる形式を4種とも挙げている", () => {
+    for (const ext of [".xlsx", ".docx", ".pptx", "PDF"]) {
+      expect(FILE_TOOLS_NOTE).toContain(ext);
+    }
+  });
+});
 
 describe("システムプロンプトの合成", () => {
   it("プリセットの有無にかかわらずベースガードレールで始まる", () => {

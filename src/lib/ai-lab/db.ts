@@ -19,6 +19,7 @@ export interface LabCompanyRow {
   default_model: string;
   monthly_token_budget: number | null;
   is_active: boolean;
+  file_tools_enabled: boolean;
   starts_on: string | null;
   ends_on: string | null;
   created_at: string;
@@ -86,7 +87,7 @@ export interface LabMessageRow {
 }
 
 const COMPANY_COLS =
-  "id, tenant_id, account_id, name, slug, basic_user, allowed_models, default_model, monthly_token_budget, is_active, starts_on, ends_on, created_at";
+  "id, tenant_id, account_id, name, slug, basic_user, allowed_models, default_model, monthly_token_budget, is_active, file_tools_enabled, starts_on, ends_on, created_at";
 
 export function labDb() {
   return getSupabaseAdmin();
@@ -253,6 +254,143 @@ export async function addUsage(params: {
     p_out: params.outputTokens,
     p_images: params.images ?? 0,
   });
+}
+
+// ===================== 添付・生成ファイル =====================
+
+export interface LabAttachmentRow {
+  id: string;
+  conversation_id: string | null;
+  message_id: string | null;
+  origin: "upload" | "generated";
+  kind: "image" | "document" | "output";
+  file_name: string;
+  mime: string;
+  size_bytes: number;
+  storage_path: string;
+  created_at: string;
+}
+
+const ATTACHMENT_COLS =
+  "id, conversation_id, message_id, origin, kind, file_name, mime, size_bytes, storage_path, created_at";
+
+export const UPLOAD_BUCKET = "ai-lab-uploads";
+export const OUTPUT_BUCKET = "ai-lab-generated";
+
+export function bucketFor(origin: "upload" | "generated"): string {
+  return origin === "upload" ? UPLOAD_BUCKET : OUTPUT_BUCKET;
+}
+
+export async function createAttachment(params: {
+  tenantId: string;
+  companyId: string;
+  userId: string;
+  origin: "upload" | "generated";
+  kind: "image" | "document" | "output";
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  storagePath: string;
+  conversationId?: string | null;
+  messageId?: string | null;
+}): Promise<LabAttachmentRow | null> {
+  const { data } = await labDb()
+    .from("ai_lab_attachments")
+    .insert({
+      tenant_id: params.tenantId,
+      company_id: params.companyId,
+      user_id: params.userId,
+      origin: params.origin,
+      kind: params.kind,
+      file_name: params.fileName,
+      mime: params.mime,
+      size_bytes: params.sizeBytes,
+      storage_path: params.storagePath,
+      conversation_id: params.conversationId ?? null,
+      message_id: params.messageId ?? null,
+    })
+    .select(ATTACHMENT_COLS)
+    .single();
+  return (data as LabAttachmentRow | null) ?? null;
+}
+
+/**
+ * 添付を「本人がアップロードした、まだ送信していないもの」に限って取り出す。
+ * 他人のIDを渡されても、会社・利用者・未送信の3条件で弾かれる。
+ */
+export async function getPendingAttachments(
+  companyId: string,
+  userId: string,
+  ids: string[],
+): Promise<LabAttachmentRow[]> {
+  if (ids.length === 0) return [];
+  const { data } = await labDb()
+    .from("ai_lab_attachments")
+    .select(ATTACHMENT_COLS)
+    .eq("company_id", companyId)
+    .eq("user_id", userId)
+    .eq("origin", "upload")
+    .is("message_id", null)
+    .in("id", ids);
+  return (data as LabAttachmentRow[] | null) ?? [];
+}
+
+/** 送信確定時に、添付を会話とメッセージへ結び付ける。 */
+export async function attachToMessage(
+  ids: string[],
+  conversationId: string,
+  messageId: string,
+): Promise<void> {
+  if (ids.length === 0) return;
+  await labDb()
+    .from("ai_lab_attachments")
+    .update({ conversation_id: conversationId, message_id: messageId })
+    .in("id", ids);
+}
+
+export async function listAttachmentsForConversation(conversationId: string): Promise<LabAttachmentRow[]> {
+  const { data } = await labDb()
+    .from("ai_lab_attachments")
+    .select(ATTACHMENT_COLS)
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true });
+  return (data as LabAttachmentRow[] | null) ?? [];
+}
+
+/** Storage から実体を取り出す。モデルへ渡す直前にだけ呼ぶ。 */
+export async function downloadAttachment(row: LabAttachmentRow): Promise<Buffer | null> {
+  const { data } = await labDb().storage.from(bucketFor(row.origin)).download(row.storage_path);
+  if (!data) return null;
+  return Buffer.from(await data.arrayBuffer());
+}
+
+/** 添付/生成物の署名URL(パス→URL)。会話単位でまとめて発行する。 */
+export async function signAttachmentUrls(
+  rows: LabAttachmentRow[],
+  expiresInSec = 600,
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const byBucket = new Map<string, LabAttachmentRow[]>();
+  for (const r of rows) {
+    const bucket = bucketFor(r.origin);
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), r]);
+  }
+  for (const [bucket, list] of byBucket) {
+    const { data } = await labDb()
+      .storage.from(bucket)
+      .createSignedUrls(
+        list.map((r) => r.storage_path),
+        expiresInSec,
+      );
+    for (const row of data ?? []) {
+      const key = (row as { path?: string | null }).path;
+      if (key && row.signedUrl) {
+        const match = list.find((r) => r.storage_path === key);
+        if (match) out[match.id] = row.signedUrl;
+      }
+    }
+  }
+  return out;
 }
 
 /** 生成画像は非公開バケットに置き、表示のたびに短命の署名URLを作る。 */

@@ -204,6 +204,18 @@ export default async function AiLabPage({ searchParams }: { searchParams: { save
             <input name="endsOn" type="date" className="input" />
           </div>
           <div className="md:col-span-2">
+            <label className="flex items-start gap-2 rounded-xl border border-black/10 px-3 py-2.5 text-sm">
+              <input type="checkbox" name="fileTools" value="1" defaultChecked className="mt-0.5" />
+              <span>
+                ファイル作成を許可する（Excel / Word / PowerPoint / PDF）
+                <span className="mt-0.5 block text-[11px] text-ink/45 text-legible">
+                  裏側でコード実行を使うため、不要なら外してください。
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div className="md:col-span-2">
             <label className="label">CRMの顧客に紐付ける（任意）</label>
             <select name="accountId" className="input" defaultValue="">
               <option value="">紐付けない</option>

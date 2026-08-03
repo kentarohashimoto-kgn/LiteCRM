@@ -19,6 +19,29 @@ export const BASE_GUARDRAIL = [
 /** プリセットのアセットをシステムプロンプトへ注入する上限(文字数)。 */
 export const ASSET_INJECT_LIMIT = 24_000;
 
+/**
+ * ファイル生成が使えるときにだけ足す案内。
+ * 何が作れるかを明示しないと、モデルは表をテキストで返して終わることが多い。
+ */
+export const FILE_TOOLS_NOTE = [
+  "",
+  "## ファイル作成について",
+  "あなたはコード実行環境を使って Excel(.xlsx)・Word(.docx)・PowerPoint(.pptx)・PDF を実際に作成し、",
+  "ダウンロードできる形で渡せます。これはこの環境の主要な機能です。",
+  "",
+  "- Excel・スプレッドシート・表・集計・一覧・シートを求められたら、**必ず実ファイルを作成**してください。",
+  "  「この表をExcelにコピー&ペーストしてください」と手順を説明して終わらせてはいけません。",
+  "  受け手が自分で貼り付ける必要のある回答は、依頼に応えたことになりません。",
+  "- Excel では openpyxl を使い、次を積極的に作り込んでください。",
+  "  - 目的に応じた**複数シートへの分割**（入力シート・計算シート・集計シート・前提条件シートなど）",
+  "  - セルに直接値を書くのではなく、**シートをまたぐ数式**（=入力!B5*設定!B2 のような参照）",
+  "  - 見出しの書式・列幅・表示形式（通貨・パーセント・桁区切り）",
+  "  - 入力欄と計算結果の色分けなど、受け手が触って試せる作り",
+  "- 受講者が添付した資料（PDF・画像）から数値や項目を読み取って表計算にまとめることもできます。",
+  "- ファイル名は内容が分かる日本語にしてください。",
+  "- 本文には「何を作ったか」と「どう使うか」を簡潔に書けば十分です。表そのものを本文に再掲する必要はありません。",
+].join("\n");
+
 export interface PromptPreset {
   system_prompt: string | null;
 }
@@ -88,12 +111,12 @@ export const HISTORY_CHAR_BUDGET = 60_000;
  * 直近から遡って詰め、最新のメッセージは予算を超えても必ず残す(質問自体が消えないように)。
  * 中身が空の行(エラー時に記録した assistant 行など)は文脈にならないので除外する。
  */
-export function buildHistory(
-  messages: HistoryMessage[],
+export function buildHistory<T extends HistoryMessage>(
+  messages: T[],
   charBudget = HISTORY_CHAR_BUDGET,
-): HistoryMessage[] {
+): T[] {
   const usable = messages.filter((m) => m.content && m.content.trim().length > 0);
-  const kept: HistoryMessage[] = [];
+  const kept: T[] = [];
   let used = 0;
   for (let i = usable.length - 1; i >= 0; i--) {
     const m = usable[i];

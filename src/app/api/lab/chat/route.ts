@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import type { NextRequest } from "next/server";
 import { addUsage } from "@/lib/ai-lab/db";
 import { getChatProvider, LabProviderError } from "@/lib/ai-lab/providers";
-import { prepareLabTurn, saveAssistantMessage } from "@/lib/ai-lab/turn";
+import { prepareLabTurn, saveAssistantMessage, saveGeneratedFiles } from "@/lib/ai-lab/turn";
 
 /**
  * AI Lab のテキスト生成(SSEストリーミング)。
@@ -12,9 +12,15 @@ import { prepareLabTurn, saveAssistantMessage } from "@/lib/ai-lab/turn";
  */
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+// ファイル生成はコードを書いて実行する往復が入るぶん長くなる。
+export const maxDuration = 300;
 
 const MAX_OUTPUT_TOKENS = 8000;
+/**
+ * ファイル生成時はコードを書いて実行する往復が入るため、通常より広く取る。
+ * ここが狭いと、複数シートを組み立てている途中で打ち切られて生成物が残らない。
+ */
+const MAX_OUTPUT_TOKENS_WITH_FILES = 24000;
 
 export async function POST(req: NextRequest): Promise<Response> {
   let body: {
@@ -23,6 +29,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     presetId?: string | null;
     modelKey?: string;
     message?: string;
+    attachmentIds?: string[];
   };
   try {
     body = await req.json();
@@ -36,6 +43,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     presetId: body.presetId ?? null,
     modelKey: String(body.modelKey ?? ""),
     message: String(body.message ?? ""),
+    attachmentIds: Array.isArray(body.attachmentIds) ? body.attachmentIds.map(String) : [],
   });
   if (!prep.ok) return Response.json({ error: prep.error.code }, { status: prep.error.status });
 
@@ -72,8 +80,10 @@ export async function POST(req: NextRequest): Promise<Response> {
           modelId: turn.model.modelId(),
           system: turn.system,
           messages: turn.history,
-          maxTokens: MAX_OUTPUT_TOKENS,
+          maxTokens: turn.fileToolsEnabled ? MAX_OUTPUT_TOKENS_WITH_FILES : MAX_OUTPUT_TOKENS,
           signal: abort.signal,
+          // ファイル生成はコード実行を伴うため、会社設定で無効なら付けない。
+          enableFileTools: turn.fileToolsEnabled,
           onDelta: (delta) => {
             text += delta;
             send({ delta });
@@ -86,6 +96,8 @@ export async function POST(req: NextRequest): Promise<Response> {
           inputTokens: usage.inputTokens,
           outputTokens: usage.outputTokens,
         });
+        const files = await saveGeneratedFiles(turn, messageId, usage.files ?? []);
+        if (files.length > 0) send({ files });
         await addUsage({
           tenantId: turn.ctx.company.tenant_id,
           companyId: turn.ctx.company.id,
