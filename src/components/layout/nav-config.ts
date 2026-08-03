@@ -170,8 +170,9 @@ function injectAdminOnly(base: NavGroup[], role: Role): NavGroup[] {
     if (g.heading === "ホーム") {
       return { ...g, items: [...g.items, { href: "/app/mindmaps", label: "マインドマップ", icon: Brain }] };
     }
-    // AI体験環境(/lab)は顧客向けの別画面。ここから会社・受講者・プリセットを管理する。
-    if (g.heading === "設定") {
+    // AI体験環境(/lab)は契約済み顧客向けの別画面。会社・受講者・プリセットをここから管理する。
+    // 「設定」ではなく「顧客」に置くのは、実態が顧客への提供物で、研修の準備中に探す場所だから。
+    if (g.heading === "顧客") {
       return { ...g, items: [...g.items, { href: "/app/ai-lab", label: "AI体験環境", icon: FlaskConical }] };
     }
     return g;
