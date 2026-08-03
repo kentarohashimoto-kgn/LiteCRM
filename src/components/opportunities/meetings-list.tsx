@@ -7,7 +7,7 @@ import type { MeetingListRow } from "@/server/actions/opportunities";
 import { YomiBadge } from "@/components/ui/badges";
 import { cn, formatDateFull, formatTimeJst, toJstDate } from "@/lib/utils";
 
-interface Option { id: string; name: string; }
+interface Option { id: string; name: string; color?: string; }
 type SortKey = "held" | "created";
 
 /** 商談実施日(日付)を返す。日付列が無ければ日時からJST日付を導出。 */
@@ -19,9 +19,16 @@ export function MeetingsList({ rows, owners }: { rows: MeetingListRow[]; owners:
   const [sortKey, setSortKey] = useState<SortKey>("held");
   const [asc, setAsc] = useState(false); // 既定: 新しい順(降順)
 
-  const ownerName = useMemo(() => {
-    const map = new Map(owners.map((o) => [o.id, o.name]));
-    return (id?: string | null) => (id ? map.get(id) ?? "—" : "—");
+  // 営業担当は商談の担当を優先し、未設定なら親案件の担当を代わりに表示する。
+  const ownerOf = useMemo(() => {
+    const map = new Map(owners.map((o) => [o.id, o]));
+    return (m: MeetingListRow): { name: string; color?: string; fromOpp: boolean } | null => {
+      const own = m.owner_user_id ? map.get(m.owner_user_id) : undefined;
+      if (own) return { name: own.name, color: own.color, fromOpp: false };
+      const opp = m.opp_owner_user_id ? map.get(m.opp_owner_user_id) : undefined;
+      if (opp) return { name: opp.name, color: opp.color, fromOpp: true };
+      return null;
+    };
   }, [owners]);
 
   const sorted = useMemo(() => {
@@ -72,8 +79,8 @@ export function MeetingsList({ rows, owners }: { rows: MeetingListRow[]; owners:
                 <th className="th">案件名</th>
                 <th className="th">商談名</th>
                 <th className="th">ヨミ</th>
+                <th className="th">営業担当</th>
                 <th className="th min-w-[200px]">商談概要</th>
-                <th className="th">担当</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/[0.04]">
@@ -92,8 +99,8 @@ export function MeetingsList({ rows, owners }: { rows: MeetingListRow[]; owners:
                       : <span className="text-ink/30">—</span>}
                   </td>
                   <td className="td"><YomiBadge yomi={m.yomi} /></td>
+                  <td className="td whitespace-nowrap"><OwnerCell owner={ownerOf(m)} /></td>
                   <td className="td whitespace-normal text-[12.5px] text-ink/60"><span className="line-clamp-2">{m.summary || <span className="text-ink/25">—</span>}</span></td>
-                  <td className="td text-ink/70 whitespace-nowrap">{ownerName(m.owner_user_id)}</td>
                 </tr>
               ))}
             </tbody>
@@ -101,6 +108,18 @@ export function MeetingsList({ rows, owners }: { rows: MeetingListRow[]; owners:
         </div>
       )}
     </div>
+  );
+}
+
+/** 営業担当セル。色ドット＋氏名。案件担当で補完した場合は末尾に(案件)を付ける。 */
+function OwnerCell({ owner }: { owner: { name: string; color?: string; fromOpp: boolean } | null }) {
+  if (!owner) return <span className="text-ink/25">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-ink/70" title={owner.fromOpp ? `${owner.name}（案件の担当）` : owner.name}>
+      <span className="size-2 rounded-full shrink-0" style={{ backgroundColor: owner.color ?? "#008C8C" }} />
+      {owner.name}
+      {owner.fromOpp && <span className="text-[10px] text-ink/35">(案件)</span>}
+    </span>
   );
 }
 

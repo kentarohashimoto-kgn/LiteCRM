@@ -161,7 +161,8 @@ export interface MeetingListRow {
   meeting_at: string | null;     // 商談実施日時
   created_at: string;            // 商談登録日
   method: string | null;
-  owner_user_id: string | null;
+  owner_user_id: string | null;      // 商談の担当営業
+  opp_owner_user_id: string | null;  // 親案件の担当営業(商談側が未設定のときの表示元)
   opportunity_id: string;
   opp_name: string;
   account_name: string;
@@ -176,7 +177,7 @@ export async function fetchMeetingsListAction(): Promise<MeetingListRow[]> {
   // opportunities!inner で親案件が可視(削除除外・権限内)の商談のみに絞る。
   const { data } = await sb
     .from("meetings")
-    .select("id,title,summary,meeting_date,meeting_at,created_at,method,owner_user_id,opportunity_id, opportunities!inner(name,yomi,accounts(name))")
+    .select("id,title,summary,meeting_date,meeting_at,created_at,method,owner_user_id,opportunity_id, opportunities!inner(name,yomi,owner_user_id,accounts(name))")
     .order("created_at", { ascending: false })
     .limit(2000);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -189,6 +190,7 @@ export async function fetchMeetingsListAction(): Promise<MeetingListRow[]> {
     created_at: m.created_at as string,
     method: (m.method as string) ?? null,
     owner_user_id: (m.owner_user_id as string) ?? null,
+    opp_owner_user_id: (m.opportunities?.owner_user_id as string) ?? null,
     opportunity_id: m.opportunity_id as string,
     opp_name: (m.opportunities?.name as string) ?? "—",
     yomi: (m.opportunities?.yomi as string) ?? null,
