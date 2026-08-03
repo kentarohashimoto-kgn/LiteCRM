@@ -164,7 +164,8 @@ export default async function AiLabPage({ searchParams }: { searchParams: { save
                       name="models"
                       value={m.key}
                       disabled={!available}
-                      defaultChecked={m.key === "claude-sonnet" && available}
+                      // 既定は「使えるものは全部オン」。受講者が画面で選び比べられる状態から始める。
+                      defaultChecked={available}
                     />
                     {m.label}
                     {!available && <span className="text-[10px]">（キー未設定）</span>}

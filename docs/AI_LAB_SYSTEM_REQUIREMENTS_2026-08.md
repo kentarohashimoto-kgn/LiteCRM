@@ -76,7 +76,7 @@
 
 | 変数 | 用途 | 必須 |
 |---|---|---|
-| `AILAB_SESSION_SECRET` | セッション/プレビュートークン署名鍵（32byte以上ランダム） | ✔ |
+| `AILAB_SESSION_SECRET` | セッション署名鍵（32byte以上ランダム）。**未設定なら `SUPABASE_SERVICE_ROLE_KEY` から用途を分けて派生**するため設定なしでも動くが、鍵の差し替えでセッションが失効するので本番は明示設定を推奨 | – |
 | `OPENAI_API_KEY` | ChatGPT・画像生成。`.env.example` 既存キーを本番設定 | ✔ |
 | `OPENAI_CHAT_MODEL` | 「ChatGPT最新」の実モデルID（既定 `gpt-5.1`） | – |
 | `AILAB_IMAGE_MODEL` | 画像生成の実モデルID（既定 `gpt-image-2`） | – |

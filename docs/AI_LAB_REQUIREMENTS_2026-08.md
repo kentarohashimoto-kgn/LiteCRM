@@ -1,8 +1,10 @@
 # 生成AI体験環境「AI Lab」要件定義書 2026-08
 
 > **ステータス（2026-08）**: 機能要件 AL-1xx〜AL-8xx を実装済み。ユニットテスト（79件）は CI でグリーン。
-> **残作業**: ①テスト仕様書の手動ケース（IT/ST/RT）をステージングで実施 ②環境変数の本番設定（`AILAB_SESSION_SECRET` / `OPENAI_API_KEY`）
-> ③マイグレーション `0198_ai_lab.sql` の適用と Storage バケット `ai-lab-generated` の確認 ④§8 の未確定事項の確定
+> **残作業**: ①テスト仕様書の手動ケース（IT/ST/RT）をステージングで実施 ②`OPENAI_API_KEY` の設定（ChatGPT・画像生成を使う場合）
+> ③§8 の未確定事項の確定
+> ※ マイグレーション `0198_ai_lab.sql` は本番（Supabase: catorce-sales-os）に適用済み。
+> ※ `AILAB_SESSION_SECRET` は未設定でも `SUPABASE_SERVICE_ROLE_KEY` から派生するため必須ではない（本番は明示設定を推奨）。
 >
 > **主な実装ファイル**: `supabase/migrations/0198_ai_lab.sql` / `src/lib/ai-lab/*` / `src/app/lab/[slug]/**` /
 > `src/app/api/lab/{chat,image}/route.ts` / `src/app/app/ai-lab/**` / `src/components/ai-lab/**` /

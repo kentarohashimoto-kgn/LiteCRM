@@ -13,8 +13,18 @@ import { availableModelsFor, resolveDefaultModel, type LabModel, type ModelKey }
 export const LAB_COOKIE = "ailab_session";
 export const LAB_SESSION_HOURS = 12;
 
+/**
+ * セッション署名鍵。
+ * 専用の AILAB_SESSION_SECRET を推奨するが、未設定でも動くように
+ * サーバー専用の既存シークレット(service role key)から用途を分けて派生させる。
+ * 環境変数の設定漏れで「誰もログインできない」状態になるのを避けるための実務上の妥協で、
+ * service role key を差し替えると既存セッションが失効する点だけ許容している。
+ */
 function sessionSecret(): string {
-  return process.env.AILAB_SESSION_SECRET ?? "";
+  const explicit = process.env.AILAB_SESSION_SECRET;
+  if (explicit) return explicit;
+  const derived = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return derived ? `ailab-session-v1:${derived}` : "";
 }
 
 export interface LabCtx {
