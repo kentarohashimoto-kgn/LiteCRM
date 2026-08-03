@@ -6,6 +6,9 @@ import { requireLabCtx } from "@/lib/ai-lab/session";
 import { slideProgress } from "@/lib/ai-lab/slides";
 import { getDeck, listDecks, listDeckGenerated, listSlideItems } from "@/lib/ai-lab/slides-db";
 import type { LabUiDeck, LabUiDeckSummary } from "@/lib/ai-lab/slides-ui-types";
+
+/** スライド画像・pptx の署名URLの有効時間。生成と確認にかかる時間に合わせて長めに取る。 */
+const SLIDE_URL_TTL_SEC = 3600;
 import { LabShell } from "../lab-shell";
 import { DeckClient } from "./deck-client";
 import { NewDeckForm } from "./new-deck-form";
@@ -54,7 +57,8 @@ export async function SlidesScreen({ slug, deckId }: { slug: string; deckId?: st
       const all = await listDeckGenerated(deck.id);
       pptxRow = all.get(deck.pptx_attachment_id) ?? null;
     }
-    const urls = await signAttachmentUrls([...rows, ...(pptxRow ? [pptxRow] : [])]);
+    // 生成に数分かかるので、既定(10分)だと画面を開いたまま作業する間に切れてしまう。
+    const urls = await signAttachmentUrls([...rows, ...(pptxRow ? [pptxRow] : [])], SLIDE_URL_TTL_SEC);
 
     const ui: LabUiDeck = {
       id: deck.id,

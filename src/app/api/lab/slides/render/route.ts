@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import type { NextRequest } from "next/server";
 import { selectImageReferences } from "@/lib/ai-lab/attachments";
-import { addUsage, downloadAttachment, monthlyTokensUsed } from "@/lib/ai-lab/db";
+import { addUsage, downloadAttachment, monthlyTokensUsed, signAttachmentUrls } from "@/lib/ai-lab/db";
 import { isBudgetExceeded, monthRange } from "@/lib/ai-lab/limits";
 import { resolveModel } from "@/lib/ai-lab/models";
 import { getImageProvider, LabProviderError } from "@/lib/ai-lab/providers";
@@ -33,6 +33,11 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const IMAGE_COUNT = 1;
+/**
+ * スライド画像の署名URLの有効時間。
+ * 10枚の生成に数分かかるため、既定(10分)だと最初の数枚が生成中に切れて画像が消える。
+ */
+const SLIDE_URL_TTL_SEC = 3600;
 
 export async function POST(req: NextRequest): Promise<Response> {
   let body: { slug?: string; deckId?: string; position?: number };
@@ -107,7 +112,10 @@ export async function POST(req: NextRequest): Promise<Response> {
     const after = items.map((i) => (i.id === item.id ? { ...i, status: "done" as const } : i));
     if (after.every((i) => i.status === "done")) await updateDeck(deck.id, { status: "ready" });
 
-    return Response.json({ position: item.position, attachmentId: row.id });
+    // 1枚ごとに署名URLを返し、生成の途中でもサムネイルを出せるようにする。
+    // 全部終わるまで見えないと、10枚のあいだ何が出来ているのか分からない。
+    const urls = await signAttachmentUrls([row], SLIDE_URL_TTL_SEC);
+    return Response.json({ position: item.position, attachmentId: row.id, imageUrl: urls[row.id] ?? null });
   } catch (e) {
     const code = e instanceof LabProviderError ? e.code : "provider_error";
     if (code !== "aborted") Sentry.captureException(e);

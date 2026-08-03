@@ -40,7 +40,7 @@ export function DeckClient({ slug, deck }: { slug: string; deck: LabUiDeck }) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ slug, deckId: deck.id, position }),
         });
-        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        const json = (await res.json().catch(() => ({}))) as { error?: string; imageUrl?: string | null };
         if (!res.ok || json.error) {
           setItems((prev) =>
             prev.map((i) =>
@@ -50,8 +50,13 @@ export function DeckClient({ slug, deck }: { slug: string; deck: LabUiDeck }) {
           setError(labErrorMessage(json.error));
           return false;
         }
+        // 出来た1枚をその場でサムネイルに反映する。全部終わるまで待たせない。
         setItems((prev) =>
-          prev.map((i) => (i.position === position ? { ...i, status: "done", errorCode: null } : i)),
+          prev.map((i) =>
+            i.position === position
+              ? { ...i, status: "done", errorCode: null, imageUrl: json.imageUrl ?? i.imageUrl }
+              : i,
+          ),
         );
         return true;
       } catch {
@@ -79,7 +84,8 @@ export function DeckClient({ slug, deck }: { slug: string; deck: LabUiDeck }) {
       }
     } finally {
       setRunning(false);
-      // 署名URLは期限付きなので、生成後はサーバーから取り直す。
+      // サムネイルは1枚ごとに反映済み。ここでの取り直しは、一覧側の枚数表示など
+      // サーバー側で持っている状態を現在に合わせるためのもの。
       router.refresh();
     }
   }
@@ -183,7 +189,8 @@ export function DeckClient({ slug, deck }: { slug: string; deck: LabUiDeck }) {
             slug={slug}
             deckId={deck.id}
             item={item}
-            busy={running || current === item.position}
+            generating={current === item.position}
+            disabled={running}
             onRegenerate={() => void renderOne(item.position)}
             onSaved={(patch) =>
               setItems((prev) => prev.map((i) => (i.position === item.position ? { ...i, ...patch } : i)))
@@ -199,14 +206,18 @@ function SlideCard({
   slug,
   deckId,
   item,
-  busy,
+  generating,
+  disabled,
   onRegenerate,
   onSaved,
 }: {
   slug: string;
   deckId: string;
   item: LabUiSlideItem;
-  busy: boolean;
+  /** この1枚をいま生成しているか。連続生成中に全部が回っているように見せない。 */
+  generating: boolean;
+  /** 連続生成が走っている間は個別の作り直しを止める。 */
+  disabled: boolean;
   onRegenerate: () => void;
   onSaved: (patch: Partial<LabUiSlideItem>) => void;
 }) {
@@ -252,7 +263,7 @@ function SlideCard({
             >
               {item.status === "failed" ? (
                 <AlertCircle size={18} className="text-rose-500" />
-              ) : busy ? (
+              ) : generating ? (
                 <RefreshCw size={18} className="animate-spin text-teal-primary" />
               ) : (
                 <ImageIcon size={18} className="text-ink/25" />
@@ -317,11 +328,11 @@ function SlideCard({
                 <button
                   type="button"
                   onClick={onRegenerate}
-                  disabled={busy}
+                  disabled={disabled || generating}
                   className="rounded-md p-1.5 text-ink/40 hover:bg-mist-soft hover:text-ink disabled:cursor-not-allowed"
                   aria-label="このスライドだけ作り直す"
                 >
-                  <RefreshCw size={14} className={busy ? "animate-spin" : undefined} />
+                  <RefreshCw size={14} className={generating ? "animate-spin" : undefined} />
                 </button>
               </div>
               {item.summary && <p className="mt-1 text-xs text-ink/60">{item.summary}</p>}
