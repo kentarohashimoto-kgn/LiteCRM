@@ -1,6 +1,13 @@
 # 生成AI体験環境「AI Lab」要件定義書 2026-08
 
-> **ステータス**: ドラフト（実装未着手）
+> **ステータス（2026-08）**: 機能要件 AL-1xx〜AL-8xx を実装済み。ユニットテスト（79件）は CI でグリーン。
+> **残作業**: ①テスト仕様書の手動ケース（IT/ST/RT）をステージングで実施 ②環境変数の本番設定（`AILAB_SESSION_SECRET` / `OPENAI_API_KEY`）
+> ③マイグレーション `0198_ai_lab.sql` の適用と Storage バケット `ai-lab-generated` の確認 ④§8 の未確定事項の確定
+>
+> **主な実装ファイル**: `supabase/migrations/0198_ai_lab.sql` / `src/lib/ai-lab/*` / `src/app/lab/[slug]/**` /
+> `src/app/api/lab/{chat,image}/route.ts` / `src/app/app/ai-lab/**` / `src/components/ai-lab/**` /
+> `src/server/actions/ai-lab-{auth,chat,admin}.ts` / `src/middleware.ts`（/lab のBasic認証ゲート）
+>
 > **関連文書**:
 > - システム化要件: `docs/AI_LAB_SYSTEM_REQUIREMENTS_2026-08.md`
 > - 詳細設計: `docs/AI_LAB_DETAILED_DESIGN_2026-08.md`

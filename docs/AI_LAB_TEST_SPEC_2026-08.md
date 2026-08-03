@@ -18,7 +18,9 @@
 
 ## 2. ユニットテスト（vitest）
 
-既存規約（`tests/*.test.ts`、日本語 it 文）に従う。**プロバイダSDK・DBはモック**し、純ロジックを対象とする。
+既存規約（`tests/*.test.ts`、日本語 it 文）に従う。**プロバイダSDK・DBには触れず**、純ロジックを対象とする。
+実装済み: `tests/ai-lab-{session,auth,models,prompt,limits,validate,markdown}.test.ts`（計79件・CIでグリーン）。
+※ 下表の 2.6 は実ファイル名 `ai-lab-validate.test.ts` に対応する。
 
 ### 2.1 `tests/ai-lab-session.test.ts` — セッション（優先度A）
 

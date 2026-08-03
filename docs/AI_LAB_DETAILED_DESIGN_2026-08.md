@@ -11,8 +11,8 @@
 src/app/
 ├── lab/
 │   └── [slug]/
-│       ├── layout.tsx            会社解決 + セッション検証（未ログイン→login へ）+ 専用レイアウト
-│       ├── page.tsx              ログイン済→ /lab/[slug]/chat へ redirect
+│       ├── layout.tsx            /lab 専用ルート（noindex のみ。CRMレイアウトを通さない）
+│       ├── page.tsx              /lab/[slug]/chat へ redirect
 │       ├── login/page.tsx        個別ログイン（Server Action: labSignIn）
 │       ├── preview/route.ts      管理者プレビュートークン受け口（GET）
 │       └── chat/
@@ -22,13 +22,18 @@ src/app/
 │   ├── chat/route.ts             POST: テキスト生成（SSEストリーミング, runtime=nodejs, maxDuration=120）
 │   └── image/route.ts            POST: 画像生成（JSON応答, maxDuration=120）
 └── app/ai-lab/                   ← CRM管理画面（既存 /app レイアウト配下）
-    ├── page.tsx                  会社一覧
+    ├── page.tsx                  会社一覧＋新規作成
     └── [companyId]/
-        ├── page.tsx              会社詳細（基本設定・接続情報）
-        ├── users/page.tsx        利用者管理
+        ├── page.tsx              会社詳細（基本設定・接続情報・プレビュー）
+        ├── users/page.tsx        受講者管理（一括発行・PW再発行・無効化・ロック解除）
         ├── presets/page.tsx      プリセット・アセット管理
-        └── usage/page.tsx        利用状況・会話閲覧
+        ├── usage/page.tsx        利用状況・会話一覧
+        └── usage/[conversationId]/page.tsx  会話ログ閲覧（読み取り専用）
 ```
+
+セッション検証は layout ではなく **`ChatScreen`（`src/components/ai-lab/chat-screen.tsx`）の `requireLabCtx()`** で行う。
+新規チャットと既存会話でサーバー側の必要データがほぼ同じなので、両ページから同じ組み立てを共有し、
+「認可 → データ取得 → 描画」の順序が1か所にしか無い状態にしている。
 
 - `/lab/[slug]/**` は CRM の `/app` レイアウト（Sidebar/Topbar）を**通らない**。ルート `src/app/layout.tsx`（html/body・globals.css）のみ共有。
 - `robots`: `/lab` 配下は `noindex`（`layout.tsx` の metadata で `robots: { index: false }`）。
@@ -221,7 +226,8 @@ alter table public.ai_lab_companies enable row level security;
 -- …（全 ai_lab_* テーブルに同様。ポリシー定義は既存マイグレーションの admin 系パターンをコピーして作成）
 ```
 
-Storage バケット（Supabase ダッシュボード or マイグレーションで作成）: `ai-lab-assets` / `ai-lab-generated`。どちらも public=false。配信は service_role の `createSignedUrl(600)`。
+Storage バケット: **`ai-lab-generated` のみ**（マイグレーション内で作成、public=false）。配信は service_role の `createSignedUrls(600)`。
+アセットは v1 ではテキストを直接 `ai_lab_assets.extracted_text` に持つため、専用バケットは作らない。
 
 ## 5. モデルカタログ `src/lib/ai-lab/models.ts`
 
@@ -328,6 +334,7 @@ runtime = "nodejs"; export const maxDuration = 120;
 
 | コンポーネント | 内容 |
 |---|---|
+| `chat-screen.tsx` | サーバー側の組み立て（`requireLabCtx` → 会話/プリセット/メッセージ取得 → 画像URL署名 → 下記へ受け渡し） |
 | `lab-shell.tsx` | 2ペインレイアウト。左: 会話リスト＋「＋新しいチャット」＋ユーザー名/ログアウト。md未満は左ペインをドロワー化 |
 | `conversation-list.tsx` | 会話一覧（50件ページング）。リネーム（インライン）・削除（confirm→is_archived、AL-302/303） |
 | `chat-client.tsx` | "use client"。メッセージ表示・SSE受信・停止・エラー表示・再送。楽観追加→確定IDで置換 |

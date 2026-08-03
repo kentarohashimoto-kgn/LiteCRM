@@ -34,6 +34,7 @@ import {
   Brain,
   HelpCircle,
   Search,
+  FlaskConical,
 } from "lucide-react";
 import { canManageProjects } from "@/lib/constants";
 import type { Role } from "@/lib/types";
@@ -162,14 +163,19 @@ function injectProjects(base: NavGroup[], role: Role): NavGroup[] {
   );
 }
 
-/** 管理者(代表/管理者)だけの機能を「ホーム」グループに差し込む。RLSでもDB側で遮断済み。 */
+/** 管理者(代表/管理者)だけの機能を差し込む。RLSでもDB側で遮断済み。 */
 function injectAdminOnly(base: NavGroup[], role: Role): NavGroup[] {
   if (role !== "owner" && role !== "admin") return base;
-  return base.map((g) =>
-    g.heading === "ホーム"
-      ? { ...g, items: [...g.items, { href: "/app/mindmaps", label: "マインドマップ", icon: Brain }] }
-      : g,
-  );
+  return base.map((g) => {
+    if (g.heading === "ホーム") {
+      return { ...g, items: [...g.items, { href: "/app/mindmaps", label: "マインドマップ", icon: Brain }] };
+    }
+    // AI体験環境(/lab)は顧客向けの別画面。ここから会社・受講者・プリセットを管理する。
+    if (g.heading === "設定") {
+      return { ...g, items: [...g.items, { href: "/app/ai-lab", label: "AI体験環境", icon: FlaskConical }] };
+    }
+    return g;
+  });
 }
 
 /** ヘルプはロールを問わず必要なため、BO専任ロールにも独立グループで差し込む。 */
