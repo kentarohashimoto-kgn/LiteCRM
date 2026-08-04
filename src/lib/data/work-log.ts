@@ -117,8 +117,10 @@ export interface AssignmentInfo {
   role: string | null;
   cost_rate: number;
   rate_unit: "man_month" | "hourly";
+  talent_id: string | null;      // 外部委託: タレント台帳の担当者
+  member_user_id: string | null; // 社員: CRMユーザー(台帳とは user_id で突合)
 }
-export interface TalentLite { id: string; name: string; hourly_rate: number | null; employment_type: string }
+export interface TalentLite { id: string; name: string; hourly_rate: number | null; employment_type: string; user_id?: string | null }
 export interface PendingWeek {
   week: WorkWeek;
   entries: WorkEntry[];
@@ -141,7 +143,10 @@ async function resolveAssignmentContext(assignmentIds: string[]): Promise<{
   const planMeta = new Map<string, { hoursPerMonth: number; oppName: string; accountName: string; opportunityId: string }>();
   if (assignmentIds.length === 0) return { assignments, planMeta };
 
-  const asgR = await sb.from("project_assignments").select("id, plan_id, kind, label, role, cost_rate, rate_unit").in("id", assignmentIds);
+  const asgR = await sb
+    .from("project_assignments")
+    .select("id, plan_id, kind, label, role, cost_rate, rate_unit, talent_id, member_user_id")
+    .in("id", assignmentIds);
   if (asgR.error) throw new Error(`アサインの取得に失敗: ${asgR.error.message}`);
   const asgs = (asgR.data ?? []) as AssignmentInfo[];
   for (const a of asgs) assignments.set(a.id, a);
@@ -192,6 +197,15 @@ async function fetchTalentsLite(talentIds: string[]): Promise<Map<string, Talent
   return new Map(((r.data ?? []) as TalentLite[]).map((t) => [t.id, t]));
 }
 
+/** CRMユーザーID → タレント台帳の担当者(社員アサインを台帳に突合するため)。 */
+async function fetchTalentsByUserIds(userIds: string[]): Promise<Map<string, TalentLite>> {
+  if (userIds.length === 0) return new Map();
+  const sb = getSupabaseServer();
+  const r = await sb.from("talents").select("id, name, hourly_rate, employment_type, user_id").in("user_id", userIds);
+  if (r.error) throw new Error(`タレントの取得に失敗: ${r.error.message}`);
+  return new Map(((r.data ?? []) as TalentLite[]).filter((t) => t.user_id).map((t) => [t.user_id as string, t]));
+}
+
 /** 提出済み(承認待ち)の週を、記入行・案件情報つきで取得(全般稼働含む)。 */
 export async function getPendingWorkWeeks(): Promise<PendingWeek[]> {
   const sb = getSupabaseServer();
@@ -239,6 +253,8 @@ export interface MonthlyWorkRow {
   key: string;
   label: string;
   kind: string; // external/internal/general
+  /** タレント台帳の担当者ID。null = 台帳に紐づいていない稼働者(所属会社を解決できない) */
+  talentId: string | null;
   role: string | null;
   oppName: string;
   accountName: string;
@@ -285,6 +301,9 @@ export async function getMonthlyWorkSummary(monthStart: string, monthEnd: string
     resolveAssignmentContext(assignmentIds),
     fetchTalentsLite(talentIds),
   ]);
+  // 社員アサインは talent_id を持たないため、CRMユーザーIDで台帳に突合する
+  const memberUserIds = [...new Set([...assignments.values()].map((a) => a.member_user_id).filter((v): v is string => !!v))];
+  const talentByUser = await fetchTalentsByUserIds(memberUserIds);
 
   const rows: MonthlyWorkRow[] = [];
   for (const k of keys) {
@@ -298,6 +317,7 @@ export async function getMonthlyWorkSummary(monthStart: string, monthEnd: string
         .reduce((s, c) => s + (c.hours != null ? Number(c.hours) : Math.round((Number(c.man_month) || 0) * Number(c.ratio ?? 1) * H)), 0);
       rows.push({
         key: k, label: a.label, kind: a.kind, role: a.role,
+        talentId: a.talent_id ?? (a.member_user_id ? talentByUser.get(a.member_user_id)?.id ?? null : null),
         oppName: meta?.oppName ?? "—", accountName: meta?.accountName ?? "—",
         plannedHours, approvedHours: approved.get(k) ?? 0, pendingHours: pending.get(k) ?? 0,
         costRate: Number(a.cost_rate) || 0, rateUnit: a.rate_unit ?? "man_month", hoursPerMonth: H,
@@ -306,7 +326,7 @@ export async function getMonthlyWorkSummary(monthStart: string, monthEnd: string
       const t = talents.get(k.slice(2));
       if (!t) continue;
       rows.push({
-        key: k, label: t.name, kind: "general", role: null,
+        key: k, label: t.name, kind: "general", role: null, talentId: t.id,
         oppName: "全般稼働（案件紐づけなし）", accountName: "",
         plannedHours: 0, approvedHours: approved.get(k) ?? 0, pendingHours: pending.get(k) ?? 0,
         costRate: Number(t.hourly_rate) || 0, rateUnit: "hourly", hoursPerMonth: 160,

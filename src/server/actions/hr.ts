@@ -285,7 +285,29 @@ export async function deleteInterviewAction(formData: FormData): Promise<void> {
   revalidatePath(`/app/hr/candidates/${candidateId}`);
 }
 
-/** タレント(稼働人員)を登録。 */
+/**
+ * 所属セレクトの値(1コントロール)を DB の2カラムに展開する。
+ * 値: "individual"(個人事業主のため個人) / "unset"(未設定) / 所属会社のUUID。
+ * 会社IDは RLS 越しに実在を確認する(他テナントのIDを指定されても素通りさせない)。
+ */
+async function affiliationFields(formData: FormData): Promise<{ affiliation_type: string; company_id: string | null }> {
+  const v = String(formData.get("affiliation") || "").trim();
+  if (v === "individual") return { affiliation_type: "individual", company_id: null };
+  if (!v || v === "unset") return { affiliation_type: "unset", company_id: null };
+  const { data } = await getSupabaseServer().from("talent_companies").select("id").eq("id", v).maybeSingle();
+  if (!data) return { affiliation_type: "unset", company_id: null };
+  return { affiliation_type: "company", company_id: v };
+}
+
+/** 消費税率(%)。個人事業主のみ意味を持つ。空欄はnull(=既定10%扱い)。 */
+function taxRateOrNull(formData: FormData): number | null {
+  const raw = String(formData.get("tax_rate") || "").replace(/[^\d.]/g, "");
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+}
+
+/** タレント(稼働人員)を登録。所属は必須項目として受け取る。 */
 export async function createTalentAction(formData: FormData): Promise<void> {
   const ctx = await requireHrCtx();
   const sb = getSupabaseServer();
@@ -304,8 +326,10 @@ export async function createTalentAction(formData: FormData): Promise<void> {
     role_text: String(formData.get("role_text") || "").trim() || null,
     email: String(formData.get("email") || "").trim() || null,
     hourly_rate: rate ? Number(rate) : null,
+    ...(await affiliationFields(formData)),
   });
   revalidatePath("/app/hr/talents");
+  revalidatePath("/app/hr/companies");
 }
 
 /** タレントの稼働先・スキル等の更新/退職/削除。 */
@@ -337,6 +361,9 @@ export async function updateTalentAction(formData: FormData): Promise<void> {
         hourly_rate: rate ? Number(rate) : null,
         cost_managed: formData.get("cost_managed") === "on",
         work_report_required: formData.get("work_report_required") === "on",
+        // 所属会社(0202)。個人事業主・未設定も所属の一形態として保持する
+        ...(formData.has("affiliation") ? await affiliationFields(formData) : {}),
+        ...(formData.has("tax_rate") ? { tax_rate: taxRateOrNull(formData) } : {}),
         // フォームに無い項目は変更しない
         ...(formData.has("skills") ? { skills: str("skills") } : {}),
         ...(formData.has("current_assignment") ? { current_assignment: str("current_assignment") } : {}),
@@ -346,6 +373,8 @@ export async function updateTalentAction(formData: FormData): Promise<void> {
       .eq("id", id);
   }
   revalidatePath("/app/hr/talents");
+  revalidatePath("/app/hr/companies");
+  revalidatePath("/app/projects/billing");
 }
 
 /** 稼働中評価(期間・総合1-5・コメント・次期目標)を追加。 */

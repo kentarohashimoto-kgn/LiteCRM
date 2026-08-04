@@ -143,6 +143,7 @@ const hrGroup: NavGroup = {
     { href: "/app/hr/openings", label: "求人案件", icon: Briefcase },
     { href: "/app/hr/candidates", label: "候補者", icon: Users },
     { href: "/app/hr/talents", label: "タレント台帳・評価", icon: Star },
+    { href: "/app/hr/companies", label: "所属会社マスタ", icon: Building2 },
   ],
 };
 
@@ -157,6 +158,7 @@ function injectProjects(base: NavGroup[], role: Role): NavGroup[] {
             ...g.items,
             { href: "/app/projects", label: "原価管理", icon: FolderKanban },
             { href: "/app/projects/approvals", label: "稼働承認", icon: BadgeCheck },
+            { href: "/app/projects/billing", label: "担当者・請求サマリー", icon: Users },
           ],
         }
       : g
