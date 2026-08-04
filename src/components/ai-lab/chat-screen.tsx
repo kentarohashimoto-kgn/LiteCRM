@@ -87,6 +87,7 @@ export async function ChatScreen({
       slug={slug}
       companyName={ctx.company.name}
       displayName={ctx.user.display_name}
+      isPreview={ctx.user.is_preview}
       conversations={conversations.map((c) => ({ id: c.id, title: c.title, updatedAt: c.updated_at }))}
       activeId={conversationId}
     >

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { LogOut, Menu, Plus, Presentation, X } from "lucide-react";
+import { Eye, LogOut, Menu, Plus, Presentation, X } from "lucide-react";
 import { labSignOut } from "@/server/actions/ai-lab-auth";
 import type { LabUiConversation } from "@/lib/ai-lab/ui-types";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ export function LabShell({
   conversations,
   activeId,
   slidesActive,
+  isPreview,
   children,
 }: {
   slug: string;
@@ -29,6 +30,8 @@ export function LabShell({
   activeId: string | null;
   /** スライド作成画面を開いているか(ナビの選択表示に使う)。 */
   slidesActive?: boolean;
+  /** 管理者プレビュー用の共用アカウントで入っているか。 */
+  isPreview?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -38,6 +41,7 @@ export function LabShell({
         companyName={companyName}
         displayName={displayName}
         slidesActive={slidesActive}
+        isPreview={isPreview}
       >
         {children}
       </LabShellInner>
@@ -50,12 +54,14 @@ function LabShellInner({
   companyName,
   displayName,
   slidesActive,
+  isPreview,
   children,
 }: {
   slug: string;
   companyName: string;
   displayName: string;
   slidesActive?: boolean;
+  isPreview?: boolean;
   children: React.ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -148,6 +154,25 @@ function LabShellInner({
           </button>
           <span className="truncate text-sm font-semibold text-ink">{companyName}</span>
         </div>
+        {/*
+          プレビューは会社ごとの共用アカウント。通常のログインと見た目が同じだと、
+          自分のIDで入ったつもりで作業して「別の端末で履歴が無い」となる。
+          どのアカウントで作業しているかを常に見えるところに出す。
+        */}
+        {isPreview && (
+          <div className="flex items-start gap-2 border-b border-accent-orange/30 bg-accent-orange/10 px-4 py-2">
+            <Eye size={14} className="mt-0.5 shrink-0 text-accent-orange" />
+            <p className="text-[11px] leading-relaxed text-ink/70">
+              <span className="font-semibold">プレビュー（管理者）で表示中です。</span>
+              ここでのチャット・スライドは<strong>プレビュー用の共用アカウント</strong>に保存され、
+              ご自身のIDでログインしても表示されません。残したい作業は{" "}
+              <a href={`/lab/${slug}/login`} className="font-semibold text-teal-deep underline">
+                ご自身のIDでログイン
+              </a>
+              してから行ってください。
+            </p>
+          </div>
+        )}
         {children}
       </div>
     </div>
