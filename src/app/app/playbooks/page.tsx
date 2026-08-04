@@ -9,11 +9,12 @@ export const dynamic = "force-dynamic";
  * B1 カトルセの型(営業プレイブック)。
  * 業種×規模×役職 別の勝ち筋を構造化して蓄積する資産。事前準備や提案の型として引き出す。
  */
-export default async function PlaybooksPage({
-  searchParams,
-}: {
-  searchParams: { q?: string; industry?: string };
-}) {
+export default async function PlaybooksPage(
+  props: {
+    searchParams: Promise<{ q?: string; industry?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const all = await listPlaybooks();
 

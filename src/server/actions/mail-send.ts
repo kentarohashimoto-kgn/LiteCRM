@@ -83,7 +83,7 @@ export async function sendEmailViaSmtpAction(input: SendEmailInput): Promise<Sen
   }
 
   if (!res.ok) return { ok: false, error: "送信に失敗しました: " + res.error };
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.send", target: input.toAddr, meta: { via: acc.auth_method, opportunity_id: input.opportunityId }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.send", target: input.toAddr, meta: { via: acc.auth_method, opportunity_id: input.opportunityId }, ip: await clientIp() });
   if (input.opportunityId) revalidatePath(`/app/opportunities/${input.opportunityId}`);
   revalidatePath("/app/email/history");
   revalidatePath("/app/activities");

@@ -121,7 +121,7 @@ export async function resolveFindingAction(formData: FormData): Promise<void> {
   await sb.from("drive_permission_findings")
     .update({ status: "resolved", resolved_by: ctx.userId, resolved_at: new Date().toISOString() })
     .eq("id", id);
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "drive.finding.resolve", target: id, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "drive.finding.resolve", target: id, ip: await clientIp() });
   revalidatePath("/app/settings/drive-audit");
 }
 
@@ -142,7 +142,7 @@ export async function saveAgreementAction(formData: FormData): Promise<void> {
     status: "active",
     created_by: ctx.userId,
   }, { onConflict: "tenant_id,email,kind" });
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "nda.upsert", target: email, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "nda.upsert", target: email, ip: await clientIp() });
   revalidatePath("/app/settings/drive-audit");
 }
 

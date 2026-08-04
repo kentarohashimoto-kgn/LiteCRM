@@ -5,7 +5,8 @@ import { PageHeader, Section } from "@/components/ui/primitives";
 import { formatYen, formatDateFull } from "@/lib/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
 
-export default async function ExecDealsPage({ searchParams }: { searchParams: { month?: string; week?: string } }) {
+export default async function ExecDealsPage(props: { searchParams: Promise<{ month?: string; week?: string }> }) {
+  const searchParams = await props.searchParams;
   const { month, week } = parsePeriod(searchParams);
   const reviewWeek = `${month.slice(0, 7)}-01`;
   const { rows, summary } = await getDealReads();

@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-export default async function MyTasksPage({ searchParams }: { searchParams: { view?: string; scope?: string } }) {
+export default async function MyTasksPage(props: { searchParams: Promise<{ view?: string; scope?: string }> }) {
+  const searchParams = await props.searchParams;
   const ws = await getWorkspaceLite();
   const hub = await getTaskHub();
   const me = ws.ctx.userId;

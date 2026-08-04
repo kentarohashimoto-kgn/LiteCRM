@@ -40,7 +40,11 @@ import { leadCandidatesQuery, buildLeadCandidates, type LeadCandRow } from "@/li
 
 const statusLabel: Record<string, string> = { prospect: "見込み", customer: "顧客", inactive: "休眠" };
 
-export default async function AccountDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string } }) {
+export default async function AccountDetailPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const ws = await getWorkspaceForAccount(params.id);
   const account = getAccount(ws, params.id);
   if (!account) notFound();

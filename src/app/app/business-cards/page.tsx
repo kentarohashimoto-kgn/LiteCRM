@@ -19,14 +19,15 @@ const PAGE_SIZE = 50;
  * 個人が交換した名刺をテナント全員で閲覧・検索し、CRM顧客との連携状態を確認できる。
  * 検索は2系統: ①ピンポイント（会社名・氏名で連絡先を引く） ②セグメント（条件で複数リストアップ）。
  */
-export default async function BusinessCardsPage({
-  searchParams,
-}: {
-  searchParams: {
-    q?: string; link?: string; page?: string;
-    owner?: string; from?: string; to?: string; title?: string; industry?: string; address?: string; emp?: string; pri?: string; tag?: string;
-  };
-}) {
+export default async function BusinessCardsPage(
+  props: {
+    searchParams: Promise<{
+      q?: string; link?: string; page?: string;
+      owner?: string; from?: string; to?: string; title?: string; industry?: string; address?: string; emp?: string; pri?: string; tag?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const sp = searchParams;
   const clean = (v?: string) => (v ?? "").trim() || undefined;

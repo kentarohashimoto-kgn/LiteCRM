@@ -10,8 +10,6 @@ const nextConfig = {
       dynamic: 180, // 動的ページを180秒キャッシュ(従来は実質0〜30秒)
       static: 300,
     },
-    // instrumentation.ts (Sentry初期化) を有効化
-    instrumentationHook: true,
     // C-3 ファイル添付: Server Action経由のアップロード上限(既定1MB)を引き上げ
     serverActions: {
       bodySizeLimit: "12mb",

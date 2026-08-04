@@ -31,11 +31,12 @@ const PHASE_LABEL: Record<string, string> = {
  * 各章を実測値で毎日置き換え続けることで、「今どこまで進み、どこがズレたか」を
  * 見える状態に保つ。日次の改善が戦略から離れるのを防ぐのが目的。
  */
-export default async function SeoStrategyPage({
-  searchParams,
-}: {
-  searchParams: { site?: string; saved?: string; error?: string };
-}) {
+export default async function SeoStrategyPage(
+  props: {
+    searchParams: Promise<{ site?: string; saved?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const sites = await listSeoSites();
   const active = sites.filter((s) => s.status === "active");

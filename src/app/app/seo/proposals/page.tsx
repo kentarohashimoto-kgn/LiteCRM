@@ -47,11 +47,12 @@ const LEVER_LABEL: Record<string, string> = {
  * 朝ここを開いて上から3件を承認するだけで、その日の打ち手が決まる状態にする。
  * 提案は「月いくら増えるか」で並ぶ。順位やCTRではなく金額で判断できるのが要点。
  */
-export default async function SeoProposalsPage({
-  searchParams,
-}: {
-  searchParams: { site?: string; status?: string; saved?: string; error?: string };
-}) {
+export default async function SeoProposalsPage(
+  props: {
+    searchParams: Promise<{ site?: string; status?: string; saved?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const sites = await listSeoSites();
   const active = sites.filter((s) => s.status === "active");

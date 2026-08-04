@@ -16,7 +16,10 @@ import { getAllocations } from "@/lib/data/target-allocations";
 
 const MGMT_ROLES = ["owner", "admin", "sales_manager"];
 
-export default async function TargetsPage({ searchParams }: { searchParams: { fy?: string; ok?: string; scope?: string; month?: string; saved?: string; error?: string } }) {
+export default async function TargetsPage(
+  props: { searchParams: Promise<{ fy?: string; ok?: string; scope?: string; month?: string; saved?: string; error?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const ws = await getWorkspaceLite();
   const isMgmt = MGMT_ROLES.includes(ws.ctx.role);
   const cur = currentFiscalStartYear();

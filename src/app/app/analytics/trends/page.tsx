@@ -3,7 +3,8 @@ import { TREND_SCOPES } from "@/lib/trends";
 import { PageHeader } from "@/components/ui/primitives";
 import { TrendsWorkspace } from "@/components/analytics/trends-workspace";
 
-export default async function TrendsPage({ searchParams }: { searchParams: { scope?: string } }) {
+export default async function TrendsPage(props: { searchParams: Promise<{ scope?: string }> }) {
+  const searchParams = await props.searchParams;
   const scope = TREND_SCOPES.some((s) => s.key === searchParams.scope) ? (searchParams.scope as string) : "all";
   const data = await buildTrends(scope);
   return (

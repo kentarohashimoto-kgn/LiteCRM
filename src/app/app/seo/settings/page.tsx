@@ -73,11 +73,12 @@ function StatusBadge({ status, label }: { status: string; label?: string }) {
  * アクセスできるプロパティ一覧を表示する。GSCの登録形式やGA4のプロパティIDを
  * 人が事前に調べなくても、ここで実態が判明する。
  */
-export default async function SeoSettingsPage({
-  searchParams,
-}: {
-  searchParams: { saved?: string; error?: string; msg?: string; sites?: string };
-}) {
+export default async function SeoSettingsPage(
+  props: {
+    searchParams: Promise<{ saved?: string; error?: string; msg?: string; sites?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const [propsR, sitesR] = await Promise.all([

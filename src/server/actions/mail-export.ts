@@ -158,7 +158,7 @@ export async function exportEmailHistoryCsvAction(
   await logAudit({
     tenantId: ctx.tenantId, userId: ctx.userId, email: ctx.email,
     action: "email_history.export_csv", target: `${out.length}件`,
-    meta: { count: out.length, columns: cols.length, filters }, ip: clientIp(),
+    meta: { count: out.length, columns: cols.length, filters }, ip: await clientIp(),
   });
 
   return { csv: "﻿" + [header, ...lines].join("\r\n"), count: out.length };

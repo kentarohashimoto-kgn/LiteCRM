@@ -49,7 +49,8 @@ function durationHours(start: string | null, end: string | null): number {
 }
 
 /** BO-7 AI講師スケジュール: 講師の日程URLを登録し、研修予定をカレンダーで俯瞰。 */
-export default async function InstructorsPage({ searchParams }: { searchParams: { month?: string } }) {
+export default async function InstructorsPage(props: { searchParams: Promise<{ month?: string }> }) {
+  const searchParams = await props.searchParams;
   await requireBoCtx();
   const sb = getSupabaseServer();
   const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);

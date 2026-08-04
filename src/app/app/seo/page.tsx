@@ -44,7 +44,8 @@ const KIND_LABEL: Record<string, string> = {
  * 「表示回数 → クリック → セッション → 問合せ → 有効リード」のKPIツリーを
  * 実測値で1本に並べる。順位やCTRではなく、最後は必ず件数と金額に着地させる。
  */
-export default async function SeoPage({ searchParams }: { searchParams: { site?: string } }) {
+export default async function SeoPage(props: { searchParams: Promise<{ site?: string }> }) {
+  const searchParams = await props.searchParams;
   const ctx = await requireCtx();
   const sites = await listSeoSites();
   const active = sites.filter((s) => s.status === "active");

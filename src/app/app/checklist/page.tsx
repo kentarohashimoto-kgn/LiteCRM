@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
  * B5 営業チェックシート(抜け漏れ可視化)。
  * 進行中案件について、型の必須項目が入力されているかを自動判定し、行動漏れを可視化する。
  */
-export default async function ChecklistPage({ searchParams }: { searchParams: { gap?: string } }) {
+export default async function ChecklistPage(props: { searchParams: Promise<{ gap?: string }> }) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const gapOnly = searchParams.gap === "1";
   const board = await getChecklistBoard(gapOnly);

@@ -62,7 +62,8 @@ interface MsgRow {
 
 const MSG_COLS = "id, direction, subject, snippet, to_addrs, from_addr, status, sent_via, sent_at, created_at, open_count, last_opened_at, click_count, last_clicked_at, error_text, lead_id, contact_id, account_id, opportunity_id, logged_by, smtp_message_id";
 
-export default async function EmailHistoryDetailPage({ params }: { params: { id: string } }) {
+export default async function EmailHistoryDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.id)) notFound();

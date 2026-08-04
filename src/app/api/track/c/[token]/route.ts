@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
  * どのリンク(資料)がクリックされたかを記録し、実URLへ302リダイレクトする。
  * トークンが不正/期限切れなら安全にアプリのトップへ。
  */
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const token = params.token;
   const fallback = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
   if (!token) return NextResponse.redirect(fallback, 302);

@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
  * 所属会社(請求元)マスタ。担当者の「どこの会社所属か」の選択肢になり、
  * 会社ごとの月末請求額(請求サマリー)の集計単位になる。
  */
-export default async function TalentCompaniesPage({ searchParams }: { searchParams: { saved?: string; error?: string } }) {
+export default async function TalentCompaniesPage(props: { searchParams: Promise<{ saved?: string; error?: string }> }) {
+  const searchParams = await props.searchParams;
   await requireHrCtx();
   const { talents, companies } = await getTalentRoster();
   const counts = countByCompany(talents);

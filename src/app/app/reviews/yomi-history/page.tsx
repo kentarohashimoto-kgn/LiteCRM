@@ -38,11 +38,12 @@ const fmtDT = (iso: string) => {
 const DAYS_OPTIONS = [7, 28, 90];
 
 /** ヨミ変更履歴: 全画面のヨミ変更を自動記録し、受注/オチ/定期追いの要因を振り返り記入する。 */
-export default async function YomiHistoryPage({
-  searchParams,
-}: {
-  searchParams: { days?: string; owner?: string; missing?: string; saved?: string; error?: string };
-}) {
+export default async function YomiHistoryPage(
+  props: {
+    searchParams: Promise<{ days?: string; owner?: string; missing?: string; saved?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const days = DAYS_OPTIONS.includes(Number(searchParams.days)) ? Number(searchParams.days) : 28;
   const owner = (searchParams.owner ?? "").trim();

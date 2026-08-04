@@ -24,7 +24,8 @@ interface CompanyRow {
  * AI Lab（生成AI体験環境）の管理トップ。
  * 契約済み顧客ごとに「会社別URL + Basic認証 + 個別ログイン」の環境を作る。
  */
-export default async function AiLabPage({ searchParams }: { searchParams: { saved?: string; error?: string } }) {
+export default async function AiLabPage(props: { searchParams: Promise<{ saved?: string; error?: string }> }) {
+  const searchParams = await props.searchParams;
   await requireAdminCtx();
   const sb = getSupabaseServer();
   const { from, to } = monthRange();

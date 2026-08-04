@@ -98,7 +98,7 @@ export async function runCardMatchingAction(): Promise<MatchCardsResult> {
   const d = (data ?? {}) as { email?: number; company_contact?: number; company?: number };
   await logAudit({
     tenantId: ctx.tenantId, userId: ctx.userId, email: ctx.email,
-    action: "cards.match", meta: { email: d.email ?? 0, companyContact: d.company_contact ?? 0, company: d.company ?? 0 }, ip: clientIp(),
+    action: "cards.match", meta: { email: d.email ?? 0, companyContact: d.company_contact ?? 0, company: d.company ?? 0 }, ip: await clientIp(),
   });
   revalidatePath(LIST_PATH);
   return { ok: true, email: d.email ?? 0, companyContact: d.company_contact ?? 0, company: d.company ?? 0 };
@@ -110,7 +110,7 @@ export async function logCardImportAudit(summary: { inserted: number; skipped: n
   await logAudit({
     tenantId: ctx.tenantId, userId: ctx.userId, email: ctx.email,
     action: "cards.import", target: `新規${summary.inserted}/スキップ${summary.skipped}`,
-    meta: { inserted: summary.inserted, skipped: summary.skipped, total: summary.total }, ip: clientIp(),
+    meta: { inserted: summary.inserted, skipped: summary.skipped, total: summary.total }, ip: await clientIp(),
   });
 }
 
@@ -371,7 +371,7 @@ export async function convertCardsToLeadsAction(input: { tag?: string; from?: st
   // Fit スコア付与(既存ランクは rescore_leads 側で保護される)
   try { await sb.rpc("rescore_leads"); } catch { /* スコアは後から再実行ボタンでも可 */ }
 
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "cards.convert_to_leads", target: rawEvent, meta: { created, linkedExisting, tag, from: input.from ?? null }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "cards.convert_to_leads", target: rawEvent, meta: { created, linkedExisting, tag, from: input.from ?? null }, ip: await clientIp() });
   revalidatePath(LIST_PATH);
   revalidatePath("/app/leads");
   return { ok: true, created, linkedExisting, skippedConverted: 0 };

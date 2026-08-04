@@ -20,7 +20,8 @@ interface MeetingRow {
   opportunity_id: string | null; account_id: string | null;
 }
 
-export default async function MeetingFollowPage({ searchParams }: { searchParams: { assignee?: string } }) {
+export default async function MeetingFollowPage(props: { searchParams: Promise<{ assignee?: string }> }) {
+  const searchParams = await props.searchParams;
   const ws = await getWorkspaceLite();
   const allTasks = listTasks(ws);
   const owners = listMembers(ws).map(({ user }) => user);

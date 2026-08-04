@@ -52,11 +52,12 @@ const AFF_PILL: Record<string, string> = {
  *  2. 請求サマリー(所属会社ごとに月末いくら請求が来るか)
  *  3. 稼働実績一覧(担当者ごとの工数・金額を所属会社でグルーピング)
  */
-export default async function TalentBillingPage({
-  searchParams,
-}: {
-  searchParams: { month?: string; aff?: string; sort?: RosterSort; q?: string; scope?: string };
-}) {
+export default async function TalentBillingPage(
+  props: {
+    searchParams: Promise<{ month?: string; aff?: string; sort?: RosterSort; q?: string; scope?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireProjectCtx();
   const today = todayJST();
   const month = normMonthParam(searchParams.month, `${today.slice(0, 7)}-01`);

@@ -27,13 +27,14 @@ interface UsageRow extends UsageDailyRow {
   user_id: string;
 }
 
-export default async function AiLabUsagePage({
-  params,
-  searchParams,
-}: {
-  params: { companyId: string };
-  searchParams: { from?: string; to?: string };
-}) {
+export default async function AiLabUsagePage(
+  props: {
+    params: Promise<{ companyId: string }>;
+    searchParams: Promise<{ from?: string; to?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   await requireAdminCtx();
   const sb = getSupabaseServer();
 

@@ -20,7 +20,8 @@ export interface EmailTemplate {
  * WO-20 メール定型文の管理(F-101a)。作成/編集/削除。
  * ここで整えた定型文をメール作成画面(/app/email/compose)から呼び出して使う。
  */
-export default async function EmailTemplatesPage({ searchParams }: { searchParams: { saved?: string; error?: string } }) {
+export default async function EmailTemplatesPage(props: { searchParams: Promise<{ saved?: string; error?: string }> }) {
+  const searchParams = await props.searchParams;
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const { data, error } = await sb

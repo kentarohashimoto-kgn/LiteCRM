@@ -149,7 +149,7 @@ export async function finalizeDriveUploadAction(input: {
   });
   if (insErr) return { ok: false, error: `台帳登録に失敗: ${insErr.message.slice(0, 120)}` };
 
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "document.upload", target: resolved.file.title, meta: { category, targetType: input.targetType, targetId: input.targetId, fileId: resolved.file.externalId, snapshot: !!storagePath }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "document.upload", target: resolved.file.title, meta: { category, targetType: input.targetType, targetId: input.targetId, fileId: resolved.file.externalId, snapshot: !!storagePath }, ip: await clientIp() });
   if (input.revalidate) revalidatePath(input.revalidate);
   return { ok: true, snapshotSaved: !!storagePath, warning };
 }
@@ -222,7 +222,7 @@ export async function attachDriveLinkAction(formData: FormData): Promise<void> {
     health_checked_at: new Date().toISOString(),
     created_by: ctx.userId,
   });
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "document.link.attach", target: resolved.file.title, meta: { targetType, targetId, fileId: resolved.file.externalId }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "document.link.attach", target: resolved.file.title, meta: { targetType, targetId, fileId: resolved.file.externalId }, ip: await clientIp() });
   if (revalidate) revalidatePath(revalidate);
 }
 
@@ -235,7 +235,7 @@ export async function deleteDocumentAction(formData: FormData): Promise<void> {
   const { data: row } = await sb.from("documents").select("title").eq("id", id).maybeSingle();
   const { error, count } = await sb.from("documents").delete({ count: "exact" }).eq("id", id);
   if (!error && (count ?? 0) > 0 && row) {
-    await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "document.link.detach", target: (row as { title: string }).title, meta: { id }, ip: clientIp() });
+    await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "document.link.detach", target: (row as { title: string }).title, meta: { id }, ip: await clientIp() });
   }
   if (revalidate) revalidatePath(revalidate);
 }

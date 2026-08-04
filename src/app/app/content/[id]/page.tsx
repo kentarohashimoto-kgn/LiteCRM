@@ -19,7 +19,8 @@ const DESIGN_META: Record<DesignStatus, { label: string; cls: string; desc: stri
 };
 
 /** B8 記事詳細: 本文の閲覧・コピー、Claudeデザイン連携フラグ、手動編集。 */
-export default async function ContentDetailPage({ params }: { params: { id: string } }) {
+export default async function ContentDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   await requireCtx();
   const item = await getContentIdea(params.id);
   if (!item) notFound();

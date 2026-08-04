@@ -18,10 +18,13 @@ export interface AuditEntry {
   ip?: string | null;
 }
 
-/** リクエストヘッダからクライアントIPを推定（取得できなければ null）。 */
-export function clientIp(): string | null {
+/**
+ * リクエストヘッダからクライアントIPを推定（取得できなければ null）。
+ * Next 15 で headers() が Promise を返すようになったため非同期。
+ */
+export async function clientIp(): Promise<string | null> {
   try {
-    const h = headers();
+    const h = await headers();
     const xff = h.get("x-forwarded-for");
     if (xff) return xff.split(",")[0].trim().slice(0, 64);
     return h.get("x-real-ip")?.slice(0, 64) ?? null;

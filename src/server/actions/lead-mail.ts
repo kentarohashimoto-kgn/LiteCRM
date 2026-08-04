@@ -393,7 +393,7 @@ export async function sendLeadBulkMailAction(
     if (schErr) return { ok: false, error: `予約に失敗しました: ${schErr.message}`, batchId: batchId ?? undefined };
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.bulk_schedule",
-      target: `template:${templateId}`, meta: { count: rows.length, at: opts.scheduledAtIso, unsub_mode: opts?.unsubMode ?? "full" }, ip: clientIp(),
+      target: `template:${templateId}`, meta: { count: rows.length, at: opts.scheduledAtIso, unsub_mode: opts?.unsubMode ?? "full" }, ip: await clientIp(),
     });
     revalidatePath("/app/email/scheduled");
     return { ok: true, sent: 0, scheduled: rows.length, failed: 0, batchId: batchId ?? undefined,
@@ -435,7 +435,7 @@ export async function sendLeadBulkMailAction(
     tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.bulk_send",
     target: `template:${templateId}`,
     meta: { sent, failed: failures.length, filters: { ...filters }, suppressed: r.suppressed, already_sent: r.alreadySent, unsub_mode: opts?.unsubMode ?? "full" },
-    ip: clientIp(),
+    ip: await clientIp(),
   });
   revalidatePath("/app/leads");
   revalidatePath("/app/email/history");

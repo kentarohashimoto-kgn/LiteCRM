@@ -51,7 +51,10 @@ function monthAdd(ym: string, diff: number): string {
 }
 
 /** BO-6 研修後フォローアップ: 受注研修を母数に1/3/6ヶ月後Mtgと活用度・アップセルを追跡。 */
-export default async function FollowupsPage({ searchParams }: { searchParams: { view?: string; assignee?: string; month?: string } }) {
+export default async function FollowupsPage(
+  props: { searchParams: Promise<{ view?: string; assignee?: string; month?: string }> }
+) {
+  const searchParams = await props.searchParams;
   await requireBoCtx();
   const sb = getSupabaseServer();
   const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);

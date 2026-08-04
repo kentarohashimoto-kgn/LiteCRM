@@ -27,7 +27,8 @@ const KIND_LABEL: Record<string, string> = {
  * ・今週/来週の予定マップを自動生成(Googleカレンダー × CRM × 週次報告)
  * ・研修・セミナー構成テンプレート / 自由マップの作成
  */
-export default async function MindmapsPage({ searchParams }: { searchParams: { error?: string } }) {
+export default async function MindmapsPage(props: { searchParams: Promise<{ error?: string }> }) {
+  const searchParams = await props.searchParams;
   await requireAdminCtx();
   const maps = await listMindmaps();
   const thisWeek = mondayJst(new Date());

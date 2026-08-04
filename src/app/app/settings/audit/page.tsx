@@ -16,11 +16,12 @@ function fmtJst(iso: string): string {
   return d.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-export default async function AuditPage({
-  searchParams,
-}: {
-  searchParams: { action?: string; user?: string; from?: string; to?: string; page?: string };
-}) {
+export default async function AuditPage(
+  props: {
+    searchParams: Promise<{ action?: string; user?: string; from?: string; to?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const ctx = await requireCtx();
   if (!["owner", "admin"].includes(ctx.role)) redirect("/app/dashboard");
 

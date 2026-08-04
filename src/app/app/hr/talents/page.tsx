@@ -50,11 +50,12 @@ const yen = (n: number) => "¥" + Math.round(n).toLocaleString("ja-JP");
 const affValue = (t: RosterTalent) => (t.affiliation_type === "company" && t.company_id ? t.company_id : t.affiliation_type);
 
 /** BO-5 タレント台帳・稼働中評価: アクティブ人材(社員/業務委託/講師/企業)の台帳・所属会社・契約状態・原価管理対象の管理。 */
-export default async function TalentsPage({
-  searchParams,
-}: {
-  searchParams: { aff?: string; q?: string; sort?: RosterSort; scope?: string };
-}) {
+export default async function TalentsPage(
+  props: {
+    searchParams: Promise<{ aff?: string; q?: string; sort?: RosterSort; scope?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireHrCtx();
   const sb = getSupabaseServer();
   const [{ talents, companies, companyById }, revR, members] = await Promise.all([

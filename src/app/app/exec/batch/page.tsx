@@ -25,7 +25,8 @@ interface JobSetting {
  * ジョブごとのスタート/停止制御(batch_job_settings)と、
  * 夜間バッチ(方針A / Claude Code方式・従量課金ゼロ)の運用ログ可視化。
  */
-export default async function BatchOpsPage({ searchParams }: { searchParams: { saved?: string; error?: string } }) {
+export default async function BatchOpsPage(props: { searchParams: Promise<{ saved?: string; error?: string }> }) {
+  const searchParams = await props.searchParams;
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const [data, jobsR] = await Promise.all([

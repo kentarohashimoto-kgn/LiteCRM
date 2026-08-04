@@ -112,7 +112,7 @@ export async function finishRecordingAction(input: { id: string; durationSec?: n
   await logAudit({
     tenantId: ctx.tenantId, userId: ctx.userId, email: ctx.email,
     action: "meeting.record", target: input.id,
-    meta: { durationSec: input.durationSec ?? null, sizeBytes: input.sizeBytes ?? null }, ip: clientIp(),
+    meta: { durationSec: input.durationSec ?? null, sizeBytes: input.sizeBytes ?? null }, ip: await clientIp(),
   });
   revalidatePath("/app/opportunities", "layout");
   revalidatePath("/app/memos", "layout");

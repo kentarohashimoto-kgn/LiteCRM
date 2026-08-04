@@ -21,13 +21,14 @@ interface LabUser {
   last_login_at: string | null;
 }
 
-export default async function AiLabUsersPage({
-  params,
-  searchParams,
-}: {
-  params: { companyId: string };
-  searchParams: { saved?: string; error?: string };
-}) {
+export default async function AiLabUsersPage(
+  props: {
+    params: Promise<{ companyId: string }>;
+    searchParams: Promise<{ saved?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   await requireAdminCtx();
   const sb = getSupabaseServer();
 

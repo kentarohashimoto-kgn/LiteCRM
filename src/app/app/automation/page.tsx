@@ -41,7 +41,8 @@ const TRIGGER_LABEL: Record<string, string> = {
  * レシピを選んでルールを作成→有効化。発火は /api/cron/automation(バッチ)。
  * 「WHEN(業務イベント)→IF(条件)→THEN(Slack/通知/タスク)」の軽量Flow。
  */
-export default async function AutomationPage({ searchParams }: { searchParams: { saved?: string; error?: string } }) {
+export default async function AutomationPage(props: { searchParams: Promise<{ saved?: string; error?: string }> }) {
+  const searchParams = await props.searchParams;
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const [rulesR, runsR] = await Promise.all([

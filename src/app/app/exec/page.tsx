@@ -12,7 +12,8 @@ function tally(evs: Evaluation[]) {
   return { good: evs.filter((e) => e === "good").length, watch: evs.filter((e) => e === "watch").length, bad: evs.filter((e) => e === "bad").length };
 }
 
-export default async function ExecSummaryPage({ searchParams }: { searchParams: { month?: string; week?: string } }) {
+export default async function ExecSummaryPage(props: { searchParams: Promise<{ month?: string; week?: string }> }) {
+  const searchParams = await props.searchParams;
   const { month, week } = parsePeriod(searchParams);
   const [rows, actions, mkt, deliveries, projects] = await Promise.all([
     getKpiReview(month, week), listMtgActions(), getMarketingReview(month), listDeliveryReviews(), listProjectProfitReviews(),

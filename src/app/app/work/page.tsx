@@ -26,11 +26,12 @@ const dayLabel = (iso: string) => {
 };
 
 /** 担当者の稼働実績 記入ページ(週次)。1つの表で行ごとに案件(担当者マスター)を選ぶ。 */
-export default async function WorkPage({
-  searchParams,
-}: {
-  searchParams: { week?: string; saved?: string; error?: string; n?: string; lk?: string; um?: string; iv?: string };
-}) {
+export default async function WorkPage(
+  props: {
+    searchParams: Promise<{ week?: string; saved?: string; error?: string; n?: string; lk?: string; um?: string; iv?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const today = todayJST();
   const week = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.week ?? "") ? weekStartOf(searchParams.week!) : weekStartOf(today);

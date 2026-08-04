@@ -7,20 +7,23 @@ import { ProjectPane } from "@/components/projects/project-pane";
  * 直リンク/リロード時はこのルートはマッチせず、フルページ([id]/page.tsx)になる。
  * ?from=calendar|list で閉じたときの戻り先タブを指定する。
  */
-export default async function InterceptedProjectDetail({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: { from?: string; saved?: string };
-}) {
+export default async function InterceptedProjectDetail(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ from?: string; saved?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const backHref =
     searchParams.from === "calendar" ? "/app/projects?view=calendar"
     : searchParams.from === "list" ? "/app/projects"
     : null;
   return (
     <ProjectPane oppId={params.id} backHref={backHref}>
-      <ProjectDetailPage params={params} searchParams={searchParams} />
+      {/* Next 15 では params / searchParams は Promise。解決済みの値ではなく
+          Promise のまま渡し、受け側([id]/page.tsx)で await させる。 */}
+      <ProjectDetailPage params={props.params} searchParams={props.searchParams} />
     </ProjectPane>
   );
 }

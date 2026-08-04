@@ -27,7 +27,7 @@ export async function enterPresentationMode() {
   const sb = getSupabaseServer();
   const { error } = await sb.rpc("enter_presentation_mode");
   if (error) throw new Error(`プレゼンモード開始に失敗しました: ${error.message}`);
-  cookies().set(PRESENTATION_COOKIE, "1", { ...cookieOpts(), maxAge: MAX_AGE });
+  (await cookies()).set(PRESENTATION_COOKIE, "1", { ...cookieOpts(), maxAge: MAX_AGE });
   redirect("/app/dashboard");
 }
 
@@ -36,7 +36,7 @@ export async function exitPresentationMode() {
   const sb = getSupabaseServer();
   // Cookie の有無に関わらず付替えは元に戻す(冪等)。
   const { error } = await sb.rpc("exit_presentation_mode");
-  cookies().delete(PRESENTATION_COOKIE);
+  (await cookies()).delete(PRESENTATION_COOKIE);
   if (error) throw new Error(`プレゼンモード終了に失敗しました: ${error.message}`);
   redirect("/app/dashboard");
 }

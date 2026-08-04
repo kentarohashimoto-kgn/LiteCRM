@@ -51,6 +51,6 @@ export async function GET(req: Request) {
     : await sb.from("tenant_storage_connections").insert(row);
   if (res.error) return back(`error=gdrive_save&detail=${encodeURIComponent(res.error.message.slice(0, 120))}`);
 
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "storage.gdrive.connect", target: email, meta: { provider: "gdrive" }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "storage.gdrive.connect", target: email, meta: { provider: "gdrive" }, ip: await clientIp() });
   return back("saved=gdrive_connected");
 }

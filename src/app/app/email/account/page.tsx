@@ -33,7 +33,10 @@ export interface MailAccountView {
  * WO-22 メール送信アカウント接続(F-101)。本人のSMTP(GWS/Zoho)をアプリパスワードで接続。
  * 接続すると、アプリから本人アカウント経由でメール送信+開封/クリック計測ができる。
  */
-export default async function MailAccountPage({ searchParams }: { searchParams: { saved?: string; error?: string; detail?: string } }) {
+export default async function MailAccountPage(
+  props: { searchParams: Promise<{ saved?: string; error?: string; detail?: string }> }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const sb = getSupabaseServer();
   const { data } = await sb

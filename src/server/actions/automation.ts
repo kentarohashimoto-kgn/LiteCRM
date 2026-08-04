@@ -47,7 +47,7 @@ export async function createRuleFromRecipeAction(formData: FormData): Promise<vo
   });
   if (ins.error) back("error=save_failed");
 
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "automation.rule.create", target: recipe!.name, meta: { recipe_key: recipeKey }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "automation.rule.create", target: recipe!.name, meta: { recipe_key: recipeKey }, ip: await clientIp() });
   revalidatePath("/app/automation");
   back("saved=created");
 }
@@ -75,7 +75,7 @@ export async function toggleRuleAction(formData: FormData): Promise<void> {
     .select("id");
   if (up.error || !up.data?.length) back("error=save_failed");
 
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "automation.rule.toggle", target: id, meta: { enabled: to }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "automation.rule.toggle", target: id, meta: { enabled: to }, ip: await clientIp() });
   revalidatePath("/app/automation");
   back(to ? "saved=started" : "saved=stopped");
 }
@@ -93,7 +93,7 @@ export async function deleteRuleAction(formData: FormData): Promise<void> {
   const del = await sb.from("automation_rules").delete().eq("id", id).eq("tenant_id", ctx.tenantId);
   if (del.error) back("error=save_failed");
 
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "automation.rule.delete", target: id, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "automation.rule.delete", target: id, ip: await clientIp() });
   revalidatePath("/app/automation");
   back("saved=deleted");
 }

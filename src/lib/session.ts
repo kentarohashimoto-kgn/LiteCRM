@@ -33,7 +33,7 @@ export const getCtxOrNull = cache(async (): Promise<Ctx | null> => {
 
   // プレゼンモード: Cookie がヒント。実際の可否は presentation_sessions(DB)を真とする。
   // これにより RLS(current_tenant_ids)とアプリの判定が食い違わない。
-  const presentationHint = cookies().get(PRESENTATION_COOKIE)?.value === "1";
+  const presentationHint = (await cookies()).get(PRESENTATION_COOKIE)?.value === "1";
   if (presentationHint) {
     const { data: sess } = await supabase
       .from("presentation_sessions")

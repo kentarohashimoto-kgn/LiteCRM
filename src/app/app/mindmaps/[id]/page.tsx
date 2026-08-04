@@ -9,7 +9,8 @@ import { MindmapTitle } from "@/components/mindmap/mindmap-title";
 export const dynamic = "force-dynamic";
 
 /** マインドマップ編集画面(管理者専用)。 */
-export default async function MindmapEditorPage({ params }: { params: { id: string } }) {
+export default async function MindmapEditorPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   await requireAdminCtx();
   const map = await getMindmap(params.id);
   if (!map) notFound();

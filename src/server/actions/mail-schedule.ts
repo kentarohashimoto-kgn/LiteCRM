@@ -74,7 +74,7 @@ export async function scheduleEmailAction(input: ScheduleEmailInput): Promise<Sc
   }).select("id").single();
   if (error || !data) return { ok: false, error: `予約に失敗しました: ${error?.message ?? ""}` };
 
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.schedule", target: input.toAddr, meta: { at: input.scheduledAtIso }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.schedule", target: input.toAddr, meta: { at: input.scheduledAtIso }, ip: await clientIp() });
   revalidatePath("/app/email/scheduled");
   return { ok: true, id: data.id as string };
 }
@@ -123,7 +123,7 @@ export async function cancelScheduledEmailAction(id: string): Promise<{ ok: bool
     .eq("id", id)
     .eq("status", "scheduled");
   if (error) return { ok: false, error: error.message };
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.schedule_cancel", target: id, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.schedule_cancel", target: id, ip: await clientIp() });
   revalidatePath("/app/email/scheduled");
   return { ok: true };
 }

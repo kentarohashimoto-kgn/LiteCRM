@@ -16,7 +16,8 @@ interface TaskRow { id: string; name: string; category: string; due_date: string
 interface StaffRow { id: string; date: string; role: string; user_id: string | null; member_name: string | null; }
 
 /** BO-4 展示会WBS詳細: タスク消込・人員アサイン・会期変更(期日再計算)。 */
-export default async function ExpoDetailPage({ params }: { params: { id: string } }) {
+export default async function ExpoDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   await requireBoCtx();
   const sb = getSupabaseServer();
   const today = new Date().toISOString().slice(0, 10);

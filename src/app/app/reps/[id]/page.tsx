@@ -10,7 +10,8 @@ import { formatYen, formatDate, startOfMonth, addMonths, monthKey, sum, cn } fro
 
 export const dynamic = "force-dynamic";
 
-export default async function RepDetailPage({ params }: { params: { id: string } }) {
+export default async function RepDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const ws = await getWorkspaceLite();
   const member = listMembers(ws).find(({ user }) => user.id === params.id);
   if (!member) notFound();

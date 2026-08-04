@@ -26,11 +26,12 @@ interface MessageRow {
  * 会話ログの閲覧（管理者のみ・読み取り専用）。
  * 研修の振り返りに使う。受講者には「運営者が確認できる場合がある」旨をログイン画面で案内している。
  */
-export default async function AiLabConversationLogPage({
-  params,
-}: {
-  params: { companyId: string; conversationId: string };
-}) {
+export default async function AiLabConversationLogPage(
+  props: {
+    params: Promise<{ companyId: string; conversationId: string }>;
+  }
+) {
+  const params = await props.params;
   await requireAdminCtx();
   const sb = getSupabaseServer();
 
