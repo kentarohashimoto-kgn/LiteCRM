@@ -47,7 +47,12 @@ export default async function WorkApprovalsPage({ searchParams }: { searchParams
       <PageHeader
         title="稼働承認"
         subtitle="提出された週次の稼働実績を承認/差戻しします。承認済みの実績は原価管理の実績原価と月次請求の根拠になります。"
-        action={<Link href="/app/projects" className="btn-ghost text-xs">原価管理へ</Link>}
+        action={
+          <div className="flex items-center gap-1.5">
+            <Link href={`/app/projects/billing?month=${month.slice(0, 7)}`} className="btn-ghost text-xs">担当者・請求サマリーへ</Link>
+            <Link href="/app/projects" className="btn-ghost text-xs">原価管理へ</Link>
+          </div>
+        }
       />
 
       <ActionNotice
