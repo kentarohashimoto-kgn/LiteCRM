@@ -26,3 +26,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code の個人設定（.claude/settings.json はチーム共有なのでコミットする）
+.claude/settings.local.json
