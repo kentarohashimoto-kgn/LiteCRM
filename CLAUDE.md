@@ -30,7 +30,8 @@ npx vitest run -t "commit は"            # テスト名で絞り込み
 
 - Supabase の3変数（`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`）が無いと `npm run dev` は起動しても認証もデータ取得も通らない。**型チェック・テスト・ビルドは変数なしで通る**ので、変数が無い環境で保証できるのはそこまで。
 - `.env.example` の47変数のうち必須は上記3つだけ。他は未設定なら該当機能が 503 / スキップで無効化される設計。
-- Node のバージョン指定（`.nvmrc` / `engines`）が無い。CI は Node 20、Claude Code の実行コンテナは Node 22。
+- Node のバージョンは **`.nvmrc`（`22`）が唯一の正**。CI は `node-version-file: .nvmrc` で読むので、上げるときは `.nvmrc` だけ書き換える（`ci.yml` に数字を直接書かない）。`package.json` の `engines` は `>=22.12.0`。この下限を決めているのは vitest 配下の `rolldown`（`^20.19.0 || >=22.12.0` と穴あきの範囲を要求する）で、package.json だけ見ても分からない。
+- **Vercel のビルド Node バージョンだけはリポジトリで固定できない**（Project Settings 側にしか無い）。`.nvmrc` を上げるときは Vercel の Node.js Version も併せて合わせる。
 
 ---
 
