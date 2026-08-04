@@ -33,7 +33,8 @@ interface Company {
  * 会社横断の月別レポート。
  * 「どの会社が・どの月に・いくら使ったか」を1枚で見て、予算の見直し判断につなげる画面。
  */
-export default async function AiLabReportsPage({ searchParams }: { searchParams: { month?: string } }) {
+export default async function AiLabReportsPage(props: { searchParams: Promise<{ month?: string }> }) {
+  const searchParams = await props.searchParams;
   await requireAdminCtx();
   const sb = getSupabaseServer();
 

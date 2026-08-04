@@ -10,7 +10,8 @@ import { OppCustomerSection } from "@/components/opportunities/opp-customer-sect
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { SubmitButton } from "@/components/ui/submit-button";
 
-export default async function NewOpportunityPage({ searchParams }: { searchParams: { error?: string } }) {
+export default async function NewOpportunityPage(props: { searchParams: Promise<{ error?: string }> }) {
+  const searchParams = await props.searchParams;
   const ws = await getWorkspaceLite();
   const owners = listMembers(ws).map(({ user }) => user);
   const products = getProducts(ws);

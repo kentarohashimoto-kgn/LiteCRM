@@ -15,13 +15,14 @@ import type { TaskViewKind } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProjectDetailPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: { view?: string };
-}) {
+export default async function ProjectDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ view?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const ws = await getWorkspaceLite();
   const hub = await getTaskHub();
   const project = getProject(hub, params.id);

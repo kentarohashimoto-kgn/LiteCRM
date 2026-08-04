@@ -11,7 +11,10 @@ export const dynamic = "force-dynamic";
  * WO-20 メール作成(F-101a)。定型文→変数差込→Gmail作成画面で送信(手動)→記録。
  * ?opportunity=<id> / ?contact=<id> で宛先・案件を事前充填できる(案件詳細等からの導線用)。
  */
-export default async function EmailComposePage({ searchParams }: { searchParams: { opportunity?: string; contact?: string } }) {
+export default async function EmailComposePage(
+  props: { searchParams: Promise<{ opportunity?: string; contact?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
 

@@ -26,7 +26,10 @@ function addMonths(monthStart: string, n: number): string {
 }
 
 /** 稼働承認: 提出された週次実績の承認/差戻しと、月次の承認済み工数集計(請求参考)。 */
-export default async function WorkApprovalsPage({ searchParams }: { searchParams: { month?: string; saved?: string; error?: string } }) {
+export default async function WorkApprovalsPage(
+  props: { searchParams: Promise<{ month?: string; saved?: string; error?: string }> }
+) {
+  const searchParams = await props.searchParams;
   await requireProjectCtx();
   const today = todayJST();
   const month = normMonthParam(searchParams.month, `${today.slice(0, 7)}-01`);

@@ -42,7 +42,7 @@ export function labLoginPath(slug: string): string {
 export async function setLabSession(user: Pick<LabUserRow, "id" | "company_id">): Promise<void> {
   const exp = Math.floor(Date.now() / 1000) + LAB_SESSION_HOURS * 3600;
   const token = await signLabToken({ uid: user.id, cid: user.company_id, exp }, sessionSecret());
-  cookies().set(LAB_COOKIE, token, {
+  (await cookies()).set(LAB_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -51,8 +51,8 @@ export async function setLabSession(user: Pick<LabUserRow, "id" | "company_id">)
   });
 }
 
-export function clearLabSession(): void {
-  cookies().set(LAB_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+export async function clearLabSession(): Promise<void> {
+  (await cookies()).set(LAB_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
 }
 
 /**
@@ -65,7 +65,7 @@ export const getLabCtx = cache(async (slug: string): Promise<LabCtx | null> => {
   const secret = sessionSecret();
   if (!secret) return null;
 
-  const token = cookies().get(LAB_COOKIE)?.value;
+  const token = (await cookies()).get(LAB_COOKIE)?.value;
   const payload = await verifyLabToken(token, secret);
   if (!payload) return null;
 

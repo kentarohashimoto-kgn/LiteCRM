@@ -54,7 +54,7 @@ export async function runHandlerAssignmentAction(): Promise<RunHandlerResult> {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const mm = (m ?? {}) as any;
   const aa = (a ?? {}) as any;
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "lead.assign_handlers", target: "leads", meta: { ...mm, ...aa }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "lead.assign_handlers", target: "leads", meta: { ...mm, ...aa }, ip: await clientIp() });
   revalidatePath("/app/leads");
   revalidatePath("/app/leads/scoring");
   return {
@@ -140,7 +140,7 @@ export async function saveHandlerRulesAction(rules: HandlerRule[]): Promise<{ ok
     })));
     if (error) return { ok: false, error: `保存に失敗: ${error.message}` };
   }
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "lead.handler_rules.save", target: "lead_handler_rules", meta: { rules: rules.length }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "lead.handler_rules.save", target: "lead_handler_rules", meta: { rules: rules.length }, ip: await clientIp() });
   revalidatePath("/app/leads/scoring");
   return { ok: true };
 }

@@ -22,13 +22,14 @@ interface CandLink { id: string; role_note: string | null; candidates: CandRow |
 const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
 
 /** 求人案件 詳細/編集ページ。区分別の全項目編集・ステータス管理・削除。 */
-export default async function OpeningDetailPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: { saved?: string; error?: string };
-}) {
+export default async function OpeningDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ saved?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   await requireHrCtx();
   const sb = getSupabaseServer();
   const { data } = await sb.from("job_openings").select(COLS).eq("id", params.id).maybeSingle();

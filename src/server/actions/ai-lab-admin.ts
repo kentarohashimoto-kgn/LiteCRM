@@ -119,7 +119,7 @@ export async function createLabCompanyAction(formData: FormData): Promise<void> 
     email: ctx.email,
     action: "ai_lab.company.create",
     target: slug,
-    ip: clientIp(),
+    ip: await clientIp(),
   });
 
   backTo(`/app/ai-lab/${data.id}`, "created");
@@ -173,7 +173,7 @@ export async function updateLabCompanyAction(formData: FormData): Promise<void> 
     email: ctx.email,
     action: "ai_lab.company.update",
     target: id,
-    ip: clientIp(),
+    ip: await clientIp(),
   });
   backTo(path, "saved");
 }
@@ -194,7 +194,7 @@ export async function setLabCompanyActiveAction(formData: FormData): Promise<voi
     email: ctx.email,
     action: active ? "ai_lab.company.activate" : "ai_lab.company.deactivate",
     target: id,
-    ip: clientIp(),
+    ip: await clientIp(),
   });
   backTo(path, active ? "activated" : "deactivated");
 }
@@ -261,7 +261,7 @@ export async function issueLabUsersAction(input: {
     action: "ai_lab.users.issue",
     target: input.companyId,
     meta: { count: issued.length },
-    ip: clientIp(),
+    ip: await clientIp(),
   });
   revalidatePath(`/app/ai-lab/${input.companyId}/users`);
   return { ok: true, issued };
@@ -287,7 +287,7 @@ export async function resetLabUserPasswordAction(input: {
     email: ctx.email,
     action: "ai_lab.user.reset_password",
     target: input.userId,
-    ip: clientIp(),
+    ip: await clientIp(),
   });
   revalidatePath(`/app/ai-lab/${input.companyId}/users`);
   return { ok: true, password };

@@ -27,7 +27,11 @@ function hm(iso?: string): string {
  * 商談中に「顧客情報・事前リサーチ・営業戦略」を参照しながらメモを取れるよう、
  * 左=メモ入力(商談を編集) / 右=参照パネル(スクロール追従) の2カラム構成。
  */
-export default async function MeetingDetailPage({ params, searchParams }: { params: { id: string; mid: string }; searchParams: { saved?: string } }) {
+export default async function MeetingDetailPage(
+  props: { params: Promise<{ id: string; mid: string }>; searchParams: Promise<{ saved?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const ws = await getWorkspaceForOpportunity(params.id);
   const meeting = getMeeting(ws, params.mid);
   if (!meeting || meeting.opportunity_id !== params.id) notFound();

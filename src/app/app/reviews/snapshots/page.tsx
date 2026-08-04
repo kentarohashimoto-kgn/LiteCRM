@@ -9,11 +9,12 @@ export const dynamic = "force-dynamic";
  * 週報スナップショット。週次サマリを型化して保存し、過去分を振り返り、2世代を並べて比較する。
  * (定例会の精度向上: ランダム報告 → 型化された数字ベースの振り返り)
  */
-export default async function WeeklySnapshotsPage({
-  searchParams,
-}: {
-  searchParams: { a?: string; b?: string };
-}) {
+export default async function WeeklySnapshotsPage(
+  props: {
+    searchParams: Promise<{ a?: string; b?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const list = await listWeeklySnapshots();
 

@@ -19,7 +19,8 @@ function page(title: string, body: string) {
  * mail_suppressions を必ず突合して該当宛先をスキップする。
  */
 /** RFC8058 ワンクリック配信停止(List-Unsubscribe-Post)。メールクライアントの「配信停止」ボタンからのPOST。 */
-export async function POST(_req: Request, { params }: { params: { token: string } }) {
+export async function POST(_req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const token = (params.token ?? "").trim();
   if (token) {
     try {
@@ -36,7 +37,8 @@ export async function POST(_req: Request, { params }: { params: { token: string 
   return new NextResponse(null, { status: 200 });
 }
 
-export async function GET(_req: Request, { params }: { params: { token: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const token = (params.token ?? "").trim();
   if (!token) return page("無効なリンクです", "URLが正しくありません。お手数ですが、メールに記載の送信者までご連絡ください。");
   try {

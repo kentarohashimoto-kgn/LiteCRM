@@ -10,7 +10,8 @@ import { SubmitButton } from "@/components/ui/submit-button";
 function fv(v: number, unit: "count" | "yen") { return unit === "yen" ? formatYen(v) : `${Math.round(v).toLocaleString("ja-JP")}件`; }
 function pct(v: number | null) { return v == null ? "—" : `${Math.round(v * 100)}%`; }
 
-export default async function ExecKpiPage({ searchParams }: { searchParams: { month?: string; week?: string } }) {
+export default async function ExecKpiPage(props: { searchParams: Promise<{ month?: string; week?: string }> }) {
+  const searchParams = await props.searchParams;
   const { month, week } = parsePeriod(searchParams);
   // メンバー名しか使わないため lite(≈800KB) ではなく軽量フェッチャで取得(監査2026-07-12)
   const [membersRaw, rows] = await Promise.all([getMembersLite(), getKpiReview(month, week)]);

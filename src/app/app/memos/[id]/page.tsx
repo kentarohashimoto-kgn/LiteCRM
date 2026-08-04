@@ -21,13 +21,14 @@ export const dynamic = "force-dynamic";
  * ・後からCRMの案件・商談に紐付け（ページ配下の録音にも伝播）
  * ・サブページで自由に階層化
  */
-export default async function MemoPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: { error?: string };
-}) {
+export default async function MemoPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   await requireCtx();
   const page = await getMemoPage(params.id);
   if (!page) notFound();

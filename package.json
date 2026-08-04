@@ -24,7 +24,7 @@
     "imapflow": "^1.4.7",
     "lucide-react": "^0.427.0",
     "mailparser": "^3.9.14",
-    "next": "^14.2.35",
+    "next": "^15.5.22",
     "nodemailer": "^9.0.4",
     "pptxgenjs": "^4.0.1",
     "react": "^18.3.1",
@@ -39,9 +39,13 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.41",
+    "postcss": "^8.5.25",
     "tailwindcss": "^3.4.10",
     "typescript": "^5.5.4",
     "vitest": "^4.1.9"
+  },
+  "overrides": {
+    "postcss": "^8.5.25",
+    "sharp": "^0.35.0"
   }
 }

@@ -27,13 +27,14 @@ interface Company {
   ends_on: string | null;
 }
 
-export default async function AiLabCompanyPage({
-  params,
-  searchParams,
-}: {
-  params: { companyId: string };
-  searchParams: { saved?: string; error?: string };
-}) {
+export default async function AiLabCompanyPage(
+  props: {
+    params: Promise<{ companyId: string }>;
+    searchParams: Promise<{ saved?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   await requireAdminCtx();
   const sb = getSupabaseServer();
 

@@ -39,7 +39,7 @@ export async function saveSequenceAction(formData: FormData): Promise<void> {
     ? await sb.from("email_sequences").update(row).eq("id", id).eq("tenant_id", ctx.tenantId).select("id")
     : await sb.from("email_sequences").insert({ ...row, created_by: ctx.userId }).select("id");
   if (res.error) back("error=save_failed");
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "sequence.create", target: name, meta: { steps: steps.length, update: !!id }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "sequence.create", target: name, meta: { steps: steps.length, update: !!id }, ip: await clientIp() });
   revalidatePath("/app/email/sequences");
   back(id ? "saved=updated" : "saved=created");
 }
@@ -102,7 +102,7 @@ export async function enrollSequenceAction(input: EnrollInput): Promise<EnrollRe
     if (String(error.code) === "23505") return { ok: false, error: "この宛先は既にこのシーケンスに投入済みです" };
     return { ok: false, error: "投入に失敗しました: " + error.message };
   }
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "sequence.enroll", target: input.toAddr, meta: { sequence_id: input.sequenceId }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "sequence.enroll", target: input.toAddr, meta: { sequence_id: input.sequenceId }, ip: await clientIp() });
   revalidatePath("/app/email/sequences");
   return { ok: true, id: data!.id as string };
 }
@@ -118,7 +118,7 @@ export async function stopEnrollmentAction(formData: FormData): Promise<void> {
     .update({ status: "stopped", stopped_reason: "手動停止" })
     .eq("id", id)
     .eq("tenant_id", ctx.tenantId);
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "sequence.stop", target: id, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "sequence.stop", target: id, ip: await clientIp() });
   revalidatePath("/app/email/sequences");
   back("saved=stopped");
 }

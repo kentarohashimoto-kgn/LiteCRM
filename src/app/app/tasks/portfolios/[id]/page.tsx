@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-export default async function PortfolioDetailPage({ params }: { params: { id: string } }) {
+export default async function PortfolioDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const ws = await getWorkspaceLite();
   const hub = await getTaskHub();
   const pf = hub.portfolios.find((p) => p.id === params.id);

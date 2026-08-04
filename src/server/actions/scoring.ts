@@ -81,7 +81,7 @@ export async function saveScoringConfigAction(axes: AxisInput[], rules: RuleInpu
     distribution[rank] = count ?? 0;
   }
 
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "scoring.save", target: "lead_scoring_rules", meta: { rules: rules.length, rescored }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "scoring.save", target: "lead_scoring_rules", meta: { rules: rules.length, rescored }, ip: await clientIp() });
   revalidatePath("/app/leads");
   revalidatePath("/app/leads/scoring");
   return { ok: true, rescored, distribution };

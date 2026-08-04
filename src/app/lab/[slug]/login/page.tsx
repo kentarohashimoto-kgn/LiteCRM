@@ -9,13 +9,14 @@ export const dynamic = "force-dynamic";
  * 受講者の個別ログイン。
  * ここに到達している時点で、middleware の Basic 認証(会社ゲート)は通過している。
  */
-export default async function LabLoginPage({
-  params,
-  searchParams,
-}: {
-  params: { slug: string };
-  searchParams: { error?: string };
-}) {
+export default async function LabLoginPage(
+  props: {
+    params: Promise<{ slug: string }>;
+    searchParams: Promise<{ error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const company = await getCompanyBySlug(params.slug);
   if (!company || !isCompanyOpen(company)) notFound();
 

@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 
 const yen = (v: number) => "¥" + Math.round(v).toLocaleString("ja-JP");
 
-export default async function ExhibitionDrillPage({ params }: { params: { id: string } }) {
+export default async function ExhibitionDrillPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const ctx = await requireCtx();
   const d = await getExhibitionDrill(params.id);
   if (!d.campaign) notFound();

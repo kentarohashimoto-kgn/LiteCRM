@@ -12,7 +12,8 @@ import { ProjectsViewTabs, type ProjectView } from "@/components/projects/projec
 
 export const dynamic = "force-dynamic";
 
-export default async function ProjectsListPage({ searchParams }: { searchParams: { view?: string } }) {
+export default async function ProjectsListPage(props: { searchParams: Promise<{ view?: string }> }) {
+  const searchParams = await props.searchParams;
   await requireProjectCtx();
   // 旧 ?view=forecast はカレンダー(統合ビュー)に集約
   const view: ProjectView =

@@ -14,11 +14,12 @@ export const dynamic = "force-dynamic";
  * 営業マン別 週報。自動集計(目標/実績/見込み/パイプライン/担当案件)＋
  * 先週コメント・来週予定・1ヶ月先予定のナラティブ入力を、型に沿って作成する。
  */
-export default async function RepReportPage({
-  searchParams,
-}: {
-  searchParams: { owner?: string; week?: string; saved?: string; error?: string };
-}) {
+export default async function RepReportPage(
+  props: {
+    searchParams: Promise<{ owner?: string; week?: string; saved?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const ctx = await requireCtx();
   const owner = searchParams.owner || ctx.userId;
   const week = searchParams.week || mondayJst(new Date());

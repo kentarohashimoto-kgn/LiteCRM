@@ -2,7 +2,8 @@ import { signIn } from "@/server/actions";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { TurnstileWidget } from "@/components/auth/turnstile-widget";
 
-export default function LoginPage({ searchParams }: { searchParams: { error?: string } }) {
+export default async function LoginPage(props: { searchParams: Promise<{ error?: string }> }) {
+  const searchParams = await props.searchParams;
   const captchaSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   return (
     <div className="min-h-screen flex items-center justify-center bg-mist-soft p-6">

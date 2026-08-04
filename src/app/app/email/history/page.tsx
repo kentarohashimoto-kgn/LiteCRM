@@ -43,9 +43,12 @@ const LIST_LIMIT = 100;
  * WO-22 メール送信履歴(F-101c)。送信状態・開封回数・クリック(どの資料か)を可視化。
  * 件数が増えるため期間などで絞り込み、同じ条件のままCSVで一括ダウンロードできる。
  */
-export default async function EmailHistoryPage({ searchParams }: {
-  searchParams: { from?: string; to?: string; status?: string; sender?: string; reaction?: string };
-}) {
+export default async function EmailHistoryPage(
+  props: {
+    searchParams: Promise<{ from?: string; to?: string; status?: string; sender?: string; reaction?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
 

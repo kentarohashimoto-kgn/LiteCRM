@@ -36,11 +36,12 @@ const DIFF_TONE: Record<number, string> = {
  * 並び順は 意図層 → 優先度 → 難易度。難易度の低い記事から積むのは、
  * 検索数だけで選ぶと競合が強い語ばかり狙って半年成果ゼロになるため。
  */
-export default async function SeoPlansPage({
-  searchParams,
-}: {
-  searchParams: { site?: string; layer?: string; diff?: string; saved?: string; error?: string };
-}) {
+export default async function SeoPlansPage(
+  props: {
+    searchParams: Promise<{ site?: string; layer?: string; diff?: string; saved?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const sites = await listSeoSites();
   const active = sites.filter((s) => s.status === "active");

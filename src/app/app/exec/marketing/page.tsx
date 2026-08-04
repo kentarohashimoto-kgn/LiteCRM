@@ -9,7 +9,8 @@ import { SubmitButton } from "@/components/ui/submit-button";
 
 const CH_LABEL: Record<string, string> = { exhibition: "展示会", seminar: "セミナー", agency: "代理店", media_ipros: "広告", media_aismiley: "広告", sns: "SNS", networking: "交流", whitelist_call: "リスト架電", exec_appt_bt: "経営者アポ", exec_appt_rm: "経営者アポ", other: "その他" };
 
-export default async function ExecMarketingPage({ searchParams }: { searchParams: { month?: string; week?: string } }) {
+export default async function ExecMarketingPage(props: { searchParams: Promise<{ month?: string; week?: string }> }) {
+  const searchParams = await props.searchParams;
   const { month, week } = parsePeriod(searchParams);
   const { rows, leadTarget, planLeads, coverage, upcoming } = await getMarketingReview(month);
   const coverEval = coverage == null ? "watch" : coverage >= 1 ? "good" : coverage >= 0.6 ? "watch" : "bad";

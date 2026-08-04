@@ -50,7 +50,7 @@ export async function GET(req: Request) {
     : await sb.from("user_mail_accounts").insert(row);
   if (res.error) return back(`error=save_failed&detail=${encodeURIComponent(res.error.message.slice(0, 120))}`);
 
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.account.google_connect", target: email, meta: { provider: "gws", gmail_api_ready: info.gmailApiReady }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.account.google_connect", target: email, meta: { provider: "gws", gmail_api_ready: info.gmailApiReady }, ip: await clientIp() });
   // 保存はできたがGmail APIが未有効の場合、そのまま送信すると失敗する。接続時点で気づけるようにする。
   return back(info.gmailApiReady ? "saved=google_connected" : "error=gmail_api_disabled");
 }

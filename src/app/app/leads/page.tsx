@@ -18,11 +18,12 @@ import {
 import { PageHeader, LinkButton } from "@/components/ui/primitives";
 import { LeadsWorkspace, type LeadsTab } from "@/components/leads/leads-workspace";
 
-export default async function LeadsPage({
-  searchParams,
-}: {
-  searchParams: { tab?: string; q?: string; ev?: string; disp?: string; rank?: string; er?: string; gr?: string; emin?: string; owner?: string; handler?: string; from?: string; to?: string; page?: string; scored?: string; md?: string; sort?: string; dir?: string };
-}) {
+export default async function LeadsPage(
+  props: {
+    searchParams: Promise<{ tab?: string; q?: string; ev?: string; disp?: string; rank?: string; er?: string; gr?: string; emin?: string; owner?: string; handler?: string; from?: string; to?: string; page?: string; scored?: string; md?: string; sort?: string; dir?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const tab = (["list", "inquiries", "funnel", "queue", "company", "analysis", "download", "batches"].includes(searchParams.tab ?? "")
     ? searchParams.tab
     : "list") as LeadsTab;

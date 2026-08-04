@@ -17,11 +17,12 @@ import { ChatDmTest } from "@/components/settings/chat-dm-test";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage({
-  searchParams,
-}: {
-  searchParams: { ok?: string; error?: string; saved?: string; detail?: string; calendar?: string; msg?: string };
-}) {
+export default async function SettingsPage(
+  props: {
+    searchParams: Promise<{ ok?: string; error?: string; saved?: string; detail?: string; calendar?: string; msg?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const ws = await getWorkspaceLite();
   const isAdmin = ["owner", "admin"].includes(ws.ctx.role);
 

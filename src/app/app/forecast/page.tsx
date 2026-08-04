@@ -36,7 +36,8 @@ function daysBetween(end?: string | null, start?: string | null): number | null 
   return Math.round((+new Date(end) - +new Date(start)) / 86400000);
 }
 
-export default async function ForecastPage({ searchParams }: { searchParams: { fy?: string } }) {
+export default async function ForecastPage(props: { searchParams: Promise<{ fy?: string }> }) {
+  const searchParams = await props.searchParams;
   // full(2.1MB, meetings等含む)を回避: lite＋請求スケジュールのみ取得。
   const ws = await getWorkspaceLite();
   const sb = getSupabaseServer();

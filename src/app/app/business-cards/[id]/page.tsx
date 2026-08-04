@@ -18,7 +18,8 @@ export const dynamic = "force-dynamic";
 /**
  * 名刺詳細: スキャン誤りの修正（編集）・コメント・優先度/任意タグ・CRM連携をまとめて扱う。
  */
-export default async function BusinessCardDetailPage({ params }: { params: { id: string } }) {
+export default async function BusinessCardDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const ctx = await requireCtx();
   const card = await getBusinessCard(params.id);
   if (!card) notFound();

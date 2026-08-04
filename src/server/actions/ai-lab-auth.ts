@@ -74,6 +74,6 @@ export async function labSignIn(formData: FormData): Promise<void> {
 
 export async function labSignOut(formData: FormData): Promise<void> {
   const slug = String(formData.get("slug") ?? "").trim();
-  clearLabSession();
+  await clearLabSession();
   redirect(slug ? labLoginPath(slug) : "/");
 }

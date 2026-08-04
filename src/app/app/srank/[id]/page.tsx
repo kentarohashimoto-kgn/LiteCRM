@@ -9,7 +9,8 @@ import { SRANK_STAGES, DEAL_STATUS, PROPOSAL_STATUS, PROPOSAL_STATUS_LABEL, KEYP
 import { formatYen, formatDateFull } from "@/lib/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
 
-export default async function SrankDetailPage({ params }: { params: { id: string } }) {
+export default async function SrankDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { account: a, departments, keypersons } = await getSrankDetail(params.id);
   if (!a) notFound();
   const deptTotal = departments.reduce((s, d) => s + (d.amount ?? 0), 0);

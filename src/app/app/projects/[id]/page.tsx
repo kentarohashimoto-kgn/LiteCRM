@@ -32,7 +32,11 @@ const VERDICT = {
 } as const;
 const rateCls = (r: number) => (r >= 0.4 ? "text-emerald-600" : r >= 0.25 ? "text-amber-600" : "text-rose-600");
 
-export default async function ProjectDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { saved?: string } }) {
+export default async function ProjectDetailPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   await requireProjectCtx();
   const ws = await getWorkspaceForOpportunity(params.id);
   const o = getOpportunity(ws, params.id);

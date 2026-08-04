@@ -10,11 +10,12 @@ export const dynamic = "force-dynamic";
  * B7 ノウハウ・事例ナレッジベース。
  * 商談で得たノウハウ(成功/失敗)、成約/失注理由、刺さる事例(自社/他社)を蓄積し検索する。
  */
-export default async function KnowledgePage({
-  searchParams,
-}: {
-  searchParams: { q?: string; kind?: string };
-}) {
+export default async function KnowledgePage(
+  props: {
+    searchParams: Promise<{ q?: string; kind?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const all = await listKnowledge();
 

@@ -23,7 +23,8 @@ function CategoryLegend() {
   );
 }
 
-export default async function RevenueAnalyticsPage({ searchParams }: { searchParams: { fy?: string } }) {
+export default async function RevenueAnalyticsPage(props: { searchParams: Promise<{ fy?: string }> }) {
+  const searchParams = await props.searchParams;
   // E-1軽量化: full(2.1MB)ではなく lite＋請求スケジュールのみ直接取得
   const ws = await getWorkspaceLite();
   const sb = getSupabaseServer();

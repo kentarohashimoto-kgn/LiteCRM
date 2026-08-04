@@ -100,7 +100,7 @@ export async function askAssistantAction(input: { question: string; categories?:
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId, action: "assistant.ask",
-      target: question.slice(0, 100), meta: { hits: hits.length, sources: sources.length }, ip: clientIp(),
+      target: question.slice(0, 100), meta: { hits: hits.length, sources: sources.length }, ip: await clientIp(),
     });
     return { ok: true, answer, sources };
   } catch (e) {

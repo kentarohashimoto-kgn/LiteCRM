@@ -52,13 +52,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /** 候補者 詳細ページ。基本情報の編集・複数求人の紐付け・書類添付・選考履歴・削除。 */
-export default async function CandidateDetailPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: { saved?: string; error?: string };
-}) {
+export default async function CandidateDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ saved?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   await requireHrCtx();
   const sb = getSupabaseServer();
   const { data: cand } = await sb

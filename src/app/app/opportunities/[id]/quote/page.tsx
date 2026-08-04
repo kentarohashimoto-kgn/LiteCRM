@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
  * D-3 見積書: 案件から見積書を生成する印刷ビュー。
  * 宛名・品目・金額はこの画面で編集でき、ブラウザの印刷(PDF保存)でそのまま提出できる。
  */
-export default async function QuotePage({ params }: { params: { id: string } }) {
+export default async function QuotePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   await requireCtx();
   const sb = getSupabaseServer();
   const [{ data: opp }, { data: items }] = await Promise.all([

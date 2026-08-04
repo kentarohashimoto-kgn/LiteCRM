@@ -23,7 +23,8 @@ function pixelResponse() {
  * WO-22 開封トラッキング(F-101c)。送信HTMLに埋め込んだ1×1ピクセルが取得されると開封として記録。
  * ※ 開封は近似値(Gmailプロキシ/Appleのプリフェッチで誤差)。常にピクセルを返す(トークン不正でも)。
  */
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const token = params.token?.replace(/\.gif$/, "");
   if (token) {
     try {

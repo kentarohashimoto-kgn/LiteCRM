@@ -10,11 +10,12 @@ export const dynamic = "force-dynamic";
  * ネタ→選定→執筆中→公開 の状態で記事候補を管理する。将来、営業ニーズ＋Web検索から
  * 夜間バッチで候補を自動生成しここに積む(現状は手動運用の受け皿)。
  */
-export default async function ContentPage({
-  searchParams,
-}: {
-  searchParams: { status?: string };
-}) {
+export default async function ContentPage(
+  props: {
+    searchParams: Promise<{ status?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const status = searchParams.status ?? "";
   const [items, counts] = await Promise.all([listContentIdeas(status), contentStatusCounts()]);

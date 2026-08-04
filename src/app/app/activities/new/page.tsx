@@ -5,11 +5,12 @@ import type { PickOption } from "@/server/actions/activities";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewActivityPage({
-  searchParams,
-}: {
-  searchParams: { account?: string; opp?: string };
-}) {
+export default async function NewActivityPage(
+  props: {
+    searchParams: Promise<{ account?: string; opp?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // 案件詳細/顧客詳細からの事前選択（?account=&opp=）を解決
   let defaultAccount: PickOption | undefined;
   let defaultOpp: PickOption | undefined;

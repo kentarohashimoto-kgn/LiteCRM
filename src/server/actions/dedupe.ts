@@ -62,7 +62,7 @@ export async function mergeAccountsAction(input: { primaryId: string; dupIds: st
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId, email: ctx.email,
       action: "accounts.merge", target: `統合先${input.primaryId} ← ${input.dupIds.length}件`,
-      meta: { primaryId: input.primaryId, dupCount: input.dupIds.length }, ip: clientIp(),
+      meta: { primaryId: input.primaryId, dupCount: input.dupIds.length }, ip: await clientIp(),
     });
     revalidatePath("/app/accounts");
     revalidatePath("/app/settings/duplicates");
@@ -81,7 +81,7 @@ export async function mergeLeadsAction(input: { primaryId: string; dupIds: strin
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId, email: ctx.email,
       action: "leads.merge", target: `統合先${input.primaryId} ← ${input.dupIds.length}件`,
-      meta: { primaryId: input.primaryId, dupCount: input.dupIds.length }, ip: clientIp(),
+      meta: { primaryId: input.primaryId, dupCount: input.dupIds.length }, ip: await clientIp(),
     });
     revalidatePath("/app/leads");
     revalidatePath("/app/settings/duplicates");

@@ -13,7 +13,8 @@ import { setLabSession } from "@/lib/ai-lab/session";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest, { params }: { params: { slug: string } }): Promise<Response> {
+export async function GET(req: NextRequest, props: { params: Promise<{ slug: string }> }): Promise<Response> {
+  const params = await props.params;
   const token = req.nextUrl.searchParams.get("token");
   const deny = () => new NextResponse("Not Found", { status: 404 });
   if (!token) return deny();

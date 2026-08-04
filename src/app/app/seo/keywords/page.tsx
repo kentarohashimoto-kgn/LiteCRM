@@ -120,19 +120,20 @@ function Sparkline({ history, appliedAt }: { history?: KeywordWeekPoint[]; appli
  * これがSEOコンサルの主戦場で、ここが空だと施策は対処療法になる。
  * 背景: docs/SEO_STRATEGY_V2_KEYWORD_DRIVEN_2026-07.md
  */
-export default async function SeoKeywordsPage({
-  searchParams,
-}: {
-  searchParams: {
-    site?: string;
-    layer?: string;
-    status?: string;
-    work?: string;
-    sort?: string;
-    saved?: string;
-    error?: string;
-  };
-}) {
+export default async function SeoKeywordsPage(
+  props: {
+    searchParams: Promise<{
+      site?: string;
+      layer?: string;
+      status?: string;
+      work?: string;
+      sort?: string;
+      saved?: string;
+      error?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const sites = await listSeoSites();
   const active = sites.filter((s) => s.status === "active");
@@ -506,13 +507,13 @@ export default async function SeoKeywordsPage({
                             </span>
                             {state === "none" && (
                               // 未対応の語をその場で提案化する。バッチの1日10件を待たなくてよい
-                              <form action={createProposalFromKeywordAction}>
+                              (<form action={createProposalFromKeywordAction}>
                                 <input type="hidden" name="keyword_id" value={r.keywordId} />
                                 <input type="hidden" name="site" value={current.id} />
                                 <SubmitButton className="btn-secondary !px-2 !py-0.5 text-xs" pendingLabel="…">
                                   提案を作る
                                 </SubmitButton>
-                              </form>
+                              </form>)
                             )}
                             {state === "proposed" && (
                               <Link

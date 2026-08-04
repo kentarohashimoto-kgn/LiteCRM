@@ -15,7 +15,8 @@ function fmtPeriodJp(start: string, endExclusive: string): string {
 }
 
 /** 保存済みスナップショットの閲覧(保存時点のデータで営業レントゲンを再現)。 */
-export default async function XraySnapshotPage({ params }: { params: { id: string } }) {
+export default async function XraySnapshotPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   await requireCtx();
   const sb = getSupabaseServer();
   const { data: snap } = await sb

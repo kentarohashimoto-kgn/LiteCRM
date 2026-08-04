@@ -39,13 +39,14 @@ interface Asset {
  * 「スライド作成のときにデザインガイドを仕込んでおく」といった研修シナリオを、
  * システムプロンプト＋参照アセットの組で用意する画面。
  */
-export default async function AiLabPresetsPage({
-  params,
-  searchParams,
-}: {
-  params: { companyId: string };
-  searchParams: { saved?: string; error?: string };
-}) {
+export default async function AiLabPresetsPage(
+  props: {
+    params: Promise<{ companyId: string }>;
+    searchParams: Promise<{ saved?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   await requireAdminCtx();
   const sb = getSupabaseServer();
 

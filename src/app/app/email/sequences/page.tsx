@@ -40,7 +40,8 @@ const ENROLL_STATUS: Record<string, { label: string; cls: string }> = {
  * WO-21 メールシーケンス(追客カデンス)管理(F-101b)。
  * 多段フォローを定義→案件/担当者を投入→日次cronが本人アカウント経由で自動送信。
  */
-export default async function SequencesPage({ searchParams }: { searchParams: { saved?: string; error?: string } }) {
+export default async function SequencesPage(props: { searchParams: Promise<{ saved?: string; error?: string }> }) {
+  const searchParams = await props.searchParams;
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   const [seqR, tplR, enrR] = await Promise.all([

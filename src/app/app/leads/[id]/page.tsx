@@ -29,7 +29,8 @@ const HANDLER_SRC_LABEL: Record<string, string> = {
   memo: "メモから判定", card: "名刺から判定", both: "メモ+名刺", manual: "手動設定",
 };
 
-export default async function LeadEditPage({ params }: { params: { id: string } }) {
+export default async function LeadEditPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const l = await getLead(params.id);
   if (!l) notFound();
   const ev = l.raw_event ?? "—";

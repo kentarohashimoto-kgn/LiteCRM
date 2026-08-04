@@ -85,7 +85,7 @@ export async function saveMailAccountAction(formData: FormData): Promise<void> {
     : await sb.from("user_mail_accounts").insert(row).select("id");
   if (up.error) back("error=save_failed");
 
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.account.connect", target: fromEmail, meta: { provider, verified, inbound: inboundEnabled }, ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.account.connect", target: fromEmail, meta: { provider, verified, inbound: inboundEnabled }, ip: await clientIp() });
 
   revalidatePath("/app/email/account");
   if (verified) back("saved=connected");
@@ -131,7 +131,7 @@ export async function disconnectMailAccountAction(): Promise<void> {
   const ctx = await requireCtx();
   const sb = getSupabaseServer();
   await sb.from("user_mail_accounts").delete().eq("user_id", ctx.userId);
-  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.account.disconnect", ip: clientIp() });
+  await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action: "mail.account.disconnect", ip: await clientIp() });
   revalidatePath("/app/email/account");
   redirect("/app/email/account?saved=disconnected");
 }

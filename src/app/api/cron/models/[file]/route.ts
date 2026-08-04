@@ -18,7 +18,8 @@ const REPO: Record<string, string> = {
 // faster-whisper がローカル読み込みで必要とするファイルのみ許可（任意パス取得は禁止）。
 const ALLOWED = new Set(["config.json", "model.bin", "tokenizer.json", "vocabulary.txt", "preprocessor_config.json", "vocabulary.json"]);
 
-export async function GET(req: Request, { params }: { params: { file: string } }): Promise<Response> {
+export async function GET(req: Request, props: { params: Promise<{ file: string }> }): Promise<Response> {
+  const params = await props.params;
   const secret = process.env.CRON_SECRET;
   const authz = req.headers.get("authorization") ?? "";
   if (!secret || authz !== `Bearer ${secret}`) return new Response("unauthorized", { status: 401 });

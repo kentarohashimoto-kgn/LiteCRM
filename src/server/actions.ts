@@ -41,7 +41,7 @@ async function syncOppFirstMeeting(sb: ReturnType<typeof getSupabaseServer>, opp
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  const ip = clientIp();
+  const ip = await clientIp();
 
   // CAPTCHA（Turnstile）検証。ロボット/自動化のログイン試行を抑止。未設定時はスキップ（段階導入）。
   const captchaOk = await verifyTurnstile(String(formData.get("cf-turnstile-response") ?? ""), ip);
@@ -1669,7 +1669,7 @@ export async function exportLeadsCsvAction(
   await logAudit({
     tenantId: ctx.tenantId, userId: ctx.userId, email: ctx.email,
     action: "leads.export_csv", target: `${out.length}\u4EF6`,
-    meta: { count: out.length, columns: cols.length, filters }, ip: clientIp(),
+    meta: { count: out.length, columns: cols.length, filters }, ip: await clientIp(),
   });
   return { csv: "\uFEFF" + [header, ...lines].join("\r\n"), count: out.length };
 }

@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
  * メモ・議事録の一覧。Notionライクに「まず白紙ページを作って書き始める」導線を最上部に置く。
  * ページは後から案件・商談に紐付けられる（紐付け済みはピルで表示）。
  */
-export default async function MemosPage({ searchParams }: { searchParams: { q?: string; error?: string } }) {
+export default async function MemosPage(props: { searchParams: Promise<{ q?: string; error?: string }> }) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const q = (searchParams.q ?? "").trim();
   const pages = await listMemoPages(q);

@@ -58,11 +58,12 @@ const MODE_LABEL: Record<string, string> = {
  * 「反映しました」の記録が効果検証(WO-36)の起点になるため、
  * そこだけは押し忘れが起きないように目立たせる。
  */
-export default async function SeoActionsPage({
-  searchParams,
-}: {
-  searchParams: { site?: string; saved?: string; error?: string };
-}) {
+export default async function SeoActionsPage(
+  props: {
+    searchParams: Promise<{ site?: string; saved?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireCtx();
   const sites = await listSeoSites();
   const active = sites.filter((s) => s.status === "active");
