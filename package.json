@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "CATORCE Sales OS - AI営業OS / CRM / SFA / 売上予測SaaS",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -22,7 +22,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # バージョンはここに直接書かず .nvmrc を唯一の正とする。
+          # 開発環境と CI の食い違いを防ぐため、上げるときは .nvmrc だけ書き換える。
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
