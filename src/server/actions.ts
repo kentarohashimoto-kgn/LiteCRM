@@ -25,6 +25,17 @@ function str(v: FormDataEntryValue | null): string | null {
   const s = v == null ? "" : String(v).trim();
   return s === "" ? null : s;
 }
+/**
+ * フォームの return_to（保存後の戻り先）を検証して返す。
+ * スライドオーバー（?mid= 付きの案件URL）から保存したときに、フルページへ遷移して
+ * 背後のカレンダー・一覧が失われるのを防ぐために使う。
+ * オープンリダイレクト防止のため、アプリ内の相対パスのみ許可する。
+ */
+function returnPath(v: FormDataEntryValue | null): string | null {
+  const s = str(v);
+  if (!s) return null;
+  return s.startsWith("/app/") && !s.startsWith("//") ? s : null;
+}
 
 /**
  * 案件の初回商談日/アポ日時を、配下商談のうち「最も早い商談」に同期する。
@@ -585,7 +596,7 @@ export async function updateMeetingAction(formData: FormData) {
   }
   revalidatePath(`/app/opportunities/${oppId}/meetings/${id}`);
   if (oppId) revalidatePath(`/app/opportunities/${oppId}`);
-  redirect(`/app/opportunities/${oppId}/meetings/${id}?saved=1`);
+  redirect(returnPath(formData.get("return_to")) ?? `/app/opportunities/${oppId}/meetings/${id}?saved=1`);
 }
 
 /**
@@ -625,7 +636,9 @@ export async function deleteMeetingAction(formData: FormData) {
   const sb = getSupabaseServer();
   const id = String(formData.get("id"));
   const oppId = str(formData.get("opportunity_id"));
-  const backTo = oppId ? `/app/opportunities/${oppId}` : "/app/opportunities";
+  // スライドオーバーからの削除はペインのURLへ戻す（背後のカレンダー・一覧を保つ）。
+  const back = returnPath(formData.get("return_to"));
+  const backTo = back ?? (oppId ? `/app/opportunities/${oppId}` : "/app/opportunities");
   if (!id) redirect(backTo);
 
   // 対象商談(テナント内・閲覧可能な範囲)を取得し、権限判定に使う。
@@ -638,7 +651,7 @@ export async function deleteMeetingAction(formData: FormData) {
 
   const canDelete = canReassignOwner(ctx.role) || (m.owner_user_id as string | null) === ctx.userId;
   const targetOpp = (m.opportunity_id as string | null) ?? oppId;
-  const target = targetOpp ? `/app/opportunities/${targetOpp}` : "/app/opportunities";
+  const target = back ?? (targetOpp ? `/app/opportunities/${targetOpp}` : "/app/opportunities");
   if (!canDelete) redirect(`${target}?error=${encodeURIComponent("この商談を削除する権限がありません")}`);
 
   // 削除はサービスロールで実行(meetingsのDELETEポリシーはowner/admin限定のため)。

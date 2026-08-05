@@ -8,13 +8,23 @@ import { X, Maximize2 } from "lucide-react";
 const LIST_PATH = "/app/opportunities";
 
 /**
- * 案件一覧の上に重ねるスライドオーバー。右側に画面幅の約2/3で開き、
- * 一覧に留まったまま案件詳細を確認・更新できる。
- *  - バックドロップは張らない → 左に残る一覧（顧客/案件列）をそのままクリックして
- *    次の案件へ次々切り替えられる。一覧のスクロール・検索状態も保持される。
- *  - ✕ / ESC で閉じる（一覧へ戻る）。「全画面」で従来のフルページを別タブで開ける。
+ * 案件一覧・カレンダーの上に重ねるスライドオーバー。右側に画面幅の約2/3で開き、
+ * 背後の画面に留まったまま案件詳細・商談メモを確認・更新できる。
+ *  - バックドロップは張らない → 左に残る一覧やカレンダーをそのままクリックして
+ *    次の案件・次の商談へ次々切り替えられる。表示週・絞り込み・スクロールも保持される。
+ *  - ✕ / ESC で閉じる（背後の画面へ戻る）。「全画面」で従来のフルページを別タブで開ける。
  */
-export function DetailPane({ oppId, children }: { oppId: string; children: React.ReactNode }) {
+export function DetailPane({
+  oppId,
+  title = "案件詳細",
+  fullHref,
+  children,
+}: {
+  oppId: string;
+  title?: string;
+  fullHref?: string;
+  children: React.ReactNode;
+}) {
   const router = useRouter();
   const [shown, setShown] = useState(false);
 
@@ -44,14 +54,14 @@ export function DetailPane({ oppId, children }: { oppId: string; children: React
         }`}
         role="dialog"
         aria-modal="false"
-        aria-label="案件詳細"
+        aria-label={title}
       >
         {/* ヘッダー（固定） */}
         <div className="flex items-center justify-between gap-3 border-b border-black/10 bg-white px-4 py-2.5 md:px-6">
-          <span className="text-sm font-semibold text-ink/70">案件詳細<span className="ml-2 text-[11px] font-normal text-ink/35">左の一覧から次の案件をクリックできます</span></span>
+          <span className="text-sm font-semibold text-ink/70">{title}<span className="ml-2 text-[11px] font-normal text-ink/35">左の一覧・カレンダーから次の商談をクリックできます</span></span>
           <div className="flex items-center gap-1.5">
             <Link
-              href={`${LIST_PATH}/${oppId}`}
+              href={fullHref ?? `${LIST_PATH}/${oppId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 px-2.5 py-1.5 text-xs text-ink/60 hover:bg-black/[0.03]"

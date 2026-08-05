@@ -9,11 +9,14 @@ import { setOwnerColorAction, setOwnerCalendarHiddenAction } from "@/server/acti
 import { YomiBadge } from "@/components/ui/badges";
 import { Avatar } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
+import { readViewState, writeViewState } from "@/lib/view-state";
 import { CalendarOwnerManager, type OwnerMeta } from "./calendar-owner-manager";
 
 interface Option { id: string; name: string; color?: string; hidden?: boolean; }
 type View = "list" | "month" | "week" | "day";
 type KindFilter = "all" | "appt";
+const CAL_STATE_KEY = "catorce.opp.calendar";
+interface CalendarViewState { view: View; cursor: string; ownerFilter: string; kindFilter: KindFilter }
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
 const DAY_START = 8; // 8:00
 const DAY_END = 21; // 21:00
@@ -41,8 +44,16 @@ function ownerColor(it: CalItem): string { return it.owner_color ?? "#008C8C"; }
 function ownerUser(it: CalItem) {
   return it.owner_user_id ? { id: it.owner_user_id, name: it.owner_name ?? "—", avatarColor: it.owner_color ?? "#008C8C" } : undefined;
 }
+/**
+ * カレンダーから開く詳細のURL。
+ * 商談（meeting_id あり）は `?mid=` を付けた案件URLにする。案件セグメントの
+ * インターセプトルート（@detail/(.)[id]）がこれを横取りしてスライドオーバーで開くため、
+ * カレンダーはマウントされたまま（表示週・絞り込みを保ったまま）商談メモを編集できる。
+ */
 function oppHref(it: CalItem): string {
-  return it.meeting_id ? `/app/opportunities/${it.opportunity_id}/meetings/${it.meeting_id}` : `/app/opportunities/${it.opportunity_id}`;
+  return it.meeting_id
+    ? `/app/opportunities/${it.opportunity_id}?mid=${it.meeting_id}`
+    : `/app/opportunities/${it.opportunity_id}`;
 }
 
 interface Appt { item: CalItem; at: Date; timed: boolean; key: string; }
@@ -81,6 +92,24 @@ export function AppointmentCalendarPro({ items, owners, bookingLinks = [], canMa
   const [cursor, setCursor] = useState<Date>(startOfDay(new Date()));
   const [ownerFilter, setOwnerFilter] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+
+  // 表示形式・表示中の週・絞り込みをタブセッションに保持する（リロードや
+  // フルページからの復帰で「今週・すべて」に戻ってしまうのを防ぐ）。
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    const s = readViewState<CalendarViewState>(CAL_STATE_KEY);
+    if (s) {
+      if (s.view === "list" || s.view === "month" || s.view === "week" || s.view === "day") setView(s.view);
+      if (s.cursor && /^\d{4}-\d{2}-\d{2}$/.test(s.cursor)) setCursor(dateFromYmd(s.cursor));
+      if (typeof s.ownerFilter === "string") setOwnerFilter(s.ownerFilter);
+      if (s.kindFilter === "all" || s.kindFilter === "appt") setKindFilter(s.kindFilter);
+    }
+    setRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!restored) return; // 復元前に既定値で上書きしない
+    writeViewState<CalendarViewState>(CAL_STATE_KEY, { view, cursor: ymd(cursor), ownerFilter, kindFilter });
+  }, [restored, view, cursor, ownerFilter, kindFilter]);
 
   // 担当ごとの色・非表示のローカル状態（初期値はサーバーから）。編集は即時反映＋永続化。
   const [colorByOwner, setColorByOwner] = useState<Record<string, string>>(() =>
