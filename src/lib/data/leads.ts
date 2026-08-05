@@ -7,6 +7,7 @@
  *  - getLead:        単票取得
  */
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { companySearchFilter } from "@/lib/company-name";
 import type { OppView } from "@/lib/data/select";
 import type { Lead, LeadImportBatch, AcquirerAlias, LeadExportPreset } from "@/lib/types";
 import { sizeBucket, type WsListRow, type WsQueueRow, type LeadsFilters, type CompaniesData, type FunnelData, type AnalysisData } from "@/lib/data/leads-workspace";
@@ -51,8 +52,9 @@ export async function queryLeadList(f: LeadsFilters): Promise<{ rows: WsListRow[
   const page = Math.max(1, f.page ?? 1);
   const start = (page - 1) * LIST_PAGE;
   let qy = sb.from("lead_list_eng").select(LIST_COLS, { count: "exact" });
-  const q = (f.q ?? "").replace(/[,%_()]/g, " ").trim();
-  if (q) qy = qy.or(`company_name.ilike.%${q}%,contact_name.ilike.%${q}%`);
+  // 生の部分一致 + 会社名の正規化キー列 search_key(0203)で表記ゆれを吸収
+  const qFilter = companySearchFilter(["company_name", "contact_name"], f.q ?? "");
+  if (qFilter) qy = qy.or(qFilter);
   if (f.sourceIdIn) qy = qy.in("lead_source_id", f.sourceIdIn);
   if (f.media) qy = qy.eq("inquiry_media", f.media);
   // 流入(raw_event)は複数選択可(CSV)

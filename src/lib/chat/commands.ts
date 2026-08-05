@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { companySearchFilter } from "@/lib/company-name";
 import { cardMessage, textMessage } from "./cards";
 import type { ChatMessagePayload } from "./client";
 import type { ResolvedSender } from "./identities";
@@ -56,13 +57,11 @@ async function searchDeals(tenantId: string, kw: string): Promise<ChatMessagePay
   const admin = getSupabaseAdmin();
   if (!kw) return textMessage("検索キーワードを指定してください。例）商談 近代美術");
 
-  // 取引先名の一致から account_id を集める
-  const { data: accs } = await admin
-    .from("accounts")
-    .select("id")
-    .eq("tenant_id", tenantId)
-    .ilike("name", `%${kw}%`)
-    .limit(50);
+  // 取引先名の一致から account_id を集める(法人格の有無・全半角の違いは search_key で吸収)
+  const accFilter = companySearchFilter(["name"], kw);
+  let accQuery = admin.from("accounts").select("id").eq("tenant_id", tenantId).limit(50);
+  if (accFilter) accQuery = accQuery.or(accFilter);
+  const { data: accs } = await accQuery;
   const accIds = (accs ?? []).map((a) => a.id as string);
 
   let q = admin
@@ -72,9 +71,9 @@ async function searchDeals(tenantId: string, kw: string): Promise<ChatMessagePay
     .eq("status", "open")
     .is("deleted_at", null)
     .limit(5);
-  q = accIds.length
-    ? q.or(`name.ilike.%${kw}%,account_id.in.(${accIds.join(",")})`)
-    : q.ilike("name", `%${kw}%`);
+  const oppFilter = companySearchFilter(["name"], kw);
+  const orParts = [oppFilter, accIds.length ? `account_id.in.(${accIds.join(",")})` : null].filter(Boolean);
+  if (orParts.length) q = q.or(orParts.join(","));
 
   const { data: opps } = await q;
   if (!opps || opps.length === 0) {

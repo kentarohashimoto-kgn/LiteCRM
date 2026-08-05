@@ -5,6 +5,7 @@ import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { yomiToFields } from "@/lib/deal-import";
 import { normCompany } from "@/lib/lead-import";
+import { companySearchFilter } from "@/lib/company-name";
 
 // ===================== リード検索(アポ登録用) =====================
 export interface ApptLeadHit {
@@ -24,9 +25,9 @@ export async function searchApptLeadsAction(q: string): Promise<ApptLeadHit[]> {
     .select("id,company_name,contact_name,raw_event,rank,converted_opportunity_id")
     .order("priority_score", { ascending: false })
     .limit(20);
-  // PostgRESTのor句に入れるためメタ文字を除去(フィルタ注入対策。leads.ts と同じサニタイズ)
-  const safeQ = q.replace(/[,%_()]/g, " ").trim();
-  if (safeQ) query = query.or(`company_name.ilike.%${safeQ}%,contact_name.ilike.%${safeQ}%`);
+  // 生の部分一致 + 会社名の正規化キー列 search_key(0203)。メタ文字の除去も内部で行う
+  const filter = companySearchFilter(["company_name", "contact_name"], q);
+  if (filter) query = query.or(filter);
   const { data } = await query;
   return (data ?? [])
     .filter((l) => !l.converted_opportunity_id) // 既に案件化済みは除外
