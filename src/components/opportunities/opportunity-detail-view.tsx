@@ -268,7 +268,7 @@ export async function OpportunityDetailView({ id, inPane = false, saved, error }
           </Section>
 
           <Section title={`商談（${meetings.length}回）`} className={entityBorder("meeting")} action={<EditTarget level="meeting" />}>
-            <MeetingList meetings={meetings} manage canManage={canReassign} currentUserId={ws.ctx.userId} />
+            <MeetingList meetings={meetings} manage canManage={canReassign} currentUserId={ws.ctx.userId} inPane={inPane} />
             <details className="mt-3">
               <summary className="cursor-pointer text-sm font-medium text-teal-deep">＋ 商談を登録</summary>
               <form action={createMeetingAction} className="mt-3 space-y-3 border-t border-black/[0.05] pt-3">

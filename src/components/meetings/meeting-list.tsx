@@ -16,6 +16,7 @@ function hm(iso?: string): string | null {
  * 案件配下の商談リスト。商談日・時間・概要を把握しやすく表示。
  * manage=true で各行に「日付変更(リスケ)/削除」の操作を表示する
  * (案件詳細でのみ有効。削除は canManage もしくは当該商談の担当者本人に限定)。
+ * inPane=true ではスライドオーバー内に留まるURL(`?mid=`)へリンクする。
  */
 export function MeetingList({
   meetings,
@@ -24,6 +25,7 @@ export function MeetingList({
   manage = false,
   canManage = false,
   currentUserId,
+  inPane = false,
 }: {
   meetings: MeetingView[];
   showOpportunity?: boolean;
@@ -31,6 +33,7 @@ export function MeetingList({
   manage?: boolean;
   canManage?: boolean;
   currentUserId?: string;
+  inPane?: boolean;
 }) {
   if (meetings.length === 0) return <EmptyState message={emptyMessage} />;
   return (
@@ -39,7 +42,10 @@ export function MeetingList({
         const time = hm(m.meeting_at);
         return (
           <li key={m.id} className="py-2.5">
-            <Link href={`/app/opportunities/${m.opportunity_id}/meetings/${m.id}`} className="group flex gap-3">
+            <Link
+              href={inPane ? `/app/opportunities/${m.opportunity_id}?mid=${m.id}` : `/app/opportunities/${m.opportunity_id}/meetings/${m.id}`}
+              className="group flex gap-3"
+            >
               <div className="shrink-0 w-16 text-center">
                 <div className="text-sm font-semibold tabular-nums text-ink leading-tight">{formatDate(m.meeting_date ?? m.meeting_at)}</div>
                 <div className={`text-xs tabular-nums ${time ? "text-teal-deep font-medium" : "text-ink/30"}`}>{time ?? "時刻未設定"}</div>

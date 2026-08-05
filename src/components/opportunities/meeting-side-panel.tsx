@@ -58,11 +58,13 @@ export function MeetingSidePanel({ meetingId, onClose }: { meetingId: string | n
               <button onClick={onClose} className="text-ink/40 hover:text-ink shrink-0" aria-label="閉じる"><X size={18} /></button>
             </div>
 
+            {/* 商談メモ・案件は幅2/3のスライドオーバーで開く（一覧・カレンダーを保ったまま編集できる）。
+                このプレビューは閉じて、広いペインへ引き継ぐ。 */}
             <div className="flex flex-wrap gap-2">
-              <Link href={`/app/opportunities/${m.opportunityId}/meetings/${m.id}`} className="btn-accent inline-flex items-center gap-1 text-xs">
+              <Link href={`/app/opportunities/${m.opportunityId}?mid=${m.id}`} onClick={onClose} className="btn-accent inline-flex items-center gap-1 text-xs">
                 <ExternalLink size={13} /> 商談メモを開く
               </Link>
-              <Link href={`/app/opportunities/${m.opportunityId}`} className="btn-ghost inline-flex items-center gap-1 text-xs">案件を開く</Link>
+              <Link href={`/app/opportunities/${m.opportunityId}`} onClick={onClose} className="btn-ghost inline-flex items-center gap-1 text-xs">案件を開く</Link>
               {m.accountId && <Link href={`/app/accounts/${m.accountId}`} className="btn-ghost inline-flex items-center gap-1 text-xs">顧客を開く</Link>}
             </div>
 

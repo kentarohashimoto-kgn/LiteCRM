@@ -58,8 +58,8 @@ export function MeetingRowActions({
   );
 }
 
-/** 商談詳細ページ用の削除ボタン。 */
-export function DeleteMeetingButton({ meetingId, opportunityId }: { meetingId: string; opportunityId: string }) {
+/** 商談詳細ページ用の削除ボタン。returnTo 指定時は削除後にその画面（スライドオーバー）へ戻す。 */
+export function DeleteMeetingButton({ meetingId, opportunityId, returnTo }: { meetingId: string; opportunityId: string; returnTo?: string }) {
   return (
     <form
       action={deleteMeetingAction}
@@ -69,6 +69,7 @@ export function DeleteMeetingButton({ meetingId, opportunityId }: { meetingId: s
     >
       <input type="hidden" name="id" value={meetingId} />
       <input type="hidden" name="opportunity_id" value={opportunityId} />
+      {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
       <button
         type="submit"
         className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-100"

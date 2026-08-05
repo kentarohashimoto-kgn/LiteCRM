@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { List, LayoutGrid, CalendarDays, FileText, Handshake, Loader2 } from "lucide-react";
 import type { OppView } from "@/lib/data/select";
 import { leanToOppView } from "@/lib/data/opps-page";
@@ -13,9 +13,12 @@ import { ProposalBoard } from "./proposal-board";
 import { MeetingsList } from "./meetings-list";
 import { AppointmentCalendarPro, type BookingLink } from "./appointment-calendar-pro";
 import { cn } from "@/lib/utils";
+import { readViewState, writeViewState } from "@/lib/view-state";
 
 interface Option { id: string; name: string; color?: string; hidden?: boolean; }
 type View = "list" | "meetings" | "board" | "calendar" | "proposal";
+const TAB_STATE_KEY = "catorce.opp.tab";
+const VIEWS: View[] = ["list", "meetings", "board", "calendar", "proposal"];
 
 export function OppWorkspace({
   initialRows,
@@ -74,11 +77,21 @@ export function OppWorkspace({
   }
   function switchTo(v: View) {
     setView(v);
+    writeViewState(TAB_STATE_KEY, { view: v });
     if (v === "board") ensureAll();
     if (v === "calendar") ensureAppts();
     if (v === "proposal") ensureProposals();
     if (v === "meetings") ensureMeetings();
   }
+
+  // 直前に開いていたタブを復元する。カレンダーを常用する運用で、リロードや
+  // フルページからの復帰のたびに案件一覧へ戻ってしまうのを防ぐ。
+  useEffect(() => {
+    const saved = readViewState<{ view: View }>(TAB_STATE_KEY)?.view;
+    if (saved && saved !== "list" && VIEWS.includes(saved)) switchTo(saved);
+    // マウント時のみ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="space-y-4">
