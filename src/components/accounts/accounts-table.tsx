@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { ACCOUNT_RANKS, ACCOUNT_FOCUS, RANK_ORDER, FOCUS_ORDER } from "@/lib/constants";
 import { setAccountRankAction, setAccountFocusAction, setAccountOwnerAction } from "@/server/actions";
 import { formatYen, cn } from "@/lib/utils";
+import { matchesCompanyQuery } from "@/lib/company-name";
 
 export interface AccountRow {
   id: string;
@@ -48,7 +49,8 @@ export function AccountsTable({ rows, owners = [] }: { rows: AccountRow[]; owner
 
   const filtered = useMemo(() => {
     const list = rows.filter((r) => {
-      if (q && !r.name.toLowerCase().includes(q.toLowerCase())) return false;
+      // 法人格の有無・全半角・かなの違いを吸収して照合(DB側の company_search_key と同一規則)
+      if (!matchesCompanyQuery(r.name, q)) return false;
       if (rank && r.rank !== rank) return false;
       if (focus && r.focus !== focus) return false;
       if (area && r.area !== area) return false;

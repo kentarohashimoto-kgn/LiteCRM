@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { companySearchFilter } from "@/lib/company-name";
 
 export interface PickOption {
   id: string;
@@ -10,22 +11,29 @@ export interface PickOption {
   sub?: string;
 }
 
-/** 顧客のインクリメンタル検索（上位20件）。全件プルダウンを避ける。 */
+/**
+ * 顧客のインクリメンタル検索（上位20件）。全件プルダウンを避ける。
+ * 「株式会社カトルセ」で検索してデータが「カトルセ」でもヒットするよう、
+ * 生の部分一致と正規化キー列 search_key（0203）の両方で照合する。
+ */
 export async function searchAccountsAction(q: string): Promise<PickOption[]> {
   await requireCtx();
   const sb = getSupabaseServer();
-  const query = sb.from("accounts").select("id,name,industry").order("name").limit(20);
-  const { data } = q.trim() ? await query.ilike("name", `%${q.trim()}%`) : await query;
+  let query = sb.from("accounts").select("id,name,industry").order("name").limit(20);
+  const filter = companySearchFilter(["name"], q);
+  if (filter) query = query.or(filter);
+  const { data } = await query;
   return (data ?? []).map((a) => ({ id: a.id as string, label: (a.name as string) ?? "—", sub: (a.industry as string) ?? undefined }));
 }
 
-/** 案件のインクリメンタル検索（顧客で絞り込み可、上位20件）。 */
+/** 案件のインクリメンタル検索（顧客で絞り込み可、上位20件）。表記ゆれは顧客検索と同じ規則で吸収。 */
 export async function searchOpportunitiesAction(q: string, accountId?: string): Promise<PickOption[]> {
   await requireCtx();
   const sb = getSupabaseServer();
   let query = sb.from("opportunities").select("id,name,yomi").order("last_activity_at", { ascending: false }).limit(20);
   if (accountId) query = query.eq("account_id", accountId);
-  if (q.trim()) query = query.ilike("name", `%${q.trim()}%`);
+  const filter = companySearchFilter(["name"], q);
+  if (filter) query = query.or(filter);
   const { data } = await query;
   return (data ?? []).map((o) => ({ id: o.id as string, label: (o.name as string) ?? "—", sub: (o.yomi as string) ?? undefined }));
 }

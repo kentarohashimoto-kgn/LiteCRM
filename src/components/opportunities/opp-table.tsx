@@ -9,6 +9,7 @@ import { YomiBadge, RiskBadge, StageBadge } from "@/components/ui/badges";
 import { Avatar } from "@/components/ui/primitives";
 import { formatYen, formatDate, daysSince, cn } from "@/lib/utils";
 import { isStale, noNextAction } from "@/lib/risk";
+import { matchesCompanyQuery } from "@/lib/company-name";
 import { InlineYomi, InlineAmount, InlineNextDate, NextDateReadonly, type OnEdited } from "./opp-inline";
 
 type SortKey = "amount" | "expected_close_date" | "last_activity_at" | "probability";
@@ -55,7 +56,8 @@ export function OppTable({
 
   const filtered = useMemo(() => {
     return opps.filter((o) => {
-      if (q && !(`${o.name} ${o.account?.name ?? ""}`.toLowerCase().includes(q.toLowerCase()))) return false;
+      // 案件名＋顧客名に対し、法人格や全半角の違いを吸収して照合(従来の部分一致も維持)
+      if (!matchesCompanyQuery(`${o.name} ${o.account?.name ?? ""}`, q)) return false;
       if (stage && o.stage !== stage) return false;
       if (yomiSel.length && !yomiSel.includes(o.yomi ?? "")) return false;
       if (owner && o.owner_user_id !== owner) return false;
