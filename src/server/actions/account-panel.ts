@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireCtx } from "@/lib/session";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { casUpdate } from "@/server/actions/_helpers";
-import type { MatrixAccount } from "@/lib/account-matrix";
+import { getAccountMatrix } from "@/lib/data/account-matrix";
+import type { AccountMatrix, MatrixAccount, MatrixFilter } from "@/lib/account-matrix";
 
 /**
  * 顧客分析マトリクスの右ペイン用データ取得と、その場での更新。
@@ -228,14 +229,25 @@ export async function setAccountRankAction(input: {
 }
 
 /**
+ * 絞り込み条件を変えてマトリクスを取り直す。
+ * 条件はセルの中身まで変えるので、画面側での絞り込みではなく RPC から引き直す。
+ */
+export async function fetchAccountMatrixAction(filter: MatrixFilter): Promise<AccountMatrix> {
+  await requireCtx();
+  return getAccountMatrix(filter);
+}
+
+/**
  * セル明細(「他N社」)の続きを取得する。
  * マトリクス本体は1セル数件しか返さないため、大きいセルはここから追加読込する。
+ * filter はマトリクス本体と同じものを渡す(渡さないと「他N社」の件数と中身がずれる)。
  */
 export async function listCellAccountsAction(input: {
   segmentKey: string;
   rank: string;
   offset: number;
   limit?: number;
+  filter?: MatrixFilter;
 }): Promise<{ ok: boolean; error?: string; rows: MatrixAccount[]; total: number }> {
   await requireCtx();
   const sb = getSupabaseServer();
@@ -244,6 +256,7 @@ export async function listCellAccountsAction(input: {
     p_rank: input.rank,
     p_offset: Math.max(0, input.offset),
     p_limit: Math.min(Math.max(1, input.limit ?? 50), 200),
+    p_filter: input.filter ?? {},
   });
   if (error) return { ok: false, error: error.message, rows: [], total: 0 };
   const res = (data ?? { rows: [], total: 0 }) as { rows: MatrixAccount[]; total: number };
