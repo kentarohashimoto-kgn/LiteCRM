@@ -35,6 +35,7 @@ import {
   HelpCircle,
   Search,
   FlaskConical,
+  LayoutGrid,
 } from "lucide-react";
 import { canManageProjects } from "@/lib/constants";
 import type { Role } from "@/lib/types";
@@ -81,6 +82,7 @@ const groups: NavGroup[] = [
     heading: "顧客",
     items: [
       { href: "/app/accounts", label: "顧客", icon: Building2 },
+      { href: "/app/accounts/matrix", label: "顧客分析マトリクス", icon: LayoutGrid },
       { href: "/app/contacts", label: "担当者", icon: Users },
       { href: "/app/business-cards", label: "名刺情報", icon: Contact },
       { href: "/app/email/templates", label: "メール", icon: Mail },
