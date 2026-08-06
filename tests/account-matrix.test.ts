@@ -5,8 +5,9 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_RANK_SETTINGS, EMPTY_MATRIX_FILTER, MATRIX_RANKS,
-  buildMatrixFilter, hasMatrixFilter, rankCriteria, UNSEGMENTED_KEY,
+  DEAL_STAGES, DEAL_STAGE_MAP, DEFAULT_RANK_SETTINGS, EMPTY_MATRIX_FILTER, MATRIX_RANKS,
+  buildMatrixFilter, dealStageOf, dealStageSummary, hasMatrixFilter, rankCriteria, UNSEGMENTED_KEY,
+  type MatrixAccount,
 } from "@/lib/account-matrix";
 
 describe("rankCriteria", () => {
@@ -138,5 +139,74 @@ describe("buildMatrixFilter", () => {
       wonFrom: "2026-07-01", wonTo: "2027-06-30", openState: "open",
     });
     expect(hasMatrixFilter({ ...EMPTY_MATRIX_FILTER, size: "1000" })).toBe(true);
+  });
+});
+
+/**
+ * 取引ステージ。判定の正は RPC(account_matrix_base)側なので、ここで検証するのは
+ * 「RPC の dealStage をそのまま尊重すること」と「欠けたときのフォールバック」。
+ */
+describe("dealStageOf", () => {
+  it("RPC が返した dealStage をそのまま使う", () => {
+    expect(dealStageOf({ dealStage: "won", wonCount: 0, metCount: 0 })).toBe("won");
+    expect(dealStageOf({ dealStage: "engaged", wonCount: 5, metCount: 5 })).toBe("engaged");
+    expect(dealStageOf({ dealStage: "lead", wonCount: 3, metCount: 3 })).toBe("lead");
+  });
+
+  it("dealStage が無いときは件数から組み立てる(成約 > 商談 > リード)", () => {
+    expect(dealStageOf({ wonCount: 1, metCount: 4 })).toBe("won");
+    expect(dealStageOf({ wonCount: 0, metCount: 2 })).toBe("engaged");
+    expect(dealStageOf({ wonCount: 0, metCount: 0 })).toBe("lead");
+    expect(dealStageOf({})).toBe("lead");
+  });
+
+  it("受注金額が0でも受注件数があれば成約済(amount=0 の受注を取りこぼさない)", () => {
+    expect(dealStageOf({ wonCount: 2, metCount: 0 })).toBe("won");
+  });
+
+  it("不正な値は無視してフォールバックする", () => {
+    expect(dealStageOf({ dealStage: "unknown" as never, wonCount: 0, metCount: 1 })).toBe("engaged");
+  });
+});
+
+describe("dealStageSummary", () => {
+  const base: MatrixAccount = {
+    id: "a", name: "テスト株式会社", industry: null, area: null, status: "prospect",
+    ownerName: null, won: 0, openAmount: 0, oppCount: 0, openCount: 0,
+    employees: null, lastWonDate: null,
+    dealStage: "lead", wonCount: 0, metCount: 0, leadCount: 0,
+    rankAuto: true, segmentManual: false,
+  };
+
+  it("ステージ名と件数の内訳を並べる", () => {
+    const s = dealStageSummary({ ...base, dealStage: "won", wonCount: 2, metCount: 5, oppCount: 6, leadCount: 1 });
+    expect(s).toBe("成約済 ／ 受注2件・商談5件・案件6件・リード1件");
+  });
+
+  it("件数が全て0ならステージ名だけ", () => {
+    expect(dealStageSummary(base)).toBe("リードのみ");
+  });
+
+  it("0件の項目は並べない", () => {
+    expect(dealStageSummary({ ...base, dealStage: "engaged", metCount: 3, oppCount: 3 }))
+      .toBe("商談済 ／ 商談3件・案件3件");
+  });
+});
+
+describe("取引ステージの定義", () => {
+  it("進んでいる順(成約済 → 商談済 → リードのみ)に並ぶ", () => {
+    expect(DEAL_STAGES.map((s) => s.key)).toEqual(["won", "engaged", "lead"]);
+  });
+
+  it("全ステージに表示用の色とラベルが揃っている", () => {
+    for (const s of DEAL_STAGES) {
+      expect(DEAL_STAGE_MAP[s.key]).toBe(s);
+      expect(s.label).toBeTruthy();
+      expect(s.criteria).toBeTruthy();
+      expect(s.text).toBeTruthy();
+      expect(s.icon).toBeTruthy();
+      expect(s.pill).toBeTruthy();
+      expect(s.bar).toBeTruthy();
+    }
   });
 });
