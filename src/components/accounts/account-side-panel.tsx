@@ -13,7 +13,8 @@ import {
   setAccountRankAction,
   type AccountPanelData,
 } from "@/server/actions/account-panel";
-import { MATRIX_RANKS, type MatrixSegment } from "@/lib/account-matrix";
+import { DealStageBadge } from "@/components/accounts/deal-stage-badge";
+import { MATRIX_RANKS, type DealStage, type MatrixSegment } from "@/lib/account-matrix";
 import { STAGE_MAP, ACTIVITY_TYPE_MAP, ACCOUNT_FOCUS_MAP } from "@/lib/constants";
 import { cn, formatYen, formatDate, formatDateFull } from "@/lib/utils";
 
@@ -31,6 +32,7 @@ const DECISION_ROLE_LABEL: Record<string, string> = {
 
 export function AccountSidePanel({
   accountId,
+  dealStage,
   segments,
   index,
   total,
@@ -38,6 +40,11 @@ export function AccountSidePanel({
   onNav,
 }: {
   accountId: string | null;
+  /**
+   * 取引ステージ。判定に必要な材料(初回商談日・商談の活動記録)はマトリクスの RPC 側にしか
+   * 無いので、呼び出し元から受け取って一覧と同じ表示を保つ。
+   */
+  dealStage?: DealStage | null;
   segments: MatrixSegment[];
   /** セル内での位置(0-based)。連続確認用 */
   index: number;
@@ -122,6 +129,7 @@ export function AccountSidePanel({
             {a ? (
               <>
                 <div className="flex flex-wrap items-center gap-1.5">
+                  {dealStage && <DealStageBadge stage={dealStage} />}
                   <span className="pill bg-mist-soft text-[10px] text-ink/60">{STATUS_LABEL[a.status] ?? a.status}</span>
                   {a.focus && ACCOUNT_FOCUS_MAP[a.focus] && (
                     <span className={cn("pill text-[10px] font-bold", ACCOUNT_FOCUS_MAP[a.focus].color)}>

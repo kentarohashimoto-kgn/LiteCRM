@@ -21,6 +21,12 @@ export const SEGMENT_COLOR_CHOICES = [
   "#F97316", "#0EA5E9", "#6366F1", "#EF4444", "#14B8A6", "#A855F7",
 ];
 
+/**
+ * 取引ステージ。顧客との関係がどこまで進んでいるかを3段階で表す。
+ * 判定の正は RPC 側(0206_account_matrix_deal_stage.sql の account_matrix_base)。
+ */
+export type DealStage = "won" | "engaged" | "lead";
+
 export interface MatrixAccount {
   id: string;
   name: string;
@@ -36,6 +42,14 @@ export interface MatrixAccount {
   employees: number | null;
   /** 最終受注日(受注案件の完了予定日の最大)。受注実績が無ければ null */
   lastWonDate: string | null;
+  /** 取引ステージ(成約済 / 商談済 / リードのみ) */
+  dealStage: DealStage;
+  /** 受注済み案件数。成約済の判定はここ(金額0の受注を取りこぼさないため) */
+  wonCount: number;
+  /** 商談を実施した痕跡がある案件数 + 商談の活動記録数 */
+  metCount: number;
+  /** 紐づくリード数。判定には使わず表示のみ */
+  leadCount: number;
   /** ランクが自動判定(手動未設定)かどうか */
   rankAuto: boolean;
   /** セグメントが手動割当かどうか(false = industry からの自動マッピング) */
@@ -58,6 +72,10 @@ export interface MatrixCell {
   count: number;
   won: number;
   openAmount: number;
+  /** 取引ステージ別の社数。accounts は上位数件しか来ないので、内訳はセル単位で持つ */
+  wonAccounts: number;
+  engagedAccounts: number;
+  leadAccounts: number;
   /** 上位 MAX_ACCOUNTS_PER_CELL 件のみ */
   accounts: MatrixAccount[];
 }
@@ -79,6 +97,8 @@ export interface MatrixMatch {
   segmentKey: string;
   rank: string;
   won: number;
+  /** 取引ステージ。ヒット一覧と右ペインで、セル内と同じ印を出すために持つ */
+  dealStage: DealStage;
 }
 
 export interface AccountMatrix {
@@ -109,6 +129,84 @@ export const MATRIX_RANKS: { key: string; label: string; color: string }[] = [
   { key: "C", label: "C", color: "bg-mist-soft text-ink/70 border border-black/5" },
   { key: "D", label: "D", color: "bg-mist-soft text-ink/40" },
 ];
+
+/**
+ * 取引ステージの表示定義。セル内の顧客名を「色 + 先頭アイコン」で区別するために使う。
+ * 並びは進んでいる順(成約済 → 商談済 → リードのみ)。
+ * 配色は提案書デザインガイド準拠: 成約済=ティール / 商談済=オレンジ / リードのみ=グレー。
+ */
+export const DEAL_STAGES: {
+  key: DealStage;
+  label: string;
+  /** 凡例に出す判定条件 */
+  criteria: string;
+  /** セル内の顧客名の文字色 */
+  text: string;
+  /** 先頭アイコンの色 */
+  icon: string;
+  /** 凡例バッジ・詳細パネルのピル */
+  pill: string;
+  /** セル内訳バーの色(Tailwind の背景色) */
+  bar: string;
+}[] = [
+  {
+    key: "won",
+    label: "成約済",
+    criteria: "受注した案件がある顧客",
+    text: "text-teal-deep font-semibold",
+    icon: "text-teal-primary",
+    pill: "bg-teal-primary text-white",
+    bar: "bg-teal-primary",
+  },
+  {
+    key: "engaged",
+    label: "商談済",
+    criteria: "商談を実施したことがあるが、まだ受注が無い顧客",
+    text: "text-amber-700",
+    icon: "text-accent-orange",
+    pill: "bg-accent-orange text-white",
+    bar: "bg-accent-orange",
+  },
+  {
+    key: "lead",
+    label: "リードのみ",
+    criteria: "まだ商談していない顧客（リード獲得・アポ設定まで）",
+    text: "text-ink/45",
+    icon: "text-ink/30",
+    pill: "bg-mist-soft text-ink/60 border border-black/5",
+    bar: "bg-ink/15",
+  },
+];
+
+export const DEAL_STAGE_MAP = Object.fromEntries(DEAL_STAGES.map((s) => [s.key, s])) as Record<
+  DealStage,
+  (typeof DEAL_STAGES)[number]
+>;
+
+/**
+ * 顧客の取引ステージを決める。
+ * 通常は RPC が返す dealStage をそのまま使い、欠けている場合だけ件数から組み立て直す
+ * (RPC を古いまま参照しても画面が壊れないようにするためのフォールバック)。
+ */
+export function dealStageOf(
+  a: Partial<Pick<MatrixAccount, "dealStage" | "wonCount" | "metCount">>
+): DealStage {
+  if (a.dealStage === "won" || a.dealStage === "engaged" || a.dealStage === "lead") return a.dealStage;
+  if ((a.wonCount ?? 0) > 0) return "won";
+  if ((a.metCount ?? 0) > 0) return "engaged";
+  return "lead";
+}
+
+/** ツールチップ用の一行説明(「成約済 ／ 受注2件・商談5件」)。 */
+export function dealStageSummary(a: MatrixAccount): string {
+  const stage = DEAL_STAGE_MAP[dealStageOf(a)];
+  const parts: string[] = [];
+  if (a.wonCount > 0) parts.push(`受注${a.wonCount}件`);
+  if (a.metCount > 0) parts.push(`商談${a.metCount}件`);
+  if (a.oppCount > 0) parts.push(`案件${a.oppCount}件`);
+  if (a.leadCount > 0) parts.push(`リード${a.leadCount}件`);
+  return parts.length > 0 ? `${stage.label} ／ ${parts.join("・")}` : stage.label;
+}
 
 /**
  * 閾値からランクの判定条件を日本語で組み立てる(凡例・ツールチップ用)。

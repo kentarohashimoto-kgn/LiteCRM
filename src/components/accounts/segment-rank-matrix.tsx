@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Crosshair, EyeOff, Loader2, Settings2, Sparkles } from "lucide-react";
 import { AccountSidePanel } from "@/components/accounts/account-side-panel";
+import { DealStageIcon, DealStageLegend } from "@/components/accounts/deal-stage-badge";
 import { MatrixFilterBar } from "@/components/accounts/matrix-filter-bar";
 import { SegmentEditor } from "@/components/accounts/segment-editor";
 import { fetchAccountMatrixAction, listCellAccountsAction } from "@/server/actions/account-panel";
 import {
-  DEFAULT_SEGMENT_COLOR, DEFAULT_VISIBLE_SEGMENTS, EMPTY_MATRIX_FILTER, MATRIX_RANKS, UNSEGMENTED_KEY,
-  buildMatrixFilter, hasMatrixFilter, rankCriteria,
-  type AccountMatrix, type MatrixAccount, type MatrixCell, type MatrixFilterState,
+  DEAL_STAGES, DEAL_STAGE_MAP, DEFAULT_SEGMENT_COLOR, DEFAULT_VISIBLE_SEGMENTS,
+  EMPTY_MATRIX_FILTER, MATRIX_RANKS, UNSEGMENTED_KEY,
+  buildMatrixFilter, dealStageOf, dealStageSummary, hasMatrixFilter, rankCriteria,
+  type AccountMatrix, type DealStage, type MatrixAccount, type MatrixCell, type MatrixFilterState,
 } from "@/lib/account-matrix";
 import { cn, formatYen } from "@/lib/utils";
 
@@ -34,9 +36,13 @@ interface Row {
   isHidden: boolean;
 }
 
-/** 右ペインで連続確認する顧客の並び(セル内の顧客、または検索ヒット) */
+/**
+ * 右ペインで連続確認する顧客の並び(セル内の顧客、または検索ヒット)。
+ * 取引ステージは右ペインのバッジに使う。判定材料は RPC 側にしか無いので、
+ * ここで一覧から持ち回して一覧と同じ表示にする。
+ */
 interface ActiveList {
-  items: { id: string; name: string }[];
+  items: { id: string; name: string; dealStage?: DealStage }[];
 }
 
 export function SegmentRankMatrix({
@@ -109,6 +115,34 @@ export function SegmentRankMatrix({
   const totalAll = useMemo(() => matrix.cells.reduce((s, c) => s + c.count, 0), [matrix.cells]);
   const totalShown = useMemo(() => data.cells.reduce((s, c) => s + c.count, 0), [data.cells]);
 
+  /**
+   * 取引ステージ別の社数。行ヘッダーと合計行に出す。
+   * 絞り込み後の data.cells から数えるので、条件を変えると内訳もそれに追従する。
+   */
+  const stagesBySegment = useMemo(() => {
+    const m: Record<string, StageCounts> = {};
+    for (const c of data.cells) {
+      const t = (m[c.segmentKey] ??= { won: 0, engaged: 0, lead: 0 });
+      t.won += c.wonAccounts ?? 0;
+      t.engaged += c.engagedAccounts ?? 0;
+      t.lead += c.leadAccounts ?? 0;
+    }
+    return m;
+  }, [data.cells]);
+
+  const stageTotals = useMemo(
+    () =>
+      data.cells.reduce<StageCounts>(
+        (t, c) => ({
+          won: t.won + (c.wonAccounts ?? 0),
+          engaged: t.engaged + (c.engagedAccounts ?? 0),
+          lead: t.lead + (c.leadAccounts ?? 0),
+        }),
+        { won: 0, engaged: 0, lead: 0 }
+      ),
+    [data.cells]
+  );
+
   const allRows: Row[] = useMemo(() => {
     const rows: Row[] = data.segments
       // 非表示セグメントも、絞り込み結果に顧客が残っているときは出す(どこに居るか分からなくなるため)
@@ -178,7 +212,7 @@ export function SegmentRankMatrix({
     if (r.ok) setExpanded((p) => ({ ...p, [cellKey]: r.rows }));
   }
 
-  function openList(items: { id: string; name: string }[], index: number) {
+  function openList(items: ActiveList["items"], index: number) {
     setActiveList({ items });
     setActiveIndex(index);
   }
@@ -190,7 +224,7 @@ export function SegmentRankMatrix({
     if (!m) return;
     const cellKey = `${m.segmentKey}|${m.rank}`;
     setFocusCell(cellKey);
-    openList(data.matches.map((x) => ({ id: x.id, name: x.name })), index);
+    openList(data.matches.map((x) => ({ id: x.id, name: x.name, dealStage: x.dealStage })), index);
     cellRefs.current[cellKey]?.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
@@ -245,14 +279,17 @@ export function SegmentRankMatrix({
 
       {/* 操作バー */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink/50">
-          <span className="font-semibold text-ink/60">ランク基準:</span>
-          {MATRIX_RANKS.map((r) => (
-            <span key={r.key} className={cn("pill text-[10px] font-bold", r.color)} title={criteria[r.key]}>
-              {r.label}
-            </span>
-          ))}
-          <span className="text-ink/40">（バッジにカーソルを合わせると判定条件が出ます）</span>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink/50">
+            <span className="font-semibold text-ink/60">ランク基準:</span>
+            {MATRIX_RANKS.map((r) => (
+              <span key={r.key} className={cn("pill text-[10px] font-bold", r.color)} title={criteria[r.key]}>
+                {r.label}
+              </span>
+            ))}
+            <span className="text-ink/40">（バッジにカーソルを合わせると判定条件が出ます）</span>
+          </div>
+          <DealStageLegend />
         </div>
         <button onClick={() => setEditing(true)} className="btn-ghost inline-flex items-center gap-1.5 text-xs">
           <Settings2 size={14} /> セグメント設定
@@ -290,6 +327,7 @@ export function SegmentRankMatrix({
                   <span className="block pl-[18px] text-[10px] text-ink/40 tabular-nums">
                     {countsBySegment[row.key] ?? 0}社
                   </span>
+                  <StageCountList totals={stagesBySegment[row.key]} className="pl-[18px]" />
                 </td>
 
                 {MATRIX_RANKS.map((r) => {
@@ -317,22 +355,33 @@ export function SegmentRankMatrix({
                             )}
                           </div>
 
+                          {/* 取引ステージの内訳。顧客名は上位数件しか出ないので、セル全体の構成をここで示す */}
+                          <StageBar cell={cell} count={count} />
+
                           <ul className="space-y-0.5">
-                            {accounts.map((acc, i) => (
-                              <li key={acc.id}>
-                                <button
-                                  onClick={() => openList(accounts.map((a) => ({ id: a.id, name: a.name })), i)}
-                                  title={accountTitle(acc)}
-                                  className={cn(
-                                    "block w-full truncate rounded px-1 py-px text-left text-xs text-ink/80 hover:bg-white/70 hover:text-teal-primary hover:underline",
-                                    matchIds.has(acc.id) && "bg-accent-orange/15 font-semibold text-ink"
-                                  )}
-                                >
-                                  {acc.name}
-                                  {acc.rankAuto && <Sparkles size={9} className="ml-0.5 -mt-0.5 inline text-ink/25" />}
-                                </button>
-                              </li>
-                            ))}
+                            {accounts.map((acc, i) => {
+                              const stage = dealStageOf(acc);
+                              return (
+                                <li key={acc.id}>
+                                  <button
+                                    onClick={() => openList(accounts.map((a) => ({ id: a.id, name: a.name, dealStage: dealStageOf(a) })), i)}
+                                    title={accountTitle(acc)}
+                                    className={cn(
+                                      "flex w-full items-center gap-1 rounded px-1 py-px text-left text-xs hover:bg-white/70 hover:text-teal-primary hover:underline",
+                                      DEAL_STAGE_MAP[stage].text,
+                                      // 検索ヒットは取引ステージの色より優先(「どこに居るか」を探している最中なので)
+                                      matchIds.has(acc.id) && "bg-accent-orange/15 font-semibold text-ink"
+                                    )}
+                                  >
+                                    <DealStageIcon stage={stage} />
+                                    <span className="min-w-0 flex-1 truncate">
+                                      {acc.name}
+                                      {acc.rankAuto && <Sparkles size={9} className="ml-0.5 -mt-0.5 inline text-ink/25" />}
+                                    </span>
+                                  </button>
+                                </li>
+                              );
+                            })}
                           </ul>
 
                           {remaining > 0 && (
@@ -368,7 +417,10 @@ export function SegmentRankMatrix({
 
           <tfoot className="border-t border-black/[0.08] bg-mist-soft/40">
             <tr>
-              <td className="td font-semibold">合計</td>
+              <td className="td font-semibold">
+                合計
+                <StageCountList totals={stageTotals} />
+              </td>
               {rankTotals.map((r) => (
                 <td key={r.key} className="td text-sm font-semibold tabular-nums">
                   {r.count}社
@@ -405,7 +457,16 @@ export function SegmentRankMatrix({
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-ink/40">
-        セルの濃さは社数。顧客名をクリックすると右側に詳細が開きます（
+        セルの濃さは社数。顧客名の色と先頭アイコンは取引ステージ（
+        {DEAL_STAGES.map((s, i) => (
+          <span key={s.key}>
+            {i > 0 && " / "}
+            <DealStageIcon stage={s.key} size={10} className="-mt-0.5 inline" />
+            <span className={cn("ml-0.5", s.text)}>{s.label}</span>
+          </span>
+        ))}
+        ）。セル上部の細いバーはそのセル全体のステージ構成です。
+        顧客名をクリックすると右側に詳細が開きます（
         <Sparkles size={9} className="inline -mt-0.5" /> はランク自動判定＝手動未設定）。
         セグメントは顧客の「業種」から自動でマッピングし、右ペインで個別に固定できます。
       </p>
@@ -413,6 +474,7 @@ export function SegmentRankMatrix({
       {/* 右ペイン(特大) */}
       <AccountSidePanel
         accountId={activeAccount?.id ?? null}
+        dealStage={activeAccount?.dealStage ?? null}
         segments={data.segments}
         index={activeIndex}
         total={activeList?.items.length ?? 0}
@@ -438,13 +500,72 @@ export function SegmentRankMatrix({
   );
 }
 
-/** セル内の顧客名のツールチップ。規模・取引額・最終受注をまとめて出す。 */
+/** セル内の顧客名のツールチップ。取引ステージ・規模・取引額・最終受注をまとめて出す。 */
 function accountTitle(a: MatrixAccount): string {
   const parts = [a.name];
   if (a.industry) parts.push(`業種 ${a.industry}`);
   if (a.ownerName) parts.push(`担当 ${a.ownerName}`);
   if (a.employees) parts.push(`規模 ${a.employees.toLocaleString("ja-JP")}名〜`);
+  parts.push(dealStageSummary(a));
   parts.push(`累計受注 ${formatYen(a.won)}`);
   if (a.lastWonDate) parts.push(`最終受注 ${a.lastWonDate}`);
   return parts.join("｜");
+}
+
+/** 取引ステージ別の社数 */
+interface StageCounts {
+  won: number;
+  engaged: number;
+  lead: number;
+}
+
+/**
+ * 「成約3・商談12・リード2」のような内訳表示(行ヘッダーと合計行)。
+ * 0件のステージは並べない。全て0なら何も出さない。
+ */
+function StageCountList({ totals, className }: { totals?: StageCounts; className?: string }) {
+  if (!totals) return null;
+  const shown = DEAL_STAGES.map((s) => ({ ...s, n: totals[s.key] ?? 0 })).filter((s) => s.n > 0);
+  if (shown.length === 0) return null;
+
+  return (
+    <span className={cn("mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[10px] font-normal", className)}>
+      {shown.map((s) => (
+        <span key={s.key} className={cn("inline-flex items-center gap-0.5", s.text)} title={`${s.label} ${s.n}社`}>
+          <DealStageIcon stage={s.key} size={9} />
+          <span className="tabular-nums">{s.n}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * セルの取引ステージ構成を表す積み上げバー。
+ * セル内に顧客名は MAX_ACCOUNTS_PER_CELL 件しか出ないため、「他N社」に何が隠れているかを
+ * 展開せずに読み取れるようにする。内訳が1種類だけのセルでは情報量が無いので出さない。
+ */
+function StageBar({ cell, count }: { cell: MatrixCell | undefined; count: number }) {
+  if (!cell) return null;
+  const segments = DEAL_STAGES.map((s) => ({
+    ...s,
+    n:
+      s.key === "won" ? cell.wonAccounts ?? 0
+        : s.key === "engaged" ? cell.engagedAccounts ?? 0
+        : cell.leadAccounts ?? 0,
+  })).filter((s) => s.n > 0);
+
+  // 内訳が未提供(0件)、または全社が同じステージなら省略
+  if (segments.length < 2) return null;
+
+  return (
+    <div
+      className="flex h-1 w-full overflow-hidden rounded-full bg-black/[0.04]"
+      title={segments.map((s) => `${s.label} ${s.n}社`).join(" / ")}
+    >
+      {segments.map((s) => (
+        <span key={s.key} className={s.bar} style={{ width: `${(s.n / count) * 100}%` }} />
+      ))}
+    </div>
+  );
 }
