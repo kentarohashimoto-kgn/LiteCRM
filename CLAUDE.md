@@ -13,7 +13,8 @@ UI・コード内コメント・ドキュメント・コミットメッセージ
 ```bash
 npm ci                 # node_modules は未コミット。最初に必ず実行
 npm run dev            # 開発サーバ (http://localhost:3000)
-npm run build          # 本番ビルド
+npm run build          # 本番ビルド（Supabase の2変数が必要。無いとプリレンダリングで落ちる）
+npm run build:ci       # 上記にダミー変数を渡すだけ。CI が叩くのはこちら＝コミット前ゲートはこれ
 npm run typecheck      # tsc --noEmit
 npm run test           # vitest run（tests/**/*.test.ts、environment=node）
 npm run lint           # next lint（CI では実行されていない）
@@ -23,15 +24,58 @@ npx vitest run -t "commit は"            # テスト名で絞り込み
 ```
 
 **コミット前ゲート**（`docs/exec-plan/GUARDRAILS.md` §5 / `VERIFICATION.md` G-1・G-2）:
-`npm run build` が "Compiled successfully"、かつ `npm run typecheck` がエラー0。
+`npm run build:ci` が "Compiled successfully"、かつ `npm run typecheck` がエラー0。
 ビルドが通らない状態でコミットしない。
 
 環境の注意:
 
-- Supabase の3変数（`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`）が無いと `npm run dev` は起動しても認証もデータ取得も通らない。**型チェック・テスト・ビルドは変数なしで通る**ので、変数が無い環境で保証できるのはそこまで。
+- Supabase の3変数（`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`）が無いと `npm run dev` は起動しても認証もデータ取得も通らない。
+- **型チェックとテストは変数なしで通るが、`npm run build` は通らない。** `/app/leads` など `export const dynamic = "force-dynamic"` が付いていないページ（27ファイル）が静的プリレンダリングを試み、Supabase クライアントの生成で `Your project's URL and Key are required` を投げてビルドが落ちる。ダミー値でよいので `npm run build:ci` を使う（CI も同じコマンド）。
+  - 素の `npm run build` を変数なしで通したいなら、上記27ファイルに `force-dynamic` を付ければよい。未対応。
 - `.env.example` の47変数のうち必須は上記3つだけ。他は未設定なら該当機能が 503 / スキップで無効化される設計。
 - Node のバージョンは **`.nvmrc`（`22`）が唯一の正**。CI は `node-version-file: .nvmrc` で読むので、上げるときは `.nvmrc` だけ書き換える（`ci.yml` に数字を直接書かない）。`package.json` の `engines` は `>=22.12.0`。この下限を決めているのは vitest 配下の `rolldown`（`^20.19.0 || >=22.12.0` と穴あきの範囲を要求する）で、package.json だけ見ても分からない。
 - **Vercel のビルド Node バージョンだけはリポジトリで固定できない**（Project Settings 側にしか無い）。`.nvmrc` を上げるときは Vercel の Node.js Version も併せて合わせる。
+
+---
+
+## リモートセッション（Claude Code on the web）からの作業
+
+実測 2026-08-06。ここで詰まると調べ直しに時間を取られるので明記する。
+
+### 本番反映の手順
+
+1. マイグレーションは Supabase MCP の `apply_migration` で本番に適用し、同じ内容を `supabase/migrations/` にコミットする
+2. 作業ブランチに push → PR 作成 → CI(`verify`) green を確認 → **squash マージ**（main は線形履歴・`(#NNN)` サフィックス）
+3. main への push で Vercel が自動デプロイ
+
+### デプロイの確認は `/api/version`
+
+**Vercel のダッシュボード/API はこのセッションから見えない**（下記の通信制限）。代わりに公開エンドポイントで確認する:
+
+```bash
+curl -s "$APP_URL/api/version"
+# {"commit":"850b3556","branch":"main","env":"production","message":"...","now":"..."}
+```
+
+`commit` がマージ後の main の SHA（先頭8桁）と一致すれば反映完了。`APP_URL` はセッションに注入済み（`https://lite-crm-tau.vercel.app`）。
+
+### このセッションでできること / できないこと
+
+| | 可否 | 備考 |
+|---|---|---|
+| Supabase への DDL/クエリ | ✅ | Supabase MCP 経由。MCP はシェルのプロキシを通らない |
+| GitHub の読み取り・PR作成・マージ | ✅ | **GitHub MCP ツール経由のみ** |
+| `curl https://api.github.com/...` | ❌ | ゲートウェイが遮断（"GitHub access is not enabled for this session"）。MCP を使う |
+| `curl https://<本番>.vercel.app/...` | ✅ | アプリ本体は到達できる |
+| `vercel.com` / `api.vercel.com` | ❌ | 組織の送信ポリシーで 403。ビルドログは見えない |
+| `supabase.com` / `*.supabase.co` | ❌ | 同上。シェルから REST は叩けない（MCP を使う） |
+| CI の再実行（`rerun_workflow_run`） | ❌ | GitHub App の Actions が読み取り専用（403）。空コミットを積むか、GitHub 画面から再実行 |
+
+通信が 403 になったら `curl -sS "$HTTPS_PROXY/__agentproxy/status"` で拒否理由を確認できる。**回避を試みず、ブロックされたホスト名を報告すること。**
+
+### CI の注意
+
+`timeout-minutes` は**ランナー待ちの時間も含めて**数えられる。2026-08-06 に main の実行がランナー未割当のまま15分で落ちたため 30分に延長した。CI が `cancelled` で `runner_id: 0` なら、テスト失敗ではなく**ランナーが割り当たらなかった**だけ。同じ内容が PR 側で green なら中身は検証済み。
 
 ---
 

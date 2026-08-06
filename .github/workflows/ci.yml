@@ -15,7 +15,10 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # timeout-minutes はランナー待ちの時間も含めて数えられる。
+    # 15分だとランナーが逼迫した日にキュー待ちのままキャンセルされる
+    # （2026-08-06 に main の実行が runner 未割当のまま15分で落ちた）。
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -36,9 +39,7 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      # ダミー値は package.json の build:ci に持たせ、CI と手元で同じコマンドを叩けるようにする。
+      # （素の `npm run build` は Supabase の変数が無いとプリレンダリングで落ちる）
       - name: Production build
-        run: npm run build
-        env:
-          # ビルドは実接続を要しない（ページは force-dynamic）。CI用のダミー値を渡す。
-          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-anon-key-for-build
+        run: npm run build:ci
