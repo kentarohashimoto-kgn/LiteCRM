@@ -32,6 +32,10 @@ export interface MatrixAccount {
   openAmount: number;
   oppCount: number;
   openCount: number;
+  /** 従業員数(employee_size の自由入力から最小値を抽出したもの)。不明なら null */
+  employees: number | null;
+  /** 最終受注日(受注案件の完了予定日の最大)。受注実績が無ければ null */
+  lastWonDate: string | null;
   /** ランクが自動判定(手動未設定)かどうか */
   rankAuto: boolean;
   /** セグメントが手動割当かどうか(false = industry からの自動マッピング) */
@@ -68,11 +72,25 @@ export interface RankSettings {
   a_employees: number;
 }
 
+/** 会社名検索でヒットした顧客と、その顧客が居るセル(「どこにいるか」の案内用)。 */
+export interface MatrixMatch {
+  id: string;
+  name: string;
+  segmentKey: string;
+  rank: string;
+  won: number;
+}
+
 export interface AccountMatrix {
   settings: RankSettings;
   segments: MatrixSegment[];
   cells: MatrixCell[];
+  /** 会社名検索をしたときだけ入る。上限 MAX_MATCHES 件 */
+  matches: MatrixMatch[];
 }
+
+/** 検索ヒット一覧に出す上限。RPC 側(account_segment_matrix)の打ち切りと合わせること。 */
+export const MAX_MATCHES = 30;
 
 export const DEFAULT_RANK_SETTINGS: RankSettings = {
   s_revenue: 100000000,
@@ -114,4 +132,167 @@ export function rankCriteria(s: RankSettings): Record<string, string> {
 /** 億・万に換算した後の数値。端数は小数1桁まで、桁区切りは付ける(1000万円 → 1,000万円)。 */
 function trimNum(n: number): string {
   return (Math.round(n * 10) / 10).toLocaleString("ja-JP", { maximumFractionDigits: 1 });
+}
+
+/* =====================================================================
+ * 絞り込み
+ * =====================================================================
+ * 画面の選択(MatrixFilterState) → RPC に渡す条件(MatrixFilter) の変換をここに置く。
+ * 「直近3ヶ月」「今期」のような相対期間は、変換の時点で日付に落としてから渡す
+ * (DB 側で now() を使うと、テストで固定できず期首の扱いも二重管理になるため)。
+ */
+
+/** RPC(account_segment_matrix / account_segment_rank_accounts)の p_filter。 */
+export interface MatrixFilter {
+  /** 会社名。表記ゆれを吸収して部分一致(company_search_key) */
+  q?: string;
+  /** 担当営業のユーザーID。"__none" で未割当 */
+  owner?: string[];
+  area?: string[];
+  /** 顧客区分(prospect / customer / inactive) */
+  status?: string[];
+  empMin?: number;
+  empMax?: number;
+  /** 従業員数の記載が無い顧客だけ */
+  empUnknown?: boolean;
+  wonMin?: number;
+  wonMax?: number;
+  /** open = 進行中案件あり / none = 進行中案件なし */
+  openState?: "open" | "none";
+  wonFrom?: string;
+  wonTo?: string;
+  /** 最終受注日がこの日より前(=しばらく受注が無い) */
+  lastWonBefore?: string;
+  /** 受注実績が1件も無い顧客だけ */
+  wonNone?: boolean;
+}
+
+/** 絞り込みバーの選択状態。単一選択の3つ(規模・取引額・時期)はプリセットのキーを持つ。 */
+export interface MatrixFilterState {
+  q: string;
+  owner: string[];
+  area: string[];
+  status: string[];
+  size: string;
+  deal: string;
+  period: string;
+  openState: string;
+}
+
+export const EMPTY_MATRIX_FILTER: MatrixFilterState = {
+  q: "", owner: [], area: [], status: [], size: "", deal: "", period: "", openState: "",
+};
+
+/** 顧客区分。accounts.status の値と表示名(顧客一覧と同じ語彙)。 */
+export const MATRIX_STATUS_OPTIONS = [
+  { key: "prospect", label: "見込み" },
+  { key: "customer", label: "顧客" },
+  { key: "inactive", label: "休眠" },
+];
+
+/** 会社規模(従業員数)のプリセット。employee_size の自由入力から抽出した人数で判定する。 */
+export const MATRIX_SIZE_OPTIONS: { key: string; label: string; min?: number; max?: number; unknown?: boolean }[] = [
+  { key: "1000", label: "1,000名以上（大企業）", min: 1000 },
+  { key: "300", label: "300〜999名", min: 300, max: 999 },
+  { key: "100", label: "100〜299名（中堅）", min: 100, max: 299 },
+  { key: "30", label: "30〜99名", min: 30, max: 99 },
+  { key: "1", label: "29名以下", max: 29 },
+  { key: "unknown", label: "規模の記載なし", unknown: true },
+];
+
+/** カトルセとの累計取引額(受注済み案件の合計)のプリセット。 */
+export const MATRIX_DEAL_OPTIONS: { key: string; label: string; min?: number; max?: number; none?: boolean }[] = [
+  { key: "100m", label: "1億円以上", min: 100000000 },
+  { key: "30m", label: "3,000万円以上", min: 30000000 },
+  { key: "10m", label: "1,000万円以上", min: 10000000 },
+  { key: "1m", label: "100万円以上", min: 1000000 },
+  { key: "any", label: "取引実績あり", min: 1 },
+  { key: "none", label: "取引実績なし", none: true },
+];
+
+/**
+ * 取引時期(受注時期)のプリセット。
+ * months = 直近Nヶ月に受注あり / fiscal = 年度指定(0=今期, -1=前期) / stale = N ヶ月以上受注なし。
+ */
+export const MATRIX_PERIOD_OPTIONS: { key: string; label: string; months?: number; fiscal?: number; stale?: number }[] = [
+  { key: "3m", label: "直近3ヶ月に受注", months: 3 },
+  { key: "6m", label: "直近6ヶ月に受注", months: 6 },
+  { key: "12m", label: "直近1年に受注", months: 12 },
+  { key: "fy", label: "今期に受注", fiscal: 0 },
+  { key: "fy-1", label: "前期に受注", fiscal: -1 },
+  { key: "stale12", label: "1年以上受注なし", stale: 12 },
+  { key: "stale24", label: "2年以上受注なし", stale: 24 },
+];
+
+export const MATRIX_OPEN_OPTIONS = [
+  { key: "open", label: "進行中案件あり" },
+  { key: "none", label: "進行中案件なし" },
+];
+
+/** 会計年度の開始月(7月)。fiscal.ts の FISCAL_START_MONTH と同値。 */
+const FISCAL_START = 7;
+
+function ymd(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** 画面の選択を RPC の条件に変換する。空の項目は落として、条件なしと同じ形にする。 */
+export function buildMatrixFilter(s: MatrixFilterState, today: Date = new Date()): MatrixFilter {
+  const f: MatrixFilter = {};
+
+  const q = s.q.trim();
+  if (q) f.q = q;
+  if (s.owner.length) f.owner = s.owner;
+  if (s.area.length) f.area = s.area;
+  if (s.status.length) f.status = s.status;
+  if (s.openState === "open" || s.openState === "none") f.openState = s.openState;
+
+  const size = MATRIX_SIZE_OPTIONS.find((o) => o.key === s.size);
+  if (size) {
+    if (size.unknown) f.empUnknown = true;
+    if (size.min !== undefined) f.empMin = size.min;
+    if (size.max !== undefined) f.empMax = size.max;
+  }
+
+  const deal = MATRIX_DEAL_OPTIONS.find((o) => o.key === s.deal);
+  if (deal) {
+    if (deal.none) f.wonNone = true;
+    if (deal.min !== undefined) f.wonMin = deal.min;
+    if (deal.max !== undefined) f.wonMax = deal.max;
+  }
+
+  const period = MATRIX_PERIOD_OPTIONS.find((o) => o.key === s.period);
+  if (period) {
+    if (period.months !== undefined) {
+      const from = new Date(today.getFullYear(), today.getMonth() - period.months, today.getDate());
+      f.wonFrom = ymd(from);
+    }
+    if (period.fiscal !== undefined) {
+      // 今期 = 7月1日〜翌6月30日。fiscal は年度のオフセット(0=今期, -1=前期)
+      const startYear =
+        (today.getMonth() + 1 >= FISCAL_START ? today.getFullYear() : today.getFullYear() - 1) + period.fiscal;
+      f.wonFrom = ymd(new Date(startYear, FISCAL_START - 1, 1));
+      f.wonTo = ymd(new Date(startYear + 1, FISCAL_START - 1, 0));
+    }
+    if (period.stale !== undefined) {
+      f.lastWonBefore = ymd(new Date(today.getFullYear(), today.getMonth() - period.stale, today.getDate()));
+    }
+  }
+
+  return f;
+}
+
+/** 1つでも絞り込みが掛かっているか(リセットボタンの活性判定・件数表示の出し分けに使う)。 */
+export function hasMatrixFilter(s: MatrixFilterState): boolean {
+  return (
+    s.q.trim() !== "" ||
+    s.owner.length > 0 ||
+    s.area.length > 0 ||
+    s.status.length > 0 ||
+    s.size !== "" ||
+    s.deal !== "" ||
+    s.period !== "" ||
+    s.openState !== ""
+  );
 }
