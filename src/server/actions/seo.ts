@@ -8,11 +8,16 @@ import { listGscSites } from "@/lib/seo/gsc";
 import { checkGa4Access } from "@/lib/seo/ga4";
 import { getSeoCredentialInfo } from "@/lib/seo/google-sa";
 import { runSeoIngest } from "@/lib/seo/run-ingest";
-import { buildInstruction, EXECUTION_MODE } from "@/lib/seo/instructions";
+import { buildInstruction, EXECUTION_MODE, type TargetKeyword } from "@/lib/seo/instructions";
 import { normalizePath, todayJst } from "@/lib/seo/site-match";
 import { loadRates } from "@/lib/seo/run-proposals";
 import { expectedValueFromClicks, iceScore, ACTION_PRIORS } from "@/lib/seo/expected-value";
-import { benchmarkCtr } from "@/lib/seo/benchmark";
+import {
+  groupGapsByPlan,
+  keywordLine,
+  planProposalTitle,
+  type KeywordRankingRow,
+} from "@/lib/seo/plan-gap";
 
 const ADMIN_ROLES = ["owner", "admin"];
 const SETTINGS_PATH = "/app/seo/settings";
@@ -302,7 +307,7 @@ async function createActionFromProposal(
   const { data: p } = await sb
     .from("seo_proposals")
     .select(
-      "id, tenant_id, site_id, title, action_type, target_query, target_page, expected_json, evidence_json, plan_md, seo_sites(name, base_url)",
+      "id, tenant_id, site_id, title, action_type, target_query, target_page, article_plan_id, expected_json, evidence_json, plan_md, seo_sites(name, base_url)",
     )
     .eq("id", proposalId)
     .maybeSingle();
@@ -314,6 +319,13 @@ async function createActionFromProposal(
 
   const site = (p as { seo_sites?: { name?: string; base_url?: string } }).seo_sites;
   const targetPage = (p.target_page as string) ?? "";
+  const planId = (p.article_plan_id as string) ?? null;
+
+  // 記事プラン由来なら「この記事で狙う語」を全部集める。
+  // 執筆者はこれを見て1本の記事に見出しを割り当てる（1語1記事にしない）。
+  const plan = planId ? await loadArticlePlan(sb, planId) : null;
+  const planKeywords = plan?.keywords ?? [];
+  const planTitle = plan?.title ?? "";
 
   let duplicate = false;
   if (targetPage) {
@@ -326,6 +338,18 @@ async function createActionFromProposal(
       .limit(1);
     duplicate = !!openOnPage?.length;
   }
+  // 新規記事は target_page が空なので、ページでは重複を見つけられない。
+  // 同じ記事プランに未完了の施策があるかで判定する。
+  if (!duplicate && planId) {
+    const { data: openOnPlan } = await sb
+      .from("seo_actions")
+      .select("id, seo_proposals!inner(article_plan_id)")
+      .eq("site_id", p.site_id as string)
+      .eq("seo_proposals.article_plan_id", planId)
+      .not("status", "in", "(done,canceled)")
+      .limit(1);
+    duplicate = !!openOnPlan?.length;
+  }
 
   const actionType = p.action_type as string;
   const instruction = buildInstruction({
@@ -336,10 +360,12 @@ async function createActionFromProposal(
     targetPage,
     evidence: (p.evidence_json as Record<string, unknown>) ?? {},
     expected: (p.expected_json as Record<string, number>) ?? {},
+    planTitle: planTitle || null,
+    targetKeywords: planKeywords,
   });
   // AIが仮説・打ち手を書いていれば指示書に追記する（未生成でも成立する）
-  const plan = (p.plan_md as string) ?? "";
-  const deliverable = plan ? `${instruction}\n\n## AIが提案した打ち手\n${plan}` : instruction;
+  const aiPlanMd = (p.plan_md as string) ?? "";
+  const deliverable = aiPlanMd ? `${instruction}\n\n## AIが提案した打ち手\n${aiPlanMd}` : instruction;
 
   const mode = EXECUTION_MODE[actionType] ?? "external";
   const { data: action } = await sb
@@ -366,25 +392,78 @@ async function createActionFromProposal(
 
   // 記事系はCRMの記事パイプラインに起票して、執筆フローに乗せる
   if (mode === "content" && action) {
+    const kwNote = planKeywords.length
+      ? `この記事で狙う語（${planKeywords.length}語）: ${planKeywords
+          .map((k) => `${k.query}（月${k.volume}）`)
+          .join(" / ")}`
+      : `対象: ${targetPage || "新規"}`;
     const { data: idea } = await sb
       .from("content_ideas")
       .insert({
         tenant_id: p.tenant_id as string,
         theme: "SEO施策",
-        title: (p.target_query as string) || (p.title as string),
+        // 記事プラン由来ならプランの記事タイトル案をそのまま渡す
+        title: planTitle || (p.target_query as string) || (p.title as string),
         angle: p.title as string,
         target_keyword: (p.target_query as string) ?? null,
         source: "web_trend",
         status: "selected",
-        note: `SEO施策から起票（${actionType}）。対象: ${targetPage || "新規"}`,
+        note: `SEO施策から起票（${actionType}）。${kwNote}`,
         created_by: userId,
       })
       .select("id")
       .maybeSingle();
-    if (idea) await sb.from("seo_actions").update({ content_idea_id: idea.id }).eq("id", action.id);
+    if (idea) {
+      await sb.from("seo_actions").update({ content_idea_id: idea.id }).eq("id", action.id);
+      // 記事プラン側にも紐付ける。記事プラン画面から二重に起票されるのを防ぐ。
+      if (planId) {
+        await sb
+          .from("seo_article_plans")
+          .update({ content_idea_id: idea.id, status: "writing" })
+          .eq("id", planId)
+          .is("content_idea_id", null);
+        revalidatePath("/app/seo/plans");
+      }
+    }
   }
 
   return duplicate ? "duplicate_page" : "ok";
+}
+
+/**
+ * 記事プランと、その記事で狙う語を指示書に渡せる形で読む。
+ * 1記事=メインKW1つ+サブKW数語。ここを渡さないと執筆者は1語しか見えず、
+ * 結局1語1記事の薄い記事になる。
+ */
+async function loadArticlePlan(
+  sb: ReturnType<typeof getSupabaseServer>,
+  planId: string,
+): Promise<{ title: string; mainKeyword: string; angle: string | null; keywords: TargetKeyword[] } | null> {
+  const { data: plan } = await sb
+    .from("seo_article_plans")
+    .select("title, main_keyword, angle")
+    .eq("id", planId)
+    .maybeSingle();
+  if (!plan) return null;
+  const { data: kws } = await sb
+    .from("seo_keywords")
+    .select("query, search_volume, target_position_6m, target_position_12m, intent_layer")
+    .eq("article_plan_id", planId)
+    .eq("status", "active")
+    .order("search_volume", { ascending: false, nullsFirst: false });
+  const main = (plan.main_keyword as string) ?? "";
+  return {
+    title: (plan.title as string) ?? "",
+    mainKeyword: main,
+    angle: (plan.angle as string) ?? null,
+    keywords: (kws ?? []).map((k) => ({
+      query: k.query as string,
+      volume: Number(k.search_volume ?? 0),
+      targetPosition: (k.target_position_6m as number) ?? (k.target_position_12m as number) ?? null,
+      intentLayer: k.intent_layer == null ? null : Number(k.intent_layer),
+      isMain: k.query === main,
+    })),
+  };
 }
 
 /** 施策の状態を進める。「反映しました」の記録が効果検証の起点になる。 */
@@ -423,7 +502,10 @@ export async function updateActionStatusAction(formData: FormData): Promise<void
  * 夜間バッチは1日10件の上限とクールダウンで提案を絞るため、
  * 「台帳に未対応の語が並んでいるのに提案が来ない」待ち時間が生まれる。
  * 人が順位表を見て「これを先にやる」と決めた瞬間に起票できる導線が要る。
- * 期待値・スコアの算術はバッチと同一（loadRates / expectedValueFromClicks / iceScore）。
+ * 期待値・スコアの算術はバッチと同一（loadRates / groupGapsByPlan / iceScore）。
+ *
+ * クリックされたのは1語でも、起票するのは**その語が属する記事プラン1本ぶん**。
+ * 1語1提案にすると、承認するたびに別々の記事が作られて薄い記事が量産される。
  */
 export async function createProposalFromKeywordAction(formData: FormData): Promise<void> {
   const ctx = await requireCtx();
@@ -438,42 +520,43 @@ export async function createProposalFromKeywordAction(formData: FormData): Promi
   const sb = getSupabaseServer();
   // 順位表RPCの行をそのまま根拠にする（ギャップ状態・実測クリック・目標順位）
   const { data: rows } = await sb.rpc("seo_keyword_rankings", { p_site: site, p_weeks: 2 });
-  const kw = ((rows ?? []) as Record<string, unknown>[]).find((r) => String(r.keyword_id) === keywordId);
+  const all = (rows ?? []) as KeywordRankingRow[];
+  const kw = all.find((r) => String(r.keyword_id) === keywordId);
   if (!kw) back("error=not_found");
 
-  const query = String(kw.query ?? "");
-  const { data: existing } = await sb
+  // クリックされた語を含む記事プランの候補を作る（バッチと同じ束ね方）
+  const planId = (kw.article_plan_id as string) ?? null;
+  const scope = planId ? all.filter((r) => r.article_plan_id === planId) : [kw];
+  const candidate = groupGapsByPlan(scope)[0];
+  if (!candidate) back("saved=proposal_nogap");
+
+  const query = candidate.mainKeyword;
+  const actionType = candidate.actionType;
+  const page = candidate.targetPage;
+
+  // 同じ対象（またはこの記事プラン）の承認待ちが既にあれば増やさない
+  let dup = sb
     .from("seo_proposals")
     .select("id")
     .eq("site_id", site)
-    .eq("target_query", query)
-    .eq("status", "pending_review")
-    .limit(1);
+    .eq("status", "pending_review");
+  dup = planId ? dup.eq("article_plan_id", planId) : dup.eq("target_query", query);
+  const { data: existing } = await dup.limit(1);
   if (existing?.length) back("saved=proposal_exists");
 
-  const gap = String(kw.gap_status ?? "no_page");
-  const actionType =
-    gap === "no_page" || gap === "out" ? "new_article" : gap === "far" || gap === "striking" ? "rewrite" : "title_meta";
-  const page = (kw.ranking_page as string) ?? (kw.planned_url as string) ?? "";
-
-  const volume = Number(kw.search_volume ?? 0);
-  const targetPos = Number(kw.target_position_12m ?? kw.target_position_6m ?? 10);
-  const currentClicks = Number(kw.clicks ?? 0);
-  const targetCtr = benchmarkCtr(Math.min(targetPos, 10)) ?? 0.03;
-  const extraClicks = Math.max(0, Math.round(volume * targetCtr - currentClicks));
-
   const { rates, weights } = await loadRates(sb, site);
-  const expected = expectedValueFromClicks(extraClicks, rates);
-  const layer = kw.intent_layer == null ? null : Number(kw.intent_layer);
-  const ice = iceScore(expected.revenue, actionType, { layer1: layer === 1 }, weights);
+  const expected = expectedValueFromClicks(candidate.totalExtraClicks, rates);
+  const layer = candidate.layer1 ? 1 : kw.intent_layer == null ? null : Number(kw.intent_layer);
+  const ice = iceScore(expected.revenue, actionType, { layer1: candidate.layer1 }, weights);
 
+  const main = candidate.keywords.find((k) => k.isMain) ?? candidate.keywords[0];
   const statusLabel =
-    gap === "no_page"
+    main.gapStatus === "no_page"
       ? "対策ページが無い"
-      : gap === "out"
+      : main.gapStatus === "out"
         ? "ページはあるが圏外"
-        : kw.current_position != null
-          ? `${kw.current_position}位`
+        : main.position != null
+          ? `${main.position}位`
           : "順位計測中";
 
   const { data: siteRow } = await sb.from("seo_sites").select("tenant_id").eq("id", site).maybeSingle();
@@ -483,7 +566,8 @@ export async function createProposalFromKeywordAction(formData: FormData): Promi
     {
       tenant_id: siteRow.tenant_id as string,
       site_id: site,
-      title: `狙う語「${query}」を取る（${ACTION_PRIORS[actionType]?.label ?? actionType}）`,
+      article_plan_id: planId,
+      title: planProposalTitle(candidate, ACTION_PRIORS[actionType]?.label ?? actionType),
       action_type: actionType,
       lever: actionType === "title_meta" ? "ctr" : "position",
       intent_layer: layer,
@@ -491,14 +575,20 @@ export async function createProposalFromKeywordAction(formData: FormData): Promi
       target_page: page,
       evidence_json: {
         kind: "keyword_gap",
-        detected: `KW順位表から手動起票。現状: ${statusLabel} / 想定検索数 月${volume} / 目標 ${targetPos}位`,
-        searchVolume: volume,
-        targetPosition: targetPos,
-        currentPosition: kw.current_position ?? "圏外",
-        impressions: Number(kw.impressions ?? 0),
-        clicks: currentClicks,
-        extraClicks,
-        gapStatus: gap,
+        detected: `KW順位表から手動起票。${
+          candidate.planId ? `記事プラン「${candidate.planTitle}」で${candidate.keywords.length}語を狙う。` : ""
+        }現状: ${statusLabel} / 想定検索数 月${candidate.totalVolume} / 目標 ${main.targetPosition}位`,
+        queries: candidate.keywords.map(keywordLine).join(" ／ "),
+        planTitle: candidate.planTitle,
+        keywordCount: candidate.keywords.length,
+        searchVolume: candidate.totalVolume,
+        targetPosition: main.targetPosition,
+        currentPosition: main.position ?? "圏外",
+        impressions: candidate.totalImpressions,
+        clicks: candidate.keywords.reduce((n, k) => n + k.clicks, 0),
+        extraClicks: candidate.totalExtraClicks,
+        gapStatus: main.gapStatus,
+        difficulty: candidate.difficulty,
       },
       expected_json: expected,
       ice_impact: ice.impact,

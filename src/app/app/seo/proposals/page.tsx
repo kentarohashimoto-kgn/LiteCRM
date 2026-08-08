@@ -23,6 +23,7 @@ interface ProposalRow {
   intent_layer: number | null;
   target_query: string;
   target_page: string;
+  article_plan_id: string | null;
   evidence_json: Record<string, unknown>;
   expected_json: Record<string, number>;
   ice_score: number;
@@ -68,16 +69,25 @@ export default async function SeoProposalsPage(
 
   const status = searchParams.status ?? "pending_review";
   const sb = getSupabaseServer();
-  const { data } = await sb
-    .from("seo_proposals")
-    .select(
-      "id, title, action_type, lever, intent_layer, target_query, target_page, evidence_json, expected_json, ice_score, strategy_weight, hypothesis, plan_md, status, proposed_date",
-    )
-    .eq("site_id", current.id)
-    .eq("status", status)
-    .order("ice_score", { ascending: false })
-    .limit(50);
+  const [{ data }, { count }] = await Promise.all([
+    sb
+      .from("seo_proposals")
+      .select(
+        "id, title, action_type, lever, intent_layer, target_query, target_page, article_plan_id, evidence_json, expected_json, ice_score, strategy_weight, hypothesis, plan_md, status, proposed_date",
+      )
+      .eq("site_id", current.id)
+      .eq("status", status)
+      .order("ice_score", { ascending: false })
+      .limit(50),
+    // 表示は50件までなので、件数は別に数える（50で頭打ちの数を見せない）
+    sb
+      .from("seo_proposals")
+      .select("id", { count: "exact", head: true })
+      .eq("site_id", current.id)
+      .eq("status", status),
+  ]);
   const proposals = (data ?? []) as ProposalRow[];
+  const totalCount = count ?? proposals.length;
 
   const totalRevenue = proposals.reduce((n, p) => n + Number(p.expected_json?.revenue ?? 0), 0);
 
@@ -85,9 +95,12 @@ export default async function SeoProposalsPage(
     <div className="space-y-5">
       <PageHeader
         title="改善提案"
-        subtitle={`${current.name} — 期待売上の大きい順。上から3件承認すれば、その日の打ち手が決まります。`}
+        subtitle={`${current.name} — 1提案＝記事1本（メインKW1つ+サブKW数語）。期待売上の大きい順。上から3件承認すれば、その日の打ち手が決まります。`}
         action={
           <div className="flex items-center gap-2">
+            <Link href="/app/seo/plans" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
+              記事プラン
+            </Link>
             <Link href="/app/seo/actions" className="btn-secondary inline-flex items-center gap-1.5 text-sm">
               施策の実行
             </Link>
@@ -133,7 +146,9 @@ export default async function SeoProposalsPage(
         ))}
         {status === "pending_review" && proposals.length > 0 && (
           <span className="ml-2 text-ink/50">
-            承認待ち {proposals.length}件・全部実施すると月{yen(totalRevenue)}の見込み
+            承認待ち {totalCount}件
+            {totalCount > proposals.length ? `（期待売上の大きい${proposals.length}件を表示）` : ""}・
+            表示中の{proposals.length}件を全部実施すると月{yen(totalRevenue)}の見込み
           </span>
         )}
       </div>
@@ -151,17 +166,22 @@ export default async function SeoProposalsPage(
           {proposals.map((p) => {
             const e = p.expected_json ?? {};
             const prior = ACTION_PRIORS[p.action_type];
-            // 束ねた対象クエリ（ページ単位の提案のみ持つ）
+            // 束ねた対象クエリ（記事プラン単位・ページ単位の提案が持つ）
             const groupedQueries =
               typeof p.evidence_json?.queries === "string" ? p.evidence_json.queries : null;
+            const keywordCount = Number(p.evidence_json?.keywordCount ?? 0);
+            const difficulty =
+              p.evidence_json?.difficulty == null ? null : Number(p.evidence_json.difficulty);
             return (
               <Section key={p.id} title={p.title} icon={<Lightbulb size={15} />}>
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-1.5 text-xs">
                     <Tag>{prior?.label ?? p.action_type}</Tag>
+                    {keywordCount > 1 && <Tag tone="accent">記事1本で{keywordCount}語</Tag>}
                     {p.lever && <Tag>{LEVER_LABEL[p.lever] ?? p.lever}に効く</Tag>}
                     {p.intent_layer === 1 && <Tag tone="accent">第1層（今すぐ客）</Tag>}
                     {p.strategy_weight > 1 && <Tag tone="accent">戦略係数 ×{p.strategy_weight}</Tag>}
+                    {difficulty != null && <Tag>難易度 {difficulty}/5</Tag>}
                     <Tag>手間 {prior ? `${prior.effort}` : "—"}</Tag>
                   </div>
 
@@ -178,7 +198,11 @@ export default async function SeoProposalsPage(
                       分かると、承認の判断が早くなる。 */}
                   {groupedQueries && (
                     <div className="rounded-lg border border-black/[0.06] bg-black/[0.01] p-3 text-xs">
-                      <div className="text-ink/50">この1件で改善される検索キーワード</div>
+                      <div className="text-ink/50">
+                        {p.article_plan_id
+                          ? `この記事1本で狙う検索キーワード（${keywordCount || "—"}語）`
+                          : "この1件で改善される検索キーワード"}
+                      </div>
                       <ul className="mt-1 space-y-0.5">
                         {groupedQueries
                           .split(" ／ ")

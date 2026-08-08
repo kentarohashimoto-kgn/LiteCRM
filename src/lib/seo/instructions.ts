@@ -22,6 +22,15 @@ export const EXECUTION_MODE: Record<string, ExecutionMode> = {
   new_article: "content",
 };
 
+/** 1記事で狙う語。メインKW1つ＋サブKW数語で1本の記事にする。 */
+export interface TargetKeyword {
+  query: string;
+  volume: number;
+  targetPosition: number | null;
+  intentLayer?: number | null;
+  isMain: boolean;
+}
+
 export interface ActionContext {
   actionType: string;
   siteName: string;
@@ -30,6 +39,10 @@ export interface ActionContext {
   targetPage: string;
   evidence: Record<string, unknown>;
   expected: Record<string, number>;
+  /** 記事プランの記事タイトル案（プラン由来の施策のみ） */
+  planTitle?: string | null;
+  /** この記事で狙う語の一覧。空なら従来どおり targetQuery 1語で指示する。 */
+  targetKeywords?: TargetKeyword[];
 }
 
 const yen = (n: number) => `¥${Math.round(n).toLocaleString("ja-JP")}`;
@@ -58,8 +71,11 @@ function expectedBlock(expected: Record<string, number>): string {
 }
 
 /** 根拠数値のブロック。「なぜ今これをやるのか」の裏付け。 */
-function evidenceBlock(evidence: Record<string, unknown>): string {
-  const skip = new Set(["kind", "detected"]);
+function evidenceBlock(evidence: Record<string, unknown>, hasKeywordBlock = false): string {
+  // 狙う語の表を別途出すときは、根拠側の羅列と二重になるので落とす
+  const skip = new Set(
+    hasKeywordBlock ? ["kind", "detected", "queries", "planTitle", "keywordCount"] : ["kind", "detected"],
+  );
   const rows = Object.entries(evidence)
     .filter(([k, v]) => !skip.has(k) && v != null && v !== "")
     .map(([k, v]) => `- ${LABELS[k] ?? k}: ${String(v)}`);
@@ -81,6 +97,14 @@ const LABELS: Record<string, string> = {
   clicksAfter: "現在のクリック",
   pages: "競合しているページ数",
   paths: "対象ページ",
+  queries: "対象キーワード",
+  planTitle: "記事プラン",
+  keywordCount: "この記事で狙う語の数",
+  searchVolume: "想定検索数(月)",
+  targetPosition: "目標順位",
+  currentPosition: "現在の順位",
+  gapStatus: "ギャップ状態",
+  difficulty: "難易度(1易〜5難)",
 };
 
 /**
@@ -90,12 +114,55 @@ const LABELS: Record<string, string> = {
  */
 export function buildInstruction(ctx: ActionContext): string {
   const url = absoluteUrl(ctx.baseUrl, ctx.targetPage);
-  const head = `# 作業依頼: ${TITLES[ctx.actionType] ?? ctx.actionType}\n\n**対象サイト**: ${ctx.siteName}\n**対象ページ**: ${url}${
-    ctx.targetQuery ? `\n**対象キーワード**: ${ctx.targetQuery}` : ""
+  const head = `# 作業依頼: ${TITLES[ctx.actionType] ?? ctx.actionType}\n\n**対象サイト**: ${ctx.siteName}\n**対象ページ**: ${
+    ctx.targetPage ? url : "新規作成（未公開）"
+  }${ctx.planTitle ? `\n**記事タイトル案**: ${ctx.planTitle}` : ""}${
+    ctx.targetQuery ? `\n**メインキーワード**: ${ctx.targetQuery}` : ""
   }`;
   const body = BODY[ctx.actionType]?.(ctx, url) ?? GENERIC(ctx, url);
-  return [head, evidenceBlock(ctx.evidence), body, expectedBlock(ctx.expected), FOOTER].join("\n\n");
+  const keywords = keywordBlock(ctx);
+  const blocks = [head, evidenceBlock(ctx.evidence, !!keywords), keywords, body, expectedBlock(ctx.expected), FOOTER];
+  return blocks.filter(Boolean).join("\n\n");
 }
+
+/**
+ * 「この記事で狙う語」の一覧。指示書の中核。
+ *
+ * 1語1記事にすると薄い記事が量産されてサイト全体の評価が落ちる。
+ * 逆に語を渡さないと執筆者はメインKWだけ見て書くので、結局1語ぶんの
+ * 記事になる。狙う語を全部・目標順位つきで渡し、見出しへの割り当てまで
+ * 指示するのが最短で、ここが設計の要になる。
+ */
+function keywordBlock(ctx: ActionContext): string {
+  const kws = ctx.targetKeywords ?? [];
+  if (kws.length < 2) return "";
+  const main = kws.find((k) => k.isMain) ?? kws[0];
+  const subs = kws.filter((k) => k !== main);
+  const row = (k: TargetKeyword) =>
+    `| ${k.query} | ${k.volume ? `${k.volume.toLocaleString("ja-JP")}` : "—"} | ${
+      k.targetPosition ? `${k.targetPosition}位` : "—"
+    } | ${LAYER_LABEL[k.intentLayer ?? 0] ?? "—"} |`;
+  const total = kws.reduce((n, k) => n + k.volume, 0);
+
+  return `## この記事で狙う語（${kws.length}語 / 合計 月${total.toLocaleString("ja-JP")}検索）
+
+| キーワード | 想定検索数/月 | 目標順位 | 検索意図 |
+|---|---:|---:|---|
+${[main, ...subs].map(row).join("\n")}
+
+### 語の割り当て方（守ってください）
+- **記事は1本だけ**作ります。上の語ごとに記事を分けないでください（内容が重複して自社ページ同士が競合し、どちらも順位が上がりません）
+- メインKW「${main.query}」は **タイトル・H1・冒頭200文字** に入れる
+- サブKWは **H2/H3見出しに1語ずつ割り当てる**（1見出し＝1サブKW。無理に全部を本文へ詰め込まない）
+- 語順を入れ替えただけの語（表記ゆれ）は同じ見出しでまとめてよい
+- どうしても1本に収まらない語があれば、記事を分けずに **CRMの「記事プラン」で別プランに切り出して** ください`;
+}
+
+const LAYER_LABEL: Record<number, string> = {
+  1: "第1層（今すぐ客）",
+  2: "第2層（そのうち客）",
+  3: "第3層（情報収集）",
+};
 
 const TITLES: Record<string, string> = {
   title_meta: "タイトル・メタディスクリプションの改善",
@@ -123,7 +190,11 @@ const BODY: Record<string, (ctx: ActionContext, url: string) => string> = {
 
 ### 守ること
 - 対象キーワード「${ctx.targetQuery}」を**タイトルの前半**に入れる
-- 全角30文字前後（検索結果で省略されない長さ）
+- 全角30文字前後（検索結果で省略されない長さ）${
+    (ctx.targetKeywords?.length ?? 0) > 1
+      ? `\n- 上の「狙う語」のうち検索数の大きい2〜3語を**メタディスクリプションに入れる**（タイトルに詰め込むと不自然になり、かえってクリックされません）`
+      : ""
+  }
 - 誇大表現・実績のない数字は書かない`,
 
   internal_link: (ctx, url) => `## 作業内容
@@ -171,7 +242,11 @@ ${String(ctx.evidence.detected ?? "")}
 
   rewrite: (ctx, url) => `## 作業内容（記事パイプラインで実施）
 
-${url} を対象キーワード「${ctx.targetQuery}」向けにリライトします。
+${url} を上記の狙う語で取れる記事にリライトします。${
+    (ctx.targetKeywords?.length ?? 0) > 1
+      ? "\n\n**新しい記事を作らないでください。** このページを書き換えます。別ページを作ると同じ語で自社ページ同士が競合します。"
+      : ""
+  }
 
 1. CRMの「記事ネタ・ブログ」に本施策から起票済みです
 2. 構成案 → 本文 → 監修 の順で進めてください
@@ -179,18 +254,23 @@ ${url} を対象キーワード「${ctx.targetQuery}」向けにリライトし�
 4. 公開後、CRMで「反映しました」を押してください
 
 ### リライトの優先順位
-1. 見出し構成を検索意図に合わせる
-2. 冒頭200文字で結論を書く
-3. 古い情報・陳腐化した記述を差し替える`,
+1. 上の「狙う語」に対応する見出しが無いものを **追加する**（不足している検索意図が最大の失点）
+2. 見出し構成を検索意図の順（知りたい順）に並べ替える
+3. 冒頭200文字で結論を書く
+4. 古い情報・陳腐化した記述を差し替える`,
 
   new_article: (ctx) => `## 作業内容（記事パイプラインで実施）
 
-対象キーワード「${ctx.targetQuery || "未設定"}」向けの新規記事を作成します。
+${ctx.planTitle ? `記事「${ctx.planTitle}」` : `対象キーワード「${ctx.targetQuery || "未設定"}」向けの記事`}を新規作成します。${
+    (ctx.targetKeywords?.length ?? 0) > 1
+      ? `\n\n上の${ctx.targetKeywords?.length}語を **この1本で** 取りにいきます。語ごとに記事を分けないでください。`
+      : ""
+  }
 
 1. CRMの「記事ネタ・ブログ」に本施策から起票済みです
 2. 発注検討層に届く記事にしてください（料金の目安・比較軸・導入事例のいずれかを含める）
 3. 一次情報を必ず入れてください。汎用的な解説記事では順位が付きません
-4. 公開後、CRMで「反映しました」を押してください`,
+4. 公開後、CRMで「反映しました」を押してください。あわせて記事プランに公開URLを保存してください`,
 };
 
 const GENERIC = (ctx: ActionContext, url: string) => `## 作業内容
