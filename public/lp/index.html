@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="CRM・SFA・タスク・案件粗利・名刺・議事録AI・メール追客・バックオフィスを1つのデータベースで連結した、中堅企業のための統合営業OS。">
+<title>CATORCE Sales OS — 営業が勝手に強くなる仕組み</title>
+<style>
+  :root {
+    --paper: #F7FAF9;
+    --surface: #FFFFFF;
+    --mist: #E9F2F0;
+    --line: #D5E4E1;
+    --ink: #122F2D;
+    --sub: #4C6663;
+    --teal: #008C8C;
+    --teal-deep: #01605F;
+    --teal-soft: #DFF0EE;
+    --orange: #F59A2A;
+    --orange-ink: #AD620C;
+    --bad: #C24B3A;
+    --shadow: 0 10px 30px rgba(1, 96, 95, .10);
+  }
+  :root:not([data-theme="light"]) { }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0B1817;
+      --surface: #102221;
+      --mist: #152E2C;
+      --line: #274744;
+      --ink: #E7F2EF;
+      --sub: #9DB9B4;
+      --teal: #2FB8B2;
+      --teal-deep: #8ADAD4;
+      --teal-soft: #123433;
+      --orange: #F6A94C;
+      --orange-ink: #F6A94C;
+      --bad: #E07B6B;
+      --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0B1817;
+    --surface: #102221;
+    --mist: #152E2C;
+    --line: #274744;
+    --ink: #E7F2EF;
+    --sub: #9DB9B4;
+    --teal: #2FB8B2;
+    --teal-deep: #8ADAD4;
+    --teal-soft: #123433;
+    --orange: #F6A94C;
+    --orange-ink: #F6A94C;
+    --bad: #E07B6B;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", "Meiryo", sans-serif;
+    line-height: 1.75;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: var(--teal-deep); }
+  ::selection { background: var(--teal); color: #fff; }
+  :focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; border-radius: 4px; }
+
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-size: 12px; font-weight: 700; letter-spacing: .22em;
+    color: var(--teal-deep); text-transform: uppercase;
+  }
+  .eyebrow::before { content: ""; width: 26px; height: 2px; background: var(--teal); }
+  h2 {
+    font-size: clamp(26px, 4.4vw, 40px); font-weight: 900; line-height: 1.35;
+    letter-spacing: .01em; margin: 14px 0 10px; text-wrap: balance;
+  }
+  .lede { color: var(--sub); max-width: 40em; margin: 0 0 8px; }
+  section { padding: 88px 0; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ───── header ───── */
+  .top {
+    position: sticky; top: 0; z-index: 50;
+    background: color-mix(in srgb, var(--paper) 86%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid transparent;
+    transition: border-color .3s, box-shadow .3s;
+  }
+  .top.scrolled { border-bottom-color: var(--line); box-shadow: 0 4px 20px rgba(1,96,95,.06); }
+  .top .wrap { display: flex; align-items: center; gap: 20px; height: 62px; }
+  .logo { font-weight: 900; font-size: 17px; letter-spacing: .04em; color: var(--ink); text-decoration: none; }
+  .logo b { color: var(--teal); }
+  .topnav { display: flex; gap: 18px; margin-left: auto; }
+  .topnav a { font-size: 13px; font-weight: 600; color: var(--sub); text-decoration: none; }
+  .topnav a:hover { color: var(--teal-deep); }
+  .cta-s {
+    background: var(--orange); color: #1E1503; font-weight: 800; font-size: 13px;
+    padding: 9px 18px; border-radius: 999px; text-decoration: none; white-space: nowrap;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .cta-s:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(245,154,42,.4); }
+  @media (max-width: 720px) { .topnav { display: none; } }
+
+  /* ───── hero ───── */
+  .hero { position: relative; padding: 72px 0 40px; overflow: hidden; }
+  .hero .wrap { position: relative; display: grid; grid-template-columns: 1.1fr .9fr; gap: 30px; align-items: center; }
+  @media (max-width: 860px) { .hero .wrap { grid-template-columns: 1fr; } }
+  .hero h1 {
+    font-size: clamp(30px, 5.2vw, 52px); font-weight: 900; line-height: 1.32;
+    letter-spacing: .01em; margin: 16px 0 18px; text-wrap: balance;
+  }
+  .hero h1 .flip { color: var(--teal); border-bottom: 6px solid var(--orange); }
+  .hero p.sub { color: var(--sub); font-size: 17px; max-width: 32em; }
+  .hero-cta { display: flex; gap: 14px; margin-top: 26px; flex-wrap: wrap; }
+  .btn-main {
+    background: var(--teal); color: #fff; font-weight: 800; font-size: 15px;
+    padding: 14px 28px; border-radius: 999px; text-decoration: none;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .btn-main:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,140,140,.35); }
+  .btn-ghost {
+    color: var(--teal-deep); font-weight: 700; font-size: 15px; padding: 14px 20px;
+    border: 1.5px solid var(--line); border-radius: 999px; text-decoration: none; background: var(--surface);
+  }
+  .btn-ghost:hover { border-color: var(--teal); }
+  #orbit { width: 100%; aspect-ratio: 1; max-width: 440px; margin: 0 auto; display: block; }
+
+  .statbar { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); }
+  .statbar .wrap { display: grid; grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 720px) { .statbar .wrap { grid-template-columns: repeat(2, 1fr); } }
+  .stat { padding: 26px 10px; text-align: center; border-left: 1px solid var(--line); }
+  .stat:first-child { border-left: 0; }
+  @media (max-width: 720px) { .stat:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); } .stat:nth-child(4) { border-top: 1px solid var(--line); } }
+  .stat .v { font-size: clamp(30px, 4vw, 42px); font-weight: 900; color: var(--teal-deep); letter-spacing: -.01em; }
+  .stat .v small { font-size: .45em; font-weight: 800; margin-left: 2px; color: var(--sub); }
+  .stat .l { font-size: 12.5px; color: var(--sub); font-weight: 600; margin-top: 2px; }
+
+  /* ───── reveal ───── */
+  .rv { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s ease; }
+  .rv.in { opacity: 1; transform: none; }
+  .rv.d1 { transition-delay: .08s; } .rv.d2 { transition-delay: .16s; } .rv.d3 { transition-delay: .24s; }
+  @media (prefers-reduced-motion: reduce) {
+    .rv { opacity: 1; transform: none; transition: none; }
+    html { scroll-behavior: auto; }
+    .pulse, .sweep { animation: none !important; }
+  }
+
+  /* ───── problem ───── */
+  .problem { background: var(--mist); }
+  .saas-pile { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 34px 0 10px; }
+  @media (max-width: 760px) { .saas-pile { grid-template-columns: repeat(2, 1fr); } }
+  .saas-card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; box-shadow: var(--shadow); position: relative;
+  }
+  .saas-card .t { font-weight: 800; font-size: 14px; }
+  .saas-card .d { font-size: 12px; color: var(--sub); }
+  .saas-card::after {
+    content: "月額"; position: absolute; top: 10px; right: 12px;
+    font-size: 10px; font-weight: 700; color: var(--bad);
+    border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px;
+  }
+  .problem-punch { margin-top: 26px; font-size: clamp(18px, 2.6vw, 24px); font-weight: 900; }
+  .problem-punch em { font-style: normal; color: var(--bad); }
+
+  /* ───── explorer ───── */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 26px 0 8px; }
+  .chip {
+    border: 1.5px solid var(--line); background: var(--surface); color: var(--sub);
+    font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 999px;
+    cursor: pointer; transition: all .18s; font-family: inherit;
+  }
+  .chip:hover { border-color: var(--teal); color: var(--teal-deep); }
+  .chip.on { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .exp-count { font-size: 13px; color: var(--sub); margin: 6px 0 18px; }
+  .exp-count b { color: var(--teal-deep); font-size: 16px; }
+  .fgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 900px) { .fgrid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .fgrid { grid-template-columns: 1fr; } }
+  .fcard {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px 18px 16px; transition: transform .18s, box-shadow .18s, border-color .18s, opacity .3s;
+  }
+  .fcard:hover { transform: translateY(-4px); box-shadow: var(--shadow); border-color: var(--teal); }
+  .fcard.hide { display: none; }
+  .fcard .cat { font-size: 10.5px; font-weight: 800; letter-spacing: .12em; color: var(--teal-deep); }
+  .fcard .name { font-weight: 800; font-size: 15.5px; margin: 4px 0 4px; }
+  .fcard .desc { font-size: 13px; color: var(--sub); line-height: 1.7; }
+  .fcard.star { border-top: 3px solid var(--orange); }
+  .fcard.star .cat::after { content: " ★独自"; color: var(--orange-ink); }
+
+  /* ───── night timeline ───── */
+  .night { background: var(--ink); color: var(--paper); }
+  :root[data-theme="dark"] .night, .night { background: #0A2423; color: #EAF4F2; }
+  .night .eyebrow { color: #7FD6D0; }
+  .night .eyebrow::before { background: #7FD6D0; }
+  .night .lede { color: #A9C6C1; }
+  .tl-scroll { overflow-x: auto; margin-top: 36px; padding-bottom: 10px; }
+  .tl { position: relative; min-width: 860px; height: 210px; }
+  .tl-axis { position: absolute; left: 0; right: 0; top: 130px; height: 2px; background: #2C5350; }
+  .tl-axis .sweep {
+    position: absolute; top: -3px; left: 0; width: 90px; height: 8px; border-radius: 999px;
+    background: linear-gradient(90deg, transparent, #F59A2A);
+    animation: sweep 7s linear infinite;
+  }
+  @keyframes sweep { from { left: -10%; } to { left: 104%; } }
+  .tl-h { position: absolute; top: 148px; font-size: 11px; color: #7FA6A1; font-weight: 700; transform: translateX(-50%); }
+  .tl-job { position: absolute; transform: translateX(-50%); text-align: center; width: 120px; }
+  .tl-job .dot {
+    width: 12px; height: 12px; border-radius: 50%; background: #F59A2A; margin: 0 auto;
+    box-shadow: 0 0 0 5px rgba(245,154,42,.18);
+  }
+  .tl-job.teal .dot { background: #2FB8B2; box-shadow: 0 0 0 5px rgba(47,184,178,.18); }
+  .tl-job .jl { font-size: 11.5px; font-weight: 700; line-height: 1.45; margin-top: 8px; color: #EAF4F2; }
+  .tl-job .jt { font-size: 10px; color: #7FA6A1; font-weight: 700; }
+  .tl-job.up { top: 24px; } .tl-job.up .dot { position: absolute; bottom: -84px; left: 50%; margin-left: -6px; }
+  .tl-job.dn { top: 122px; padding-top: 22px; }
+  .day-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 30px; }
+  .day-chip {
+    font-size: 12.5px; font-weight: 700; border: 1px solid #2C5350; border-radius: 999px;
+    padding: 7px 14px; color: #BFE0DB;
+  }
+  .day-chip b { color: #F6A94C; }
+  .night .punch { margin-top: 30px; font-size: clamp(17px, 2.4vw, 22px); font-weight: 900; color: #fff; }
+
+  /* ───── vs table ───── */
+  .vs-table-wrap { overflow-x: auto; margin-top: 30px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+  table.vs { border-collapse: collapse; width: 100%; min-width: 660px; font-size: 14px; }
+  .vs th, .vs td { padding: 13px 16px; border-top: 1px solid var(--line); text-align: left; }
+  .vs thead th { border-top: 0; font-size: 12.5px; letter-spacing: .06em; color: var(--sub); background: var(--mist); }
+  .vs td.c { text-align: center; font-weight: 900; white-space: nowrap; }
+  .vs .win { color: var(--teal); font-size: 17px; }
+  .vs .lose { color: var(--sub); opacity: .7; }
+  .vs .note { font-size: 12px; color: var(--sub); }
+  .vs tbody tr { transition: background .15s; }
+  .vs tbody tr:hover { background: var(--teal-soft); }
+  .vs .free { display: inline-block; font-size: 10.5px; font-weight: 800; color: var(--orange-ink); border: 1px solid currentColor; border-radius: 999px; padding: 0 8px; margin-left: 6px; vertical-align: 2px; white-space: nowrap; }
+  .only-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 30px; }
+  @media (max-width: 760px) { .only-grid { grid-template-columns: 1fr; } }
+  .only-card { background: var(--teal-soft); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .only-card .t { font-weight: 900; font-size: 15.5px; color: var(--teal-deep); }
+  .only-card .d { font-size: 13px; color: var(--sub); margin-top: 4px; }
+  details.honest {
+    margin-top: 34px; border: 1.5px dashed var(--line); border-radius: 14px;
+    padding: 4px 22px; background: var(--surface);
+  }
+  details.honest summary { cursor: pointer; font-weight: 800; padding: 14px 0; color: var(--ink); }
+  details.honest summary::marker { color: var(--orange); }
+  details.honest .body { padding: 0 0 18px; color: var(--sub); font-size: 14px; }
+  details.honest li { margin-bottom: 8px; }
+
+  /* ───── calculator ───── */
+  .calc { background: var(--mist); }
+  .calc-box {
+    display: grid; grid-template-columns: 1.05fr .95fr; gap: 0; margin-top: 34px;
+    border-radius: 18px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow);
+  }
+  @media (max-width: 820px) { .calc-box { grid-template-columns: 1fr; } }
+  .calc-l { background: var(--surface); padding: 28px; }
+  .calc-l h3 { margin: 0 0 4px; font-size: 16px; font-weight: 900; }
+  .calc-l .hint { font-size: 12.5px; color: var(--sub); margin-bottom: 18px; }
+  .tool-row {
+    display: flex; align-items: center; gap: 12px; padding: 11px 12px;
+    border-radius: 10px; cursor: pointer; transition: background .15s; border: 1px solid transparent;
+  }
+  .tool-row:hover { background: var(--teal-soft); }
+  .tool-row input { width: 18px; height: 18px; accent-color: var(--teal); cursor: pointer; }
+  .tool-row .tn { font-weight: 700; font-size: 14px; flex: 1; }
+  .tool-row .tn small { display: block; font-weight: 600; font-size: 11px; color: var(--sub); }
+  .tool-row .tp { font-size: 13px; font-weight: 800; color: var(--sub); white-space: nowrap; }
+  .heads { display: flex; align-items: center; gap: 14px; margin: 20px 0 6px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .heads label { font-weight: 800; font-size: 14px; }
+  .heads input[type=range] { flex: 1; accent-color: var(--teal); }
+  .heads .hv { font-weight: 900; font-size: 20px; color: var(--teal-deep); min-width: 3.2em; text-align: right; }
+  .calc-r {
+    background: var(--teal); color: #fff; padding: 28px;
+    display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  }
+  .calc-r .cap { font-size: 12px; font-weight: 800; letter-spacing: .18em; opacity: .85; }
+  .calc-r .big { font-size: clamp(34px, 5vw, 50px); font-weight: 900; letter-spacing: -.01em; line-height: 1.15; }
+  .calc-r .big small { font-size: .38em; font-weight: 800; opacity: .85; }
+  .calc-r .strike { text-decoration: line-through; text-decoration-thickness: 3px; text-decoration-color: var(--orange); opacity: .75; font-size: 20px; font-weight: 800; }
+  .calc-r .vs-line { margin: 8px 0; border: 0; border-top: 1px dashed rgba(255,255,255,.4); }
+  .calc-r .one { font-size: 15px; font-weight: 800; }
+  .calc-r .one b { color: #FFD9A3; }
+  .calc-r .disc { font-size: 10.5px; opacity: .75; margin-top: 12px; line-height: 1.6; }
+
+  /* ───── trust ───── */
+  .trust-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 34px; }
+  @media (max-width: 860px) { .trust-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .trust-grid { grid-template-columns: 1fr; } }
+  .tcard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .tcard .ic { width: 38px; height: 38px; border-radius: 10px; background: var(--teal-soft); display: grid; place-items: center; margin-bottom: 12px; }
+  .tcard .ic svg { width: 20px; height: 20px; stroke: var(--teal-deep); fill: none; stroke-width: 2; }
+  .tcard .t { font-weight: 900; font-size: 15px; }
+  .tcard .d { font-size: 13px; color: var(--sub); margin-top: 4px; }
+
+  /* ───── final cta ───── */
+  .final { background: linear-gradient(140deg, var(--teal-deep), var(--teal)); color: #fff; text-align: center; }
+  :root[data-theme="dark"] .final, .final { color: #fff; }
+  .final h2 { color: #fff; }
+  .final .lede { color: rgba(255,255,255,.85); margin: 0 auto 8px; }
+  .final .btn-main { background: var(--orange); color: #1E1503; font-size: 17px; padding: 16px 40px; display: inline-block; margin-top: 22px; }
+  .final .note { font-size: 12px; opacity: .8; margin-top: 18px; }
+  footer { padding: 26px 0 40px; font-size: 12px; color: var(--sub); }
+  footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<header class="top" id="top">
+  <div class="wrap">
+    <a class="logo" href="#top">CATORCE <b>Sales OS</b></a>
+    <nav class="topnav">
+      <a href="#problem">課題</a>
+      <a href="#features">機能</a>
+      <a href="#night">自動化</a>
+      <a href="#vs">Salesforce比較</a>
+      <a href="#calc">コスト試算</a>
+    </nav>
+    <a class="cta-s" href="#contact">デモを見る</a>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">中堅企業のための営業OS</span>
+      <h1>Salesforceを<br>「使いこなす」より、<br>営業が<span class="flip">勝手に強くなる</span>仕組みを。</h1>
+      <p class="sub">CRM・SFA・タスク・案件粗利・名刺・議事録AI・メール追客・バックオフィス。8つのSaaS領域を<strong>1つのデータベース</strong>で連結した、日本の営業実務のための統合営業OSです。</p>
+      <div class="hero-cta">
+        <a class="btn-main" href="#calc">いくら削減できるか試算する</a>
+        <a class="btn-ghost" href="#features">機能をすべて見る</a>
+      </div>
+    </div>
+    <canvas id="orbit" width="440" height="440" aria-label="8つのSaaS領域が1つのデータベースに連結するイメージ図" role="img"></canvas>
+  </div>
+</div>
+
+<div class="statbar">
+  <div class="wrap">
+    <div class="stat rv"><div class="v num"><span data-count="141">0</span><small>画面</small></div><div class="l">機能画面数</div></div>
+    <div class="stat rv d1"><div class="v num"><span data-count="8">0</span><small>領域</small></div><div class="l">カバーするSaaS領域</div></div>
+    <div class="stat rv d2"><div class="v num"><span data-count="17">0</span><small>種</small></div><div class="l">AI機能（従量課金ゼロ）</div></div>
+    <div class="stat rv d3"><div class="v num"><span data-count="13">0</span><small>本</small></div><div class="l">自動化ジョブ／毎日稼働</div></div>
+  </div>
+</div>
+
+<section class="problem" id="problem">
+  <div class="wrap">
+    <span class="eyebrow rv">The Problem</span>
+    <h2 class="rv">ツールを増やすほど、<br>営業データは分断されていく。</h2>
+    <p class="lede rv">SFAに商談を入れ、タスク管理に作業を入れ、名刺アプリに名刺を入れ、議事録AIの要約をコピペする——。中堅企業の営業組織は、いま平均して5〜8個のSaaSを使い分けています。</p>
+    <div class="saas-pile">
+      <div class="saas-card rv"><div class="t">SFA / CRM</div><div class="d">商談・ヨミ管理</div></div>
+      <div class="saas-card rv d1"><div class="t">タスク・PJ管理</div><div class="d">作業とガント</div></div>
+      <div class="saas-card rv d2"><div class="t">名刺管理</div><div class="d">人脈データベース</div></div>
+      <div class="saas-card rv d3"><div class="t">議事録AI</div><div class="d">録音・文字起こし</div></div>
+      <div class="saas-card rv"><div class="t">メール計測</div><div class="d">開封・追客</div></div>
+      <div class="saas-card rv d1"><div class="t">工数・原価管理</div><div class="d">稼働と粗利</div></div>
+      <div class="saas-card rv d2"><div class="t">BIツール</div><div class="d">ダッシュボード</div></div>
+      <div class="saas-card rv d3"><div class="t">業務アプリ基盤</div><div class="d">申請・台帳</div></div>
+    </div>
+    <p class="problem-punch rv">その結果——<em>月額は積み上がり</em>、連携保守に工数が消え、<em>データは8つに分断</em>されたまま。<br>ツールをもう1本足しても、この構造は変わりません。</p>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <span class="eyebrow rv">Features</span>
+    <h2 class="rv">「多機能」は、カタログの話ではなく<br>現場が毎日触る画面の話。</h2>
+    <p class="lede rv">141画面すべてが実装済み・稼働中。カテゴリを選んで、営業の一日がどこまでカバーされるか確かめてください。</p>
+    <div class="chips" id="chips" role="group" aria-label="機能カテゴリで絞り込み"></div>
+    <p class="exp-count">表示中 <b id="fcount" class="num">0</b> 機能 <span id="fcat"></span></p>
+    <div class="fgrid" id="fgrid"></div>
+  </div>
+</section>
+
+<section class="night" id="night">
+  <div class="wrap">
+    <span class="eyebrow rv">Automation</span>
+    <h2 class="rv">あなたが寝ている間に、<br>13本の自動化とAIが営業を進める。</h2>
+    <p class="lede rv">夜間バッチが議事録・レポート・資料インデックス・権限監査を仕上げ、朝8時のSlackに「今日やること」が届く。営業は朝から商談だけに集中できます。</p>
+    <div class="tl-scroll">
+      <div class="tl" aria-label="夜間自動化タイムライン">
+        <div class="tl-axis"><div class="sweep"></div></div>
+        <div class="tl-h" style="left:4%">0:00</div>
+        <div class="tl-h" style="left:28%">2:00</div>
+        <div class="tl-h" style="left:52%">4:00</div>
+        <div class="tl-h" style="left:76%">6:00</div>
+        <div class="tl-h" style="left:96%">8:00</div>
+        <div class="tl-job up" style="left:7%"><div class="jl">営業レントゲン<br>月次スナップショット</div><div class="jt">0:30</div><div class="dot"></div></div>
+        <div class="tl-job dn teal" style="left:17%"><div class="dot"></div><div class="jl">AI-PMOレポート<br>4モード自動生成</div><div class="jt">1:00</div></div>
+        <div class="tl-job up teal" style="left:30%"><div class="jl">商談録音の文字起こし<br>＋AI議事録</div><div class="jt">2:00</div><div class="dot"></div></div>
+        <div class="tl-job dn" style="left:40%"><div class="dot"></div><div class="jl">資料のAI学習<br>インデックス化</div><div class="jt">2:00</div></div>
+        <div class="tl-job up" style="left:52%"><div class="jl">資料リンク検査<br>＋Drive自動同期</div><div class="jt">3:30</div><div class="dot"></div></div>
+        <div class="tl-job dn" style="left:63%"><div class="dot"></div><div class="jl">ドライブ権限監査<br>（NDA・在籍突合）</div><div class="jt">4:00</div></div>
+        <div class="tl-job up teal" style="left:74%"><div class="jl">SEO順位・流入の<br>自動取込</div><div class="jt">4:00</div><div class="dot"></div></div>
+        <div class="tl-job dn" style="left:90%"><div class="dot"></div><div class="jl">朝のSlackダイジェスト<br>今日のアポ・期限超過</div><div class="jt">8:00</div></div>
+      </div>
+    </div>
+    <div class="day-chips rv">
+      <span class="day-chip">日中も動く — <b>5分毎</b> メール予約送信</span>
+      <span class="day-chip"><b>15分毎</b> エンゲージメント集計・ホットリード通知</span>
+      <span class="day-chip"><b>30分毎</b> ワークフロー自動化・受信メール同期</span>
+      <span class="day-chip"><b>9:00</b> 追客シーケンス配信（返信が来たら自動停止）</span>
+    </div>
+    <p class="punch rv">これら全部で、AI従量課金は <span style="color:#F6A94C">¥0</span>。「AI機能は使うほど高い」の常識は、設計で壊せます。</p>
+  </div>
+</section>
+
+<section id="vs">
+  <div class="wrap">
+    <span class="eyebrow rv">vs Salesforce</span>
+    <h2 class="rv">コア機能は同等以上。<br>しかも「上位プラン課金」の領域が標準搭載。</h2>
+    <p class="lede rv">Salesforceで別製品・上位プランになる機能群を、CATORCEは最初から1つの契約に含みます。</p>
+    <div class="vs-table-wrap rv">
+      <table class="vs">
+        <thead>
+          <tr><th>機能</th><th style="text-align:center">Salesforce</th><th style="text-align:center">CATORCE</th><th>備考</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>商談・パイプライン管理</td><td class="c win">◎</td><td class="c win">◎</td><td class="note">表・ボード・カレンダー3ビュー、同時編集保護つき</td></tr>
+          <tr><td>ヨミ管理・売上予測</td><td class="c win">◎</td><td class="c win">◎</td><td class="note">日本式ヨミ＋変更履歴＋3系統予測。ヨミ会議の様式ごと搭載</td></tr>
+          <tr><td>リード管理・スコアリング</td><td class="c win">◎</td><td class="c win">◎</td><td class="note">ルールをGUI設計→全件自動再スコア</td></tr>
+          <tr><td>メール追客・開封/クリック計測<span class="free">SFは上位課金</span></td><td class="c win">◎</td><td class="c win">◎</td><td class="note">本人アカウント送信・シーケンス・返信で自動停止</td></tr>
+          <tr><td>AIアシスト（議事録・レポート等）<span class="free">SFは従量課金</span></td><td class="c win">◎</td><td class="c win">◎</td><td class="note">17種のAI機能、追加費用なし</td></tr>
+          <tr><td>ワークフロー自動化</td><td class="c win">◎</td><td class="c">○</td><td class="note">「ヨミC転落→通知」等のレシピ型。構築コンサル不要</td></tr>
+          <tr><td>権限管理・監査</td><td class="c win">◎</td><td class="c win">◎</td><td class="note">DBレベルの分離（RLS）＋監査ログ＋12ロール</td></tr>
+          <tr><td>案件原価・粗利・稼働承認<span class="free">SFは対象外</span></td><td class="c lose">✕</td><td class="c win">◎</td><td class="note">商談の見込み粗利と実績粗利が同じ画面で繋がる</td></tr>
+          <tr><td>タスク・ガント・PJ管理<span class="free">SFは対象外</span></td><td class="c lose">△</td><td class="c win">◎</td><td class="note">依存関係・マイルストーン・商談連動タスク</td></tr>
+          <tr><td>カスタムオブジェクト自由定義</td><td class="c win">◎</td><td class="c lose">✕</td><td class="note">思想の違い。「作る自由」より「最初から揃っている」</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="rv" style="margin-top:70px; font-size:clamp(22px,3.4vw,30px)">そして、Salesforceに「無い」ものがある。</h2>
+    <div class="only-grid">
+      <div class="only-card rv"><div class="t">営業レントゲン</div><div class="d">売上＝リード×アポ率×成約率×単価に因数分解し、悪化ノードと機会損失額を診断。「現状を映すBI」でなく「処方箋を出す診断機」。</div></div>
+      <div class="only-card rv d1"><div class="t">議事録がヨミになる</div><div class="d">商談録音→文字起こし→AI要約→人の確認→商談フィールド反映まで1本のパイプライン。コピペ転記が消える。</div></div>
+      <div class="only-card rv"><div class="t">SFA×PSAの一気通貫</div><div class="d">売る前の利益率と売った後の利益率が同じ画面。専業SaaS同士の連携では構造的に実現できない。</div></div>
+      <div class="only-card rv d1"><div class="t">7月開始の会計年度に完全対応</div><div class="d">「今期」「前期」がすべて貴社の年度で動く。週次レビュー会議画面・週報の世代比較まで、日本の営業会議の様式が最初から。</div></div>
+    </div>
+
+    <details class="honest rv">
+      <summary>正直な比較 — Salesforceが勝る領域も、先にお伝えします</summary>
+      <div class="body">
+        <ul>
+          <li><b>カスタムオブジェクト・項目のノーコード追加</b>：CATORCEは作り込み済みのスキーマ固定型です。「自由に作れる」は「作り込む人件費が要る」の裏返しでもあります。</li>
+          <li><b>巨大なエコシステム（AppExchange・認定人材市場）</b>：外部拡張の選択肢はSalesforceが圧倒的です。私たちは「最初から揃っている」ことで応えます。</li>
+          <li><b>CTI（電話連携）・ネイティブモバイルアプリ</b>：未対応です（モバイルはブラウザ対応）。</li>
+          <li>FlowやApexで大規模カスタマイズ済みの企業には、無理な乗り換えをおすすめしません。<b>「導入したが使いこなせていない」</b>と感じている企業にこそ、最適です。</li>
+        </ul>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="calc" id="calc">
+  <div class="wrap">
+    <span class="eyebrow rv">Cost Simulator</span>
+    <h2 class="rv">いま使っているツールを選ぶだけ。<br>削減インパクトを試算する。</h2>
+    <p class="lede rv">置き換え対象のSaaSと利用人数を選ぶと、月額の概算が動きます。</p>
+    <div class="calc-box rv">
+      <div class="calc-l">
+        <h3>現在利用中のツール</h3>
+        <p class="hint">該当するものにチェック（金額は一般的な中位プランの概算）</p>
+        <div id="tools"></div>
+        <div class="heads">
+          <label for="headcount">営業関連の利用人数</label>
+          <input type="range" id="headcount" min="5" max="50" step="1" value="10">
+          <span class="hv num" id="headv">10名</span>
+        </div>
+      </div>
+      <div class="calc-r">
+        <div class="cap">現在の推定月額合計</div>
+        <div class="strike num">¥<span id="beforeYen">0</span> /月</div>
+        <hr class="vs-line">
+        <div class="cap">CATORCE Sales OS なら</div>
+        <div class="big num">ワンプライス<br><small>ツール連携の構築・保守コスト、二重入力の人件費も同時にゼロへ</small></div>
+        <div class="one">年間換算で <b>¥<span id="yearYen" class="num">0</span></b> 相当のツール費が集約対象に</div>
+        <div class="disc">※ 金額は一般公開価格に基づく概算です。正確な比較は個別のお見積りで提示します。名刺管理・採用管理など会社単位課金の製品は代表的な最小構成で計算しています。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="trust">
+  <div class="wrap">
+    <span class="eyebrow rv">Enterprise Ready</span>
+    <h2 class="rv">中堅企業の「ちゃんとした運用」に耐える土台。</h2>
+    <p class="lede rv">機能の多さは、ガバナンスの土台があってはじめて価値になります。</p>
+    <div class="trust-grid">
+      <div class="tcard rv"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div><div class="t">DBレベルの権限分離</div><div class="d">Row Level Securityでデータベース層から遮断。画面とDBの二重防御は「隠しているだけ」のCRMと根本的に違います。</div></div>
+      <div class="tcard rv d1"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.8-3 3-4.5 5.5-4.5S13.7 16 14.5 19"/><circle cx="17.5" cy="9.5" r="2.5"/><path d="M15.5 19c.5-2 1.8-3.2 3.5-3.4"/></svg></div><div class="t">12ロールの細粒度権限</div><div class="d">インサイドセールス・パートナー営業・経理・事務まで。部門ごとに「別プロダクト」のような画面構成に自動で切り替わります。</div></div>
+      <div class="tcard rv d2"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/><circle cx="19" cy="19" r="2.5"/></svg></div><div class="t">監査ログ・30日ゴミ箱</div><div class="d">主要操作を記録、削除は30日間復元可能。同時編集の上書き消失もシステムが防ぎます。</div></div>
+      <div class="tcard rv"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg></div><div class="t">Google Workspace連携</div><div class="d">Gmail送受信・カレンダー・Drive・Google Chat。いま使っている道具の延長線に載ります。</div></div>
+      <div class="tcard rv d1"><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3M7 9l3 3 5-5"/></svg></div><div class="t">プレゼンモード</div><div class="d">ワンクリックでデモデータに切替、実データに影響なし・12時間で自動失効。社内展開の説明会もこの画面のままできます。</div></div>
+      <div class="tcard rv d2"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 3-2 4.5-2 7h-10c0-2.5-2-4-2-7a7 7 0 0 1 7-7z"/><path d="M9.5 21h5"/></svg></div><div class="t">拡張は「実務の言葉」で</div><div class="d">リードスコア設計・ワークフローレシピ・展示会WBSテンプレート。管理者が画面から育てられ、開発ベンダー依存になりません。</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="final" id="contact">
+  <div class="wrap">
+    <h2 class="rv">ツールをもう1本足すのではなく、<br>営業の仕組みそのものを入れ替える。</h2>
+    <p class="lede rv">名刺→リード→商談→受注→案件→粗利→深耕。営業の一生を、1つのデータベースで。<br>貴社の商談データを使ったデモも可能です（プレゼンモードで実データに影響なく体験できます）。</p>
+    <a class="btn-main rv" href="#contact">デモ・お見積りを依頼する</a>
+    <p class="note rv">最短で当日中にご連絡します ／ しつこい営業はしません</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© CATORCE Inc. — CATORCE Sales OS</span>
+    <span>掲載の機能はすべて実装・稼働中のものです（2026年8月時点）。他社製品名は各社の商標です。</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ヘッダーの影 */
+  var top = document.getElementById("top");
+  addEventListener("scroll", function () {
+    top.classList.toggle("scrolled", scrollY > 8);
+  }, { passive: true });
+
+  /* スクロール出現 */
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.15 });
+  document.querySelectorAll(".rv").forEach(function (el) { io.observe(el); });
+
+  /* 数値カウントアップ */
+  var cio = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      cio.unobserve(e.target);
+      var el = e.target, goal = +el.dataset.count, t0 = null;
+      if (reduced) { el.textContent = goal; return; }
+      function step(t) {
+        if (!t0) t0 = t;
+        var p = Math.min((t - t0) / 1400, 1);
+        el.textContent = Math.round(goal * (1 - Math.pow(1 - p, 3)));
+        if (p < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    });
+  }, { threshold: 0.6 });
+  document.querySelectorAll("[data-count]").forEach(function (el) { cio.observe(el); });
+
+  /* ヒーロー: 8領域→1DB の収束アニメーション */
+  var cv = document.getElementById("orbit"), ctx = cv.getContext("2d");
+  var DPR = Math.min(devicePixelRatio || 1, 2);
+  var domains = ["SFA/CRM", "タスク", "名刺", "議事録AI", "メール", "SEO集客", "原価/粗利", "人事/BO"];
+  var mouse = { x: 0, y: 0 };
+  cv.addEventListener("pointermove", function (ev) {
+    var r = cv.getBoundingClientRect();
+    mouse.x = (ev.clientX - r.left) / r.width - 0.5;
+    mouse.y = (ev.clientY - r.top) / r.height - 0.5;
+  });
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function drawOrbit(t) {
+    var w = cv.clientWidth || 440;
+    if (cv.width !== w * DPR) { cv.width = w * DPR; cv.height = w * DPR; }
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, w, w);
+    var C = w / 2, R = w * 0.36;
+    var teal = css("--teal"), deep = css("--teal-deep"), orange = css("--orange"),
+        sub = css("--sub"), surface = css("--surface"), line = css("--line");
+    var cx = C + mouse.x * 10, cy = C + mouse.y * 10;
+    domains.forEach(function (name, i) {
+      var a = (i / domains.length) * Math.PI * 2 - Math.PI / 2 + (reduced ? 0 : t * 0.00008);
+      var wob = reduced ? 0 : Math.sin(t * 0.001 + i * 1.7) * 5;
+      var x = cx + Math.cos(a) * (R + wob), y = cy + Math.sin(a) * (R + wob);
+      var g = ctx.createLinearGradient(cx, cy, x, y);
+      g.addColorStop(0, teal); g.addColorStop(1, line);
+      ctx.strokeStyle = g; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.stroke();
+      if (!reduced) {
+        var p = ((t * 0.00035 + i * 0.125) % 1);
+        ctx.fillStyle = orange;
+        ctx.beginPath();
+        ctx.arc(x + (cx - x) * p, y + (cy - y) * p, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = surface; ctx.strokeStyle = teal; ctx.lineWidth = 1.5;
+      var bw = 78, bh = 30;
+      roundRect(x - bw / 2, y - bh / 2, bw, bh, 15); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = deep; ctx.font = "700 11px sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(name, x, y + 1);
+    });
+    var pulse = reduced ? 0 : Math.sin(t * 0.002) * 3;
+    ctx.fillStyle = teal;
+    ctx.beginPath(); ctx.arc(cx, cy, 44 + pulse, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = orange; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(cx, cy, 52 + pulse, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.font = "900 13px sans-serif";
+    ctx.fillText("ONE", cx, cy - 8);
+    ctx.fillText("DATABASE", cx, cy + 9);
+    if (!reduced) requestAnimationFrame(drawOrbit);
+  }
+  function roundRect(x, y, w2, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w2, y, x + w2, y + h, r);
+    ctx.arcTo(x + w2, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w2, y, r);
+    ctx.closePath();
+  }
+  requestAnimationFrame(drawOrbit);
+  if (reduced) requestAnimationFrame(drawOrbit);
+
+  /* 機能エクスプローラ */
+  var FEATURES = [
+    ["SFA中核", "案件管理（表・ボード・カレンダー）", "3ビュー切替とインライン編集。同時編集しても上書き事故が起きない楽観ロックつき。", 0],
+    ["SFA中核", "ヨミ管理・3系統売上予測", "日本式ヨミ＋Commit/BestCase/Weighted。ヨミ変更は理由つきで全履歴が残る。", 1],
+    ["SFA中核", "営業レントゲン", "売上を方程式に因数分解し、悪化ノードと機会損失額を診断。処方箋まで出す。", 1],
+    ["SFA中核", "週次レビュー・週報スナップショット", "会議専用UI。週報は保存時点の数字で固定され、世代比較できる。", 1],
+    ["SFA中核", "商談チェック（型の強制力）", "営業の「型」の必須項目の入力漏れを自動検知。プレイブックが読み物で終わらない。", 1],
+    ["SFA中核", "目標管理・逆算シミュレーション", "目標売上から必要受注数・アポ数を逆算。感度分析つき。", 0],
+    ["SFA中核", "見積書生成", "案件から宛名・品目を編集してそのまま提出できる。", 0],
+    ["顧客深耕", "顧客分析マトリクス", "セグメント×ランクの2軸で全顧客を俯瞰し、セルから明細へドリルダウン。", 0],
+    ["顧客深耕", "Sランク顧客攻略", "大手を会社単位で攻略。部署・キーマン別に横展開し、年間1,000万円取引先へ育成。", 1],
+    ["顧客深耕", "既存顧客ナーチャリング", "受注後フォロー→追加課題→アップセル→横展開まで継続管理。", 0],
+    ["顧客深耕", "名刺管理・自動リード化", "CSV取込→顧客と自動マッチング→リード昇格。名刺が眠らない。", 0],
+    ["顧客深耕", "エンゲージメントスコア", "開封・クリック・返信・資料閲覧を人単位でスコア化。ホットリードは自動通知。", 1],
+    ["メール追客", "本人アカウントでのメール送信", "Gmail/SMTPを本人名義で送信。営業メールが「システムっぽく」ならない。", 0],
+    ["メール追客", "開封・クリック計測", "どの資料リンクが読まれたかまで追跡。", 0],
+    ["メール追客", "追客シーケンス", "ステップメールを自動配信。返信が来たら自動停止する。", 1],
+    ["メール追客", "受信メールの選別同期", "返信と既知取引先のメールだけをタイムラインに記録。無関係なメールは保存しない。", 1],
+    ["AI", "商談録音→自動議事録", "録音を上げれば夜間に文字起こし＋AI要約。音声は30日で自動削除。", 1],
+    ["AI", "AI確認キュー", "AIの下書きを人が確認して確定する関所。誤要約がCRMを汚染しない。", 1],
+    ["AI", "AI-PMO夜間レポート", "振り返り・段取り・案件管理・経営俯瞰の4レポートを毎晩自動生成。", 1],
+    ["AI", "AIヘルプ（社内資料RAG）", "社内資料を根拠に回答。出典リンク必須、資料に無いことは「分からない」と答える。", 1],
+    ["AI", "チャットからのCRM操作", "Google Chatで自然文メンション→商談検索・タスク起票。", 0],
+    ["AI", "AI Lab（顧客向けAI環境）", "顧客企業ごとに独立のマルチモデルAI環境を発行。トークン予算で自動停止。", 1],
+    ["自動化", "ワークフロー自動化", "「ヨミがCに落ちたら通知」等、営業管理の言葉でレシピが動く。", 0],
+    ["自動化", "朝のSlackダイジェスト", "担当別に今日のアポ・次回アクション・期限超過を毎朝配信。", 0],
+    ["自動化", "受注→フォロー自動生成", "受注すると研修後1/3/6ヶ月フォローが自動で予定される。", 1],
+    ["自動化", "Drive資料の自動台帳化", "案件フォルダで作業すれば資料台帳に自動反映。リンク切れも夜間検知。", 1],
+    ["自動化", "ドライブ権限監査", "共有権限を毎晩スナップショットし、在籍情報・NDA台帳と突合。", 1],
+    ["案件粗利", "月次 原価・粗利マトリクス", "案件ごとの売上・原価・粗利を月次で計画/実績管理。", 0],
+    ["案件粗利", "稼働報告・承認フロー", "週単位入力→提出→承認/差戻し。CSV取込にも対応。", 0],
+    ["案件粗利", "商談→粗利の一気通貫", "売る前の見込み粗利と、売った後の実績粗利が同じ画面で比べられる。", 1],
+    ["タスクPM", "ガント・依存関係・マイルストーン", "プロジェクト・ポートフォリオ・ゴール管理まで一式。", 0],
+    ["タスクPM", "商談連動タスク", "商談後の作業漏れを検知し、行から直接タスク追加。", 1],
+    ["タスクPM", "サブタスク・繰り返し・@メンション", "日々のタスク運用に必要なコアを標準装備。", 0],
+    ["マーケ集客", "SEO集客エンジン", "検索順位→問合せ→商談→売上まで一本で追跡。改善提案はAIが肉付け。", 1],
+    ["マーケ集客", "Webフォーム→リード直結", "HPの問合せ・資料請求からリード自動生成。スパム対策込み。", 0],
+    ["マーケ集客", "展示会ROI・出展選定", "成果分析に加え、出展候補を想定リード・相性・ROIで自動スコアリング。", 1],
+    ["マーケ集客", "セミナー攻略リスト", "過去接点とクロスしたフォローリストを自動生成。", 0],
+    ["バックオフィス", "助成金トラッカー", "申請期限・進捗を管理。商談データと同じDBで繋がる。", 1],
+    ["バックオフィス", "展示会準備WBS", "展示会を確定にすると会期基準の期日つきタスクが自動生成。", 1],
+    ["バックオフィス", "採用パイプライン・タレント台帳", "候補者は入社で台帳へ自動昇格。誰がどの案件でいくら粗利を生んだかまで繋がる。", 1]
+  ];
+  var CATS = ["すべて", "SFA中核", "顧客深耕", "メール追客", "AI", "自動化", "案件粗利", "タスクPM", "マーケ集客", "バックオフィス"];
+  var chips = document.getElementById("chips"), grid = document.getElementById("fgrid");
+  var fcount = document.getElementById("fcount"), fcat = document.getElementById("fcat");
+  FEATURES.forEach(function (f) {
+    var d = document.createElement("div");
+    d.className = "fcard" + (f[3] ? " star" : "");
+    d.dataset.cat = f[0];
+    d.innerHTML = '<div class="cat">' + f[0] + '</div><div class="name">' + f[1] + '</div><div class="desc">' + f[2] + "</div>";
+    grid.appendChild(d);
+  });
+  CATS.forEach(function (c, i) {
+    var b = document.createElement("button");
+    b.className = "chip" + (i === 0 ? " on" : "");
+    b.type = "button";
+    b.textContent = c === "すべて" ? "すべて (" + FEATURES.length + ")" : c;
+    b.addEventListener("click", function () {
+      chips.querySelectorAll(".chip").forEach(function (x) { x.classList.remove("on"); });
+      b.classList.add("on");
+      var n = 0;
+      grid.querySelectorAll(".fcard").forEach(function (card) {
+        var show = c === "すべて" || card.dataset.cat === c;
+        card.classList.toggle("hide", !show);
+        if (show) n++;
+      });
+      fcount.textContent = n;
+      fcat.textContent = c === "すべて" ? "（★はCATORCE独自機能）" : "— " + c;
+    });
+    chips.appendChild(b);
+  });
+  fcount.textContent = FEATURES.length;
+  fcat.textContent = "（★はCATORCE独自機能）";
+
+  /* コスト試算 */
+  var TOOLS = [
+    ["SFA / CRM", "Salesforce・HubSpot など", 11000, true, true],
+    ["タスク・PJ管理", "Asana・Backlog など", 1500, true, true],
+    ["議事録AI", "tl;dv・Notta など", 3000, true, true],
+    ["メール計測・追客", "シーケンス系ツール", 2000, true, false],
+    ["名刺管理", "Sansan など（会社単位）", 60000, false, true],
+    ["業務アプリ基盤", "kintone など", 1800, true, false],
+    ["BIツール", "Tableau など", 5000, true, false],
+    ["工数・原価管理", "PSA系ツール", 1200, true, false]
+  ];
+  var toolsBox = document.getElementById("tools");
+  var head = document.getElementById("headcount"), headv = document.getElementById("headv");
+  var beforeYen = document.getElementById("beforeYen"), yearYen = document.getElementById("yearYen");
+  var shownBefore = 0;
+  TOOLS.forEach(function (tdef, i) {
+    var lab = document.createElement("label");
+    lab.className = "tool-row";
+    lab.innerHTML = '<input type="checkbox" data-i="' + i + '"' + (tdef[4] ? " checked" : "") + '>' +
+      '<span class="tn">' + tdef[0] + "<small>" + tdef[1] + '</small></span>' +
+      '<span class="tp num">' + (tdef[3] ? "¥" + tdef[2].toLocaleString() + "/人" : "¥" + tdef[2].toLocaleString() + "/社") + "</span>";
+    lab.querySelector("input").addEventListener("change", calc);
+    toolsBox.appendChild(lab);
+  });
+  head.addEventListener("input", calc);
+  function calc() {
+    var n = +head.value;
+    headv.textContent = n + "名";
+    var total = 0;
+    toolsBox.querySelectorAll("input:checked").forEach(function (cb) {
+      var tdef = TOOLS[+cb.dataset.i];
+      total += tdef[3] ? tdef[2] * n : tdef[2];
+    });
+    animateYen(total);
+  }
+  function animateYen(goal) {
+    if (reduced) { shownBefore = goal; render(); return; }
+    var from = shownBefore, t0 = null;
+    function step(t) {
+      if (!t0) t0 = t;
+      var p = Math.min((t - t0) / 500, 1);
+      shownBefore = Math.round(from + (goal - from) * (1 - Math.pow(1 - p, 3)));
+      render();
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  function render() {
+    beforeYen.textContent = shownBefore.toLocaleString();
+    yearYen.textContent = (shownBefore * 12).toLocaleString();
+  }
+  calc();
+})();
+</script>
+</body>
+</html>
