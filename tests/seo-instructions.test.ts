@@ -87,3 +87,63 @@ describe("buildInstruction", () => {
     }
   });
 });
+
+/**
+ * 「1記事で複数語を狙う」を成立させるのは指示書。
+ * 狙う語を全部渡さないと、執筆者はメインKWだけ見て書き、結局1語ぶんの
+ * 薄い記事になる。逆に語ごとに記事を分けられるとカニバリを起こす。
+ */
+describe("buildInstruction — 記事プラン由来（複数語）", () => {
+  const planCtx = (over: Partial<ActionContext> = {}) =>
+    ctx({
+      actionType: "new_article",
+      targetQuery: "生成AI研修",
+      targetPage: "",
+      planTitle: "法人向け生成AI研修｜実務定着まで",
+      targetKeywords: [
+        { query: "生成AI研修", volume: 1000, targetPosition: 10, intentLayer: 1, isMain: true },
+        { query: "生成AI研修 費用", volume: 300, targetPosition: 5, intentLayer: 1, isMain: false },
+        { query: "AI研修 企業", volume: 200, targetPosition: 8, intentLayer: 2, isMain: false },
+      ],
+      ...over,
+    });
+
+  it("狙う語を全部・目標順位つきで表に出す", () => {
+    const md = buildInstruction(planCtx());
+    expect(md).toContain("この記事で狙う語（3語");
+    expect(md).toContain("生成AI研修 費用");
+    expect(md).toContain("AI研修 企業");
+    expect(md).toContain("合計 月1,500検索");
+  });
+
+  it("記事を分けないことと、サブKWを見出しに割り当てることを明示する", () => {
+    const md = buildInstruction(planCtx());
+    expect(md).toContain("記事は1本だけ");
+    expect(md).toContain("H2/H3見出しに1語ずつ割り当てる");
+    expect(md).toContain("語ごとに記事を分けないでください");
+  });
+
+  it("メインKWはタイトル・H1・冒頭に入れる指示になる", () => {
+    const md = buildInstruction(planCtx());
+    expect(md).toContain("メインKW「生成AI研修」");
+    expect(md).toContain("タイトル・H1・冒頭200文字");
+  });
+
+  it("リライトでは新しいページを作らせない（自社ページ同士の競合を防ぐ）", () => {
+    const md = buildInstruction(planCtx({ actionType: "rewrite", targetPage: "/ai-training" }));
+    expect(md).toContain("新しい記事を作らないでください");
+  });
+
+  it("新規記事は対象ページを「新規作成（未公開）」と書く（URLを捏造しない）", () => {
+    const md = buildInstruction(planCtx());
+    expect(md).toContain("新規作成（未公開）");
+    expect(md).toContain("**記事タイトル案**: 法人向け生成AI研修｜実務定着まで");
+  });
+
+  it("狙う語が1語だけなら表は出さず、従来の指示書のままにする", () => {
+    const md = buildInstruction(
+      planCtx({ targetKeywords: [{ query: "AI顧問", volume: 100, targetPosition: 5, isMain: true }] }),
+    );
+    expect(md).not.toContain("この記事で狙う語");
+  });
+});

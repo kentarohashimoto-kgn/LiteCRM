@@ -49,6 +49,8 @@ export interface IngestResult {
   insights?: number;
   /** 検出から作られた提案の件数。 */
   proposals?: number;
+  /** 既存の承認待ちを最新の数値に更新した件数（新規は作らない）。 */
+  proposalsRefreshed?: number;
   summary: Array<Record<string, unknown>>;
   errors: string[];
   window?: { startDate: string; endDate: string };
@@ -240,6 +242,7 @@ export async function runSeoIngest(trigger: "cron" | "manual"): Promise<IngestRe
   // 数字が入った瞬間に「今日の要対応」と「承認待ちの提案」が揃う状態にするため。
   let insights = 0;
   let proposals = 0;
+  let proposalsRefreshed = 0;
   try {
     const analyzed = await runSeoAnalysis();
     insights = analyzed.insights;
@@ -250,6 +253,7 @@ export async function runSeoIngest(trigger: "cron" | "manual"): Promise<IngestRe
   try {
     const proposed = await runSeoProposals();
     proposals = proposed.created;
+    proposalsRefreshed = proposed.refreshed;
     errors.push(...proposed.errors);
   } catch (e) {
     errors.push(`提案: ${e instanceof Error ? e.message : String(e)}`);
@@ -261,6 +265,7 @@ export async function runSeoIngest(trigger: "cron" | "manual"): Promise<IngestRe
     sites: touchedSites,
     insights,
     proposals,
+    proposalsRefreshed,
     summary,
     errors: errors.slice(0, 20),
   };

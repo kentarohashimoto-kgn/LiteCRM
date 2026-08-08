@@ -259,8 +259,10 @@ export default async function SeoKeywordsPage(
         saved={searchParams.saved}
         error={searchParams.error}
         savedMessages={{
-          proposal_created: "提案を作成しました。「改善提案」で承認すると実行チケットと指示書が作られます。",
-          proposal_exists: "この語の提案は既に承認待ちにあります。「改善提案」から承認してください。",
+          proposal_created:
+            "提案を作成しました。この語が属する記事プラン1本ぶん（サブKW込み）です。「改善提案」で承認すると実行チケットと指示書が作られます。",
+          proposal_exists: "この記事の提案は既に承認待ちにあります。「改善提案」から承認してください。",
+          proposal_nogap: "この記事の狙う語はすべて目標順位に届いています。新しい提案はありません。",
         }}
         errorMessages={{
           forbidden: "提案の作成は owner / admin / sales_manager のみ可能です。",

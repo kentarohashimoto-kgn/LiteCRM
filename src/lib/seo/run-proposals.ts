@@ -5,7 +5,12 @@ import { estimateIntentLayer } from "@/lib/seo/benchmark";
 import { groupInsightsByPage, isPageScopedAction, type Insight } from "@/lib/seo/analyze";
 import { DEFAULT_RATES, type StrategyRates } from "@/lib/seo/strategy";
 import { todayJst } from "@/lib/seo/site-match";
-import { benchmarkCtr } from "@/lib/seo/benchmark";
+import {
+  groupGapsByPlan,
+  keywordLine,
+  planProposalTitle,
+  type KeywordRankingRow,
+} from "@/lib/seo/plan-gap";
 
 /**
  * 検出した機会(seo_insights)を「承認できる提案」に変換する（決定的処理）。
@@ -34,6 +39,8 @@ export interface ProposalRunResult {
   ok: boolean;
   created: number;
   skipped: number;
+  /** 既存の承認待ちを最新の数値で更新した件数（新規は作らない） */
+  refreshed: number;
   errors: string[];
 }
 
@@ -102,6 +109,7 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
   const today = todayJst();
   let created = 0;
   let skipped = 0;
+  let refreshed = 0;
 
   const { data: jobRows } = await admin
     .from("batch_job_settings")
@@ -139,19 +147,28 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
       // クールダウン判定用に、同一サイトの直近提案を引く
       const { data: recent } = await admin
         .from("seo_proposals")
-        .select("action_type, target_query, target_page, status, reject_reason, proposed_date")
+        .select("id, action_type, target_query, target_page, article_plan_id, status, reject_reason, proposed_date")
         .eq("site_id", siteId)
         .order("proposed_date", { ascending: false })
         .limit(500);
       const lastByTarget = new Map<string, { status: string; reason: string | null; date: string }>();
+      // 未承認のまま残っている提案。同じ対象を作り直さず、数値だけ更新する。
+      // ここを作り直していたため、同じ提案が承認画面に何件も並んでいた。
+      const openByTarget = new Map<string, string>();
+      const openByPlan = new Map<string, string>();
       for (const r of recent ?? []) {
-        const key = `${r.action_type}|${r.target_query}|${r.target_page}`;
+        const key = `${r.action_type}|${r.target_query}|${r.target_page ?? ""}`;
         if (!lastByTarget.has(key)) {
           lastByTarget.set(key, {
             status: r.status as string,
             reason: (r.reject_reason as string) ?? null,
             date: r.proposed_date as string,
           });
+        }
+        if (r.status === "pending_review") {
+          if (!openByTarget.has(key)) openByTarget.set(key, r.id as string);
+          const planId = r.article_plan_id as string | null;
+          if (planId && !openByPlan.has(planId)) openByPlan.set(planId, r.id as string);
         }
       }
 
@@ -181,6 +198,7 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
         evidence: Record<string, unknown>;
         layer1: boolean;
         insightIds: string[];
+        planId: string | null;
       };
       const candidates: Candidate[] = [];
 
@@ -188,60 +206,46 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
       // 「狙ったのに取れていない語」から提案を作る。ここを最優先にするのは、
       // GSCに出てきた語を磨くだけでは、そもそも狙っていない語の順位が
       // 上がるだけで問合せが増えないため（対処療法になる）。
+      //
+      // 単位は「記事プラン1本」。1語1提案にすると同じ記事の提案が何件も並び、
+      // 承認するたびに別々の記事が作られて薄い記事の量産になる（0187 の設計）。
       const { data: gapRows } = await admin.rpc("seo_keyword_rankings", { p_site: siteId, p_weeks: 2 });
-      for (const g of (gapRows ?? []) as Record<string, unknown>[]) {
-        const status = String(g.gap_status ?? "");
-        const query = String(g.query ?? "");
-        const layer = g.intent_layer == null ? null : Number(g.intent_layer);
-        const volume = Number(g.search_volume ?? 0);
-        const targetPos = Number(g.target_position ?? 5);
-        const page = (g.ranking_page as string) ?? (g.target_page as string) ?? "";
-
-        // 状態ごとに打ち手が一意に決まる
-        const actionType =
-          status === "no_page" || status === "out"
-            ? "new_article"
-            : status === "far" || status === "striking"
-              ? "rewrite"
-              : "title_meta";
-
-        // 目標順位まで取れたときのクリック増。取れていない語は現在0クリックなので
-        // 「目標順位のCTR × 検索数」がそのまま伸びしろになる。
-        const targetCtr = benchmarkCtr(targetPos) ?? 0.03;
-        const currentClicks = Number(g.clicks ?? 0);
-        const extraClicks = Math.max(0, Math.round(volume * targetCtr - currentClicks));
-        if (extraClicks <= 0) continue;
-
-        const statusLabel =
-          status === "no_page"
-            ? "対策ページが無い"
-            : status === "out"
-              ? "ページはあるが圏外"
-              : status === "far"
-                ? `${g.current_position}位（21位以下）`
-                : status === "striking"
-                  ? `${g.current_position}位（あと一歩）`
-                  : `${g.current_position}位（CTR改善の段階）`;
+      for (const plan of groupGapsByPlan((gapRows ?? []) as KeywordRankingRow[])) {
+        const main = plan.keywords.find((k) => k.isMain) ?? plan.keywords[0];
+        const actionType = plan.actionType;
+        const label = ACTION_PRIORS[actionType]?.label ?? actionType;
+        const detected = plan.planId
+          ? `記事プラン「${plan.planTitle}」。この1本で${plan.keywords.length}語（想定 月${plan.totalVolume.toLocaleString("ja-JP")}検索）を狙う。${
+              plan.isExistingPage ? "対策ページあり" : "対策ページが無い"
+            }`
+          : `台帳の狙う語。${main.gapStatus === "no_page" ? "対策ページが無い" : main.position == null ? "ページはあるが圏外" : `現在${main.position}位`} / 想定検索数 月${main.volume} / 目標 ${main.targetPosition}位`;
 
         candidates.push({
           actionType,
-          query,
-          page,
-          extraClicks,
-          title: `狙う語「${query}」を取る（${ACTION_PRIORS[actionType]?.label ?? actionType}）`,
+          query: plan.mainKeyword,
+          page: plan.targetPage,
+          extraClicks: plan.totalExtraClicks,
+          title: planProposalTitle(plan, label),
           evidence: {
             kind: "keyword_gap",
-            detected: `台帳の狙う語。現状: ${statusLabel} / 想定検索数 月${volume} / 目標 ${targetPos}位`,
-            searchVolume: volume,
-            targetPosition: targetPos,
-            currentPosition: g.current_position ?? "圏外",
-            impressions: Number(g.impressions ?? 0),
-            clicks: currentClicks,
-            extraClicks,
-            gapStatus: status,
+            detected,
+            // 承認画面と指示書の両方が読む。「1記事で何語取れるのか」が
+            // 見えないと、1語ぶんの価値で判断して見送ってしまう。
+            queries: plan.keywords.map(keywordLine).join(" ／ "),
+            planTitle: plan.planTitle,
+            keywordCount: plan.keywords.length,
+            searchVolume: plan.totalVolume,
+            targetPosition: main.targetPosition,
+            currentPosition: main.position ?? "圏外",
+            impressions: plan.totalImpressions,
+            clicks: plan.keywords.reduce((n, k) => n + k.clicks, 0),
+            extraClicks: plan.totalExtraClicks,
+            gapStatus: main.gapStatus,
+            difficulty: plan.difficulty,
           },
-          layer1: layer === 1,
+          layer1: plan.layer1,
           insightIds: [],
+          planId: plan.planId,
         });
       }
 
@@ -266,6 +270,7 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
           },
           layer1: g.hasLayer1,
           insightIds: g.sourceInsightIds,
+          planId: null,
         });
       }
 
@@ -284,6 +289,7 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
           evidence: { kind: ins.kind, detected: ins.title, ...ins.metric },
           layer1: !!ins.query && estimateIntentLayer(ins.query) === 1,
           insightIds: ins.id ? [ins.id] : [],
+          planId: null,
         });
       }
       // 台帳由来を優先する。同じ機会量なら「狙った語」を先に出す。
@@ -296,9 +302,53 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
       });
 
       const rows: Record<string, unknown>[] = [];
+      // 同じ実行の中で同じ対象を2度起票しない（束ね漏れがあっても重複させない）
+      const queued = new Set<string>();
       for (const c of candidates) {
-        if (rows.length >= MAX_PER_DAY) break;
         const key = `${c.actionType}|${c.query}|${c.page}`;
+        if (queued.has(key)) continue;
+        const expected = expectedValueFromClicks(c.extraClicks, rates);
+        const intentLayer = c.query ? estimateIntentLayer(c.query) : null;
+        const ice = iceScore(expected.revenue, c.actionType, { layer1: c.layer1 }, weights);
+
+        // 既に同じ対象（または同じ記事プラン）の承認待ちがあるなら作り直さない。
+        // 中身だけ最新に差し替える。作り直すと承認画面に同じ提案が積み上がる。
+        const openId = openByTarget.get(key) ?? (c.planId ? openByPlan.get(c.planId) : undefined);
+        if (openId) {
+          // 対策ページが公開された等で打ち手そのものが変わることがあるので、
+          // 施策タイプと対象も更新する（新規記事の提案が居座らないように）。
+          const { error } = await admin
+            .from("seo_proposals")
+            .update({
+              title: c.title,
+              action_type: c.actionType,
+              target_query: c.query,
+              target_page: c.page,
+              article_plan_id: c.planId,
+              lever: c.actionType === "title_meta" ? "ctr" : "position",
+              intent_layer: c.layer1 ? 1 : intentLayer,
+              evidence_json: c.evidence,
+              expected_json: expected,
+              ice_impact: ice.impact,
+              ice_confidence: ice.confidence,
+              ice_effort: ice.effort,
+              strategy_weight: ice.strategyWeight,
+              ice_score: ice.score,
+            })
+            .eq("id", openId);
+          if (error) {
+            // 更新先の対象が既に別の承認待ちに使われている場合。
+            // 古い方を置き換え済みにして、キューから重複を消す。
+            await admin.from("seo_proposals").update({ status: "superseded" }).eq("id", openId);
+            skipped += 1;
+          } else {
+            refreshed += 1;
+          }
+          openByTarget.set(`${c.actionType}|${c.query}|${c.page}`, openId);
+          queued.add(key);
+          continue;
+        }
+
         const last = lastByTarget.get(key);
         if (
           last &&
@@ -307,14 +357,20 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
           skipped += 1;
           continue;
         }
-        const expected = expectedValueFromClicks(c.extraClicks, rates);
-        const intentLayer = c.query ? estimateIntentLayer(c.query) : null;
-        const ice = iceScore(expected.revenue, c.actionType, { layer1: c.layer1 }, weights);
 
+        // 新規起票だけ1日の上限で止める。既存の承認待ちの数値更新は上限外
+        // （更新を止めると、古い数字のまま承認させることになる）。
+        if (rows.length >= MAX_PER_DAY) {
+          skipped += 1;
+          continue;
+        }
+
+        queued.add(key);
         rows.push({
           tenant_id: site.tenant_id as string,
           site_id: siteId,
           insight_id: c.insightIds[0] ?? null,
+          article_plan_id: c.planId,
           title: c.title,
           action_type: c.actionType,
           lever:
@@ -350,7 +406,7 @@ export async function runSeoProposals(): Promise<ProposalRunResult> {
     }
   }
 
-  return { ok: errors.length === 0, created, skipped, errors };
+  return { ok: errors.length === 0, created, skipped, refreshed, errors };
 }
 
 /** 承認画面でそのまま読める提案タイトル。何をするのかが一目で分かる形にする。 */
