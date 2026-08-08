@@ -9,9 +9,11 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /**
- * AI-PMO 夜間バッチ(Vercel Cronから深夜1時JST=16:00 UTCに起動)。
+ * AI-PMO 週次バッチ(Vercel Cronから毎週日曜23時JST=日曜14:00 UTCに起動)。
  * 4モード(振り返りPDCA/未来段取り/案件PJ管理/経営俯瞰)のレポートを
- * 自動生成し pmo_reports へ保存する。朝イチで最新レポートが読める状態にする。
+ * 自動生成し pmo_reports へ保存する。月曜朝イチで最新レポートが読める状態にする。
+ * ※以前は毎晩実行だったが、API料金節約のため週1回(日曜夜)に変更した。
+ *   平日に必要になった場合はAI-PMO画面から手動生成できる。
  *
  * - 停止スイッチ: batch_job_settings(job_kind='pmo_nightly')。AIバッチ運用画面で制御
  * - 冪等: 同一JST日に同モードのレポートが既にあればスキップ(cron再実行に耐える)
